@@ -43,8 +43,8 @@ const StatusCheck: React.FC = () => {
         }
     };
     
-    // ATENÇÃO: Substitua o link abaixo pelo link real do seu grupo de WhatsApp
-    const whatsappGroupLink = 'https://chat.whatsapp.com/SEU_LINK_AQUI';
+    // Link do grupo para os aprovados
+    const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
 
     const renderStatusResult = () => {
         if (!searched || isLoading || error) {

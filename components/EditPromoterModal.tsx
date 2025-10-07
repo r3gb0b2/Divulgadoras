@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Promoter } from '../types';
 
@@ -23,7 +22,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         whatsapp: promoter.whatsapp,
         instagram: promoter.instagram,
         tiktok: promoter.tiktok,
-        age: promoter.age,
+        dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
       });
     }
@@ -35,7 +34,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: name === 'age' ? parseInt(value) || 0 : value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async () => {
@@ -94,8 +93,8 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             <input type="text" name="tiktok" value={formData.tiktok || ''} onChange={handleChange} className={formInputStyle} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Idade</label>
-            <input type="number" name="age" value={formData.age || 0} onChange={handleChange} className={formInputStyle} />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data de Nascimento</label>
+            <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleChange} className={formInputStyle} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>

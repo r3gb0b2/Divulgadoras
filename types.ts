@@ -1,4 +1,3 @@
-
 import { Timestamp } from "firebase/firestore";
 
 export interface Promoter {
@@ -8,7 +7,7 @@ export interface Promoter {
   email: string;
   instagram: string;
   tiktok: string;
-  age: number;
+  dateOfBirth: string;
   photoUrls: string[];
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Timestamp;
@@ -20,6 +19,6 @@ export interface PromoterApplicationData {
     email: string;
     instagram: string;
     tiktok: string;
-    age: number;
+    dateOfBirth: string;
     photos: File[];
 }

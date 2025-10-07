@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 // Fix: Corrected import paths for services and components.
 import { addPromoter } from '../services/promoterService';
@@ -62,7 +61,7 @@ const RegistrationForm: React.FC = () => {
     email: '',
     instagram: '',
     tiktok: '',
-    age: 0,
+    dateOfBirth: '',
   });
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -72,10 +71,10 @@ const RegistrationForm: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseInt(value, 10) || 0 : value,
+      [name]: value,
     }));
   };
 
@@ -116,6 +115,28 @@ const RegistrationForm: React.FC = () => {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
+
+    if (formData.dateOfBirth) {
+        const birthDate = new Date(formData.dateOfBirth);
+        const today = new Date();
+        // Adjust for timezone differences
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        if (age < 18) {
+            setSubmitError("Você deve ter pelo menos 18 anos para se cadastrar.");
+            setTimeout(() => setSubmitError(null), 5000);
+            return;
+        }
+    } else {
+        setSubmitError("Por favor, insira sua data de nascimento.");
+        setTimeout(() => setSubmitError(null), 5000);
+        return;
+    }
+    
     setIsSubmitting(true);
     setSubmitError(null);
     
@@ -124,16 +145,16 @@ const RegistrationForm: React.FC = () => {
       setSubmitSuccess(true);
       
       // Reset form
-      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0 });
+      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
-    // FIX: The catch block now safely handles errors of 'unknown' type.
-    // This prevents runtime errors from trying to access properties like 'message'
-    // on non-Error objects, and avoids incorrectly treating an error as a 'File' object.
+    // Fix: The catch block now safely handles errors of 'unknown' type.
+    // This prevents runtime errors from trying to access properties like 'name'
+    // on a non-Error object and ensures a proper error message is shown.
     } catch (error) {
       console.error("Failed to submit form", error);
       const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
@@ -173,7 +194,7 @@ const RegistrationForm: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
-                    <InputWithIcon Icon={CalendarIcon} type="number" name="age" placeholder="Idade" value={formData.age === 0 ? '' : formData.age} onChange={handleChange} required />
+                    <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
                 </div>
                 <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
                 <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />

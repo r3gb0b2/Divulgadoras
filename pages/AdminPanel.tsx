@@ -1,8 +1,21 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
 import { Promoter } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
+
+const calculateAge = (dateOfBirth: string): number => {
+    if (!dateOfBirth) return 0;
+    const birthDate = new Date(dateOfBirth);
+    // Adjust for timezone to avoid off-by-one day errors
+    birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+};
 
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -70,7 +83,7 @@ const AdminPanel: React.FC = () => {
     }
 
     if (ageFilter) {
-      promotersToFilter = promotersToFilter.filter(p => p.age === parseInt(ageFilter, 10));
+      promotersToFilter = promotersToFilter.filter(p => calculateAge(p.dateOfBirth) === parseInt(ageFilter, 10));
     }
 
     return promotersToFilter;
@@ -128,7 +141,7 @@ const AdminPanel: React.FC = () => {
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                         {filteredPromoters.map(p => (
                             <tr key={p.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{p.name} ({p.age} anos)</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{p.name} ({calculateAge(p.dateOfBirth)} anos)</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center space-x-2">
                                         {p.photoUrls.slice(0, 3).map((url, index) => (
