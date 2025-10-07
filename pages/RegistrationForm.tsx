@@ -153,7 +153,7 @@ const RegistrationForm: React.FC = () => {
       
       setTimeout(() => setSubmitSuccess(false), 5000);
     // Fix: The catch block now safely handles errors of 'unknown' type.
-    // This prevents runtime errors from trying to access properties like 'name'
+    // This prevents runtime errors from trying to access properties like 'name' or 'message'
     // on a non-Error object and ensures a proper error message is shown.
     } catch (error) {
       console.error("Failed to submit form", error);

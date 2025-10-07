@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
+import RulesPage from './pages/RulesPage'; // Import the new page
 
 const App: React.FC = () => {
   return (
@@ -15,6 +15,7 @@ const App: React.FC = () => {
             <div className='space-x-4'>
               <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Cadastro</Link>
               <Link to="/status" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
+              <Link to="/rules" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Regras</Link>
               <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
             </div>
           </nav>
@@ -24,6 +25,7 @@ const App: React.FC = () => {
             <Route path="/" element={<RegistrationForm />} />
             <Route path="/admin" element={<AdminAuth />} />
             <Route path="/status" element={<StatusCheck />} />
+            <Route path="/rules" element={<RulesPage />} />
           </Routes>
         </main>
         <footer className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
