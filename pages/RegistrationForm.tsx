@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+// Fix: Corrected import paths for services and components.
 import { addPromoter } from '../services/promoterService';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 

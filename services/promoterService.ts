@@ -1,74 +1,86 @@
-import { Promoter } from '../types';
+
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Promoter, PromoterApplicationData } from '../types';
 
-
-export const getPromoters = async (): Promise<Promoter[]> => {
+export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
-    const promotersCollection = collection(firestore, 'promoters');
-    const q = query(promotersCollection, orderBy('submissionDate', 'desc'));
-    const querySnapshot = await getDocs(q);
-    
-    const promoters: Promoter[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    const photoUrls = await Promise.all(
+      promoterData.photos.map(async (photo) => {
+        const fileExtension = photo.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2)}.${fileExtension}`;
+        const storageRef = ref(storage, `promoters-photos/${fileName}`);
+        await uploadBytes(storageRef, photo);
+        return await getDownloadURL(storageRef);
+      })
+    );
 
-      // Ensure submissionDate is a valid Firestore Timestamp before converting
-      const submissionTimestamp = data.submissionDate;
-      const submissionDate = submissionTimestamp && typeof submissionTimestamp.toDate === 'function'
-        ? submissionTimestamp.toDate().toISOString()
-        : new Date().toISOString(); // Fallback if data is malformed
+    const { photos, ...rest } = promoterData;
 
-      promoters.push({
-        id: doc.id,
-        name: data.name,
-        whatsapp: data.whatsapp,
-        email: data.email,
-        instagram: data.instagram,
-        tiktok: data.tiktok,
-        age: data.age,
-        photos: data.photos || [],
-        submissionDate: submissionDate,
-      });
-    });
-    return promoters;
-  } catch (error: any) {
-    console.error("Erro ao buscar perfis do Firestore:", error.message);
-    // Re-throw the error so the UI component can catch it and display a message
-    throw error;
+    const newPromoter = {
+      ...rest,
+      photoUrls,
+      status: 'pending' as const,
+      createdAt: serverTimestamp(),
+    };
+
+    await addDoc(collection(firestore, 'promoters'), newPromoter);
+  } catch (error) {
+    console.error("Error adding promoter: ", error);
+    throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
   }
 };
 
-interface PromoterDataWithPhotos extends Omit<Promoter, 'id' | 'submissionDate' | 'photos'> {
-    photos: File[];
-}
+export const getPromoters = async (): Promise<Promoter[]> => {
+  try {
+    const q = query(collection(firestore, "promoters"), orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(q);
+    const promoters: Promoter[] = [];
+    querySnapshot.forEach((doc) => {
+      promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+    });
+    return promoters;
+  } catch (error) {
+    console.error("Error getting promoters: ", error);
+    throw new Error("Não foi possível buscar as divulgadoras.");
+  }
+};
 
-export const addPromoter = async (promoterData: PromoterDataWithPhotos): Promise<void> => {
+export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
+  try {
+    const promoterDoc = doc(firestore, 'promoters', id);
+    await updateDoc(promoterDoc, data);
+  } catch (error) {
+    console.error("Error updating promoter: ", error);
+    throw new Error("Não foi possível atualizar a divulgadora.");
+  }
+};
+
+export const deletePromoter = async (id: string): Promise<void> => {
     try {
-        // 1. Upload all images to Firebase Storage concurrently
-        const photoURLs = await Promise.all(
-            promoterData.photos.map(async (photoFile) => {
-                const storageRef = ref(storage, `promoter_photos/${Date.now()}_${photoFile.name}`);
-                const snapshot = await uploadBytes(storageRef, photoFile);
-                return await getDownloadURL(snapshot.ref);
-            })
-        );
+      await deleteDoc(doc(firestore, "promoters", id));
+      // Note: This does not delete photos from storage. That would require more logic.
+    } catch (error) {
+      console.error("Error deleting promoter: ", error);
+      throw new Error("Não foi possível deletar a divulgadora.");
+    }
+};
 
-        // 2. Prepare data for Firestore
-        const { photos, ...promoterInfo } = promoterData;
-        const docData = {
-            ...promoterInfo,
-            photos: photoURLs, // Save the array of image URLs
-            submissionDate: serverTimestamp(),
-        };
-
-        // 3. Add promoter document to Firestore
-        const promotersCollection = collection(firestore, 'promoters');
-        await addDoc(promotersCollection, docData);
-
-    } catch (error: any) {
-        console.error("Failed to add promoter to Firestore:", error.message);
-        throw new Error(`Failed to save promoter data.`);
+export const checkPromoterStatus = async (email: string): Promise<Promoter | null> => {
+    try {
+        const q = query(collection(firestore, "promoters"), where("email", "==", email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return null;
+        }
+        // Assuming one registration per email
+        const promoterDoc = querySnapshot.docs[0];
+        return { id: promoterDoc.id, ...promoterDoc.data() } as Promoter;
+    } catch (error) {
+        console.error("Error checking promoter status: ", error);
+        throw new Error("Não foi possível verificar o status.");
     }
 };
