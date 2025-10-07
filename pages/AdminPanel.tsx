@@ -3,7 +3,7 @@ import { getPromoters, updatePromoter, deletePromoter } from '../services/promot
 import { Promoter } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
-import { InstagramIcon } from '../components/Icons';
+import { InstagramIcon, MailIcon, WhatsAppIcon } from '../components/Icons';
 
 const calculateAge = (dateOfBirth: string): number => {
     if (!dateOfBirth) return 0;
@@ -150,55 +150,77 @@ const AdminPanel: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredPromoters.map(p => (
-                            <tr key={p.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{p.name} ({calculateAge(p.dateOfBirth)} anos)</td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center space-x-2">
-                                        {p.photoUrls.slice(0, 3).map((url, index) => (
-                                            <button key={index} onClick={() => openPhotoViewer(p.photoUrls, index)}>
-                                                <img src={url} alt={`Foto ${index+1}`} className="h-12 w-12 rounded-md object-cover hover:opacity-80 transition-opacity" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                    {p.email}
-                                    <br/>
-                                    <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400 hover:underline">
-                                        {p.whatsapp}
-                                    </a>
-                                     {p.instagram && (
-                                        <>
-                                            <br/>
-                                            <a 
-                                                href={p.instagram.startsWith('http') ? p.instagram : `https://instagram.com/${p.instagram}`} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="text-pink-500 hover:text-pink-400 hover:underline flex items-center gap-1"
-                                            >
-                                                <InstagramIcon className="w-4 h-4" />
-                                                Instagram
-                                            </a>
-                                        </>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={p.status} /></td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.createdAt?.toDate().toLocaleDateString() ?? 'N/A'}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div className="flex items-center space-x-4">
-                                        {p.status === 'pending' && (
+                        {filteredPromoters.map(p => {
+                            const siteUrl = `${window.location.origin}/status`;
+                            const emailSubject = `Parabéns! Seu cadastro de divulgadora foi aprovado!`;
+                            const emailBody = `Olá ${p.name},\n\nSeu cadastro para se tornar uma divulgadora foi aprovado! Estamos muito felizes em ter você no time.\n\nPara continuar, por favor, acesse nosso site, verifique seu status e siga os próximos passos para ter acesso às regras e ao link do grupo exclusivo para divulgadoras.\n\nAcesse aqui: ${siteUrl}\n\nAtenciosamente,\nEquipe DivulgaAqui`;
+                            const mailtoLink = `mailto:${p.email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+
+                            const whatsappMessage = `Olá ${p.name}! Parabéns, seu cadastro de divulgadora foi aprovado! Para continuar, acesse nosso site (${siteUrl}), verifique seu status e siga os próximos passos para entrar no grupo. 🎉`;
+                            const whatsappLink = `https://wa.me/${p.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
+
+                            return (
+                                <tr key={p.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{p.name} ({calculateAge(p.dateOfBirth)} anos)</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center space-x-2">
+                                            {p.photoUrls.slice(0, 3).map((url, index) => (
+                                                <button key={index} onClick={() => openPhotoViewer(p.photoUrls, index)}>
+                                                    <img src={url} alt={`Foto ${index+1}`} className="h-12 w-12 rounded-md object-cover hover:opacity-80 transition-opacity" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {p.email}
+                                        <br/>
+                                        <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400 hover:underline">
+                                            {p.whatsapp}
+                                        </a>
+                                        {p.instagram && (
                                             <>
-                                                <button onClick={() => handleUpdateStatus(p.id, 'approved')} className="text-green-600 hover:text-green-900 dark:hover:text-green-400 transition-colors">Aprovar</button>
-                                                <button onClick={() => handleUpdateStatus(p.id, 'rejected')} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Rejeitar</button>
+                                                <br/>
+                                                <a 
+                                                    href={p.instagram.startsWith('http') ? p.instagram : `https://instagram.com/${p.instagram}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="text-pink-500 hover:text-pink-400 hover:underline flex items-center gap-1"
+                                                >
+                                                    <InstagramIcon className="w-4 h-4" />
+                                                    Instagram
+                                                </a>
                                             </>
                                         )}
-                                        <button onClick={() => openEditModal(p)} className="text-indigo-600 hover:text-indigo-900 dark:hover:text-indigo-400 transition-colors">Ver/Editar</button>
-                                        <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Deletar</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={p.status} /></td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.createdAt?.toDate().toLocaleDateString() ?? 'N/A'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
+                                            {p.status === 'pending' && (
+                                                <>
+                                                    <button onClick={() => handleUpdateStatus(p.id, 'approved')} className="text-green-600 hover:text-green-900 dark:hover:text-green-400 transition-colors">Aprovar</button>
+                                                    <button onClick={() => handleUpdateStatus(p.id, 'rejected')} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Rejeitar</button>
+                                                </>
+                                            )}
+                                            {p.status === 'approved' && (
+                                                <>
+                                                    <a href={mailtoLink} className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-900 dark:hover:text-blue-400 transition-colors" title="Notificar por E-mail">
+                                                        <MailIcon className="w-4 h-4" />
+                                                        E-mail
+                                                    </a>
+                                                    <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-green-600 hover:text-green-900 dark:hover:text-green-400 transition-colors" title="Notificar por WhatsApp">
+                                                        <WhatsAppIcon className="w-4 h-4" />
+                                                        WhatsApp
+                                                    </a>
+                                                </>
+                                            )}
+                                            <button onClick={() => openEditModal(p)} className="text-indigo-600 hover:text-indigo-900 dark:hover:text-indigo-400 transition-colors">Ver/Editar</button>
+                                            <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Deletar</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
                  {filteredPromoters.length === 0 && (
