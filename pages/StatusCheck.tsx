@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { checkPromoterStatus } from '../services/promoterService';
 import { Promoter } from '../types';
 
@@ -33,7 +34,7 @@ const StatusCheck: React.FC = () => {
         },
         approved: {
             title: 'Aprovado!',
-            message: 'Parabéns! Seu cadastro foi aprovado. Clique no botão abaixo para entrar no grupo oficial.',
+            message: 'Parabéns! Seu cadastro foi aprovado. Clique nos botões abaixo para entrar no grupo e ler as regras.',
             styles: 'bg-green-100 border-green-500 text-green-700'
         },
         rejected: {
@@ -66,7 +67,7 @@ const StatusCheck: React.FC = () => {
                 <p className="font-bold">{statusInfo.title}</p>
                 <p>{statusInfo.message}</p>
                 {promoter.status === 'approved' && (
-                    <div className="mt-4">
+                    <div className="mt-4 flex flex-wrap gap-4 items-center">
                         <a 
                             href={whatsappGroupLink}
                             target="_blank"
@@ -75,6 +76,12 @@ const StatusCheck: React.FC = () => {
                         >
                             Entrar no Grupo do WhatsApp
                         </a>
+                        <Link
+                            to="/rules"
+                            className="inline-block bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                        >
+                            Ler as Regras
+                        </Link>
                     </div>
                 )}
             </div>

@@ -15,7 +15,6 @@ const App: React.FC = () => {
             <div className='space-x-4'>
               <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Cadastro</Link>
               <Link to="/status" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
-              <Link to="/rules" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Regras</Link>
               <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
             </div>
           </nav>
