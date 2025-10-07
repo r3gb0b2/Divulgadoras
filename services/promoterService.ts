@@ -33,8 +33,8 @@ export const getPromoters = async (): Promise<Promoter[]> => {
       });
     });
     return promoters;
-  } catch (error) {
-    console.error("Erro ao buscar perfis do Firestore:", error);
+  } catch (error: any) {
+    console.error("Erro ao buscar perfis do Firestore:", error.message);
     // Re-throw the error so the UI component can catch it and display a message
     throw error;
   }
@@ -64,8 +64,8 @@ export const addPromoter = async (promoterData: PromoterDataWithPhoto): Promise<
         const promotersCollection = collection(firestore, 'promoters');
         await addDoc(promotersCollection, docData);
 
-    } catch (error) {
-        console.error("Failed to add promoter to Firestore:", error);
+    } catch (error: any) {
+        console.error("Failed to add promoter to Firestore:", error.message);
         throw new Error(`Failed to save promoter data.`);
     }
 };

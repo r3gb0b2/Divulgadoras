@@ -123,8 +123,8 @@ const RegistrationForm: React.FC = () => {
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
-    } catch (error) {
-      console.error("Failed to submit form", error);
+    } catch (error: any) {
+      console.error("Failed to submit form", error.message);
       setSubmitError("Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.");
        setTimeout(() => setSubmitError(null), 5000);
     } finally {

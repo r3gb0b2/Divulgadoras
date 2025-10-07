@@ -15,8 +15,8 @@ const AdminPanel: React.FC = () => {
       try {
         const fetchedPromoters = await getPromoters();
         setPromoters(fetchedPromoters);
-      } catch (err) {
-        console.error("Failed to load promoters:", err);
+      } catch (err: any) {
+        console.error("Failed to load promoters:", err.message);
         setError("Não foi possível carregar os perfis. Verifique se as credenciais do Firebase estão corretas e se as regras de segurança permitem a leitura de dados.");
       } finally {
         setIsLoading(false);
