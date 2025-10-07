@@ -1,0 +1,5 @@
+{
+  "name": "Cadastro de Divulgadoras",
+  "description": "Um formulário de cadastro para novas divulgadoras e um painel administrativo para visualizar os perfis enviados. Os dados são salvos localmente no navegador.",
+  "requestFramePermissions": []
+}
