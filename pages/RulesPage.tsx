@@ -1,6 +1,8 @@
 import React from 'react';
 
 const RulesPage: React.FC = () => {
+  const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
+
   return (
     <div className="max-w-3xl mx-auto">
       <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
@@ -42,8 +44,20 @@ const RulesPage: React.FC = () => {
               <li>É proibido divulgar outras festas ou eventos que aconteçam <span className="font-bold">no mesmo dia</span> dos eventos gerenciados por este grupo.</li>
             </ul>
           </div>
-
         </div>
+
+        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Ao entrar no grupo, você concorda com todas as regras acima.</p>
+            <a
+                href={whatsappGroupLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-lg"
+            >
+                Entrar no Grupo
+            </a>
+        </div>
+
       </div>
     </div>
   );

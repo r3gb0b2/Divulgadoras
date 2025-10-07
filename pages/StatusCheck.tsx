@@ -34,7 +34,7 @@ const StatusCheck: React.FC = () => {
         },
         approved: {
             title: 'Aprovado!',
-            message: 'Parabéns! Seu cadastro foi aprovado. Clique nos botões abaixo para entrar no grupo e ler as regras.',
+            message: 'Parabéns! Seu cadastro foi aprovado. Clique no botão abaixo para ler as regras e acessar o link do grupo.',
             styles: 'bg-green-100 border-green-500 text-green-700'
         },
         rejected: {
@@ -44,9 +44,6 @@ const StatusCheck: React.FC = () => {
         }
     };
     
-    // Link do grupo para os aprovados
-    const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
-
     const renderStatusResult = () => {
         if (!searched || isLoading || error) {
             return null;
@@ -67,20 +64,12 @@ const StatusCheck: React.FC = () => {
                 <p className="font-bold">{statusInfo.title}</p>
                 <p>{statusInfo.message}</p>
                 {promoter.status === 'approved' && (
-                    <div className="mt-4 flex flex-wrap gap-4 items-center">
-                        <a 
-                            href={whatsappGroupLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors"
-                        >
-                            Entrar no Grupo do WhatsApp
-                        </a>
+                    <div className="mt-4">
                         <Link
                             to="/rules"
-                            className="inline-block bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                            className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
                         >
-                            Ler as Regras
+                            Próximo Passo: Ler as Regras
                         </Link>
                     </div>
                 )}
