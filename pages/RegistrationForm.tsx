@@ -5,6 +5,54 @@ import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon,
 
 type PromoterFormData = Omit<Promoter, 'id' | 'submissionDate'>;
 
+// Helper function to resize and compress images
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      if (!event.target?.result) {
+        return reject(new Error("FileReader did not return a result."));
+      }
+      const img = new Image();
+      img.src = event.target.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context'));
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Get the data URL as a JPEG with specified quality
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+
 const RegistrationForm: React.FC = () => {
   const [formData, setFormData] = useState<PromoterFormData>({
     name: '',
@@ -16,6 +64,7 @@ const RegistrationForm: React.FC = () => {
     photo: '',
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -28,16 +77,24 @@ const RegistrationForm: React.FC = () => {
     }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        setFormData(prev => ({ ...prev, photo: base64String }));
-        setPhotoPreview(base64String);
-      };
-      reader.readAsDataURL(file);
+      setIsProcessingPhoto(true);
+      setSubmitError(null);
+      setPhotoPreview(null);
+      try {
+        // Resize to max 800x800, 80% quality JPEG
+        const resizedBase64 = await resizeImage(file, 800, 800, 0.8);
+        setFormData(prev => ({ ...prev, photo: resizedBase64 }));
+        setPhotoPreview(resizedBase64);
+      } catch (error) {
+        console.error("Error resizing image:", error);
+        setSubmitError("Houve um problema ao processar sua foto. Por favor, tente uma imagem diferente.");
+        e.target.value = '';
+      } finally {
+        setIsProcessingPhoto(false);
+      }
     }
   };
 
@@ -84,7 +141,7 @@ const RegistrationForm: React.FC = () => {
 
             {submitError && (
                 <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
-                    <p className="font-bold">Erro no Envio</p>
+                    <p className="font-bold">Erro</p>
                     <p>{submitError}</p>
                 </div>
             )}
@@ -103,7 +160,11 @@ const RegistrationForm: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sua melhor foto</label>
                     <div className="mt-1 flex items-center space-x-4">
                         <div className="flex-shrink-0">
-                            {photoPreview ? (
+                           {isProcessingPhoto ? (
+                                <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                </span>
+                            ) : photoPreview ? (
                                 <img className="h-24 w-24 rounded-full object-cover" src={photoPreview} alt="Prévia da foto" />
                             ) : (
                                 <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
@@ -120,10 +181,10 @@ const RegistrationForm: React.FC = () => {
 
                 <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isProcessingPhoto}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-pink-300 disabled:cursor-not-allowed transition-all duration-300"
                 >
-                    {isSubmitting ? 'Enviando...' : 'Finalizar Cadastro'}
+                    {isSubmitting ? 'Enviando...' : (isProcessingPhoto ? 'Processando foto...' : 'Finalizar Cadastro')}
                 </button>
             </form>
         </div>
