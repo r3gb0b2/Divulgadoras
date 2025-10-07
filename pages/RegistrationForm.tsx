@@ -1,9 +1,39 @@
+
 import React, { useState } from 'react';
 import { addPromoter } from '../services/promoterService';
 import { Promoter } from '../types';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 
 type PromoterFormData = Omit<Promoter, 'id' | 'submissionDate'>;
+
+// Chave de API para o serviço de hospedagem de imagens imgbb
+const IMGBB_API_KEY = '6a615217f7911b3390234a02324901f2';
+
+// Função para fazer upload da imagem para um host e retornar a URL
+const uploadImageToHost = async (base64Image: string): Promise<string> => {
+  const formData = new FormData();
+  // Extrai apenas os dados Base64, removendo o prefixo "data:image/jpeg;base64,"
+  const base64Data = base64Image.substring(base64Image.indexOf(',') + 1);
+  formData.append('image', base64Data);
+
+  const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Falha no upload da imagem: ${errorData.error.message}`);
+  }
+
+  const result = await response.json();
+  if (result.data?.url) {
+    return result.data.url;
+  } else {
+    throw new Error('A resposta da API de imagem não continha uma URL.');
+  }
+};
+
 
 // Helper function to resize and compress images
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<string> => {
@@ -61,10 +91,11 @@ const RegistrationForm: React.FC = () => {
     instagram: '',
     tiktok: '',
     age: 0,
-    photo: '',
+    photo: '', // Agora irá armazenar a URL da imagem
   });
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -83,17 +114,28 @@ const RegistrationForm: React.FC = () => {
       setIsProcessingPhoto(true);
       setSubmitError(null);
       setPhotoPreview(null);
+      
       try {
-        // Resize to max 800x800, 80% quality JPEG
+        // 1. Redimensiona a imagem localmente
         const resizedBase64 = await resizeImage(file, 800, 800, 0.8);
-        setFormData(prev => ({ ...prev, photo: resizedBase64 }));
-        setPhotoPreview(resizedBase64);
+        setPhotoPreview(resizedBase64); // Mostra preview imediatamente
+        setIsProcessingPhoto(false);
+        
+        // 2. Faz o upload da imagem redimensionada
+        setIsUploadingPhoto(true);
+        const imageUrl = await uploadImageToHost(resizedBase64);
+        
+        // 3. Salva a URL retornada no estado do formulário
+        setFormData(prev => ({ ...prev, photo: imageUrl }));
+
       } catch (error) {
-        console.error("Error resizing image:", error);
-        setSubmitError("Houve um problema ao processar sua foto. Por favor, tente uma imagem diferente.");
+        console.error("Error processing or uploading image:", error);
+        setSubmitError("Houve um problema com sua foto. Por favor, tente uma imagem diferente ou verifique sua conexão.");
         e.target.value = '';
+        setPhotoPreview(null);
       } finally {
         setIsProcessingPhoto(false);
+        setIsUploadingPhoto(false);
       }
     }
   };
@@ -101,7 +143,7 @@ const RegistrationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formData.photo) {
-        alert("Por favor, envie uma foto.");
+        alert("Por favor, aguarde o envio da foto antes de finalizar.");
         return;
     }
     setIsSubmitting(true);
@@ -116,15 +158,22 @@ const RegistrationForm: React.FC = () => {
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
-      setTimeout(() => setSubmitSuccess(false), 5000); // Hide success message after 5s
+      setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (error) {
       console.error("Failed to submit form", error);
       setSubmitError("Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.");
-       setTimeout(() => setSubmitError(null), 5000); // Hide error message after 5s
+       setTimeout(() => setSubmitError(null), 5000);
     } finally {
       setIsSubmitting(false);
     }
   };
+  
+  const getButtonText = () => {
+      if (isSubmitting) return 'Enviando...';
+      if (isProcessingPhoto) return 'Processando foto...';
+      if (isUploadingPhoto) return 'Enviando foto...';
+      return 'Finalizar Cadastro';
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -160,7 +209,7 @@ const RegistrationForm: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sua melhor foto</label>
                     <div className="mt-1 flex items-center space-x-4">
                         <div className="flex-shrink-0">
-                           {isProcessingPhoto ? (
+                           {isProcessingPhoto || isUploadingPhoto ? (
                                 <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
@@ -174,17 +223,18 @@ const RegistrationForm: React.FC = () => {
                         </div>
                         <label htmlFor="photo-upload" className="cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                             <span>{photoPreview ? 'Trocar foto' : 'Enviar foto'}</span>
-                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" />
+                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" disabled={isProcessingPhoto || isUploadingPhoto} />
                         </label>
                     </div>
+                     {isUploadingPhoto && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Enviando foto, por favor aguarde...</p>}
                 </div>
 
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
+                    disabled={isSubmitting || isProcessingPhoto || isUploadingPhoto}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-pink-300 disabled:cursor-not-allowed transition-all duration-300"
                 >
-                    {isSubmitting ? 'Enviando...' : (isProcessingPhoto ? 'Processando foto...' : 'Finalizar Cadastro')}
+                    {getButtonText()}
                 </button>
             </form>
         </div>
