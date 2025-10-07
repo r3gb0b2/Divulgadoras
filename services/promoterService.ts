@@ -1,6 +1,6 @@
 
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData } from '../types';
 
@@ -32,6 +32,8 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
+      notes: '',
+      isArchived: false,
     };
 
     await addDoc(collection(firestore, 'promoters'), newPromoter);
@@ -46,7 +48,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
 export const getPromoters = async (): Promise<Promoter[]> => {
   try {
-    const q = query(collection(firestore, "promoters"), orderBy("createdAt", "desc"));
+    const q = query(collection(firestore, "promoters"), where("isArchived", "!=", true), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
@@ -69,13 +71,14 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
   }
 };
 
-export const deletePromoter = async (id: string): Promise<void> => {
+export const archivePromoter = async (id: string): Promise<void> => {
     try {
-      await deleteDoc(doc(firestore, "promoters", id));
-      // Note: This does not delete photos from storage. That would require more logic.
+      const promoterDoc = doc(firestore, 'promoters', id);
+      await updateDoc(promoterDoc, { isArchived: true });
+      // Note: This does not delete photos from storage.
     } catch (error) {
-      console.error("Error deleting promoter: ", error);
-      throw new Error("Não foi possível deletar a divulgadora.");
+      console.error("Error archiving promoter: ", error);
+      throw new Error("Não foi possível arquivar a divulgadora.");
     }
 };
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
+import { getPromoters, updatePromoter, archivePromoter } from '../services/promoterService';
 import { Promoter } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
-import { InstagramIcon, MailIcon, WhatsAppIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon } from '../components/Icons';
+import { InstagramIcon, MailIcon, WhatsAppIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, DownloadIcon, ArchiveIcon } from '../components/Icons';
 
 const calculateAge = (dateOfBirth: string): number => {
     if (!dateOfBirth) return 0;
@@ -145,14 +145,14 @@ const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja deletar este cadastro? Esta ação não pode ser desfeita.')) {
+  const handleArchive = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja arquivar este cadastro? Ele será ocultado da lista principal.')) {
         try {
-            await deletePromoter(id);
+            await archivePromoter(id);
             setPromoters(prev => prev.filter(p => p.id !== id));
         } catch (error) {
             console.error(error);
-            alert('Falha ao deletar.');
+            alert('Falha ao arquivar.');
         }
     }
   }
@@ -171,6 +171,34 @@ const AdminPanel: React.FC = () => {
     setSelectedPhotos(photos);
     setPhotoStartIndex(startIndex);
     setIsPhotoViewerOpen(true);
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Nome", "Idade", "E-mail", "WhatsApp", "Instagram", "TikTok", "Status", "Data de Cadastro"];
+    const rows = processedPromoters.map(p => [
+        `"${p.name.replace(/"/g, '""')}"`, // Escape double quotes
+        calculateAge(p.dateOfBirth),
+        `"${p.email}"`,
+        `"${p.whatsapp}"`,
+        `"${p.instagram || ''}"`,
+        `"${p.tiktok || ''}"`,
+        `"${p.status}"`,
+        `"${p.createdAt?.toDate().toLocaleDateString('pt-BR') || 'N/A'}"`
+    ].join(','));
+
+    // BOM for Excel to recognize UTF-8
+    const csvContent = "\uFEFF" + headers.join(',') + "\n" + rows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "divulgadoras.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
   };
   
   const SortableHeader: React.FC<{ sortKey: SortableKeys; children: React.ReactNode }> = ({ sortKey, children }) => {
@@ -198,6 +226,18 @@ const AdminPanel: React.FC = () => {
     }
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>
   }
+
+  const SkeletonRow = () => (
+    <tr>
+        <td className="px-6 py-4"><div className="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div></td>
+        <td className="px-6 py-4"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-32"></div></td>
+        <td className="px-6 py-4"><div className="flex space-x-2"><div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse"></div><div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse"></div></div></td>
+        <td className="px-6 py-4"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-40"></div></td>
+        <td className="px-6 py-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse"></div></td>
+        <td className="px-6 py-4"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-24"></div></td>
+        <td className="px-6 py-4"><div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-28"></div></td>
+    </tr>
+  );
   
   return (
     <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 md:p-8">
@@ -210,21 +250,23 @@ const AdminPanel: React.FC = () => {
             <div className="bg-red-100 dark:bg-red-900/50 p-4 rounded-lg"><p className="text-sm text-red-600 dark:text-red-400">Rejeitados</p><p className="text-2xl font-bold text-red-800 dark:text-red-200">{stats.rejected}</p></div>
         </div>
         
-        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-            <div className="flex flex-wrap gap-2">
-                <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes ({stats.pending})</button>
-                <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados ({stats.approved})</button>
-                <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados ({stats.rejected})</button>
-                <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos ({stats.total})</button>
-            </div>
+        <div className="flex flex-wrap gap-2 mb-4">
+            <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes ({stats.pending})</button>
+            <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados ({stats.approved})</button>
+            <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados ({stats.rejected})</button>
+            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos ({stats.total})</button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="relative">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="relative md:col-span-2">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
                 <input type="text" placeholder="Buscar por nome, e-mail, Instagram..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
             </div>
             <input type="number" placeholder="Filtrar por idade..." value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
+            <button onClick={handleExportCSV} className="md:col-start-3 justify-self-end w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <DownloadIcon className="w-4 h-4" />
+                Exportar CSV
+            </button>
         </div>
 
         {selectedIds.length > 0 && (
@@ -235,14 +277,13 @@ const AdminPanel: React.FC = () => {
             </div>
         )}
 
-        {loading && <p className="text-center py-4">Carregando...</p>}
         {error && <p className="text-red-500 text-center py-4">Erro: {error}</p>}
-        {!loading && !error && (
+        {!error && (
             <div className="overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>
-                            <th scope="col" className="px-6 py-3"><input type="checkbox" onChange={handleSelectAll} checked={selectedIds.length > 0 && selectedIds.length === processedPromoters.length} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /></th>
+                            <th scope="col" className="px-6 py-3"><input type="checkbox" onChange={handleSelectAll} checked={!loading && selectedIds.length > 0 && selectedIds.length === processedPromoters.length} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" /></th>
                             <SortableHeader sortKey="name">Nome (Idade)</SortableHeader>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fotos</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contato</th>
@@ -252,7 +293,9 @@ const AdminPanel: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {processedPromoters.map(p => {
+                        {loading ? (
+                            Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
+                        ) : processedPromoters.map(p => {
                             const siteUrl = `${window.location.origin}/status`;
                             const emailSubject = `Parabéns! Seu cadastro de divulgadora foi aprovado!`;
                             const emailBody = `Olá ${p.name},\n\nSeu cadastro para se tornar uma divulgadora foi aprovado! Estamos muito felizes em ter você no time.\n\nPara continuar, por favor, acesse nosso site, verifique seu status e siga os próximos passos para ter acesso às regras e ao link do grupo exclusivo para divulgadoras.\n\nAcesse aqui: ${siteUrl}\n\nAtenciosamente,\nEquipe DivulgaAqui`;
@@ -317,7 +360,7 @@ const AdminPanel: React.FC = () => {
                                                 </>
                                             )}
                                             <button onClick={() => openEditModal(p)} className="text-indigo-600 hover:text-indigo-900 dark:hover:text-indigo-400 transition-colors">Ver/Editar</button>
-                                            <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Deletar</button>
+                                            <button onClick={() => handleArchive(p.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Arquivar</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -325,7 +368,7 @@ const AdminPanel: React.FC = () => {
                         })}
                     </tbody>
                 </table>
-                 {processedPromoters.length === 0 && (
+                 {!loading && processedPromoters.length === 0 && (
                     <div className="text-center py-8">
                         <p className="text-gray-500 dark:text-gray-400">Nenhum cadastro encontrado para a busca ou filtros aplicados.</p>
                     </div>

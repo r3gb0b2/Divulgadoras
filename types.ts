@@ -11,6 +11,8 @@ export interface Promoter {
   photoUrls: string[];
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Timestamp;
+  notes?: string;
+  isArchived?: boolean;
 }
 
 export interface PromoterApplicationData {

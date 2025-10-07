@@ -24,6 +24,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         tiktok: promoter.tiktok,
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
+        notes: promoter.notes || '',
       });
     }
   }, [promoter]);
@@ -32,7 +33,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     return null;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -103,6 +104,17 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="approved">Aprovado</option>
               <option value="rejected">Rejeitado</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Anotações Internas (visível apenas para admin)</label>
+            <textarea
+              name="notes"
+              rows={4}
+              value={formData.notes || ''}
+              onChange={handleChange}
+              className={`${formInputStyle} resize-y`}
+              placeholder="Adicione observações sobre a divulgadora aqui..."
+            />
           </div>
 
           <div className="mt-6 flex justify-end space-x-3">

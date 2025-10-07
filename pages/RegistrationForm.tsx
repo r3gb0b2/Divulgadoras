@@ -177,7 +177,7 @@ const RegistrationForm: React.FC = () => {
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
-      setTimeout(() => setSubmitSuccess(false), 5000);
+      setTimeout(() => setSubmitSuccess(false), 8000);
     // FIX: The catch block now safely handles errors of 'unknown' type.
     // This prevents runtime errors from trying to access properties on a non-Error object.
     } catch (error) {
@@ -205,7 +205,13 @@ const RegistrationForm: React.FC = () => {
             {submitSuccess && (
                 <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
-                    <p>Seu cadastro foi enviado. Entraremos em contato em breve.</p>
+                    <p>
+                        Seu cadastro foi enviado! Fique de olho na página{' '}
+                        <Link to="/status" className="font-semibold underline hover:text-green-800">
+                            Verificar Status
+                        </Link>
+                        {' '}para acompanhar a aprovação.
+                    </p>
                 </div>
             )}
 
