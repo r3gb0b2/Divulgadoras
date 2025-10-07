@@ -1,6 +1,7 @@
 
+
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData } from '../types';
 
@@ -48,7 +49,9 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
 export const getPromoters = async (): Promise<Promoter[]> => {
   try {
-    const q = query(collection(firestore, "promoters"), where("isArchived", "!=", true), orderBy("createdAt", "desc"));
+    // Firestore does not support combining a `!=` filter with an `orderBy` on a different field.
+    // The client-side code in AdminPanel.tsx already handles sorting, so we can safely remove it here.
+    const q = query(collection(firestore, "promoters"), where("isArchived", "!=", true));
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
