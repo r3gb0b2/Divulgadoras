@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPromoters } from '../services/promoterService';
 import { Promoter } from '../types';
-import { InstagramIcon, TikTokIcon, MailIcon, PhoneIcon } from '../components/Icons';
+import { InstagramIcon, TikTokIcon, MailIcon, PhoneIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
 
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -73,15 +73,42 @@ interface ProfileCardProps {
 }
 
 const ProfileCard: React.FC<ProfileCardProps> = ({ promoter }) => {
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    
     const formattedDate = new Date(promoter.submissionDate).toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
     });
+
+    const nextImage = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentImageIndex((prevIndex) => (prevIndex + 1) % promoter.photos.length);
+    };
+
+    const prevImage = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCurrentImageIndex((prevIndex) => (prevIndex - 1 + promoter.photos.length) % promoter.photos.length);
+    };
   
     return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300">
-      <img className="w-full h-56 object-cover object-center" src={promoter.photo} alt={promoter.name} />
+      <div className="relative">
+        <img className="w-full h-56 object-cover object-center" src={promoter.photos[currentImageIndex]} alt={promoter.name} />
+        {promoter.photos.length > 1 && (
+            <>
+                <button onClick={prevImage} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-1 rounded-full hover:bg-opacity-75 transition focus:outline-none">
+                    <ChevronLeftIcon className="h-6 w-6" />
+                </button>
+                <button onClick={nextImage} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-1 rounded-full hover:bg-opacity-75 transition focus:outline-none">
+                    <ChevronRightIcon className="h-6 w-6" />
+                </button>
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full">
+                    {currentImageIndex + 1} / {promoter.photos.length}
+                </div>
+            </>
+        )}
+      </div>
       <div className="p-6">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{promoter.name}</h2>
         <p className="text-gray-600 dark:text-gray-400">{promoter.age} anos</p>

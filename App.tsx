@@ -2,7 +2,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, NavLink } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
-import AdminPanel from './pages/AdminPanel';
+import AdminAuth from './pages/AdminAuth';
 
 const Header: React.FC = () => {
   const activeLinkClass = 'bg-primary text-white';
@@ -45,7 +45,7 @@ const App: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Routes>
               <Route path="/" element={<RegistrationForm />} />
-              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/admin" element={<AdminAuth />} />
             </Routes>
           </div>
         </main>

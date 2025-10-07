@@ -6,6 +6,6 @@ export interface Promoter {
   instagram: string;
   tiktok: string;
   age: number;
-  photo: string; // This will now store the image URL from Firebase Storage
+  photos: string[]; // This will now store the image URLs from Firebase Storage
   submissionDate: string;
 }

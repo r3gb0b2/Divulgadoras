@@ -28,7 +28,7 @@ export const getPromoters = async (): Promise<Promoter[]> => {
         instagram: data.instagram,
         tiktok: data.tiktok,
         age: data.age,
-        photo: data.photo,
+        photos: data.photos || [],
         submissionDate: submissionDate,
       });
     });
@@ -40,23 +40,26 @@ export const getPromoters = async (): Promise<Promoter[]> => {
   }
 };
 
-interface PromoterDataWithPhoto extends Omit<Promoter, 'id' | 'submissionDate' | 'photo'> {
-    photo: File;
+interface PromoterDataWithPhotos extends Omit<Promoter, 'id' | 'submissionDate' | 'photos'> {
+    photos: File[];
 }
 
-export const addPromoter = async (promoterData: PromoterDataWithPhoto): Promise<void> => {
+export const addPromoter = async (promoterData: PromoterDataWithPhotos): Promise<void> => {
     try {
-        // 1. Upload image to Firebase Storage
-        const photoFile = promoterData.photo;
-        const storageRef = ref(storage, `promoter_photos/${Date.now()}_${photoFile.name}`);
-        const snapshot = await uploadBytes(storageRef, photoFile);
-        const downloadURL = await getDownloadURL(snapshot.ref);
+        // 1. Upload all images to Firebase Storage concurrently
+        const photoURLs = await Promise.all(
+            promoterData.photos.map(async (photoFile) => {
+                const storageRef = ref(storage, `promoter_photos/${Date.now()}_${photoFile.name}`);
+                const snapshot = await uploadBytes(storageRef, photoFile);
+                return await getDownloadURL(snapshot.ref);
+            })
+        );
 
         // 2. Prepare data for Firestore
-        const { photo, ...promoterInfo } = promoterData;
+        const { photos, ...promoterInfo } = promoterData;
         const docData = {
             ...promoterInfo,
-            photo: downloadURL, // Save the image URL, not the file itself
+            photos: photoURLs, // Save the array of image URLs
             submissionDate: serverTimestamp(),
         };
 

@@ -62,9 +62,8 @@ const RegistrationForm: React.FC = () => {
     tiktok: '',
     age: 0,
   });
-  // FIX: Changed state to hold a File object instead of a Blob to retain the filename.
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -79,22 +78,29 @@ const RegistrationForm: React.FC = () => {
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (files && files.length > 0) {
       setIsProcessingPhoto(true);
       setSubmitError(null);
-      setPhotoPreview(null);
-      setPhotoFile(null);
+      setPhotoPreviews([]);
+      setPhotoFiles([]);
       
       try {
-        const compressedBlob = await resizeImage(file, 800, 800, 0.8);
-        // FIX: Reconstruct the File object from the resized Blob to preserve its name.
-        const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
-        setPhotoFile(compressedFile);
-        setPhotoPreview(URL.createObjectURL(compressedFile));
+        const fileList = Array.from(files);
+        const processedFiles = await Promise.all(
+          fileList.map(async (file) => {
+            const compressedBlob = await resizeImage(file, 800, 800, 0.8);
+            return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+          })
+        );
+        
+        setPhotoFiles(processedFiles);
+        const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
+        setPhotoPreviews(previewUrls);
+
       } catch (error) {
         console.error("Error processing image:", error);
-        setSubmitError("Houve um problema com sua foto. Por favor, tente uma imagem diferente.");
+        setSubmitError("Houve um problema com uma das fotos. Por favor, tente novamente.");
         e.target.value = '';
       } finally {
         setIsProcessingPhoto(false);
@@ -104,21 +110,21 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!photoFile) {
-        setSubmitError("Por favor, selecione uma foto para o cadastro.");
+    if (photoFiles.length === 0) {
+        setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
     setIsSubmitting(true);
     setSubmitError(null);
     
     try {
-      await addPromoter({ ...formData, photo: photoFile });
+      await addPromoter({ ...formData, photos: photoFiles });
       setSubmitSuccess(true);
       
       // Reset form
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0 });
-      setPhotoFile(null);
-      setPhotoPreview(null);
+      setPhotoFiles([]);
+      setPhotoPreviews([]);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -134,7 +140,7 @@ const RegistrationForm: React.FC = () => {
   
   const getButtonText = () => {
       if (isSubmitting) return 'Enviando Cadastro...';
-      if (isProcessingPhoto) return 'Processando foto...';
+      if (isProcessingPhoto) return 'Processando fotos...';
       return 'Finalizar Cadastro';
   }
 
@@ -169,25 +175,26 @@ const RegistrationForm: React.FC = () => {
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sua melhor foto</label>
-                    <div className="mt-1 flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                           {isProcessingPhoto ? (
-                                <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suas melhores fotos</label>
+                    <div className="mt-2 flex items-center gap-4">
+                        <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                           <CameraIcon className="w-5 h-5 mr-2 inline-block" />
+                            <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
+                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
+                        </label>
+                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1">
+                          {isProcessingPhoto ? (
+                                <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
-                            ) : photoPreview ? (
-                                <img className="h-24 w-24 rounded-full object-cover" src={photoPreview} alt="Prévia da foto" />
+                            ) : photoPreviews.length > 0 ? (
+                                photoPreviews.map((preview, index) => (
+                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover" src={preview} alt={`Prévia da foto ${index + 1}`} />
+                                ))
                             ) : (
-                                <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                    <CameraIcon className="h-10 w-10 text-gray-400" />
-                                </span>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma foto selecionada.</p>
                             )}
                         </div>
-                        <label htmlFor="photo-upload" className="cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                            <span>{photoPreview ? 'Trocar foto' : 'Enviar foto'}</span>
-                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" disabled={isProcessingPhoto || isSubmitting} />
-                        </label>
                     </div>
                 </div>
 
