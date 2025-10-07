@@ -70,7 +70,6 @@ const RegistrationForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -141,10 +140,6 @@ const RegistrationForm: React.FC = () => {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
-     if (!termsAccepted) {
-        setSubmitError("Você deve concordar com as regras de divulgação para continuar.");
-        return;
-    }
 
     if (formData.dateOfBirth) {
         const birthDate = new Date(formData.dateOfBirth);
@@ -179,7 +174,6 @@ const RegistrationForm: React.FC = () => {
       photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoFiles([]);
       setPhotoPreviews([]);
-      setTermsAccepted(false);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -265,25 +259,10 @@ const RegistrationForm: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                
-                <div className="pt-2">
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={termsAccepted}
-                            onChange={(e) => setTermsAccepted(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-gray-800 bg-gray-100 dark:bg-gray-700"
-                        />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Li e concordo com as <Link to="/rules" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">regras de divulgação</Link>.
-                        </span>
-                    </label>
-                </div>
-
 
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto || !termsAccepted}
+                    disabled={isSubmitting || isProcessingPhoto}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-pink-300 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { InstagramIcon } from '../components/Icons';
 
 const RulesPage: React.FC = () => {
+  const [rulesAccepted, setRulesAccepted] = useState(false);
   const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
   const instagramProfileLink = 'https://instagram.com/rafaelmacciel';
 
@@ -67,12 +68,31 @@ const RulesPage: React.FC = () => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Ao entrar no grupo, você concorda com todas as regras acima.</p>
+            <div className="mb-6">
+                <label className="flex items-center justify-center space-x-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={rulesAccepted}
+                        onChange={(e) => setRulesAccepted(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-gray-800 bg-gray-100 dark:bg-gray-700"
+                    />
+                    <span className="text-md text-gray-700 dark:text-gray-300">
+                        Li e concordo com todas as regras acima.
+                    </span>
+                </label>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Clique no botão abaixo para entrar no grupo do WhatsApp.</p>
             <a
-                href={whatsappGroupLink}
+                href={rulesAccepted ? whatsappGroupLink : undefined}
+                onClick={(e) => !rulesAccepted && e.preventDefault()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-lg"
+                aria-disabled={!rulesAccepted}
+                className={`inline-block text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg ${
+                    rulesAccepted
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-70'
+                }`}
             >
                 Entrar no Grupo
             </a>
