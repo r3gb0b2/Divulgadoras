@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { checkPromoterStatus } from '../services/promoterService';
 import { Promoter } from '../types';
@@ -34,7 +33,7 @@ const StatusCheck: React.FC = () => {
         },
         approved: {
             title: 'Aprovado!',
-            message: 'Parabéns! Seu cadastro foi aprovado. Fique de olho no seu e-mail e WhatsApp para os próximos passos.',
+            message: 'Parabéns! Seu cadastro foi aprovado. Clique no botão abaixo para entrar no grupo oficial.',
             styles: 'bg-green-100 border-green-500 text-green-700'
         },
         rejected: {
@@ -42,6 +41,44 @@ const StatusCheck: React.FC = () => {
             message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
             styles: 'bg-red-100 border-red-500 text-red-700'
         }
+    };
+    
+    // ATENÇÃO: Substitua o link abaixo pelo link real do seu grupo de WhatsApp
+    const whatsappGroupLink = 'https://chat.whatsapp.com/SEU_LINK_AQUI';
+
+    const renderStatusResult = () => {
+        if (!searched || isLoading || error) {
+            return null;
+        }
+
+        if (!promoter) {
+            return <p className="text-center text-gray-500 dark:text-gray-400">Nenhum cadastro encontrado para este e-mail.</p>;
+        }
+
+        const statusInfo = statusInfoMap[promoter.status];
+
+        if (!statusInfo) {
+             return <p className="text-center text-red-500 dark:text-red-400">Ocorreu um erro ao verificar o status. Por favor, contate o suporte.</p>;
+        }
+
+        return (
+            <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
+                <p className="font-bold">{statusInfo.title}</p>
+                <p>{statusInfo.message}</p>
+                {promoter.status === 'approved' && (
+                    <div className="mt-4">
+                        <a 
+                            href={whatsappGroupLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                        >
+                            Entrar no Grupo do WhatsApp
+                        </a>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -70,23 +107,9 @@ const StatusCheck: React.FC = () => {
 
                 {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
                 
-                {searched && !isLoading && !error && (
-                    <div className="mt-8">
-                        {promoter ? (
-                             (() => {
-                                const statusInfo = statusInfoMap[promoter.status];
-                                return (
-                                    <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
-                                        <p className="font-bold">{statusInfo.title}</p>
-                                        <p>{statusInfo.message}</p>
-                                    </div>
-                                );
-                            })()
-                        ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400">Nenhum cadastro encontrado para este e-mail.</p>
-                        )}
-                    </div>
-                )}
+                <div className="mt-8">
+                    {renderStatusResult()}
+                </div>
             </div>
         </div>
     );
