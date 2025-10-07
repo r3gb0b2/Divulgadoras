@@ -1,7 +1,9 @@
 import React from 'react';
+import { InstagramIcon } from '../components/Icons';
 
 const RulesPage: React.FC = () => {
   const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
+  const instagramProfileLink = 'https://instagram.com/rafaelmacciel';
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -44,6 +46,24 @@ const RulesPage: React.FC = () => {
               <li>É proibido divulgar outras festas ou eventos que aconteçam <span className="font-bold">no mesmo dia</span> dos eventos gerenciados por este grupo.</li>
             </ul>
           </div>
+
+          <div className="p-4 border rounded-lg dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-primary mb-3">5. Seguir no Instagram</h2>
+            <ul className="list-disc list-inside space-y-2">
+              <li>É fundamental seguir o perfil no Instagram para acompanhar as postagens e atualizações.
+                <a 
+                    href={instagramProfileLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="mt-2 inline-flex items-center gap-2 font-bold text-pink-600 dark:text-pink-400 hover:underline"
+                >
+                    <InstagramIcon className="w-5 h-5" />
+                    @rafaelmacciel
+                </a>
+              </li>
+            </ul>
+          </div>
+
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center">

@@ -89,7 +89,8 @@ const RegistrationForm: React.FC = () => {
       try {
         const fileList = Array.from(files);
         const processedFiles = await Promise.all(
-          fileList.map(async (file) => {
+          // FIX: Explicitly type 'file' as 'File' to resolve a TypeScript inference issue.
+          fileList.map(async (file: File) => {
             const compressedBlob = await resizeImage(file, 800, 800, 0.8);
             return new File([compressedBlob], file.name, { type: 'image/jpeg' });
           })

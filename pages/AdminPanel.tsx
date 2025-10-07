@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
 import { Promoter } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
+import PhotoViewerModal from '../components/PhotoViewerModal';
+import { InstagramIcon } from '../components/Icons';
 
 const calculateAge = (dateOfBirth: string): number => {
     if (!dateOfBirth) return 0;
@@ -25,6 +27,9 @@ const AdminPanel: React.FC = () => {
   const [ageFilter, setAgeFilter] = useState<string>('');
   const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+  const [photoStartIndex, setPhotoStartIndex] = useState(0);
   
   const fetchPromoters = useCallback(async () => {
     setLoading(true);
@@ -73,6 +78,12 @@ const AdminPanel: React.FC = () => {
   const openEditModal = (promoter: Promoter) => {
     setSelectedPromoter(promoter);
     setIsEditModalOpen(true);
+  };
+
+  const openPhotoViewer = (photos: string[], startIndex: number) => {
+    setSelectedPhotos(photos);
+    setPhotoStartIndex(startIndex);
+    setIsPhotoViewerOpen(true);
   };
   
   const filteredPromoters = useMemo(() => {
@@ -145,9 +156,9 @@ const AdminPanel: React.FC = () => {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center space-x-2">
                                         {p.photoUrls.slice(0, 3).map((url, index) => (
-                                            <a href={url} key={index} target="_blank" rel="noopener noreferrer">
+                                            <button key={index} onClick={() => openPhotoViewer(p.photoUrls, index)}>
                                                 <img src={url} alt={`Foto ${index+1}`} className="h-12 w-12 rounded-md object-cover hover:opacity-80 transition-opacity" />
-                                            </a>
+                                            </button>
                                         ))}
                                     </div>
                                 </td>
@@ -157,6 +168,20 @@ const AdminPanel: React.FC = () => {
                                     <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400 hover:underline">
                                         {p.whatsapp}
                                     </a>
+                                     {p.instagram && (
+                                        <>
+                                            <br/>
+                                            <a 
+                                                href={p.instagram.startsWith('http') ? p.instagram : `https://instagram.com/${p.instagram}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-pink-500 hover:text-pink-400 hover:underline flex items-center gap-1"
+                                            >
+                                                <InstagramIcon className="w-4 h-4" />
+                                                Instagram
+                                            </a>
+                                        </>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={p.status} /></td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.createdAt?.toDate().toLocaleDateString() ?? 'N/A'}</td>
@@ -191,6 +216,12 @@ const AdminPanel: React.FC = () => {
                 onSave={handleSaveFromModal}
             />
         )}
+        <PhotoViewerModal
+            isOpen={isPhotoViewerOpen}
+            onClose={() => setIsPhotoViewerOpen(false)}
+            imageUrls={selectedPhotos}
+            startIndex={photoStartIndex}
+        />
     </div>
   );
 };
