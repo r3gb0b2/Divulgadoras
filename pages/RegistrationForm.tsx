@@ -131,9 +131,11 @@ const RegistrationForm: React.FC = () => {
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
-    } catch (error: any) {
-      console.error("Failed to submit form", error.message);
-      setSubmitError("Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.");
+    // Fix: Made the catch block type-safe and ensured specific error messages are displayed.
+    } catch (error) {
+      console.error("Failed to submit form", error);
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
+      setSubmitError(message);
        setTimeout(() => setSubmitError(null), 5000);
     } finally {
       setIsSubmitting(false);

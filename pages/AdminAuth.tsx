@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import AdminPanel from './AdminPanel';
 
@@ -8,7 +9,7 @@ const AdminAuth: React.FC = () => {
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        if (password === '123123') {
+        if (password === '123654') {
             sessionStorage.setItem('isAdminAuthenticated', 'true');
             setIsAuthenticated(true);
             setError('');
