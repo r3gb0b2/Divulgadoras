@@ -7,13 +7,13 @@ import { getStorage } from "firebase/storage";
 // ATENÇÃO: Substitua os valores abaixo pelas credenciais do SEU projeto no Firebase
 // NUNCA compartilhe estas chaves publicamente.
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_PROJECT_ID.firebaseapp.com",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_PROJECT_ID.appspot.com",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId: "SEU_APP_ID",
-  measurementId: "SEU_MEASUREMENT_ID"
+  apiKey: "AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU",
+  authDomain: "stingressos-e0a5f.firebaseapp.com",
+  projectId: "stingressos-e0a5f",
+  storageBucket: "stingressos-e0a5f.firebasestorage.app",
+  messagingSenderId: "424186734009",
+  appId: "1:424186734009:web:385f6c645a3ace2f784268",
+  measurementId: "G-JTEQ46VCRY"
 };
 
 // Initialize Firebase
