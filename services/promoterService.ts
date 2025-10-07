@@ -1,50 +1,64 @@
 import { Promoter } from '../types';
+import { firestore, storage } from '../firebase/config';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const NPOINT_BIN_ID = 'c135455959952e4f626b';
-const API_URL = `https://api.npoint.io/bins/${NPOINT_BIN_ID}`;
 
 export const getPromoters = async (): Promise<Promoter[]> => {
   try {
-    const response = await fetch(API_URL, { cache: 'no-store' });
-    if (!response.ok) {
-      console.warn(`Received status ${response.status} when fetching promoters. This might happen if the store is empty.`);
-      return [];
-    }
-    const data = await response.json();
-    const promoters: Promoter[] = Array.isArray(data) ? data : [];
-    // Sort by newest first (by submission timestamp)
-    return promoters.sort((a, b) => b.id - a.id);
+    const promotersCollection = collection(firestore, 'promoters');
+    const q = query(promotersCollection, orderBy('submissionDate', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    const promoters: Promoter[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      promoters.push({
+        id: doc.id,
+        name: data.name,
+        whatsapp: data.whatsapp,
+        email: data.email,
+        instagram: data.instagram,
+        tiktok: data.tiktok,
+        age: data.age,
+        photo: data.photo,
+        submissionDate: data.submissionDate.toDate().toISOString(),
+      });
+    });
+    return promoters;
   } catch (error) {
-    console.error("Failed to fetch or parse promoters", error);
+    console.error("Failed to fetch promoters from Firestore", error);
     return []; // Return empty array on error to prevent app crash
   }
 };
 
-export const addPromoter = async (promoterData: Omit<Promoter, 'id' | 'submissionDate'>): Promise<void> => {
-  // This fetch-then-update approach has a risk of race conditions in high-concurrency scenarios.
-  // For this application's expected usage, the risk is minimal and acceptable.
-  // A more robust solution would require a proper backend with atomic operations.
-  const currentPromoters = await getPromoters();
-  
-  const newPromoter: Promoter = {
-    ...promoterData,
-    id: Date.now(),
-    submissionDate: new Date().toISOString(),
-  };
+interface PromoterDataWithPhoto extends Omit<Promoter, 'id' | 'submissionDate' | 'photo'> {
+    // FIX: Changed type from Blob to File, as File contains the 'name' property needed for storage upload.
+    photo: File;
+}
 
-  const updatedPromoters = [newPromoter, ...currentPromoters];
+export const addPromoter = async (promoterData: PromoterDataWithPhoto): Promise<void> => {
+    try {
+        // 1. Upload image to Firebase Storage
+        const photoFile = promoterData.photo;
+        const storageRef = ref(storage, `promoter_photos/${Date.now()}_${photoFile.name}`);
+        const snapshot = await uploadBytes(storageRef, photoFile);
+        const downloadURL = await getDownloadURL(snapshot.ref);
 
-  const updateResponse = await fetch(API_URL, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updatedPromoters),
-  });
+        // 2. Prepare data for Firestore
+        const { photo, ...promoterInfo } = promoterData;
+        const docData = {
+            ...promoterInfo,
+            photo: downloadURL, // Save the image URL, not the file itself
+            submissionDate: serverTimestamp(),
+        };
 
-  if (!updateResponse.ok) {
-    const errorBody = await updateResponse.text();
-    console.error("Failed to add promoter:", errorBody);
-    throw new Error(`Failed to save promoter data. Status: ${updateResponse.status}`);
-  }
+        // 3. Add promoter document to Firestore
+        const promotersCollection = collection(firestore, 'promoters');
+        await addDoc(promotersCollection, docData);
+
+    } catch (error) {
+        console.error("Failed to add promoter to Firestore:", error);
+        throw new Error(`Failed to save promoter data.`);
+    }
 };

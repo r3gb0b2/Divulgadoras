@@ -1,12 +1,11 @@
-
 export interface Promoter {
-  id: number;
+  id: string; // Firestore uses string IDs
   name: string;
   whatsapp: string;
   email: string;
   instagram: string;
   tiktok: string;
   age: number;
-  photo: string; // Base64 encoded image
+  photo: string; // This will now store the image URL from Firebase Storage
   submissionDate: string;
 }

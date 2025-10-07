@@ -1,42 +1,9 @@
-
 import React, { useState } from 'react';
 import { addPromoter } from '../services/promoterService';
-import { Promoter } from '../types';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 
-type PromoterFormData = Omit<Promoter, 'id' | 'submissionDate'>;
-
-// Chave de API para o serviço de hospedagem de imagens imgbb
-const IMGBB_API_KEY = '6a615217f7911b3390234a02324901f2';
-
-// Função para fazer upload da imagem para um host e retornar a URL
-const uploadImageToHost = async (base64Image: string): Promise<string> => {
-  const formData = new FormData();
-  // Extrai apenas os dados Base64, removendo o prefixo "data:image/jpeg;base64,"
-  const base64Data = base64Image.substring(base64Image.indexOf(',') + 1);
-  formData.append('image', base64Data);
-
-  const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Falha no upload da imagem: ${errorData.error.message}`);
-  }
-
-  const result = await response.json();
-  if (result.data?.url) {
-    return result.data.url;
-  } else {
-    throw new Error('A resposta da API de imagem não continha uma URL.');
-  }
-};
-
-
-// Helper function to resize and compress images
-const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<string> => {
+// Helper function to resize and compress images and return a Blob
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -72,9 +39,12 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
         
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Get the data URL as a JPEG with specified quality
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return reject(new Error('Canvas to Blob conversion failed'));
+          }
+          resolve(blob);
+        }, 'image/jpeg', quality);
       };
       img.onerror = (error) => reject(error);
     };
@@ -84,18 +54,18 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
 
 
 const RegistrationForm: React.FC = () => {
-  const [formData, setFormData] = useState<PromoterFormData>({
+  const [formData, setFormData] = useState({
     name: '',
     whatsapp: '',
     email: '',
     instagram: '',
     tiktok: '',
     age: 0,
-    photo: '', // Agora irá armazenar a URL da imagem
   });
+  // FIX: Changed state to hold a File object instead of a Blob to retain the filename.
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -114,46 +84,40 @@ const RegistrationForm: React.FC = () => {
       setIsProcessingPhoto(true);
       setSubmitError(null);
       setPhotoPreview(null);
+      setPhotoFile(null);
       
       try {
-        // 1. Redimensiona a imagem localmente
-        const resizedBase64 = await resizeImage(file, 800, 800, 0.8);
-        setPhotoPreview(resizedBase64); // Mostra preview imediatamente
-        setIsProcessingPhoto(false);
-        
-        // 2. Faz o upload da imagem redimensionada
-        setIsUploadingPhoto(true);
-        const imageUrl = await uploadImageToHost(resizedBase64);
-        
-        // 3. Salva a URL retornada no estado do formulário
-        setFormData(prev => ({ ...prev, photo: imageUrl }));
-
+        const compressedBlob = await resizeImage(file, 800, 800, 0.8);
+        // FIX: Reconstruct the File object from the resized Blob to preserve its name.
+        const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        setPhotoFile(compressedFile);
+        setPhotoPreview(URL.createObjectURL(compressedFile));
       } catch (error) {
-        console.error("Error processing or uploading image:", error);
-        setSubmitError("Houve um problema com sua foto. Por favor, tente uma imagem diferente ou verifique sua conexão.");
+        console.error("Error processing image:", error);
+        setSubmitError("Houve um problema com sua foto. Por favor, tente uma imagem diferente.");
         e.target.value = '';
-        setPhotoPreview(null);
       } finally {
         setIsProcessingPhoto(false);
-        setIsUploadingPhoto(false);
       }
     }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!formData.photo) {
-        alert("Por favor, aguarde o envio da foto antes de finalizar.");
+    if (!photoFile) {
+        setSubmitError("Por favor, selecione uma foto para o cadastro.");
         return;
     }
     setIsSubmitting(true);
     setSubmitError(null);
     
     try {
-      await addPromoter(formData);
+      await addPromoter({ ...formData, photo: photoFile });
       setSubmitSuccess(true);
+      
       // Reset form
-      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0, photo: '' });
+      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0 });
+      setPhotoFile(null);
       setPhotoPreview(null);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -169,9 +133,8 @@ const RegistrationForm: React.FC = () => {
   };
   
   const getButtonText = () => {
-      if (isSubmitting) return 'Enviando...';
+      if (isSubmitting) return 'Enviando Cadastro...';
       if (isProcessingPhoto) return 'Processando foto...';
-      if (isUploadingPhoto) return 'Enviando foto...';
       return 'Finalizar Cadastro';
   }
 
@@ -209,7 +172,7 @@ const RegistrationForm: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sua melhor foto</label>
                     <div className="mt-1 flex items-center space-x-4">
                         <div className="flex-shrink-0">
-                           {isProcessingPhoto || isUploadingPhoto ? (
+                           {isProcessingPhoto ? (
                                 <span className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
@@ -223,15 +186,14 @@ const RegistrationForm: React.FC = () => {
                         </div>
                         <label htmlFor="photo-upload" className="cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                             <span>{photoPreview ? 'Trocar foto' : 'Enviar foto'}</span>
-                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" disabled={isProcessingPhoto || isUploadingPhoto} />
+                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" disabled={isProcessingPhoto || isSubmitting} />
                         </label>
                     </div>
-                     {isUploadingPhoto && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Enviando foto, por favor aguarde...</p>}
                 </div>
 
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto || isUploadingPhoto}
+                    disabled={isSubmitting || isProcessingPhoto}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-pink-300 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}
