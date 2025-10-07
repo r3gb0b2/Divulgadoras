@@ -131,7 +131,9 @@ const RegistrationForm: React.FC = () => {
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
-    // Fix: Made the catch block type-safe and ensured specific error messages are displayed.
+    // FIX: The catch block now safely handles errors of 'unknown' type.
+    // This prevents runtime errors from trying to access properties like 'name' or 'message'
+    // on non-Error objects, and avoids incorrectly treating an error as a 'File' object.
     } catch (error) {
       console.error("Failed to submit form", error);
       const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";

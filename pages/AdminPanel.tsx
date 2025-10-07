@@ -9,6 +9,7 @@ const AdminPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [ageFilter, setAgeFilter] = useState<string>('');
   const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
@@ -62,9 +63,18 @@ const AdminPanel: React.FC = () => {
   };
   
   const filteredPromoters = useMemo(() => {
-    if (filter === 'all') return promoters;
-    return promoters.filter(p => p.status === filter);
-  }, [promoters, filter]);
+    let promotersToFilter = promoters;
+
+    if (filter !== 'all') {
+      promotersToFilter = promotersToFilter.filter(p => p.status === filter);
+    }
+
+    if (ageFilter) {
+      promotersToFilter = promotersToFilter.filter(p => p.age === parseInt(ageFilter, 10));
+    }
+
+    return promotersToFilter;
+  }, [promoters, filter, ageFilter]);
 
   const StatusBadge: React.FC<{ status: Promoter['status'] }> = ({ status }) => {
     const styles = {
@@ -84,11 +94,20 @@ const AdminPanel: React.FC = () => {
     <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Painel Administrativo</h1>
         
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 items-center mb-6">
             <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes</button>
             <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados</button>
             <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados</button>
             <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos</button>
+            <div className="ml-auto">
+                <input
+                    type="number"
+                    placeholder="Filtrar por idade..."
+                    value={ageFilter}
+                    onChange={(e) => setAgeFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                />
+            </div>
         </div>
 
         {loading && <p className="text-center py-4">Carregando...</p>}
@@ -119,7 +138,13 @@ const AdminPanel: React.FC = () => {
                                         ))}
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.email}<br/>{p.whatsapp}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {p.email}
+                                    <br/>
+                                    <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400 hover:underline">
+                                        {p.whatsapp}
+                                    </a>
+                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={p.status} /></td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.createdAt?.toDate().toLocaleDateString() ?? 'N/A'}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

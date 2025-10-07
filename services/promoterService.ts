@@ -6,6 +6,13 @@ import { Promoter, PromoterApplicationData } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
+    // Check for existing email before proceeding
+    const q = query(collection(firestore, "promoters"), where("email", "==", promoterData.email.toLowerCase().trim()));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      throw new Error("Este e-mail já foi cadastrado.");
+    }
+
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
         const fileExtension = photo.name.split('.').pop();
@@ -30,6 +37,9 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     await addDoc(collection(firestore, 'promoters'), newPromoter);
   } catch (error) {
     console.error("Error adding promoter: ", error);
+    if (error instanceof Error) {
+        throw error; // Re-throw the specific error
+    }
     throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
   }
 };
