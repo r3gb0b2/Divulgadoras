@@ -132,7 +132,7 @@ const RegistrationForm: React.FC = () => {
       
       setTimeout(() => setSubmitSuccess(false), 5000);
     // FIX: The catch block now safely handles errors of 'unknown' type.
-    // This prevents runtime errors from trying to access properties like 'name' or 'message'
+    // This prevents runtime errors from trying to access properties like 'message'
     // on non-Error objects, and avoids incorrectly treating an error as a 'File' object.
     } catch (error) {
       console.error("Failed to submit form", error);
@@ -188,14 +188,14 @@ const RegistrationForm: React.FC = () => {
                             <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
                             <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
                         </label>
-                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1">
+                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           {isProcessingPhoto ? (
-                                <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center snap-start">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
                             ) : photoPreviews.length > 0 ? (
                                 photoPreviews.map((preview, index) => (
-                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover" src={preview} alt={`Prévia da foto ${index + 1}`} />
+                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
                                 ))
                             ) : (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma foto selecionada.</p>
