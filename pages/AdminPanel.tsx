@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getPromoters } from '../services/promoterService';
 import { Promoter } from '../types';
@@ -6,10 +5,34 @@ import { InstagramIcon, TikTokIcon, MailIcon, PhoneIcon } from '../components/Ic
 
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setPromoters(getPromoters());
+    const loadPromoters = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedPromoters = await getPromoters();
+        setPromoters(fetchedPromoters);
+      } catch (error) {
+        console.error("Failed to load promoters:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadPromoters();
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-10">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Painel Administrativo</h1>
+        <div className="flex justify-center items-center space-x-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-gray-600 dark:text-gray-400 text-lg">Carregando perfis...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (promoters.length === 0) {
     return (

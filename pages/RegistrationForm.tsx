@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { addPromoter } from '../services/promoterService';
 import { Promoter } from '../types';
@@ -19,6 +18,7 @@ const RegistrationForm: React.FC = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
@@ -41,31 +41,32 @@ const RegistrationForm: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!formData.photo) {
         alert("Por favor, envie uma foto.");
         return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
-      try {
-        addPromoter(formData);
-        setSubmitSuccess(true);
-        // Reset form
-        setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0, photo: '' });
-        setPhotoPreview(null);
-        const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-
-      } catch (error) {
-        console.error("Failed to submit form", error);
-        alert("Ocorreu um erro ao enviar o formulário.");
-      } finally {
-        setIsSubmitting(false);
-        setTimeout(() => setSubmitSuccess(false), 5000); // Hide success message after 5s
-      }
-    }, 1000); // Simulate network delay
+    setSubmitError(null);
+    
+    try {
+      await addPromoter(formData);
+      setSubmitSuccess(true);
+      // Reset form
+      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', age: 0, photo: '' });
+      setPhotoPreview(null);
+      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
+      setTimeout(() => setSubmitSuccess(false), 5000); // Hide success message after 5s
+    } catch (error) {
+      console.error("Failed to submit form", error);
+      setSubmitError("Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.");
+       setTimeout(() => setSubmitError(null), 5000); // Hide error message after 5s
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -78,6 +79,13 @@ const RegistrationForm: React.FC = () => {
                 <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
                     <p>Seu cadastro foi enviado. Entraremos em contato em breve.</p>
+                </div>
+            )}
+
+            {submitError && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
+                    <p className="font-bold">Erro no Envio</p>
+                    <p>{submitError}</p>
                 </div>
             )}
             
