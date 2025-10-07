@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 // Fix: Corrected import paths for services and components.
 import { addPromoter } from '../services/promoterService';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
@@ -69,12 +70,23 @@ const RegistrationForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    let finalValue = value;
+
+    if (name === 'whatsapp') {
+      const onlyNums = value.replace(/\D/g, '');
+      finalValue = onlyNums
+        .replace(/^(\d{2})/, '($1) ')
+        .replace(/(\d{5})(\d)/, '$1-$2')
+        .slice(0, 15); // Formato: (XX) XXXXX-XXXX
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: value,
+      [name]: finalValue,
     }));
   };
 
@@ -83,6 +95,8 @@ const RegistrationForm: React.FC = () => {
     if (files && files.length > 0) {
       setIsProcessingPhoto(true);
       setSubmitError(null);
+      // Clear previous selections
+      photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoPreviews([]);
       setPhotoFiles([]);
       
@@ -110,10 +124,25 @@ const RegistrationForm: React.FC = () => {
     }
   };
 
+  const handleRemovePhoto = (indexToRemove: number) => {
+    const newFiles = photoFiles.filter((_, index) => index !== indexToRemove);
+    const newPreviews = photoPreviews.filter((_, index) => index !== indexToRemove);
+    
+    // Revoke the object URL to free memory
+    URL.revokeObjectURL(photoPreviews[indexToRemove]);
+
+    setPhotoFiles(newFiles);
+    setPhotoPreviews(newPreviews);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (photoFiles.length === 0) {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
+        return;
+    }
+     if (!termsAccepted) {
+        setSubmitError("Você deve concordar com as regras de divulgação para continuar.");
         return;
     }
 
@@ -147,8 +176,10 @@ const RegistrationForm: React.FC = () => {
       
       // Reset form
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
+      photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoFiles([]);
       setPhotoPreviews([]);
+      setTermsAccepted(false);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -197,7 +228,7 @@ const RegistrationForm: React.FC = () => {
                     <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
                 </div>
                 <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
-                <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
+                <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required maxLength={15} />
                 <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
 
@@ -206,17 +237,27 @@ const RegistrationForm: React.FC = () => {
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
-                            <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
+                            <span>{photoPreviews.length > 0 ? `Trocar (${photoPreviews.length}) fotos` : 'Enviar fotos'}</span>
                             <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
                         </label>
-                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        <div className="flex-grow flex items-center gap-4 overflow-x-auto p-2 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           {isProcessingPhoto ? (
                                 <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center snap-start">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
                             ) : photoPreviews.length > 0 ? (
                                 photoPreviews.map((preview, index) => (
-                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
+                                   <div key={preview} className="relative flex-shrink-0 snap-start">
+                                        <img className="h-20 w-20 rounded-lg object-cover" src={preview} alt={`Prévia da foto ${index + 1}`} />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemovePhoto(index)}
+                                            className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center text-sm font-bold hover:bg-red-700 transition-transform transform hover:scale-110"
+                                            aria-label={`Remover foto ${index + 1}`}
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
                                 ))
                             ) : (
                                 <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Nenhuma foto selecionada.</p>
@@ -224,10 +265,25 @@ const RegistrationForm: React.FC = () => {
                         </div>
                     </div>
                 </div>
+                
+                <div className="pt-2">
+                    <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={termsAccepted}
+                            onChange={(e) => setTermsAccepted(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-offset-gray-800 bg-gray-100 dark:bg-gray-700"
+                        />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Li e concordo com as <Link to="/rules" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">regras de divulgação</Link>.
+                        </span>
+                    </label>
+                </div>
+
 
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
+                    disabled={isSubmitting || isProcessingPhoto || !termsAccepted}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-pink-300 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}
