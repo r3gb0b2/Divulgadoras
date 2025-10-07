@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 interface PhotoViewerModalProps {
   imageUrls: string[];
@@ -13,6 +13,21 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
   useEffect(() => {
     setCurrentIndex(startIndex);
   }, [startIndex, isOpen]);
+
+  // Fix: Hoisted function declarations and wrapped them in useCallback to prevent re-renders and fix "used before declaration" error.
+  const goToPrevious = useCallback(() => {
+    setCurrentIndex((prevIndex) => {
+      const isFirstSlide = prevIndex === 0;
+      return isFirstSlide ? imageUrls.length - 1 : prevIndex - 1;
+    });
+  }, [imageUrls.length]);
+
+  const goToNext = useCallback(() => {
+    setCurrentIndex((prevIndex) => {
+      const isLastSlide = prevIndex === imageUrls.length - 1;
+      return isLastSlide ? 0 : prevIndex + 1;
+    });
+  }, [imageUrls.length]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -30,23 +45,11 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, currentIndex]); // Re-add listener if state changes
+  }, [isOpen, goToNext, goToPrevious, onClose]); // Updated dependencies
 
   if (!isOpen || !imageUrls || imageUrls.length === 0) {
     return null;
   }
-
-  const goToPrevious = () => {
-    const isFirstSlide = currentIndex === 0;
-    const newIndex = isFirstSlide ? imageUrls.length - 1 : currentIndex - 1;
-    setCurrentIndex(newIndex);
-  };
-
-  const goToNext = () => {
-    const isLastSlide = currentIndex === imageUrls.length - 1;
-    const newIndex = isLastSlide ? 0 : currentIndex + 1;
-    setCurrentIndex(newIndex);
-  };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -56,7 +59,7 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4 transition-opacity duration-300"
+      className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-2 sm:p-4 transition-opacity duration-300"
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
@@ -64,7 +67,7 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
       <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col justify-center">
         <button
           onClick={onClose}
-          className="absolute -top-8 right-0 text-white text-4xl font-bold hover:text-gray-300 z-50"
+          className="absolute top-0 right-0 m-2 text-white text-4xl font-bold hover:text-gray-300 z-50 leading-none"
           aria-label="Fechar"
         >
           &times;
@@ -74,10 +77,10 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
           {imageUrls.length > 1 && (
              <button
                 onClick={goToPrevious}
-                className="absolute left-0 -translate-x-12 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all z-50"
+                className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-40 text-white p-1 sm:p-2 rounded-full hover:bg-opacity-60 transition-all z-50"
                 aria-label="Foto anterior"
              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
              </button>
@@ -92,10 +95,10 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
           {imageUrls.length > 1 && (
             <button
               onClick={goToNext}
-              className="absolute right-0 translate-x-12 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all z-50"
+              className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-40 text-white p-1 sm:p-2 rounded-full hover:bg-opacity-60 transition-all z-50"
               aria-label="Próxima foto"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>

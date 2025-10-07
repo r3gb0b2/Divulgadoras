@@ -79,7 +79,7 @@ const StatusCheck: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
+            <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Verificar Status do Cadastro</h1>
                 <p className="text-center text-gray-600 dark:text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status.</p>
                 

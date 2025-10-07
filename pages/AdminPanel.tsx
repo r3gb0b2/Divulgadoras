@@ -115,15 +115,17 @@ const AdminPanel: React.FC = () => {
   }
   
   return (
-    <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
+    <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 md:p-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Painel Administrativo</h1>
         
-        <div className="flex flex-wrap gap-2 items-center mb-6">
-            <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes</button>
-            <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados</button>
-            <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados</button>
-            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos</button>
-            <div className="ml-auto">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+            <div className="flex flex-wrap gap-2">
+                <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes</button>
+                <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados</button>
+                <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados</button>
+                <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos</button>
+            </div>
+            <div className="md:ml-auto">
                 <input
                     type="number"
                     placeholder="Filtrar por idade..."
@@ -137,7 +139,7 @@ const AdminPanel: React.FC = () => {
         {loading && <p className="text-center py-4">Carregando...</p>}
         {error && <p className="text-red-500 text-center py-4">Erro: {error}</p>}
         {!loading && !error && (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-4 md:-mx-8 px-4 md:px-8">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                         <tr>

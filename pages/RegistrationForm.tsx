@@ -173,7 +173,7 @@ const RegistrationForm: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
+        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
             <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Seja uma Divulgadora</h1>
             <p className="text-center text-gray-600 dark:text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
@@ -219,7 +219,7 @@ const RegistrationForm: React.FC = () => {
                                    <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
                                 ))
                             ) : (
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma foto selecionada.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Nenhuma foto selecionada.</p>
                             )}
                         </div>
                     </div>

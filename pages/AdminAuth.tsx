@@ -25,9 +25,9 @@ const AdminAuth: React.FC = () => {
     }
 
     return (
-        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-            <div className="w-full max-w-md">
-                <form onSubmit={handleLogin} className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8 text-center">
+        <div className="flex items-center justify-center p-4 min-h-[calc(100vh-200px)]">
+            <div className="w-full max-w-md mx-auto">
+                <form onSubmit={handleLogin} className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg px-6 py-8 sm:p-8 text-center">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Acesso Restrito</h1>
                     <p className="text-gray-600 dark:text-gray-400 mb-6">Por favor, insira a senha para acessar o painel administrativo.</p>
                     
