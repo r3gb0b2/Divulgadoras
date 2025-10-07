@@ -13,6 +13,13 @@ export const getPromoters = async (): Promise<Promoter[]> => {
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+
+      // Ensure submissionDate is a valid Firestore Timestamp before converting
+      const submissionTimestamp = data.submissionDate;
+      const submissionDate = submissionTimestamp && typeof submissionTimestamp.toDate === 'function'
+        ? submissionTimestamp.toDate().toISOString()
+        : new Date().toISOString(); // Fallback if data is malformed
+
       promoters.push({
         id: doc.id,
         name: data.name,
@@ -22,18 +29,18 @@ export const getPromoters = async (): Promise<Promoter[]> => {
         tiktok: data.tiktok,
         age: data.age,
         photo: data.photo,
-        submissionDate: data.submissionDate.toDate().toISOString(),
+        submissionDate: submissionDate,
       });
     });
     return promoters;
   } catch (error) {
-    console.error("Failed to fetch promoters from Firestore", error);
-    return []; // Return empty array on error to prevent app crash
+    console.error("Erro ao buscar perfis do Firestore:", error);
+    // Re-throw the error so the UI component can catch it and display a message
+    throw error;
   }
 };
 
 interface PromoterDataWithPhoto extends Omit<Promoter, 'id' | 'submissionDate' | 'photo'> {
-    // FIX: Changed type from Blob to File, as File contains the 'name' property needed for storage upload.
     photo: File;
 }
 

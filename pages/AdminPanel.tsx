@@ -6,15 +6,18 @@ import { InstagramIcon, TikTokIcon, MailIcon, PhoneIcon } from '../components/Ic
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPromoters = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const fetchedPromoters = await getPromoters();
         setPromoters(fetchedPromoters);
-      } catch (error) {
-        console.error("Failed to load promoters:", error);
+      } catch (err) {
+        console.error("Failed to load promoters:", err);
+        setError("Não foi possível carregar os perfis. Verifique se as credenciais do Firebase estão corretas e se as regras de segurança permitem a leitura de dados.");
       } finally {
         setIsLoading(false);
       }
@@ -30,6 +33,16 @@ const AdminPanel: React.FC = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           <p className="text-gray-600 dark:text-gray-400 text-lg">Carregando perfis...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-10 bg-red-50 dark:bg-gray-800 rounded-lg p-6">
+        <h1 className="text-3xl font-bold text-red-600 dark:text-red-400 mb-4">Ocorreu um Erro</h1>
+        <p className="text-red-700 dark:text-red-300">{error}</p>
+        <p className="text-sm text-gray-500 mt-4">Dica: Verifique o console do navegador (F12) para ver detalhes técnicos do erro.</p>
       </div>
     );
   }
