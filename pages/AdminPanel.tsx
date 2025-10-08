@@ -6,7 +6,8 @@ import { signOut } from 'firebase/auth';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import RejectionModal from '../components/RejectionModal';
-import { InstagramIcon, MailIcon, WhatsAppIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, DownloadIcon, RestoreIcon, TrashIcon } from '../components/Icons';
+import PresetManagerModal from '../components/PresetManagerModal';
+import { InstagramIcon, TikTokIcon, MailIcon, WhatsAppIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, DownloadIcon, RestoreIcon, TrashIcon } from '../components/Icons';
 import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 const calculateAge = (dateOfBirth: string): number => {
@@ -38,6 +39,7 @@ const AdminPanel: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [isPresetManagerOpen, setIsPresetManagerOpen] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [photoStartIndex, setPhotoStartIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -60,16 +62,9 @@ const AdminPanel: React.FC = () => {
           ? await getArchivedPromoters(lastVisible)
           : await getPromoters(filter, lastVisible);
 
-      // Client-side filtering to hide archived promoters from active lists.
-      // This is done to avoid complex Firestore queries that require a manual index.
-      const promotersToDisplay = filter !== 'archived'
-          ? fetchedPromoters.filter(p => p.isArchived !== true)
-          : fetchedPromoters;
-      
-      setAllPromoters(promotersToDisplay);
+      // The service now handles filtering non-archived promoters correctly for the 'all' filter.
+      setAllPromoters(fetchedPromoters);
 
-      // Pagination logic is based on the raw fetched data length to ensure correct
-      // page transitions, even if the current page looks short after filtering.
       if (fetchedPromoters.length < PAGE_SIZE) {
         setIsLastPage(true);
       } else {
@@ -340,15 +335,20 @@ const AdminPanel: React.FC = () => {
             <button onClick={() => setFilter('archived')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'archived' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Arquivados</button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="relative md:col-span-2">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
+            <div className="relative flex-grow">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
                 <input type="text" placeholder="Buscar por nome, e-mail, Instagram na página atual..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
             </div>
-            <button onClick={handleExportCSV} className="md:col-start-3 justify-self-end w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                <DownloadIcon className="w-4 h-4" />
-                Exportar CSV (página atual)
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+                 <button onClick={() => setIsPresetManagerOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    Gerenciar Mensagens
+                </button>
+                <button onClick={handleExportCSV} className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                    <DownloadIcon className="w-4 h-4" />
+                    Exportar CSV
+                </button>
+            </div>
         </div>
 
         {selectedIds.length > 0 && filter !== 'archived' && (
@@ -398,6 +398,7 @@ const AdminPanel: React.FC = () => {
                                         <a href={`mailto:${p.email}`} className="hover:underline">{p.email}</a><br/>
                                         <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="text-green-500 hover:text-green-400 hover:underline">{p.whatsapp}</a>
                                         {p.instagram && (<><br/><a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noopener noreferrer" className="text-pink-500 hover:text-pink-400 hover:underline flex items-center gap-1"><InstagramIcon className="w-4 h-4" /> {p.instagram}</a></>)}
+                                        {p.tiktok && (<><br/><a href={`https://tiktok.com/@${p.tiktok}`} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-300 hover:underline flex items-center gap-1"><TikTokIcon className="w-4 h-4" /> {p.tiktok}</a></>)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={p.status} /></td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.createdAt?.toDate().toLocaleDateString() ?? 'N/A'}</td>
@@ -450,6 +451,7 @@ const AdminPanel: React.FC = () => {
         {selectedPromoter && <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={handleSaveFromModal} />}
         <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={selectedPhotos} startIndex={photoStartIndex} />
         {promoterToReject && <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onSubmit={handleRejectSubmit} promoterName={promoterToReject.name} />}
+        <PresetManagerModal isOpen={isPresetManagerOpen} onClose={() => setIsPresetManagerOpen(false)} />
     </div>
   );
 };

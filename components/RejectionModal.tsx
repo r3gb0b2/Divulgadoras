@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getRejectionPresets } from '../services/settingsService';
 
 interface RejectionModalProps {
   isOpen: boolean;
@@ -7,20 +8,23 @@ interface RejectionModalProps {
   promoterName: string;
 }
 
-const REASON_PRESETS = [
-    'Fotos de baixa qualidade ou inadequadas.',
-    'Perfil do Instagram privado ou inativo.',
-    'Informações de cadastro incompletas ou inconsistentes.',
-    'Não atende aos critérios de parceria no momento.',
-];
-
 const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onSubmit, promoterName }) => {
   const [reason, setReason] = useState('');
+  const [presets, setPresets] = useState<string[]>([]);
+  const [isLoadingPresets, setIsLoadingPresets] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setReason(''); // Reset reason when modal opens
+      
+      const fetchPresets = async () => {
+          setIsLoadingPresets(true);
+          const fetchedPresets = await getRejectionPresets();
+          setPresets(fetchedPresets);
+          setIsLoadingPresets(false);
+      };
+      fetchPresets();
     }
   }, [isOpen]);
 
@@ -57,11 +61,13 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onSubm
         <div className="mb-6">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ou use uma mensagem rápida:</p>
             <div className="flex flex-wrap gap-2">
-                {REASON_PRESETS.map(preset => (
-                    <button key={preset} onClick={() => setReason(preset)} className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-sm rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
-                        {preset}
-                    </button>
-                ))}
+                {isLoadingPresets ? <p className="text-xs text-gray-500">Carregando mensagens...</p> : (
+                    presets.map(preset => (
+                        <button key={preset} onClick={() => setReason(preset)} className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-sm rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
+                            {preset}
+                        </button>
+                    ))
+                )}
             </div>
         </div>
 

@@ -55,12 +55,12 @@ export const getPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [];
     
-    // NOTE: The isArchived filter was removed from the query to avoid invalid
-    // compound queries that require a manual index in Firestore.
-    // Filtering is now handled on the client-side in AdminPanel.tsx.
-
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
+    } else {
+        // For the 'all' filter, explicitly fetch only non-archived promoters.
+        // This query is valid because it uses a '!=' filter with the required orderBy('__name__').
+        queryConstraints.push(where("isArchived", "!=", true));
     }
     
     // Order by document ID to support pagination without custom indexes.
