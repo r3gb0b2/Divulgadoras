@@ -9,6 +9,42 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 
+const calculateAge = (dateString: string | undefined): string => {
+    if (!dateString) return '';
+    try {
+        const birthDate = new Date(dateString);
+        // Adjust for timezone to get correct age calculation from YYYY-MM-DD
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return `${age} anos`;
+    } catch (error) {
+        console.error("Error calculating age:", error);
+        return '';
+    }
+};
+
+const formatSocialUrl = (value: string | undefined, platform: 'instagram' | 'tiktok'): string => {
+    if (!value) return '#';
+    // If it's already a valid URL, return it.
+    if (value.startsWith('http')) return value;
+    
+    // Clean up common prefixes/symbols
+    const cleanedIdentifier = value.split('.com/').pop()?.split('/')[0].replace('@', '').trim();
+
+    if (platform === 'instagram') {
+        return `https://www.instagram.com/${cleanedIdentifier}`;
+    }
+    if (platform === 'tiktok') {
+        return `https://www.tiktok.com/@${cleanedIdentifier}`;
+    }
+    return '#';
+};
+
 const AdminPanel: React.FC = () => {
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [filteredPromoters, setFilteredPromoters] = useState<Promoter[]>([]);
@@ -246,6 +282,7 @@ const AdminPanel: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900 dark:text-white">{promoter.name}</div>
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</div>
+                                                <div className="text-sm text-gray-500 dark:text-gray-400">{calculateAge(promoter.dateOfBirth)}</div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex flex-col space-y-2 text-sm">
@@ -253,12 +290,12 @@ const AdminPanel: React.FC = () => {
                                                         <WhatsAppIcon className="w-4 h-4 mr-2" />
                                                         <span>{promoter.whatsapp}</span>
                                                     </a>
-                                                    <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center">
+                                                    <a href={formatSocialUrl(promoter.instagram, 'instagram')} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center">
                                                         <InstagramIcon className="w-4 h-4 mr-2" />
                                                         <span>Instagram</span>
                                                     </a>
                                                     {promoter.tiktok && (
-                                                        <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
+                                                        <a href={formatSocialUrl(promoter.tiktok, 'tiktok')} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
                                                             <TikTokIcon className="w-4 h-4 mr-2" />
                                                             <span>TikTok</span>
                                                         </a>
@@ -305,6 +342,7 @@ const AdminPanel: React.FC = () => {
                                         <div>
                                             <p className="font-bold text-lg text-gray-900 dark:text-white">{promoter.name}</p>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                                         </div>
                                         {getStatusBadge(promoter.status)}
                                     </div>
@@ -329,12 +367,12 @@ const AdminPanel: React.FC = () => {
                                             <WhatsAppIcon className="w-4 h-4 mr-2" />
                                             <span>{promoter.whatsapp}</span>
                                         </a>
-                                        <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline flex items-center">
+                                        <a href={formatSocialUrl(promoter.instagram, 'instagram')} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline flex items-center">
                                             <InstagramIcon className="w-4 h-4 mr-2" />
                                             <span>Instagram</span>
                                         </a>
                                         {promoter.tiktok && (
-                                            <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline flex items-center">
+                                            <a href={formatSocialUrl(promoter.tiktok, 'tiktok')} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline flex items-center">
                                                 <TikTokIcon className="w-4 h-4 mr-2" />
                                                 <span>TikTok</span>
                                             </a>

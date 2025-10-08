@@ -198,8 +198,8 @@ const RegistrationForm: React.FC = () => {
                 </div>
                 <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
                 <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
-                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
-                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
+                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Seu usuário do Instagram (@usuario)" value={formData.instagram} onChange={handleChange} required />
+                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suas melhores fotos</label>
