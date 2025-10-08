@@ -100,7 +100,7 @@ const AdminPanel: React.FC = () => {
 
   useEffect(() => {
     fetchPromoters(currentPage);
-  }, [currentPage, fetchPromoters]);
+  }, [currentPage]);
   
   const processedPromoters = useMemo(() => {
     let promoters = [...allPromoters];

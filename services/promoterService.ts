@@ -63,7 +63,10 @@ export const getPromoters = async (
         queryConstraints.push(where("status", "==", statusFilter));
     }
     
-    queryConstraints.push(orderBy("__name__"));
+    // CRITICAL FIX: Order by a single field to avoid complex composite indexes.
+    // The visual sorting for other fields will happen on the client-side.
+    // We order by createdAt to keep the list roughly chronological.
+    queryConstraints.push(orderBy("createdAt", "desc"));
     queryConstraints.push(limit(PAGE_SIZE));
     
     if (lastVisible) {
@@ -80,6 +83,11 @@ export const getPromoters = async (
 
   } catch (error) {
     console.error("Error getting promoters: ", error);
+    // Check if it's an index error and provide a helpful message.
+    if (error instanceof Error && error.message.includes('requires an index')) {
+        console.error("Firestore index required. Please create it using the link in the browser console error message.");
+        throw new Error("O banco de dados precisa de uma configuração. Por favor, verifique o console de erros do navegador para um link de criação de índice.");
+    }
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
@@ -91,7 +99,7 @@ export const getArchivedPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [
       where("isArchived", "==", true),
-      orderBy("__name__"),
+      orderBy("createdAt", "desc"), // Order by date for consistency
       limit(PAGE_SIZE)
     ];
     
