@@ -41,7 +41,9 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(promoter.id, formData);
+      // Ensure old records get the isArchived flag to appear in queries.
+      const dataToSave = { ...formData, isArchived: promoter.isArchived ?? false };
+      await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
       console.error("Failed to save promoter", error);

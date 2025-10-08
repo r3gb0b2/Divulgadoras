@@ -1,8 +1,5 @@
-
-
-
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getDocsFromCache, limit, orderBy, startAfter, QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getDocsFromCache, limit, orderBy, startAfter, QueryDocumentSnapshot, QueryConstraint } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData } from '../types';
 
@@ -56,14 +53,15 @@ export const getPromoters = async (
 ): Promise<{ promoters: Promoter[], lastDoc: QueryDocumentSnapshot | null }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    const queryConstraints = [
-        where("isArchived", "!=", true),
+    const queryConstraints: QueryConstraint[] = [
+        where("isArchived", "==", false), // FIX: Use equality check. This is a valid query with orderBy on another field.
         orderBy("createdAt", "desc"),
         limit(PAGE_SIZE)
     ];
 
     if (statusFilter !== 'all') {
-        queryConstraints.splice(1, 0, where("status", "==", statusFilter));
+        // Add status filter before other constraints for clarity. The order of 'where' clauses doesn't impact performance.
+        queryConstraints.unshift(where("status", "==", statusFilter));
     }
     
     if (lastVisible) {
