@@ -39,7 +39,7 @@ const StatusCheck: React.FC = () => {
         },
         rejected: {
             title: 'Não Aprovado',
-            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
+            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.',
             styles: 'bg-red-100 border-red-500 text-red-700'
         }
     };
@@ -62,7 +62,12 @@ const StatusCheck: React.FC = () => {
         return (
             <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
                 <p className="font-bold">{statusInfo.title}</p>
-                <p>{statusInfo.message}</p>
+                <p>{promoter.rejectionReason || statusInfo.message}</p>
+
+                {promoter.status === 'rejected' && promoter.rejectionReason && (
+                    <p className="mt-2 text-sm"><i>{statusInfo.message}</i></p>
+                )}
+                
                 {promoter.status === 'approved' && (
                     <div className="mt-4">
                         <Link

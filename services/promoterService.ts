@@ -1,6 +1,6 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getCountFromServer, limit, orderBy, startAfter, QueryDocumentSnapshot, QueryConstraint } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getCountFromServer, limit, orderBy, startAfter, QueryDocumentSnapshot, QueryConstraint, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Promoter, PromoterApplicationData } from '../types';
 
 const PAGE_SIZE = 20;
@@ -54,14 +54,14 @@ export const getPromoters = async (
   try {
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [];
+    
+    // Base query: only fetch non-archived promoters
+    queryConstraints.push(where("isArchived", "==", false));
 
-    // The query now only filters by status if specified.
-    // The 'isArchived' check will be done on the client-side to ensure old records are visible.
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
     }
     
-    // We order by document ID for stable pagination that doesn't require custom indexes.
     queryConstraints.push(orderBy("__name__"));
     queryConstraints.push(limit(PAGE_SIZE));
     
@@ -72,8 +72,6 @@ export const getPromoters = async (
     const q = query(promotersRef, ...queryConstraints);
     const documentSnapshots = await getDocs(q);
     
-    // Return all fetched promoters, including potentially archived ones.
-    // The filtering logic to hide archived records is now handled in the AdminPanel component.
     const promoters: Promoter[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
 
@@ -85,42 +83,53 @@ export const getPromoters = async (
   }
 };
 
+export const getArchivedPromoters = async (
+    lastVisible: QueryDocumentSnapshot | null = null
+): Promise<{ promoters: Promoter[], lastDoc: QueryDocumentSnapshot | null }> => {
+  try {
+    const promotersRef = collection(firestore, "promoters");
+    const queryConstraints: QueryConstraint[] = [
+      where("isArchived", "==", true),
+      orderBy("__name__"),
+      limit(PAGE_SIZE)
+    ];
+    
+    if (lastVisible) {
+        queryConstraints.push(startAfter(lastVisible));
+    }
+
+    const q = query(promotersRef, ...queryConstraints);
+    const documentSnapshots = await getDocs(q);
+    
+    const promoters: Promoter[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
+
+    return { promoters, lastDoc };
+
+  } catch (error) {
+    console.error("Error getting archived promoters: ", error);
+    throw new Error("Não foi possível buscar as divulgadoras arquivadas.");
+  }
+};
+
 export const getPromotersCount = async (): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
     try {
         const promotersRef = collection(firestore, "promoters");
 
-        // 1. Get total count for each status (including any archived ones).
-        const totalPendingQuery = query(promotersRef, where("status", "==", "pending"));
-        const totalApprovedQuery = query(promotersRef, where("status", "==", "approved"));
-        const totalRejectedQuery = query(promotersRef, where("status", "==", "rejected"));
-
-        // 2. Get count of archived promoters for each status.
-        const archivedPendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", true));
-        const archivedApprovedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", true));
-        const archivedRejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", true));
-
-        const [
-            totalPendingSnapshot,
-            totalApprovedSnapshot,
-            totalRejectedSnapshot,
-            archivedPendingSnapshot,
-            archivedApprovedSnapshot,
-            archivedRejectedSnapshot
-        ] = await Promise.all([
-            getCountFromServer(totalPendingQuery),
-            getCountFromServer(totalApprovedQuery),
-            getCountFromServer(totalRejectedQuery),
-            getCountFromServer(archivedPendingQuery),
-            getCountFromServer(archivedApprovedQuery),
-            getCountFromServer(archivedRejectedQuery)
+        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", false));
+        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", false));
+        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", false));
+        
+        const [pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
+            getCountFromServer(pendingQuery),
+            getCountFromServer(approvedQuery),
+            getCountFromServer(rejectedQuery)
         ]);
         
-        // 3. Subtract archived from total to get the correct count for each status.
-        const pendingCount = totalPendingSnapshot.data().count - archivedPendingSnapshot.data().count;
-        const approvedCount = totalApprovedSnapshot.data().count - archivedApprovedSnapshot.data().count;
-        const rejectedCount = totalRejectedSnapshot.data().count - archivedRejectedSnapshot.data().count;
+        const pendingCount = pendingSnapshot.data().count;
+        const approvedCount = approvedSnapshot.data().count;
+        const rejectedCount = rejectedSnapshot.data().count;
 
-        // 4. The correct total is the sum of all non-archived statuses.
         const totalCount = pendingCount + approvedCount + rejectedCount;
 
         return {
@@ -150,10 +159,44 @@ export const archivePromoter = async (id: string): Promise<void> => {
     try {
       const promoterDoc = doc(firestore, 'promoters', id);
       await updateDoc(promoterDoc, { isArchived: true });
-      // Note: This does not delete photos from storage.
     } catch (error) {
       console.error("Error archiving promoter: ", error);
       throw new Error("Não foi possível arquivar a divulgadora.");
+    }
+};
+
+export const restorePromoter = async (id: string): Promise<void> => {
+    try {
+      const promoterDoc = doc(firestore, 'promoters', id);
+      await updateDoc(promoterDoc, { isArchived: false });
+    } catch (error) {
+      console.error("Error restoring promoter: ", error);
+      throw new Error("Não foi possível restaurar a divulgadora.");
+    }
+};
+
+export const deletePromoterPermanently = async (promoter: Promoter): Promise<void> => {
+    try {
+        // Delete photos from Storage first
+        if (promoter.photoUrls && promoter.photoUrls.length > 0) {
+            await Promise.all(promoter.photoUrls.map(async (url) => {
+                try {
+                    const photoRef = ref(storage, url);
+                    await deleteObject(photoRef);
+                } catch (storageError: any) {
+                    // Log error but continue, e.g., if file doesn't exist
+                    console.warn(`Could not delete photo ${url}:`, storageError.code);
+                }
+            }));
+        }
+        
+        // Then, delete the document from Firestore
+        const promoterDoc = doc(firestore, 'promoters', promoter.id);
+        await deleteDoc(promoterDoc);
+
+    } catch (error) {
+      console.error("Error permanently deleting promoter: ", error);
+      throw new Error("Não foi possível excluir permanentemente a divulgadora.");
     }
 };
 

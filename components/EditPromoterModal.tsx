@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Promoter } from '../types';
+import { cleanSocialMediaHandle } from '../utils/formatters';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -25,6 +26,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
         notes: promoter.notes || '',
+        rejectionReason: promoter.rejectionReason || '',
       });
     }
   }, [promoter]);
@@ -41,8 +43,13 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Ensure old records get the isArchived flag to appear in queries.
-      const dataToSave = { ...formData, isArchived: promoter.isArchived ?? false };
+      const cleanedData = {
+        ...formData,
+        instagram: cleanSocialMediaHandle(formData.instagram || ''),
+        tiktok: cleanSocialMediaHandle(formData.tiktok || ''),
+      };
+      
+      const dataToSave = { ...cleanedData, isArchived: promoter.isArchived ?? false };
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
@@ -107,6 +114,21 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="rejected">Rejeitado</option>
             </select>
           </div>
+
+          {formData.status === 'rejected' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Motivo da Rejeição</label>
+              <textarea
+                name="rejectionReason"
+                rows={3}
+                value={formData.rejectionReason || ''}
+                onChange={handleChange}
+                className={`${formInputStyle} resize-y`}
+                placeholder="Forneça um motivo para a rejeição..."
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Anotações Internas (visível apenas para admin)</label>
             <textarea

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-// Fix: Corrected import paths for services and components.
 import { addPromoter } from '../services/promoterService';
+import { cleanSocialMediaHandle } from '../utils/formatters';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 
 // Helper function to resize and compress images and return a Blob
@@ -151,7 +151,13 @@ const RegistrationForm: React.FC = () => {
     setSubmitError(null);
     
     try {
-      await addPromoter({ ...formData, photos: photoFiles });
+      const cleanedData = {
+          ...formData,
+          instagram: cleanSocialMediaHandle(formData.instagram),
+          tiktok: cleanSocialMediaHandle(formData.tiktok),
+      };
+
+      await addPromoter({ ...cleanedData, photos: photoFiles });
       setSubmitSuccess(true);
       
       // Reset form
@@ -163,8 +169,6 @@ const RegistrationForm: React.FC = () => {
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 8000);
-    // FIX: The catch block now safely handles errors of 'unknown' type.
-    // This prevents runtime errors from trying to access properties on a non-Error object.
     } catch (error) {
       console.error("Failed to submit form", error);
       const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
@@ -214,8 +218,8 @@ const RegistrationForm: React.FC = () => {
                 </div>
                 <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
                 <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required maxLength={15} />
-                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
-                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
+                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Usuário ou link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
+                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Usuário ou link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suas melhores fotos</label>
