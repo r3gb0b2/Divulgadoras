@@ -39,7 +39,7 @@ const StatusCheck: React.FC = () => {
         },
         rejected: {
             title: 'Não Aprovado',
-            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.',
+            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
             styles: 'bg-red-100 border-red-500 text-red-700'
         }
     };
@@ -62,12 +62,7 @@ const StatusCheck: React.FC = () => {
         return (
             <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
                 <p className="font-bold">{statusInfo.title}</p>
-                <p>{promoter.rejectionReason || statusInfo.message}</p>
-
-                {promoter.status === 'rejected' && promoter.rejectionReason && (
-                    <p className="mt-2 text-sm"><i>{statusInfo.message}</i></p>
-                )}
-                
+                <p>{statusInfo.message}</p>
                 {promoter.status === 'approved' && (
                     <div className="mt-4">
                         <Link
@@ -84,7 +79,7 @@ const StatusCheck: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
+            <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Verificar Status do Cadastro</h1>
                 <p className="text-center text-gray-600 dark:text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status.</p>
                 

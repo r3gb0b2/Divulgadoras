@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Promoter } from '../types';
-import { cleanSocialMediaHandle } from '../utils/formatters';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -25,8 +24,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         tiktok: promoter.tiktok,
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
-        notes: promoter.notes || '',
-        rejectionReason: promoter.rejectionReason || '',
       });
     }
   }, [promoter]);
@@ -35,7 +32,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     return null;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -43,14 +40,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const cleanedData = {
-        ...formData,
-        instagram: cleanSocialMediaHandle(formData.instagram || ''),
-        tiktok: cleanSocialMediaHandle(formData.tiktok || ''),
-      };
-      
-      const dataToSave = { ...cleanedData, isArchived: promoter.isArchived ?? false };
-      await onSave(promoter.id, dataToSave);
+      await onSave(promoter.id, formData);
       onClose();
     } catch (error) {
       console.error("Failed to save promoter", error);
@@ -113,32 +103,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="approved">Aprovado</option>
               <option value="rejected">Rejeitado</option>
             </select>
-          </div>
-
-          {formData.status === 'rejected' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Motivo da Rejeição</label>
-              <textarea
-                name="rejectionReason"
-                rows={3}
-                value={formData.rejectionReason || ''}
-                onChange={handleChange}
-                className={`${formInputStyle} resize-y`}
-                placeholder="Forneça um motivo para a rejeição..."
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Anotações Internas (visível apenas para admin)</label>
-            <textarea
-              name="notes"
-              rows={4}
-              value={formData.notes || ''}
-              onChange={handleChange}
-              className={`${formInputStyle} resize-y`}
-              placeholder="Adicione observações sobre a divulgadora aqui..."
-            />
           </div>
 
           <div className="mt-6 flex justify-end space-x-3">

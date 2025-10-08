@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+// Fix: Corrected import paths for services and components.
 import { addPromoter } from '../services/promoterService';
-import { cleanSocialMediaHandle } from '../utils/formatters';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 
 // Helper function to resize and compress images and return a Blob
@@ -73,19 +72,9 @@ const RegistrationForm: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    let finalValue = value;
-
-    if (name === 'whatsapp') {
-      const onlyNums = value.replace(/\D/g, '');
-      finalValue = onlyNums
-        .replace(/^(\d{2})/, '($1) ')
-        .replace(/(\d{5})(\d)/, '$1-$2')
-        .slice(0, 15); // Formato: (XX) XXXXX-XXXX
-    }
-
     setFormData(prev => ({
       ...prev,
-      [name]: finalValue,
+      [name]: value,
     }));
   };
 
@@ -94,8 +83,6 @@ const RegistrationForm: React.FC = () => {
     if (files && files.length > 0) {
       setIsProcessingPhoto(true);
       setSubmitError(null);
-      // Clear previous selections
-      photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoPreviews([]);
       setPhotoFiles([]);
       
@@ -123,17 +110,6 @@ const RegistrationForm: React.FC = () => {
     }
   };
 
-  const handleRemovePhoto = (indexToRemove: number) => {
-    const newFiles = photoFiles.filter((_, index) => index !== indexToRemove);
-    const newPreviews = photoPreviews.filter((_, index) => index !== indexToRemove);
-    
-    // Revoke the object URL to free memory
-    URL.revokeObjectURL(photoPreviews[indexToRemove]);
-
-    setPhotoFiles(newFiles);
-    setPhotoPreviews(newPreviews);
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (photoFiles.length === 0) {
@@ -141,7 +117,22 @@ const RegistrationForm: React.FC = () => {
         return;
     }
 
-    if (!formData.dateOfBirth) {
+    if (formData.dateOfBirth) {
+        const birthDate = new Date(formData.dateOfBirth);
+        const today = new Date();
+        // Adjust for timezone differences
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        if (age < 18) {
+            setSubmitError("Você deve ter pelo menos 18 anos para se cadastrar.");
+            setTimeout(() => setSubmitError(null), 5000);
+            return;
+        }
+    } else {
         setSubmitError("Por favor, insira sua data de nascimento.");
         setTimeout(() => setSubmitError(null), 5000);
         return;
@@ -151,24 +142,19 @@ const RegistrationForm: React.FC = () => {
     setSubmitError(null);
     
     try {
-      const cleanedData = {
-          ...formData,
-          instagram: cleanSocialMediaHandle(formData.instagram),
-          tiktok: cleanSocialMediaHandle(formData.tiktok),
-      };
-
-      await addPromoter({ ...cleanedData, photos: photoFiles });
+      await addPromoter({ ...formData, photos: photoFiles });
       setSubmitSuccess(true);
       
       // Reset form
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
-      photoPreviews.forEach(url => URL.revokeObjectURL(url));
       setPhotoFiles([]);
       setPhotoPreviews([]);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
-      setTimeout(() => setSubmitSuccess(false), 8000);
+      setTimeout(() => setSubmitSuccess(false), 5000);
+    // FIX: The catch block now safely handles errors of 'unknown' type.
+    // This prevents runtime errors from trying to access properties on a non-Error object.
     } catch (error) {
       console.error("Failed to submit form", error);
       const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
@@ -187,20 +173,14 @@ const RegistrationForm: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
+        <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
             <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Seja uma Divulgadora</h1>
             <p className="text-center text-gray-600 dark:text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
             {submitSuccess && (
                 <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
-                    <p>
-                        Seu cadastro foi enviado! Fique de olho na página{' '}
-                        <Link to="/status" className="font-semibold underline hover:text-green-800">
-                            Verificar Status
-                        </Link>
-                        {' '}para acompanhar a aprovação.
-                    </p>
+                    <p>Seu cadastro foi enviado. Entraremos em contato em breve.</p>
                 </div>
             )}
 
@@ -217,39 +197,29 @@ const RegistrationForm: React.FC = () => {
                     <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
                 </div>
                 <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
-                <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required maxLength={15} />
-                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Usuário ou link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
-                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Usuário ou link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
+                <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
+                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Link do seu Instagram" value={formData.instagram} onChange={handleChange} required />
+                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Link do seu TikTok" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Suas melhores fotos</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-white dark:bg-gray-700 py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
-                            <span>{photoPreviews.length > 0 ? `Trocar (${photoPreviews.length}) fotos` : 'Enviar fotos'}</span>
+                            <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
                             <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
                         </label>
-                        <div className="flex-grow flex items-center gap-4 overflow-x-auto p-2 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                           {isProcessingPhoto ? (
                                 <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center snap-start">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                 </span>
                             ) : photoPreviews.length > 0 ? (
                                 photoPreviews.map((preview, index) => (
-                                   <div key={preview} className="relative flex-shrink-0 snap-start">
-                                        <img className="h-20 w-20 rounded-lg object-cover" src={preview} alt={`Prévia da foto ${index + 1}`} />
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemovePhoto(index)}
-                                            className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full h-6 w-6 flex items-center justify-center text-sm font-bold hover:bg-red-700 transition-transform transform hover:scale-110"
-                                            aria-label={`Remover foto ${index + 1}`}
-                                        >
-                                            &times;
-                                        </button>
-                                    </div>
+                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
                                 ))
                             ) : (
-                                <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">Nenhuma foto selecionada.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma foto selecionada.</p>
                             )}
                         </div>
                     </div>
