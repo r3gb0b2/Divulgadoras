@@ -33,6 +33,14 @@ const StatusBadge: React.FC<{ status: Promoter['status'] }> = ({ status }) => {
     return <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>
 }
 
+const StatsCard: React.FC<{ title: string; value: number; className?: string }> = ({ title, value, className = 'bg-gray-100 dark:bg-gray-700' }) => (
+    <div className={`p-4 rounded-lg shadow ${className}`}>
+        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{title}</h3>
+        <p className="mt-1 text-3xl font-semibold">{value}</p>
+    </div>
+);
+
+
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,12 +71,28 @@ const AdminPanel: React.FC = () => {
   }, [fetchPromoters]);
 
   const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
+    const promoter = promoters.find(p => p.id === id);
+    if (!promoter) return;
+
+    let updateData: Partial<Omit<Promoter, 'id'>> = { status };
+
+    if (status === 'rejected') {
+        const reason = prompt('Por favor, informe o motivo da rejeição:', promoter.rejectionReason || '');
+        if (reason === null) {
+            return; // User cancelled prompt
+        }
+        updateData.rejectionReason = reason || 'Motivo não especificado.';
+    } else {
+        // When approving, clear any previous rejection reason
+        updateData.rejectionReason = '';
+    }
+    
     try {
-      await updatePromoter(id, { status });
-      setPromoters(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+        await updatePromoter(id, updateData);
+        setPromoters(prev => prev.map(p => (p.id === id ? { ...p, ...updateData } : p)));
     } catch (error) {
         console.error(error);
-      alert('Falha ao atualizar status.');
+        alert('Falha ao atualizar status.');
     }
   };
 
@@ -113,10 +137,26 @@ const AdminPanel: React.FC = () => {
 
     return promotersToFilter;
   }, [promoters, filter, ageFilter]);
+
+  const stats = useMemo(() => {
+    return {
+      total: promoters.length,
+      pending: promoters.filter(p => p.status === 'pending').length,
+      approved: promoters.filter(p => p.status === 'approved').length,
+      rejected: promoters.filter(p => p.status === 'rejected').length,
+    };
+  }, [promoters]);
   
   return (
     <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Painel Administrativo</h1>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatsCard title="Total de Cadastros" value={stats.total} />
+            <StatsCard title="Pendentes" value={stats.pending} className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" />
+            <StatsCard title="Aprovados" value={stats.approved} className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" />
+            <StatsCard title="Rejeitados" value={stats.rejected} className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300" />
+        </div>
         
         <div className="flex flex-wrap gap-2 items-center mb-6">
             <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes</button>
@@ -246,6 +286,12 @@ const AdminPanel: React.FC = () => {
                                     </div>
                                     <StatusBadge status={p.status} />
                                 </div>
+
+                                {p.status === 'rejected' && p.rejectionReason && (
+                                    <div className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 p-2 rounded-md">
+                                        <span className="font-bold">Motivo:</span> {p.rejectionReason}
+                                    </div>
+                                )}
 
                                 <div className="mt-4 space-y-3">
                                     <div>

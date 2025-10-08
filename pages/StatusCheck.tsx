@@ -59,10 +59,14 @@ const StatusCheck: React.FC = () => {
              return <p className="text-center text-red-500 dark:text-red-400">Ocorreu um erro ao verificar o status. Por favor, contate o suporte.</p>;
         }
 
+        const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
+            ? `${statusInfo.message}\n\nMotivo: ${promoter.rejectionReason}`
+            : statusInfo.message;
+
         return (
             <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
                 <p className="font-bold">{statusInfo.title}</p>
-                <p>{statusInfo.message}</p>
+                <p className="whitespace-pre-wrap">{finalMessage}</p>
                 {promoter.status === 'approved' && (
                     <div className="mt-4">
                         <Link

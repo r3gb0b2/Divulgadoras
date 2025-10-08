@@ -10,6 +10,7 @@ export interface Promoter {
   dateOfBirth: string;
   photoUrls: string[];
   status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
   createdAt: Timestamp;
 }
 

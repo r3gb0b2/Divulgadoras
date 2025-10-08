@@ -24,6 +24,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         tiktok: promoter.tiktok,
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
+        rejectionReason: promoter.rejectionReason,
       });
     }
   }, [promoter]);
@@ -32,7 +33,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     return null;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -40,7 +41,11 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(promoter.id, formData);
+      const dataToSave = { ...formData };
+      if (dataToSave.status !== 'rejected') {
+        dataToSave.rejectionReason = ''; // Clear reason if not rejected
+      }
+      await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
       console.error("Failed to save promoter", error);
@@ -104,6 +109,19 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="rejected">Rejeitado</option>
             </select>
           </div>
+          
+          {formData.status === 'rejected' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Motivo da Rejeição</label>
+              <textarea
+                name="rejectionReason"
+                value={formData.rejectionReason || ''}
+                onChange={handleChange}
+                className={formInputStyle + ' min-h-[60px]'}
+                placeholder="Informe o motivo..."
+              />
+            </div>
+          )}
 
           <div className="mt-6 flex justify-end space-x-3">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">
