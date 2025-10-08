@@ -90,10 +90,11 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
         const promotersRef = collection(firestore, "promoters");
 
         // Queries for each status
-        const totalQuery = query(promotersRef, where("isArchived", "==", false));
-        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", false));
-        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", false));
-        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", false));
+        // Using '!=' true will correctly include old documents where 'isArchived' field does not exist.
+        const totalQuery = query(promotersRef, where("isArchived", "!=", true));
+        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "!=", true));
+        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "!=", true));
+        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "!=", true));
 
         // Get counts from server
         const [totalSnapshot, pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
