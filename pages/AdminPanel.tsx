@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPromoters, updatePromoter, archivePromoter } from '../services/promoterService';
 import { Promoter } from '../types';
+import { auth } from '../firebase/config';
+import { signOut } from 'firebase/auth';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import { InstagramIcon, MailIcon, WhatsAppIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon, DownloadIcon, ArchiveIcon } from '../components/Icons';
+import { QueryDocumentSnapshot } from 'firebase/firestore';
 
 const calculateAge = (dateOfBirth: string): number => {
     if (!dateOfBirth) return 0;
@@ -21,8 +24,10 @@ const calculateAge = (dateOfBirth: string): number => {
 
 type SortableKeys = keyof Pick<Promoter, 'name' | 'createdAt'> | 'age';
 
+const PAGE_SIZE = 20;
+
 const AdminPanel: React.FC = () => {
-  const [promoters, setPromoters] = useState<Promoter[]>([]);
+  const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
@@ -36,36 +41,63 @@ const AdminPanel: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
   
-  const fetchPromoters = useCallback(async () => {
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSnapshots, setPageSnapshots] = useState<(QueryDocumentSnapshot | null)[]>([null]);
+  const [isLastPage, setIsLastPage] = useState(false);
+
+  const fetchPromoters = useCallback(async (pageIndex: number) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getPromoters();
-      setPromoters(data);
+      const lastVisible = pageSnapshots[pageIndex] || null;
+      const { promoters, lastDoc } = await getPromoters(filter, lastVisible);
+      
+      setAllPromoters(promoters);
+
+      if (promoters.length < PAGE_SIZE) {
+        setIsLastPage(true);
+      } else {
+        setIsLastPage(false);
+        if (pageIndex === pageSnapshots.length - 1) {
+            setPageSnapshots(prev => [...prev, lastDoc]);
+        }
+      }
+
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar dados.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filter, pageSnapshots]);
 
   useEffect(() => {
-    fetchPromoters();
-  }, [fetchPromoters]);
+    setCurrentPage(0);
+    setPageSnapshots([null]);
+    setIsLastPage(false);
+    fetchPromoters(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]); // This effect should ONLY run when the main filter changes
+
+  useEffect(() => {
+    fetchPromoters(currentPage);
+  }, [currentPage, fetchPromoters]);
 
   const stats = useMemo(() => {
-    const unarchivedPromoters = promoters.filter(p => p.isArchived !== true);
+    // Note: Stats are now an approximation based on the first page load
+    // For exact stats, a separate cloud function or query would be needed
+    // This approach avoids extra reads for performance.
+    const unarchivedPromoters = allPromoters.filter(p => p.isArchived !== true);
     return {
-        total: unarchivedPromoters.length,
-        pending: unarchivedPromoters.filter(p => p.status === 'pending').length,
-        approved: unarchivedPromoters.filter(p => p.status === 'approved').length,
-        rejected: unarchivedPromoters.filter(p => p.status === 'rejected').length,
+        total: '...',
+        pending: '...',
+        approved: '...',
+        rejected: '...',
     };
-  }, [promoters]);
-
+  }, [allPromoters]);
+  
   const processedPromoters = useMemo(() => {
-    // Start with unarchived promoters. This handles old data without the isArchived field.
-    let promot_ers = promoters.filter(p => p.isArchived !== true);
+    let promot_ers = [...allPromoters]; // Work with a copy
 
     if (searchQuery) {
         promot_ers = promot_ers.filter(p =>
@@ -73,10 +105,6 @@ const AdminPanel: React.FC = () => {
             p.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.instagram && p.instagram.toLowerCase().includes(searchQuery.toLowerCase()))
         );
-    }
-
-    if (filter !== 'all') {
-      promot_ers = promot_ers.filter(p => p.status === filter);
     }
 
     if (ageFilter) {
@@ -106,7 +134,7 @@ const AdminPanel: React.FC = () => {
     }
 
     return promot_ers;
-  }, [promoters, filter, ageFilter, searchQuery, sortConfig]);
+  }, [allPromoters, ageFilter, searchQuery, sortConfig]);
 
   const requestSort = (key: SortableKeys) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -129,7 +157,7 @@ const AdminPanel: React.FC = () => {
     if (!window.confirm(`Tem certeza que deseja ${action} os ${selectedIds.length} cadastros selecionados?`)) return;
     try {
         await Promise.all(selectedIds.map(id => updatePromoter(id, { status })));
-        await fetchPromoters();
+        await fetchPromoters(currentPage);
         setSelectedIds([]);
     } catch (error) {
         console.error(error);
@@ -140,7 +168,7 @@ const AdminPanel: React.FC = () => {
   const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await updatePromoter(id, { status });
-      setPromoters(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+      setAllPromoters(prev => prev.map(p => p.id === id ? { ...p, status } : p));
     } catch (error) {
         console.error(error);
       alert('Falha ao atualizar status.');
@@ -151,8 +179,7 @@ const AdminPanel: React.FC = () => {
     if (window.confirm('Tem certeza que deseja arquivar este cadastro? Ele será ocultado da lista principal.')) {
         try {
             await archivePromoter(id);
-            // Optimistically update the UI to remove the promoter
-            setPromoters(prev => prev.map(p => p.id === id ? { ...p, isArchived: true } : p));
+            await fetchPromoters(currentPage);
         } catch (error) {
             console.error(error);
             alert('Falha ao arquivar.');
@@ -162,8 +189,17 @@ const AdminPanel: React.FC = () => {
 
   const handleSaveFromModal = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
       await updatePromoter(id, data);
-      await fetchPromoters(); // Refetch all data to ensure consistency
+      await fetchPromoters(currentPage);
   };
+  
+  const handleLogout = async () => {
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error("Error signing out: ", error);
+        alert("Não foi possível sair.");
+    }
+  }
 
   const openEditModal = (promoter: Promoter) => {
     setSelectedPromoter(promoter);
@@ -179,7 +215,7 @@ const AdminPanel: React.FC = () => {
   const handleExportCSV = () => {
     const headers = ["Nome", "Idade", "E-mail", "WhatsApp", "Instagram", "TikTok", "Status", "Data de Cadastro"];
     const rows = processedPromoters.map(p => [
-        `"${p.name.replace(/"/g, '""')}"`, // Escape double quotes
+        `"${p.name.replace(/"/g, '""')}"`,
         calculateAge(p.dateOfBirth),
         `"${p.email}"`,
         `"${p.whatsapp}"`,
@@ -189,7 +225,6 @@ const AdminPanel: React.FC = () => {
         `"${p.createdAt?.toDate().toLocaleDateString('pt-BR') || 'N/A'}"`
     ].join(','));
 
-    // BOM for Excel to recognize UTF-8
     const csvContent = "\uFEFF" + headers.join(',') + "\n" + rows.join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -244,7 +279,10 @@ const AdminPanel: React.FC = () => {
   
   return (
     <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 md:p-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Painel Administrativo</h1>
+        <div className="flex justify-between items-start mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Painel Administrativo</h1>
+            <button onClick={handleLogout} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600">Sair</button>
+        </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg"><p className="text-sm text-gray-500 dark:text-gray-400">Total</p><p className="text-2xl font-bold">{stats.total}</p></div>
@@ -254,21 +292,21 @@ const AdminPanel: React.FC = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 mb-4">
-            <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes ({stats.pending})</button>
-            <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados ({stats.approved})</button>
-            <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados ({stats.rejected})</button>
-            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos ({stats.total})</button>
+            <button onClick={() => setFilter('pending')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'pending' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Pendentes</button>
+            <button onClick={() => setFilter('approved')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'approved' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Aprovados</button>
+            <button onClick={() => setFilter('rejected')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'rejected' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Rejeitados</button>
+            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-md text-sm font-medium ${filter === 'all' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}>Todos</button>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="relative md:col-span-2">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                <input type="text" placeholder="Buscar por nome, e-mail, Instagram..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
+                <input type="text" placeholder="Buscar por nome, e-mail, Instagram na página atual..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
             </div>
-            <input type="number" placeholder="Filtrar por idade..." value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
+            <input type="number" placeholder="Filtrar por idade na página atual..." value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700" />
             <button onClick={handleExportCSV} className="md:col-start-3 justify-self-end w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
                 <DownloadIcon className="w-4 h-4" />
-                Exportar CSV
+                Exportar CSV (página atual)
             </button>
         </div>
 
@@ -378,6 +416,27 @@ const AdminPanel: React.FC = () => {
                 )}
             </div>
         )}
+
+        <div className="mt-6 flex justify-between items-center">
+            <button
+                onClick={() => setCurrentPage(prev => prev - 1)}
+                disabled={currentPage === 0 || loading}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Anterior
+            </button>
+            <span className="text-sm text-gray-700 dark:text-gray-300">
+                Página {currentPage + 1}
+            </span>
+            <button
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                disabled={isLastPage || loading}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Próxima
+            </button>
+        </div>
+
         {selectedPromoter && (
             <EditPromoterModal 
                 isOpen={isEditModalOpen}
