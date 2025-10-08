@@ -9,6 +9,7 @@ interface EditPromoterModalProps {
 }
 
 const formInputStyle = "mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary focus:border-primary";
+const formCheckboxStyle = "h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary";
 
 const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<Partial<Omit<Promoter, 'id'>>>({});
@@ -25,6 +26,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
         rejectionReason: promoter.rejectionReason,
+        hasJoinedGroup: promoter.hasJoinedGroup,
       });
     }
   }, [promoter]);
@@ -34,8 +36,13 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const isCheckbox = type === 'checkbox';
+    
+    setFormData(prev => ({ 
+        ...prev, 
+        [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value 
+    }));
   };
 
   const handleSave = async () => {
@@ -44,6 +51,9 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       const dataToSave = { ...formData };
       if (dataToSave.status !== 'rejected') {
         dataToSave.rejectionReason = ''; // Clear reason if not rejected
+      }
+      if (dataToSave.status !== 'approved') {
+        dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
       await onSave(promoter.id, dataToSave);
       onClose();
@@ -109,6 +119,21 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="rejected">Rejeitado</option>
             </select>
           </div>
+          
+          {formData.status === 'approved' && (
+            <div className="mt-4">
+                 <label className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <input 
+                        type="checkbox" 
+                        name="hasJoinedGroup" 
+                        checked={!!formData.hasJoinedGroup} 
+                        onChange={handleChange}
+                        className={formCheckboxStyle}
+                    />
+                    <span className="ml-2">Confirmar que entrou no grupo</span>
+                 </label>
+            </div>
+          )}
           
           {formData.status === 'rejected' && (
             <div>

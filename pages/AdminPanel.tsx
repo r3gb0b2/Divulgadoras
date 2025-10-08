@@ -131,17 +131,29 @@ const AdminPanel: React.FC = () => {
         }
     };
     
-    const handleStatusChange = async (id: string, status: PromoterStatus, rejectionReason?: string) => {
+    const handleUpdate = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         const originalPromoters = [...promoters];
-        const updatedPromoters = promoters.map(p => p.id === id ? { ...p, status, rejectionReason: rejectionReason !== undefined ? rejectionReason : p.rejectionReason } : p);
+        const updatedPromoters = promoters.map(p => p.id === id ? { ...p, ...data } : p);
         setPromoters(updatedPromoters);
 
         try {
-            await updatePromoter(id, { status, rejectionReason });
+            await updatePromoter(id, data);
         } catch (error) {
             setPromoters(originalPromoters); // Revert on error
-            alert("Falha ao atualizar o status.");
+            alert("Falha ao atualizar a divulgadora.");
         }
+    };
+
+    const handleStatusChange = async (id: string, status: PromoterStatus, rejectionReason?: string) => {
+        const data: Partial<Omit<Promoter, 'id'>> = { status };
+        if (rejectionReason !== undefined) {
+            data.rejectionReason = rejectionReason;
+        }
+        // When status changes, reset group join status unless it's being approved
+        if (status !== 'approved') {
+            data.hasJoinedGroup = false;
+        }
+        await handleUpdate(id, data);
     };
 
     const handleApprove = (id: string) => {
@@ -159,6 +171,10 @@ const AdminPanel: React.FC = () => {
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
+    };
+    
+    const handleGroupStatusChange = (id: string, hasJoined: boolean) => {
+        handleUpdate(id, { hasJoinedGroup: hasJoined });
     };
 
     const handleDelete = async (id: string) => {
@@ -186,7 +202,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleSavePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
-        await updatePromoter(id, data);
+        await handleUpdate(id, data);
         await fetchPromoters(); // Re-fetch to get fresh data
     };
 
@@ -315,7 +331,22 @@ const AdminPanel: React.FC = () => {
                                                     ))}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(promoter.status)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {getStatusBadge(promoter.status)}
+                                                {promoter.status === 'approved' && (
+                                                    <div className="mt-2">
+                                                        <label className="flex items-center text-sm text-gray-500">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!promoter.hasJoinedGroup}
+                                                                onChange={(e) => handleGroupStatusChange(promoter.id, e.target.checked)}
+                                                                className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
+                                                            />
+                                                            <span className="ml-2">Entrou no grupo</span>
+                                                        </label>
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <div className="flex items-center space-x-2">
                                                     {promoter.status === 'pending' && (
@@ -378,6 +409,20 @@ const AdminPanel: React.FC = () => {
                                             </a>
                                         )}
                                     </div>
+                                    
+                                    {promoter.status === 'approved' && (
+                                        <div className="border-t border-gray-200 dark:border-gray-700 mt-3 pt-3">
+                                            <label className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!promoter.hasJoinedGroup}
+                                                    onChange={(e) => handleGroupStatusChange(promoter.id, e.target.checked)}
+                                                    className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
+                                                />
+                                                <span className="ml-2">Entrou no grupo</span>
+                                            </label>
+                                        </div>
+                                    )}
 
                                     <div className="border-t border-gray-200 dark:border-gray-700 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-2 justify-end text-sm font-medium">
                                         {promoter.status === 'pending' && (

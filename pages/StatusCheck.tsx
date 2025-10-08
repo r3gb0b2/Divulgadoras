@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { checkPromoterStatus } from '../services/promoterService';
+import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { Promoter } from '../types';
+import { WhatsAppIcon } from '../components/Icons';
 
 const StatusCheck: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -9,6 +10,13 @@ const StatusCheck: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+    const [hasAcceptedRules, setHasAcceptedRules] = useState(false);
+    
+    useEffect(() => {
+        if(promoter?.status === 'approved') {
+            setHasAcceptedRules(promoter.hasJoinedGroup || false);
+        }
+    }, [promoter]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -25,6 +33,23 @@ const StatusCheck: React.FC = () => {
             setIsLoading(false);
         }
     };
+    
+    const handleAcceptRules = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isChecked = e.target.checked;
+        setHasAcceptedRules(isChecked); // Update UI immediately
+
+        if (isChecked && promoter && !promoter.hasJoinedGroup) {
+            try {
+                await updatePromoter(promoter.id, { hasJoinedGroup: true });
+                // Also update local state to prevent re-triggering the update
+                setPromoter(prev => prev ? { ...prev, hasJoinedGroup: true } : null);
+            } catch (updateError) {
+                console.error("Failed to update status:", updateError);
+                setError("Não foi possível salvar sua confirmação. Tente novamente.");
+                setHasAcceptedRules(false); // Revert on failure
+            }
+        }
+    };
 
     const statusInfoMap = {
         pending: {
@@ -34,7 +59,7 @@ const StatusCheck: React.FC = () => {
         },
         approved: {
             title: 'Aprovado!',
-            message: 'Parabéns! Seu cadastro foi aprovado. Clique no botão abaixo para ler as regras e acessar o link do grupo.',
+            message: 'Parabéns! Seu cadastro foi aprovado. O próximo passo é ler as regras e confirmar a leitura para liberar o acesso ao grupo.',
             styles: 'bg-green-100 border-green-500 text-green-700'
         },
         rejected: {
@@ -62,19 +87,47 @@ const StatusCheck: React.FC = () => {
         const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
             ? promoter.rejectionReason
             : statusInfo.message;
+        
+        const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
 
         return (
             <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
                 <p className="font-bold">{statusInfo.title}</p>
                 <p className="whitespace-pre-wrap">{finalMessage}</p>
                 {promoter.status === 'approved' && (
-                    <div className="mt-4">
+                    <div className="mt-4 space-y-4">
                         <Link
                             to="/rules"
+                            target="_blank" // Open in new tab so user doesn't lose this page
+                            rel="noopener noreferrer"
                             className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
                         >
-                            Próximo Passo: Ler as Regras
+                            Ver as Regras (Obrigatório)
                         </Link>
+                        
+                        <div className="p-3 border border-gray-300/50 dark:border-gray-500/50 rounded-md bg-white/20">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={hasAcceptedRules}
+                                    onChange={handleAcceptRules}
+                                    className="h-5 w-5 text-primary rounded border-gray-400 focus:ring-primary"
+                                />
+                                <span className="ml-3 font-medium text-gray-800">Li e concordo com todas as regras.</span>
+                            </label>
+                        </div>
+
+                        {hasAcceptedRules && (
+                           <a
+                                href={whatsappGroupLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg"
+                           >
+                                <WhatsAppIcon className="w-6 h-6 mr-2"/>
+                                Entrar no Grupo
+                           </a>
+                        )}
                     </div>
                 )}
             </div>

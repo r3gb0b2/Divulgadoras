@@ -14,6 +14,7 @@ export interface Promoter {
   status: PromoterStatus;
   createdAt: FieldValue;
   rejectionReason?: string;
+  hasJoinedGroup?: boolean;
 }
 
 export interface PromoterApplicationData {
