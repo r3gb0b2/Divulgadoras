@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
+import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons, addRejectionReason } from '../services/promoterService';
 import { Promoter, RejectionReason } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
@@ -70,8 +70,29 @@ const AdminPanel: React.FC = () => {
         getPromoters(),
         getRejectionReasons()
       ]);
+
+      // Seed default rejection reasons if none exist
+      if (reasonsData.length === 0) {
+        const defaultReasons = [
+          'Perfil não se encaixa com o evento.',
+          'Fotos de baixa qualidade ou inadequadas.',
+          'Informações de contato inválidas ou incorretas.',
+          'Pouca atividade ou engajamento nas redes sociais.',
+          'Cadastro incompleto ou com informações faltando.',
+          'Limite de vagas para divulgadoras atingido no momento.',
+        ];
+
+        await Promise.all(defaultReasons.map(reason => addRejectionReason(reason)));
+        
+        // Refetch reasons after seeding
+        const newReasonsData = await getRejectionReasons();
+        setRejectionReasons(newReasonsData);
+      } else {
+        setRejectionReasons(reasonsData);
+      }
+      
       setPromoters(promotersData);
-      setRejectionReasons(reasonsData);
+
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar dados.');
     } finally {
