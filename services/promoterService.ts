@@ -56,16 +56,15 @@ export const getPromoters = async (
     const queryConstraints: QueryConstraint[] = [];
 
     if (statusFilter !== 'all') {
-        // Query by status first. This query is simple and doesn't need a complex index.
-        // We will filter out archived promoters on the client-side in the AdminPanel.
         queryConstraints.push(where("status", "==", statusFilter));
     } else {
-        // When fetching 'all', we primarily filter out the archived ones at the database level.
         queryConstraints.push(where("isArchived", "==", false));
     }
     
-    // Common constraints for all queries
-    queryConstraints.push(orderBy("createdAt", "desc"));
+    // To ensure stable pagination without needing a custom Firestore index,
+    // we will sort by the document ID ("__name__"). The on-screen sorting
+    // is handled in the AdminPanel component. This avoids complex query errors.
+    queryConstraints.push(orderBy("__name__"));
     queryConstraints.push(limit(PAGE_SIZE));
     
     if (lastVisible) {
