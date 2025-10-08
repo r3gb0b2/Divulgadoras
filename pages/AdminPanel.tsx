@@ -60,8 +60,16 @@ const AdminPanel: React.FC = () => {
           ? await getArchivedPromoters(lastVisible)
           : await getPromoters(filter, lastVisible);
 
-      setAllPromoters(fetchedPromoters);
+      // Client-side filtering to hide archived promoters from active lists.
+      // This is done to avoid complex Firestore queries that require a manual index.
+      const promotersToDisplay = filter !== 'archived'
+          ? fetchedPromoters.filter(p => p.isArchived !== true)
+          : fetchedPromoters;
+      
+      setAllPromoters(promotersToDisplay);
 
+      // Pagination logic is based on the raw fetched data length to ensure correct
+      // page transitions, even if the current page looks short after filtering.
       if (fetchedPromoters.length < PAGE_SIZE) {
         setIsLastPage(true);
       } else {
@@ -73,6 +81,9 @@ const AdminPanel: React.FC = () => {
 
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar dados.');
+      if (err.message?.includes('index')) {
+        setError("O banco de dados precisa de uma configuração. Por favor, verifique o console de erros do navegador para um link de criação de índice.");
+      }
     } finally {
       setLoading(false);
     }

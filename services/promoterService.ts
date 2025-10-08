@@ -55,17 +55,15 @@ export const getPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [];
     
-    // Base query: only fetch non-archived promoters
-    // Using '!=' includes documents where the field is false OR missing.
-    queryConstraints.push(where("isArchived", "!=", true));
+    // NOTE: The isArchived filter was removed from the query to avoid invalid
+    // compound queries that require a manual index in Firestore.
+    // Filtering is now handled on the client-side in AdminPanel.tsx.
 
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
     }
     
-    // CRITICAL FIX: Order by document ID ('__name__') to prevent queries
-    // that require a manually-created composite index. The visual sorting
-    // by date is handled on the client-side.
+    // Order by document ID to support pagination without custom indexes.
     queryConstraints.push(orderBy("__name__", "desc"));
     queryConstraints.push(limit(PAGE_SIZE));
     
@@ -94,7 +92,6 @@ export const getArchivedPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [
       where("isArchived", "==", true),
-      // CRITICAL FIX: Order by document ID ('__name__') to prevent index requirement.
       orderBy("__name__", "desc"),
       limit(PAGE_SIZE)
     ];
@@ -121,20 +118,26 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
     try {
         const promotersRef = collection(firestore, "promoters");
 
-        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "!=", true));
-        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "!=", true));
-        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "!=", true));
+        // Helper function to get counts for a status, avoiding invalid compound queries.
+        const getStatusCount = async (status: 'pending' | 'approved' | 'rejected') => {
+            const totalQuery = query(promotersRef, where("status", "==", status));
+            const archivedQuery = query(promotersRef, where("status", "==", status), where("isArchived", "==", true));
+            
+            const [totalSnapshot, archivedSnapshot] = await Promise.all([
+                getCountFromServer(totalQuery),
+                getCountFromServer(archivedQuery)
+            ]);
+
+            // The final count is the total for a status minus the archived ones for that same status.
+            return totalSnapshot.data().count - archivedSnapshot.data().count;
+        };
         
-        const [pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
-            getCountFromServer(pendingQuery),
-            getCountFromServer(approvedQuery),
-            getCountFromServer(rejectedQuery)
+        const [pendingCount, approvedCount, rejectedCount] = await Promise.all([
+            getStatusCount('pending'),
+            getStatusCount('approved'),
+            getStatusCount('rejected')
         ]);
         
-        const pendingCount = pendingSnapshot.data().count;
-        const approvedCount = approvedSnapshot.data().count;
-        const rejectedCount = rejectedSnapshot.data().count;
-
         const totalCount = pendingCount + approvedCount + rejectedCount;
 
         return {
