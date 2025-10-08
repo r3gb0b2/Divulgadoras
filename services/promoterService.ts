@@ -55,17 +55,13 @@ export const getPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [];
 
+    // The query now only filters by status if specified.
+    // The 'isArchived' check will be done on the client-side to ensure old records are visible.
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
-        // Add this to filter out archived ones when a specific status is selected
-        queryConstraints.push(where("isArchived", "==", false));
-    } else {
-        queryConstraints.push(where("isArchived", "==", false));
     }
     
-    // To ensure stable pagination without needing a custom Firestore index,
-    // we will sort by the document ID ("__name__"). The on-screen sorting
-    // is handled in the AdminPanel component. This avoids complex query errors.
+    // We order by document ID for stable pagination that doesn't require custom indexes.
     queryConstraints.push(orderBy("__name__"));
     queryConstraints.push(limit(PAGE_SIZE));
     
@@ -76,6 +72,8 @@ export const getPromoters = async (
     const q = query(promotersRef, ...queryConstraints);
     const documentSnapshots = await getDocs(q);
     
+    // Return all fetched promoters, including potentially archived ones.
+    // The filtering logic to hide archived records is now handled in the AdminPanel component.
     const promoters: Promoter[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
 

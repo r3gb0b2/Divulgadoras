@@ -57,23 +57,20 @@ const AdminPanel: React.FC = () => {
     setError(null);
     try {
       const lastVisible = pageSnapshots[pageIndex] || null;
-      const { promoters, lastDoc } = await getPromoters(filter, lastVisible);
+      // getPromoters now fetches documents including archived ones to ensure old records are not missed.
+      const { promoters: rawPromoters, lastDoc } = await getPromoters(filter, lastVisible);
       
-      // When filtering by a specific status, the query might include archived promoters.
-      // We filter them out here on the client-side to ensure the UI is correct.
-      // When the filter is 'all', the query already correctly filters out archived promoters.
-      const visiblePromoters = filter === 'all'
-        ? promoters
-        : promoters.filter(p => p.isArchived !== true);
+      // We perform the filtering on the client side. This ensures old documents (without `isArchived` field) are correctly shown.
+      const visiblePromoters = rawPromoters.filter(p => p.isArchived !== true);
 
       setAllPromoters(visiblePromoters);
 
-      // Base pagination logic on the raw fetched count to know if we've reached the end.
-      if (promoters.length < PAGE_SIZE) {
+      // The pagination logic must be based on the raw fetch count to know if there's more data on the server.
+      if (rawPromoters.length < PAGE_SIZE) {
         setIsLastPage(true);
       } else {
         setIsLastPage(false);
-        if (pageIndex === pageSnapshots.length - 1) {
+        if (pageIndex === pageSnapshots.length - 1 && lastDoc) {
             setPageSnapshots(prev => [...prev, lastDoc]);
         }
       }
