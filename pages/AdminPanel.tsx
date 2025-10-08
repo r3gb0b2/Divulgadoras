@@ -3,7 +3,7 @@ import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { Promoter, PromoterStatus, RejectionReason } from '../types';
-import { WhatsAppIcon } from '../components/Icons';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
@@ -14,7 +14,7 @@ const AdminPanel: React.FC = () => {
     const [filteredPromoters, setFilteredPromoters] = useState<Promoter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<PromoterStatus | 'all'>('all');
+    const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Modals state
@@ -246,10 +246,22 @@ const AdminPanel: React.FC = () => {
                                             <div className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <a href={`https://wa.me/${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-green-600 dark:text-green-400 hover:underline inline-flex items-center">
-                                                <WhatsAppIcon className="w-4 h-4 mr-1" />
-                                                {promoter.whatsapp}
-                                            </a>
+                                            <div className="flex flex-col space-y-2 text-sm">
+                                                <a href={`https://wa.me/${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 hover:underline inline-flex items-center">
+                                                    <WhatsAppIcon className="w-4 h-4 mr-2" />
+                                                    <span>{promoter.whatsapp}</span>
+                                                </a>
+                                                <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center">
+                                                    <InstagramIcon className="w-4 h-4 mr-2" />
+                                                    <span>Instagram</span>
+                                                </a>
+                                                {promoter.tiktok && (
+                                                    <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
+                                                        <TikTokIcon className="w-4 h-4 mr-2" />
+                                                        <span>TikTok</span>
+                                                    </a>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex -space-x-2">
