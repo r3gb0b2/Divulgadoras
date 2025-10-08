@@ -91,22 +91,17 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
     try {
         const promotersRef = collection(firestore, "promoters");
 
-        // This query correctly gets all non-archived promoters, including old ones.
-        const totalQuery = query(promotersRef, where("isArchived", "!=", true));
-
-        // For status counts, we must use a different strategy to avoid invalid queries.
         // 1. Get total count for each status (including any archived ones).
         const totalPendingQuery = query(promotersRef, where("status", "==", "pending"));
         const totalApprovedQuery = query(promotersRef, where("status", "==", "approved"));
         const totalRejectedQuery = query(promotersRef, where("status", "==", "rejected"));
 
-        // 2. Get count of archived promoters for each status. These queries are valid.
+        // 2. Get count of archived promoters for each status.
         const archivedPendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", true));
         const archivedApprovedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", true));
         const archivedRejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", true));
 
         const [
-            totalSnapshot,
             totalPendingSnapshot,
             totalApprovedSnapshot,
             totalRejectedSnapshot,
@@ -114,7 +109,6 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
             archivedApprovedSnapshot,
             archivedRejectedSnapshot
         ] = await Promise.all([
-            getCountFromServer(totalQuery),
             getCountFromServer(totalPendingQuery),
             getCountFromServer(totalApprovedQuery),
             getCountFromServer(totalRejectedQuery),
@@ -123,13 +117,16 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
             getCountFromServer(archivedRejectedQuery)
         ]);
         
-        // 3. Subtract archived from total to get the correct count.
+        // 3. Subtract archived from total to get the correct count for each status.
         const pendingCount = totalPendingSnapshot.data().count - archivedPendingSnapshot.data().count;
         const approvedCount = totalApprovedSnapshot.data().count - archivedApprovedSnapshot.data().count;
         const rejectedCount = totalRejectedSnapshot.data().count - archivedRejectedSnapshot.data().count;
 
+        // 4. The correct total is the sum of all non-archived statuses.
+        const totalCount = pendingCount + approvedCount + rejectedCount;
+
         return {
-            total: totalSnapshot.data().count,
+            total: totalCount,
             pending: pendingCount,
             approved: approvedCount,
             rejected: rejectedCount,
