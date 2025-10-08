@@ -31,7 +31,12 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
         ...Array.from(selectedReasons),
         ...(customReason.trim() ? [customReason.trim()] : [])
     ];
-    onConfirm(finalReasons.join('\n- '));
+    
+    const reasonMessage = finalReasons.length > 0 
+        ? `- ${finalReasons.join('\n- ')}` 
+        : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.';
+
+    onConfirm(reasonMessage);
     // Reset state for next use
     setSelectedReasons(new Set());
     setCustomReason('');
@@ -81,8 +86,7 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
           <button 
             type="button" 
             onClick={handleConfirm} 
-            disabled={selectedReasons.size === 0 && !customReason.trim()}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-red-300 dark:disabled:bg-red-800 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
           >
             Confirmar Rejeição
           </button>

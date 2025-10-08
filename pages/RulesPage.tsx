@@ -17,7 +17,7 @@ const RulesPage: React.FC = () => {
             <h2 className="text-xl font-semibold text-primary mb-3">1. Envio de Prints</h2>
             <ul className="list-disc list-inside space-y-2">
               <li><span className="font-bold">Story:</span> Enviar print com pelo menos <span className="font-bold text-primary-dark dark:text-primary">5 horas</span> de postagem. Deixe o story apagar sozinho (não apague antes das 24h).</li>
-              <li><span className="font-bold">Feed:</span> Após <span className="font-bold text-primary-dark dark:text-primary">48 horas</span> da postagem, envie o print. Depois disso, você pode apagar ou arquivar.</li>
+              <li><span className="font-bold">Feed:</span> Após <span className="font-bold text-primary-dark dark:text-primary">48 horas</span> da postagem, envie o print. Depois disso, você pode apagar a postagem.</li>
               <li><span className="font-bold">Atenção na Postagem:</span> Verifique se a arte, o texto e a data (início de vendas, virada de lote, etc.) estão corretos antes de postar.</li>
                <li>Se não puder fazer alguma postagem, avise com antecedência para evitar ser removida do grupo.</li>
               <li className="italic font-semibold">Lembre-se: não enviar os prints é o mesmo que não postar.</li>

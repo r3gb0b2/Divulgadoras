@@ -60,7 +60,7 @@ const StatusCheck: React.FC = () => {
         }
 
         const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
-            ? `${statusInfo.message}\n\nMotivo: ${promoter.rejectionReason}`
+            ? promoter.rejectionReason
             : statusInfo.message;
 
         return (

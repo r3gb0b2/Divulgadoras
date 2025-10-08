@@ -1,4 +1,6 @@
-import { Timestamp } from "firebase/firestore";
+import { FieldValue } from 'firebase/firestore';
+
+export type PromoterStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Promoter {
   id: string;
@@ -6,25 +8,25 @@ export interface Promoter {
   whatsapp: string;
   email: string;
   instagram: string;
-  tiktok: string;
+  tiktok?: string;
   dateOfBirth: string;
   photoUrls: string[];
-  status: 'pending' | 'approved' | 'rejected';
+  status: PromoterStatus;
+  createdAt: FieldValue;
   rejectionReason?: string;
-  createdAt: Timestamp;
 }
 
 export interface PromoterApplicationData {
-    name: string;
-    whatsapp: string;
-    email: string;
-    instagram: string;
-    tiktok: string;
-    dateOfBirth: string;
-    photos: File[];
+  name: string;
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  tiktok?: string;
+  dateOfBirth: string;
+  photos: File[];
 }
 
 export interface RejectionReason {
-    id: string;
-    text: string;
+  id: string;
+  text: string;
 }
