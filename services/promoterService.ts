@@ -56,7 +56,8 @@ export const getPromoters = async (
     const queryConstraints: QueryConstraint[] = [];
     
     // Base query: only fetch non-archived promoters
-    queryConstraints.push(where("isArchived", "==", false));
+    // Using '!=' includes documents where the field is false OR missing.
+    queryConstraints.push(where("isArchived", "!=", true));
 
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
@@ -116,9 +117,9 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
     try {
         const promotersRef = collection(firestore, "promoters");
 
-        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", false));
-        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", false));
-        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", false));
+        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "!=", true));
+        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "!=", true));
+        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "!=", true));
         
         const [pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
             getCountFromServer(pendingQuery),
