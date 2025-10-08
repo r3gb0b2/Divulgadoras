@@ -2,7 +2,7 @@
 import { firestore, storage } from '../firebase/config';
 import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Promoter, PromoterApplicationData } from '../types';
+import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
@@ -92,5 +92,46 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter | nul
     } catch (error) {
         console.error("Error checking promoter status: ", error);
         throw new Error("Não foi possível verificar o status.");
+    }
+};
+
+// --- Rejection Reasons Service ---
+
+export const getRejectionReasons = async (): Promise<RejectionReason[]> => {
+    try {
+        const q = query(collection(firestore, "rejectionReasons"), orderBy("text", "asc"));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, text: doc.data().text } as RejectionReason));
+    } catch (error) {
+        console.error("Error getting rejection reasons: ", error);
+        throw new Error("Não foi possível buscar os motivos de rejeição.");
+    }
+};
+
+export const addRejectionReason = async (text: string): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding rejection reason: ", error);
+        throw new Error("Não foi possível adicionar o motivo de rejeição.");
+    }
+};
+
+export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
+    try {
+        await updateDoc(doc(firestore, 'rejectionReasons', id), { text });
+    } catch (error) {
+        console.error("Error updating rejection reason: ", error);
+        throw new Error("Não foi possível atualizar o motivo de rejeição.");
+    }
+};
+
+export const deleteRejectionReason = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "rejectionReasons", id));
+    } catch (error) {
+        console.error("Error deleting rejection reason: ", error);
+        throw new Error("Não foi possível deletar o motivo de rejeição.");
     }
 };

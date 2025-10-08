@@ -23,3 +23,8 @@ export interface PromoterApplicationData {
     dateOfBirth: string;
     photos: File[];
 }
+
+export interface RejectionReason {
+    id: string;
+    text: string;
+}

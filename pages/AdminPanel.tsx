@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
-import { Promoter } from '../types';
+import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
+import { Promoter, RejectionReason } from '../types';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PhotoViewerModal from '../components/PhotoViewerModal';
+import ManageReasonsModal from '../components/ManageReasonsModal';
+import RejectionModal from '../components/RejectionModal';
 import { InstagramIcon, MailIcon, WhatsAppIcon } from '../components/Icons';
 
 const calculateAge = (dateOfBirth: string): number => {
@@ -43,22 +45,33 @@ const StatsCard: React.FC<{ title: string; value: number; className?: string }> 
 
 const AdminPanel: React.FC = () => {
   const [promoters, setPromoters] = useState<Promoter[]>([]);
+  const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [ageFilter, setAgeFilter] = useState<string>('');
+  
   const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
+  const [promoterToReject, setPromoterToReject] = useState<Promoter | null>(null);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [isManageReasonsModalOpen, setIsManageReasonsModalOpen] = useState(false);
+
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [photoStartIndex, setPhotoStartIndex] = useState(0);
   
-  const fetchPromoters = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getPromoters();
-      setPromoters(data);
+      const [promotersData, reasonsData] = await Promise.all([
+        getPromoters(),
+        getRejectionReasons()
+      ]);
+      setPromoters(promotersData);
+      setRejectionReasons(reasonsData);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar dados.');
     } finally {
@@ -67,32 +80,34 @@ const AdminPanel: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchPromoters();
-  }, [fetchPromoters]);
+    fetchData();
+  }, [fetchData]);
 
-  const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
-    const promoter = promoters.find(p => p.id === id);
-    if (!promoter) return;
-
-    let updateData: Partial<Omit<Promoter, 'id'>> = { status };
-
-    if (status === 'rejected') {
-        const reason = prompt('Por favor, informe o motivo da rejeição:', promoter.rejectionReason || '');
-        if (reason === null) {
-            return; // User cancelled prompt
-        }
-        updateData.rejectionReason = reason || 'Motivo não especificado.';
-    } else {
-        // When approving, clear any previous rejection reason
-        updateData.rejectionReason = '';
-    }
-    
+  const handleApprove = async (id: string) => {
     try {
-        await updatePromoter(id, updateData);
-        setPromoters(prev => prev.map(p => (p.id === id ? { ...p, ...updateData } : p)));
+        await updatePromoter(id, { status: 'approved', rejectionReason: '' });
+        setPromoters(prev => prev.map(p => (p.id === id ? { ...p, status: 'approved', rejectionReason: '' } : p)));
     } catch (error) {
         console.error(error);
-        alert('Falha ao atualizar status.');
+        alert('Falha ao aprovar.');
+    }
+  };
+  
+  const handleOpenRejectionModal = (promoter: Promoter) => {
+    setPromoterToReject(promoter);
+    setIsRejectionModalOpen(true);
+  }
+  
+  const handleConfirmRejection = async (reason: string) => {
+    if (!promoterToReject) return;
+    try {
+        await updatePromoter(promoterToReject.id, { status: 'rejected', rejectionReason: reason });
+        setPromoters(prev => prev.map(p => (p.id === promoterToReject.id ? { ...p, status: 'rejected', rejectionReason: reason } : p)));
+        setIsRejectionModalOpen(false);
+        setPromoterToReject(null);
+    } catch (error) {
+        console.error(error);
+        alert('Falha ao rejeitar.');
     }
   };
 
@@ -110,7 +125,7 @@ const AdminPanel: React.FC = () => {
 
   const handleSaveFromModal = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
       await updatePromoter(id, data);
-      await fetchPromoters(); // Refetch all data to ensure consistency
+      await fetchData();
   };
 
   const openEditModal = (promoter: Promoter) => {
@@ -149,7 +164,15 @@ const AdminPanel: React.FC = () => {
   
   return (
     <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-4 sm:p-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Painel Administrativo</h1>
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Painel Administrativo</h1>
+            <button
+                onClick={() => setIsManageReasonsModalOpen(true)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 text-sm font-medium"
+            >
+                Gerenciar Motivos de Rejeição
+            </button>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatsCard title="Total de Cadastros" value={stats.total} />
@@ -240,8 +263,8 @@ const AdminPanel: React.FC = () => {
                                             <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
                                                 {p.status === 'pending' && (
                                                     <>
-                                                        <button onClick={() => handleUpdateStatus(p.id, 'approved')} className="text-green-600 hover:text-green-900 dark:hover:text-green-400 transition-colors">Aprovar</button>
-                                                        <button onClick={() => handleUpdateStatus(p.id, 'rejected')} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Rejeitar</button>
+                                                        <button onClick={() => handleApprove(p.id)} className="text-green-600 hover:text-green-900 dark:hover:text-green-400 transition-colors">Aprovar</button>
+                                                        <button onClick={() => handleOpenRejectionModal(p)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400 transition-colors">Rejeitar</button>
                                                     </>
                                                 )}
                                                 {p.status === 'approved' && (
@@ -288,7 +311,7 @@ const AdminPanel: React.FC = () => {
                                 </div>
 
                                 {p.status === 'rejected' && p.rejectionReason && (
-                                    <div className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 p-2 rounded-md">
+                                    <div className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 p-2 rounded-md whitespace-pre-wrap">
                                         <span className="font-bold">Motivo:</span> {p.rejectionReason}
                                     </div>
                                 )}
@@ -322,8 +345,8 @@ const AdminPanel: React.FC = () => {
                                     <div className="flex flex-col space-y-2">
                                         {p.status === 'pending' && (
                                             <>
-                                                <button onClick={() => handleUpdateStatus(p.id, 'approved')} className="w-full text-center p-2 rounded-md bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-300 dark:hover:bg-green-900 transition-colors font-medium">Aprovar</button>
-                                                <button onClick={() => handleUpdateStatus(p.id, 'rejected')} className="w-full text-center p-2 rounded-md bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900 transition-colors font-medium">Rejeitar</button>
+                                                <button onClick={() => handleApprove(p.id)} className="w-full text-center p-2 rounded-md bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-300 dark:hover:bg-green-900 transition-colors font-medium">Aprovar</button>
+                                                <button onClick={() => handleOpenRejectionModal(p)} className="w-full text-center p-2 rounded-md bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900 transition-colors font-medium">Rejeitar</button>
                                             </>
                                         )}
                                         {p.status === 'approved' && (
@@ -365,6 +388,17 @@ const AdminPanel: React.FC = () => {
             onClose={() => setIsPhotoViewerOpen(false)}
             imageUrls={selectedPhotos}
             startIndex={photoStartIndex}
+        />
+        <ManageReasonsModal
+            isOpen={isManageReasonsModalOpen}
+            onClose={() => setIsManageReasonsModalOpen(false)}
+            onReasonsUpdated={fetchData}
+        />
+        <RejectionModal
+            isOpen={isRejectionModalOpen}
+            onClose={() => setIsRejectionModalOpen(false)}
+            onConfirm={handleConfirmRejection}
+            reasons={rejectionReasons}
         />
     </div>
   );
