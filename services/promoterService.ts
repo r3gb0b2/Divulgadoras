@@ -57,6 +57,8 @@ export const getPromoters = async (
 
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
+        // Add this to filter out archived ones when a specific status is selected
+        queryConstraints.push(where("isArchived", "==", false));
     } else {
         queryConstraints.push(where("isArchived", "==", false));
     }
@@ -89,26 +91,48 @@ export const getPromotersCount = async (): Promise<{ total: number, pending: num
     try {
         const promotersRef = collection(firestore, "promoters");
 
-        // Queries for each status
-        // Using '!=' true will correctly include old documents where 'isArchived' field does not exist.
+        // This query correctly gets all non-archived promoters, including old ones.
         const totalQuery = query(promotersRef, where("isArchived", "!=", true));
-        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "!=", true));
-        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "!=", true));
-        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "!=", true));
 
-        // Get counts from server
-        const [totalSnapshot, pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
+        // For status counts, we must use a different strategy to avoid invalid queries.
+        // 1. Get total count for each status (including any archived ones).
+        const totalPendingQuery = query(promotersRef, where("status", "==", "pending"));
+        const totalApprovedQuery = query(promotersRef, where("status", "==", "approved"));
+        const totalRejectedQuery = query(promotersRef, where("status", "==", "rejected"));
+
+        // 2. Get count of archived promoters for each status. These queries are valid.
+        const archivedPendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", true));
+        const archivedApprovedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", true));
+        const archivedRejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", true));
+
+        const [
+            totalSnapshot,
+            totalPendingSnapshot,
+            totalApprovedSnapshot,
+            totalRejectedSnapshot,
+            archivedPendingSnapshot,
+            archivedApprovedSnapshot,
+            archivedRejectedSnapshot
+        ] = await Promise.all([
             getCountFromServer(totalQuery),
-            getCountFromServer(pendingQuery),
-            getCountFromServer(approvedQuery),
-            getCountFromServer(rejectedQuery)
+            getCountFromServer(totalPendingQuery),
+            getCountFromServer(totalApprovedQuery),
+            getCountFromServer(totalRejectedQuery),
+            getCountFromServer(archivedPendingQuery),
+            getCountFromServer(archivedApprovedQuery),
+            getCountFromServer(archivedRejectedQuery)
         ]);
         
+        // 3. Subtract archived from total to get the correct count.
+        const pendingCount = totalPendingSnapshot.data().count - archivedPendingSnapshot.data().count;
+        const approvedCount = totalApprovedSnapshot.data().count - archivedApprovedSnapshot.data().count;
+        const rejectedCount = totalRejectedSnapshot.data().count - archivedRejectedSnapshot.data().count;
+
         return {
             total: totalSnapshot.data().count,
-            pending: pendingSnapshot.data().count,
-            approved: approvedSnapshot.data().count,
-            rejected: rejectedSnapshot.data().count,
+            pending: pendingCount,
+            approved: approvedCount,
+            rejected: rejectedCount,
         };
     } catch (error) {
         console.error("Error getting promoter counts: ", error);
