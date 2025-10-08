@@ -62,8 +62,13 @@ const AdminPanel: React.FC = () => {
           ? await getArchivedPromoters(lastVisible)
           : await getPromoters(filter, lastVisible);
 
-      // The service now handles filtering non-archived promoters correctly for the 'all' filter.
-      setAllPromoters(fetchedPromoters);
+      // Client-side filtering for non-archived views to avoid complex/failing queries.
+      if (filter !== 'archived') {
+          const nonArchivedPromoters = fetchedPromoters.filter(p => p.isArchived !== true);
+          setAllPromoters(nonArchivedPromoters);
+      } else {
+          setAllPromoters(fetchedPromoters);
+      }
 
       if (fetchedPromoters.length < PAGE_SIZE) {
         setIsLastPage(true);

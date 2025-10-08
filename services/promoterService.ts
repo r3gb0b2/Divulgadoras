@@ -55,12 +55,10 @@ export const getPromoters = async (
     const promotersRef = collection(firestore, "promoters");
     const queryConstraints: QueryConstraint[] = [];
     
+    // For specific statuses, filter by that status.
+    // For 'all', we fetch all documents and let the client filter out archived ones.
     if (statusFilter !== 'all') {
         queryConstraints.push(where("status", "==", statusFilter));
-    } else {
-        // For the 'all' filter, explicitly fetch only non-archived promoters.
-        // This query is valid because it uses a '!=' filter with the required orderBy('__name__').
-        queryConstraints.push(where("isArchived", "!=", true));
     }
     
     // Order by document ID to support pagination without custom indexes.
@@ -77,6 +75,8 @@ export const getPromoters = async (
     const promoters: Promoter[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1] || null;
 
+    // We return all documents matching the status (or all documents for 'all' filter), including archived ones.
+    // The client will be responsible for filtering out the archived ones from this result.
     return { promoters, lastDoc };
 
   } catch (error) {
