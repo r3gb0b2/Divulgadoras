@@ -54,16 +54,18 @@ const AdminPanel: React.FC = () => {
   }, [fetchPromoters]);
 
   const stats = useMemo(() => {
+    const unarchivedPromoters = promoters.filter(p => p.isArchived !== true);
     return {
-        total: promoters.length,
-        pending: promoters.filter(p => p.status === 'pending').length,
-        approved: promoters.filter(p => p.status === 'approved').length,
-        rejected: promoters.filter(p => p.status === 'rejected').length,
+        total: unarchivedPromoters.length,
+        pending: unarchivedPromoters.filter(p => p.status === 'pending').length,
+        approved: unarchivedPromoters.filter(p => p.status === 'approved').length,
+        rejected: unarchivedPromoters.filter(p => p.status === 'rejected').length,
     };
   }, [promoters]);
 
   const processedPromoters = useMemo(() => {
-    let promot_ers = [...promoters];
+    // Start with unarchived promoters. This handles old data without the isArchived field.
+    let promot_ers = promoters.filter(p => p.isArchived !== true);
 
     if (searchQuery) {
         promot_ers = promot_ers.filter(p =>
@@ -149,7 +151,8 @@ const AdminPanel: React.FC = () => {
     if (window.confirm('Tem certeza que deseja arquivar este cadastro? Ele será ocultado da lista principal.')) {
         try {
             await archivePromoter(id);
-            setPromoters(prev => prev.filter(p => p.id !== id));
+            // Optimistically update the UI to remove the promoter
+            setPromoters(prev => prev.map(p => p.id === id ? { ...p, isArchived: true } : p));
         } catch (error) {
             console.error(error);
             alert('Falha ao arquivar.');

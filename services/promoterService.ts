@@ -49,10 +49,9 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
 export const getPromoters = async (): Promise<Promoter[]> => {
   try {
-    // Firestore does not support combining a `!=` filter with an `orderBy` on a different field.
-    // The client-side code in AdminPanel.tsx already handles sorting, so we can safely remove it here.
-    const q = query(collection(firestore, "promoters"), where("isArchived", "!=", true));
-    const querySnapshot = await getDocs(q);
+    // Fetch all promoters. Filtering for archived status will be handled on the client-side.
+    // This ensures that older documents without the `isArchived` field are also retrieved.
+    const querySnapshot = await getDocs(collection(firestore, "promoters"));
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
