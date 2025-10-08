@@ -227,74 +227,136 @@ const AdminPanel: React.FC = () => {
                 ) : error ? (
                     <p className="text-red-500 text-center py-4">{error}</p>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contato</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fotos</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {filteredPromoters.map((promoter) => (
-                                    <tr key={promoter.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{promoter.name}</div>
-                                            <div className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex flex-col space-y-2 text-sm">
-                                                <a href={`https://wa.me/${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 hover:underline inline-flex items-center">
-                                                    <WhatsAppIcon className="w-4 h-4 mr-2" />
-                                                    <span>{promoter.whatsapp}</span>
-                                                </a>
-                                                <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center">
-                                                    <InstagramIcon className="w-4 h-4 mr-2" />
-                                                    <span>Instagram</span>
-                                                </a>
-                                                {promoter.tiktok && (
-                                                    <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
-                                                        <TikTokIcon className="w-4 h-4 mr-2" />
-                                                        <span>TikTok</span>
-                                                    </a>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex -space-x-2">
-                                                {promoter.photoUrls.map((url, index) => (
-                                                    <img
-                                                        key={index}
-                                                        src={url}
-                                                        alt={`Foto ${index + 1}`}
-                                                        className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 cursor-pointer hover:z-10 transform hover:scale-125 transition-transform"
-                                                        onClick={() => openPhotoViewer(promoter.photoUrls, index)}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(promoter.status)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                            <div className="flex items-center space-x-2">
-                                                {promoter.status === 'pending' && (
-                                                    <>
-                                                        <button onClick={() => handleApprove(promoter.id)} className="text-green-600 hover:text-green-900">Aprovar</button>
-                                                        <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-600 hover:text-red-900">Rejeitar</button>
-                                                    </>
-                                                )}
-                                                <button onClick={() => openEditModal(promoter)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
-                                                <button onClick={() => handleDelete(promoter.id)} className="text-gray-500 hover:text-gray-700">Excluir</button>
-                                            </div>
-                                        </td>
+                    <>
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Contato</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fotos</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                         {filteredPromoters.length === 0 && <p className="text-center py-4 text-gray-500">Nenhuma divulgadora encontrada.</p>}
-                    </div>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {filteredPromoters.map((promoter) => (
+                                        <tr key={promoter.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900 dark:text-white">{promoter.name}</div>
+                                                <div className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex flex-col space-y-2 text-sm">
+                                                    <a href={`https://wa.me/${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 hover:underline inline-flex items-center">
+                                                        <WhatsAppIcon className="w-4 h-4 mr-2" />
+                                                        <span>{promoter.whatsapp}</span>
+                                                    </a>
+                                                    <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline inline-flex items-center">
+                                                        <InstagramIcon className="w-4 h-4 mr-2" />
+                                                        <span>Instagram</span>
+                                                    </a>
+                                                    {promoter.tiktok && (
+                                                        <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline inline-flex items-center">
+                                                            <TikTokIcon className="w-4 h-4 mr-2" />
+                                                            <span>TikTok</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex -space-x-2">
+                                                    {promoter.photoUrls.map((url, index) => (
+                                                        <img
+                                                            key={index}
+                                                            src={url}
+                                                            alt={`Foto ${index + 1}`}
+                                                            className="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-gray-800 cursor-pointer hover:z-10 transform hover:scale-125 transition-transform"
+                                                            onClick={() => openPhotoViewer(promoter.photoUrls, index)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(promoter.status)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <div className="flex items-center space-x-2">
+                                                    {promoter.status === 'pending' && (
+                                                        <>
+                                                            <button onClick={() => handleApprove(promoter.id)} className="text-green-600 hover:text-green-900">Aprovar</button>
+                                                            <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-600 hover:text-red-900">Rejeitar</button>
+                                                        </>
+                                                    )}
+                                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+                                                    <button onClick={() => handleDelete(promoter.id)} className="text-gray-500 hover:text-gray-700">Excluir</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4">
+                           {filteredPromoters.map((promoter) => (
+                                <div key={promoter.id} className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg shadow">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <p className="font-bold text-lg text-gray-900 dark:text-white">{promoter.name}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</p>
+                                        </div>
+                                        {getStatusBadge(promoter.status)}
+                                    </div>
+
+                                    <div className="flex items-center gap-4 mb-3">
+                                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Fotos:</span>
+                                        <div className="flex -space-x-2">
+                                            {promoter.photoUrls.map((url, index) => (
+                                                <img
+                                                    key={index}
+                                                    src={url}
+                                                    alt={`Foto ${index + 1}`}
+                                                    className="w-8 h-8 rounded-full object-cover border-2 border-white dark:border-gray-800 cursor-pointer"
+                                                    onClick={() => openPhotoViewer(promoter.photoUrls, index)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2 text-sm">
+                                        <a href={`https://wa.me/${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 dark:text-green-400 hover:underline flex items-center">
+                                            <WhatsAppIcon className="w-4 h-4 mr-2" />
+                                            <span>{promoter.whatsapp}</span>
+                                        </a>
+                                        <a href={promoter.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 dark:text-pink-400 hover:underline flex items-center">
+                                            <InstagramIcon className="w-4 h-4 mr-2" />
+                                            <span>Instagram</span>
+                                        </a>
+                                        {promoter.tiktok && (
+                                            <a href={promoter.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-600 dark:text-gray-400 hover:underline flex items-center">
+                                                <TikTokIcon className="w-4 h-4 mr-2" />
+                                                <span>TikTok</span>
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    <div className="border-t border-gray-200 dark:border-gray-700 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-2 justify-end text-sm font-medium">
+                                        {promoter.status === 'pending' && (
+                                            <>
+                                                <button onClick={() => handleApprove(promoter.id)} className="text-green-600 hover:text-green-900">Aprovar</button>
+                                                <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-600 hover:text-red-900">Rejeitar</button>
+                                            </>
+                                        )}
+                                        <button onClick={() => openEditModal(promoter)} className="text-indigo-600 hover:text-indigo-900">Editar</button>
+                                        <button onClick={() => handleDelete(promoter.id)} className="text-gray-500 hover:text-gray-700">Excluir</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {filteredPromoters.length === 0 && <p className="text-center py-4 text-gray-500">Nenhuma divulgadora encontrada.</p>}
+                    </>
                 )}
             </div>
             
