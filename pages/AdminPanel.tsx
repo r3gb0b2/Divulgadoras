@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
@@ -60,6 +60,13 @@ const AdminPanel: React.FC = () => {
         fetchPromoters();
         fetchReasons();
     }, [fetchPromoters, fetchReasons]);
+    
+    const stats = useMemo(() => ({
+        total: promoters.length,
+        pending: promoters.filter(p => p.status === 'pending').length,
+        approved: promoters.filter(p => p.status === 'approved').length,
+        rejected: promoters.filter(p => p.status === 'rejected').length,
+    }), [promoters]);
 
     useEffect(() => {
         let result = promoters;
@@ -172,6 +179,25 @@ const AdminPanel: React.FC = () => {
                     <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
                         Sair
                     </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total de Cadastros</h3>
+                    <p className="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{stats.total}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Pendentes</h3>
+                    <p className="mt-1 text-3xl font-semibold text-yellow-500 dark:text-yellow-400">{stats.pending}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Aprovados</h3>
+                    <p className="mt-1 text-3xl font-semibold text-green-500 dark:text-green-400">{stats.approved}</p>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Rejeitados</h3>
+                    <p className="mt-1 text-3xl font-semibold text-red-500 dark:text-red-400">{stats.rejected}</p>
                 </div>
             </div>
 
