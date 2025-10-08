@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getPromoters, updatePromoter, archivePromoter } from '../services/promoterService';
+import { getPromoters, updatePromoter, archivePromoter, getPromotersCount } from '../services/promoterService';
 import { Promoter } from '../types';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
@@ -40,6 +40,12 @@ const AdminPanel: React.FC = () => {
   const [photoStartIndex, setPhotoStartIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
+  const [stats, setStats] = useState<{ total: number | string, pending: number | string, approved: number | string, rejected: number | string }>({
+    total: '...',
+    pending: '...',
+    approved: '...',
+    rejected: '...',
+  });
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0);
@@ -80,6 +86,19 @@ const AdminPanel: React.FC = () => {
   }, [filter, pageSnapshots]);
 
   useEffect(() => {
+    // Fetch statistics only once when the component mounts
+    const fetchStats = async () => {
+      try {
+        const counts = await getPromotersCount();
+        setStats(counts);
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  useEffect(() => {
     setCurrentPage(0);
     setPageSnapshots([null]);
     setIsLastPage(false);
@@ -90,19 +109,6 @@ const AdminPanel: React.FC = () => {
   useEffect(() => {
     fetchPromoters(currentPage);
   }, [currentPage, fetchPromoters]);
-
-  const stats = useMemo(() => {
-    // Note: Stats are now an approximation based on the first page load
-    // For exact stats, a separate cloud function or query would be needed
-    // This approach avoids extra reads for performance.
-    const unarchivedPromoters = allPromoters.filter(p => p.isArchived !== true);
-    return {
-        total: '...',
-        pending: '...',
-        approved: '...',
-        rejected: '...',
-    };
-  }, [allPromoters]);
   
   const processedPromoters = useMemo(() => {
     let promot_ers = [...allPromoters]; // Work with a copy

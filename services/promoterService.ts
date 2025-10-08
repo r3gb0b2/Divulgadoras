@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getDocsFromCache, limit, orderBy, startAfter, QueryDocumentSnapshot, QueryConstraint } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, where, DocumentSnapshot, getCountFromServer, limit, orderBy, startAfter, QueryDocumentSnapshot, QueryConstraint } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData } from '../types';
 
@@ -83,6 +83,36 @@ export const getPromoters = async (
     console.error("Error getting promoters: ", error);
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
+};
+
+export const getPromotersCount = async (): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
+    try {
+        const promotersRef = collection(firestore, "promoters");
+
+        // Queries for each status
+        const totalQuery = query(promotersRef, where("isArchived", "==", false));
+        const pendingQuery = query(promotersRef, where("status", "==", "pending"), where("isArchived", "==", false));
+        const approvedQuery = query(promotersRef, where("status", "==", "approved"), where("isArchived", "==", false));
+        const rejectedQuery = query(promotersRef, where("status", "==", "rejected"), where("isArchived", "==", false));
+
+        // Get counts from server
+        const [totalSnapshot, pendingSnapshot, approvedSnapshot, rejectedSnapshot] = await Promise.all([
+            getCountFromServer(totalQuery),
+            getCountFromServer(pendingQuery),
+            getCountFromServer(approvedQuery),
+            getCountFromServer(rejectedQuery)
+        ]);
+        
+        return {
+            total: totalSnapshot.data().count,
+            pending: pendingSnapshot.data().count,
+            approved: approvedSnapshot.data().count,
+            rejected: rejectedSnapshot.data().count,
+        };
+    } catch (error) {
+        console.error("Error getting promoter counts: ", error);
+        throw new Error("Não foi possível carregar as estatísticas.");
+    }
 };
 
 
