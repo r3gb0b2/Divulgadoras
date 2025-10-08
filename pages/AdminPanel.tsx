@@ -53,8 +53,16 @@ const AdminPanel: React.FC = () => {
       const lastVisible = pageSnapshots[pageIndex] || null;
       const { promoters, lastDoc } = await getPromoters(filter, lastVisible);
       
-      setAllPromoters(promoters);
+      // When filtering by a specific status, the query might include archived promoters.
+      // We filter them out here on the client-side to ensure the UI is correct.
+      // When the filter is 'all', the query already correctly filters out archived promoters.
+      const visiblePromoters = filter === 'all'
+        ? promoters
+        : promoters.filter(p => p.isArchived !== true);
 
+      setAllPromoters(visiblePromoters);
+
+      // Base pagination logic on the raw fetched count to know if we've reached the end.
       if (promoters.length < PAGE_SIZE) {
         setIsLastPage(true);
       } else {

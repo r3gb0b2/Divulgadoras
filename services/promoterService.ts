@@ -53,23 +53,26 @@ export const getPromoters = async (
 ): Promise<{ promoters: Promoter[], lastDoc: QueryDocumentSnapshot | null }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    const queryConstraints: QueryConstraint[] = [
-        where("isArchived", "==", false), // FIX: Use equality check. This is a valid query with orderBy on another field.
-        orderBy("createdAt", "desc"),
-        limit(PAGE_SIZE)
-    ];
+    const queryConstraints: QueryConstraint[] = [];
 
     if (statusFilter !== 'all') {
-        // Add status filter before other constraints for clarity. The order of 'where' clauses doesn't impact performance.
-        queryConstraints.unshift(where("status", "==", statusFilter));
+        // Query by status first. This query is simple and doesn't need a complex index.
+        // We will filter out archived promoters on the client-side in the AdminPanel.
+        queryConstraints.push(where("status", "==", statusFilter));
+    } else {
+        // When fetching 'all', we primarily filter out the archived ones at the database level.
+        queryConstraints.push(where("isArchived", "==", false));
     }
+    
+    // Common constraints for all queries
+    queryConstraints.push(orderBy("createdAt", "desc"));
+    queryConstraints.push(limit(PAGE_SIZE));
     
     if (lastVisible) {
         queryConstraints.push(startAfter(lastVisible));
     }
 
     const q = query(promotersRef, ...queryConstraints);
-    
     const documentSnapshots = await getDocs(q);
     
     const promoters: Promoter[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
