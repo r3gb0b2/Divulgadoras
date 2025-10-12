@@ -1,6 +1,5 @@
 import { firestore, auth } from '../firebase/config';
 import { collection, doc, getDocs, query, where, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-// FIX: Import `getAuth` from `firebase/auth` to resolve the "Cannot find name 'getAuth'" error.
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { AdminUser } from '../types';
 
@@ -8,7 +7,7 @@ import { AdminUser } from '../types';
 // For production apps, it's safer to use Firebase Cloud Functions to manage user creation.
 // This prevents exposing any sensitive logic on the client.
 // We are creating a secondary App instance to create users without logging out the current admin.
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 
 const secondaryAppConfig = {
   apiKey: "AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU",
@@ -20,7 +19,8 @@ const secondaryAppConfig = {
   measurementId: "G-JTEQ46VCRY"
 };
 
-const secondaryApp = initializeApp(secondaryAppConfig, "secondary");
+// Ensure secondary app is only initialized once to prevent Firebase errors.
+const secondaryApp = getApps().find(app => app.name === 'secondary') || initializeApp(secondaryAppConfig, "secondary");
 const secondaryAuth = getAuth(secondaryApp);
 
 

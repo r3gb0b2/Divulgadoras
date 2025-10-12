@@ -74,9 +74,9 @@ const AdminAuth: React.FC = () => {
     return (
         <div className="flex items-center justify-center flex-grow">
             <div className="w-full max-w-md">
-                <form onSubmit={handleLogin} className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8 text-center">
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Acesso Restrito</h1>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">Por favor, insira suas credenciais para acessar o painel administrativo.</p>
+                <form onSubmit={handleLogin} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
+                    <h1 className="text-2xl font-bold text-light mb-4">Acesso Restrito</h1>
+                    <p className="text-gray-400 mb-6">Por favor, insira suas credenciais para acessar o painel administrativo.</p>
                     
                     <div className="space-y-4">
                         <div className="relative">
@@ -88,7 +88,7 @@ const AdminAuth: React.FC = () => {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="E-mail"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                                 required
                                 autoFocus
                             />
@@ -98,7 +98,7 @@ const AdminAuth: React.FC = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Senha"
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                             required
                         />
                     </div>

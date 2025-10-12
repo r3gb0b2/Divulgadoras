@@ -16,7 +16,7 @@ const availableStates = [
   { abbr: 'PB', name: 'Paraíba' },
 ];
 
-const formInputStyle = "mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary focus:border-primary";
+const formInputStyle = "mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary";
 
 const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -142,13 +142,13 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Gerenciar Usuários</h2>
+          <h2 className="text-2xl font-bold text-light">Gerenciar Usuários</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-3xl">&times;</button>
         </div>
         
-        {error && <p className="text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-md mb-4">{error}</p>}
+        {error && <p className="text-red-500 bg-red-900/50 p-3 rounded-md mb-4">{error}</p>}
         
         {!isFormVisible && (
             <button onClick={() => setIsFormVisible(true)} className="mb-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark self-start">
@@ -157,10 +157,10 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
         )}
 
         {isFormVisible && (
-          <form onSubmit={handleSubmit} className="p-4 border dark:border-gray-700 rounded-lg mb-4 space-y-4">
+          <form onSubmit={handleSubmit} className="p-4 border border-gray-700 rounded-lg mb-4 space-y-4">
             <h3 className="text-xl font-semibold">{isEditing ? 'Editar Usuário' : 'Novo Usuário'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required disabled={!!isEditing} className={formInputStyle + (isEditing ? ' bg-gray-200 dark:bg-gray-600' : '')} />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required disabled={!!isEditing} className={formInputStyle + (isEditing ? ' bg-gray-600' : '')} />
               <input type="password" placeholder={isEditing ? 'Nova Senha (deixe em branco para não alterar)' : 'Senha'} value={password} onChange={e => setPassword(e.target.value)} required={!isEditing} className={formInputStyle} />
               <input type="text" placeholder="Nome (Opcional)" value={displayName} onChange={e => setDisplayName(e.target.value)} className={formInputStyle} />
               <select value={role} onChange={e => setRole(e.target.value as UserRole)} className={formInputStyle}>
@@ -171,10 +171,10 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
             
             {role === 'stateadmin' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estados Permitidos:</label>
+                <label className="block text-sm font-medium text-gray-300">Estados Permitidos:</label>
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {availableStates.map(state => (
-                    <label key={state.abbr} className="flex items-center space-x-2 p-2 rounded-md bg-gray-100 dark:bg-gray-700/50 cursor-pointer">
+                    <label key={state.abbr} className="flex items-center space-x-2 p-2 rounded-md bg-gray-700/50 cursor-pointer">
                       <input type="checkbox" checked={selectedStates.includes(state.abbr)} onChange={() => handleStateToggle(state.abbr)} className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary" />
                       <span>{state.name} ({state.abbr})</span>
                     </label>
@@ -184,7 +184,7 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
             )}
             
             <div className="flex justify-end gap-3">
-                <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">Cancelar</button>
+                <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">Cancelar</button>
                 <button type="submit" disabled={isLoading} className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400">
                     {isLoading ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Criar Usuário')}
                 </button>
@@ -194,7 +194,7 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
 
         <div className="flex-grow overflow-y-auto">
           {isLoading && !users.length ? <p>Carregando...</p> : (
-            <div className="divide-y dark:divide-gray-700">
+            <div className="divide-y divide-gray-700">
               {users.map(user => (
                 <div key={user.id} className="p-2 flex justify-between items-center">
                   <div>
@@ -202,12 +202,12 @@ const ManageUsersModal: React.FC<ManageUsersModalProps> = ({ isOpen, onClose }) 
                     <p className="text-sm text-gray-500">{user.email}</p>
                     <p className="text-xs font-mono mt-1">
                       <span className={`px-2 py-1 rounded-full text-white ${user.role === 'superadmin' ? 'bg-indigo-500' : 'bg-blue-500'}`}>{user.role}</span>
-                      {user.role === 'stateadmin' && <span className="ml-2 text-gray-600 dark:text-gray-400">{user.states.join(', ')}</span>}
+                      {user.role === 'stateadmin' && <span className="ml-2 text-gray-400">{user.states.join(', ')}</span>}
                     </p>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={() => handleEditClick(user)} className="text-indigo-600 hover:text-indigo-800">Editar</button>
-                    <button onClick={() => handleDelete(user.id)} className="text-red-600 hover:text-red-800">Excluir</button>
+                    <button onClick={() => handleEditClick(user)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                    <button onClick={() => handleDelete(user.id)} className="text-red-400 hover:text-red-300">Excluir</button>
                   </div>
                 </div>
               ))}

@@ -9,14 +9,14 @@ import StateSelection from './pages/StateSelection';
 const App: React.FC = () => {
   return (
     <Router>
-      <div className="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen font-sans flex flex-col">
-        <header className="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-10">
+      <div className="bg-dark text-light min-h-screen font-sans flex flex-col">
+        <header className="bg-secondary shadow-md sticky top-0 z-10">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-            <Link to="/" className="text-2xl font-bold text-primary">DivulgaAqui</Link>
+            <Link to="/" className="text-2xl font-bold text-primary">Eventos D&E MUSIC</Link>
             <div className='space-x-4'>
-              <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-              <Link to="/status" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
-              <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
+              <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
+              <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
+              <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
             </div>
           </nav>
         </header>
@@ -29,8 +29,8 @@ const App: React.FC = () => {
             <Route path="/rules" element={<RulesPage />} />
           </Routes>
         </main>
-        <footer className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
-            <p>&copy; {new Date().getFullYear()} DivulgaAqui. Todos os direitos reservados.</p>
+        <footer className="text-center py-4 text-gray-400 text-sm">
+            <p>&copy; {new Date().getFullYear()} Eventos D&E MUSIC. Todos os direitos reservados.</p>
         </footer>
       </div>
     </Router>
