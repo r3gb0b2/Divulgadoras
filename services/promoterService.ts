@@ -1,6 +1,5 @@
-
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -48,12 +47,16 @@ export const getPromoters = async (states?: string[] | null): Promise<Promoter[]
   try {
     const promotersRef = collection(firestore, "promoters");
     let q;
+    let shouldSortManually = false;
 
     if (states && states.length > 0) {
-      q = query(promotersRef, where("state", "in", states), orderBy("createdAt", "desc"));
+      // FIX: Query without orderBy to avoid composite index errors.
+      // Sorting will be handled on the client-side after fetching.
+      q = query(promotersRef, where("state", "in", states));
+      shouldSortManually = true;
     } else if (states === null) { // null means fetch all (for superadmin)
       q = query(promotersRef, orderBy("createdAt", "desc"));
-    } else { // states is an empty array, so return empty
+    } else { // states is an empty array, so return nothing.
       return [];
     }
     
@@ -62,6 +65,17 @@ export const getPromoters = async (states?: string[] | null): Promise<Promoter[]
     querySnapshot.forEach((doc) => {
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
+    
+    // If we couldn't order by date in the query, do it now.
+    if (shouldSortManually) {
+        promoters.sort((a, b) => {
+            // Firestore timestamps need to be converted to compare.
+            const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+            const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+            return timeB - timeA; // Sort descending (newest first).
+        });
+    }
+
     return promoters;
   } catch (error) {
     console.error("Error getting promoters: ", error);
