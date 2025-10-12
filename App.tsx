@@ -24,7 +24,7 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<StateSelection />} />
             <Route path="/register/:state" element={<RegistrationForm />} />
-            <Route path="/admin" element={<AdminAuth />} />
+            <Route path="/admin/*" element={<AdminAuth />} />
             <Route path="/status" element={<StatusCheck />} />
             <Route path="/rules/:state" element={<RulesPage />} />
           </Routes>

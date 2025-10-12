@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
@@ -9,7 +10,6 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import ManageUsersModal from '../components/ManageUsersModal';
-import ManageStatesModal from '../components/ManageStatesModal';
 
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
@@ -77,7 +77,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
 
     const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
-    const [isStatesModalOpen, setIsStatesModalOpen] = useState(false);
 
     const fetchPromoters = useCallback(async () => {
         setIsLoading(true);
@@ -261,10 +260,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <UsersIcon className="w-4 h-4 mr-2" />
                                 Gerenciar Usuários
                             </button>
-                            <button onClick={() => setIsStatesModalOpen(true)} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
+                            <Link to="/admin/states" className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
                                 <MapPinIcon className="w-4 h-4 mr-2" />
                                 Gerenciar Localidades
-                            </button>
+                            </Link>
                         </>
                     )}
                     {canManage && (
@@ -545,10 +544,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     <ManageUsersModal
                         isOpen={isUsersModalOpen}
                         onClose={() => setIsUsersModalOpen(false)}
-                    />
-                    <ManageStatesModal
-                        isOpen={isStatesModalOpen}
-                        onClose={() => setIsStatesModalOpen(false)}
                     />
                 </>
             )}

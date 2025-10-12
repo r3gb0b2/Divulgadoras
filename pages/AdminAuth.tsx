@@ -4,6 +4,9 @@ import { auth } from '../firebase/config';
 import AdminPanel from './AdminPanel';
 import { MailIcon } from '../components/Icons';
 import { AdminAuthProvider, useAdminAuth } from '../contexts/AdminAuthContext';
+import { Routes, Route } from 'react-router-dom';
+import StatesListPage from './StatesListPage';
+import StateManagementPage from './StateManagementPage';
 
 const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -90,9 +93,18 @@ const AdminPageContent: React.FC = () => {
         );
     }
     
-    // adminData being null means user is not an admin or not logged in
     if (adminData) {
-        return <AdminPanel adminData={adminData} />;
+        return (
+            <Routes>
+                <Route index element={<AdminPanel adminData={adminData} />} />
+                {adminData.role === 'superadmin' && (
+                    <>
+                        <Route path="states" element={<StatesListPage />} />
+                        <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                    </>
+                )}
+            </Routes>
+        );
     }
 
     return <LoginForm />;
