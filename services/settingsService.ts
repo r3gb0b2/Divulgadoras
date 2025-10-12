@@ -24,34 +24,31 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         // Use the canonical list of states as the source of truth.
         for (const state of states) {
             const stateAbbr = state.abbr;
-            const dbStateConfig = dbConfig[stateAbbr] as Partial<StateConfig> | boolean | undefined;
 
-            // Start with a safe, complete default.
-            const currentState: StateConfig = {
+            // Start with a complete, safe default object. This applies to new states not yet in the DB.
+            const defaultConfig: StateConfig = {
                 isActive: true,
                 rules: '',
                 whatsappLink: '',
             };
 
-            // Intelligently apply the configuration from the database.
-            if (typeof dbStateConfig === 'object' && dbStateConfig !== null) {
-                // If the config is an object, check its properties and apply them if valid.
-                // This correctly preserves `isActive: false` if it exists.
-                if (typeof dbStateConfig.isActive === 'boolean') {
-                    currentState.isActive = dbStateConfig.isActive;
-                }
-                if (typeof dbStateConfig.rules === 'string') {
-                    currentState.rules = dbStateConfig.rules;
-                }
-                if (typeof dbStateConfig.whatsappLink === 'string') {
-                    currentState.whatsappLink = dbStateConfig.whatsappLink;
-                }
-            } else if (typeof dbStateConfig === 'boolean') {
-                // Handle the legacy format where the value was just a boolean.
-                currentState.isActive = dbStateConfig;
-            }
+            const dbStateConfig = dbConfig[stateAbbr] as Partial<StateConfig> | boolean | undefined;
             
-            finalConfig[stateAbbr] = currentState;
+            let stateFinalConfig: StateConfig;
+
+            if (typeof dbStateConfig === 'object' && dbStateConfig !== null) {
+                // If there's an object in the DB, merge it over the default.
+                // This correctly preserves all valid properties from the DB, including `isActive: false`.
+                stateFinalConfig = { ...defaultConfig, ...dbStateConfig };
+            } else if (typeof dbStateConfig === 'boolean') {
+                // Handle legacy boolean format, merging it with other defaults.
+                stateFinalConfig = { ...defaultConfig, isActive: dbStateConfig };
+            } else {
+                // If there's nothing in the DB for this state, use the default config.
+                stateFinalConfig = defaultConfig;
+            }
+
+            finalConfig[stateAbbr] = stateFinalConfig;
         }
         
         return finalConfig;
