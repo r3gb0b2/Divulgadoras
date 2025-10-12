@@ -8,8 +8,14 @@ import { MailIcon } from '../components/Icons';
 
 const AdminAuth: React.FC = () => {
     const [userProfile, setUserProfile] = useState<AdminUser | null>(() => {
-        const storedUser = sessionStorage.getItem('adminUserProfile');
-        return storedUser ? JSON.parse(storedUser) : null;
+        try {
+            const storedUser = sessionStorage.getItem('adminUserProfile');
+            return storedUser ? JSON.parse(storedUser) : null;
+        } catch (error) {
+            console.error("Failed to parse user profile from session storage", error);
+            sessionStorage.removeItem('adminUserProfile');
+            return null;
+        }
     });
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -57,7 +63,7 @@ const AdminAuth: React.FC = () => {
     }
 
     return (
-        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+        <div className="flex items-center justify-center flex-grow">
             <div className="w-full max-w-md">
                 <form onSubmit={handleLogin} className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8 text-center">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Acesso Restrito</h1>
