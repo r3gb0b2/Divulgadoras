@@ -107,7 +107,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userProfile, onLogout }) => {
             const states = new Set(allPromoters.map(p => p.state).filter(Boolean));
             return Array.from(states).sort();
         }
-        return userProfile.states.sort();
+        // Defensively check if userProfile.states is an array before trying to sort it.
+        if (Array.isArray(userProfile.states)) {
+            return [...userProfile.states].sort(); // Use spread to create a copy before sorting
+        }
+        return []; // Return empty array as a fallback
     }, [allPromoters, userProfile]);
 
     useEffect(() => {
