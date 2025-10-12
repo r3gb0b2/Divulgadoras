@@ -10,7 +10,16 @@ const AdminAuth: React.FC = () => {
     const [userProfile, setUserProfile] = useState<AdminUser | null>(() => {
         try {
             const storedUser = sessionStorage.getItem('adminUserProfile');
-            return storedUser ? JSON.parse(storedUser) : null;
+            if (storedUser) {
+                const parsedUser = JSON.parse(storedUser);
+                // Structural validation to prevent crashes from malformed session data
+                if (parsedUser && typeof parsedUser === 'object' && 'uid' in parsedUser && 'role' in parsedUser && 'states' in parsedUser) {
+                    return parsedUser as AdminUser;
+                }
+            }
+            // If data is invalid or doesn't exist, ensure it's cleared.
+            sessionStorage.removeItem('adminUserProfile');
+            return null;
         } catch (error) {
             console.error("Failed to parse user profile from session storage", error);
             sessionStorage.removeItem('adminUserProfile');
