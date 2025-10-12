@@ -5,6 +5,10 @@ export const states = [
   { abbr: 'PI', name: 'Teresina' }, // Note: PI is Piauí, Teresina is the capital.
   { abbr: 'ES', name: 'Vitória' }, // Note: ES is Espírito Santo, Vitória is the capital.
   { abbr: 'PB', name: 'Paraíba' },
+  { abbr: 'MA', name: 'São Luís' },
+  { abbr: 'GO', name: 'Goiânia' },
+  { abbr: 'AL', name: 'Maceió' },
+  { abbr: 'RN', name: 'Natal' },
 ];
 
 export const stateMap: { [key: string]: string } = {
@@ -13,5 +17,9 @@ export const stateMap: { [key: string]: string } = {
   PA: 'Pará',
   PI: 'Piauí',
   ES: 'Espírito Santo',
-  PB: 'Paraíba'
+  PB: 'Paraíba',
+  MA: 'Maranhão',
+  GO: 'Goiás',
+  AL: 'Alagoas',
+  RN: 'Rio Grande do Norte'
 };

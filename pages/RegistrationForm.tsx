@@ -126,27 +126,6 @@ const RegistrationForm: React.FC = () => {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
-
-    if (formData.dateOfBirth) {
-        const birthDate = new Date(formData.dateOfBirth);
-        const today = new Date();
-        // Adjust for timezone differences
-        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        if (age < 18) {
-            setSubmitError("Você deve ter pelo menos 18 anos para se cadastrar.");
-            setTimeout(() => setSubmitError(null), 5000);
-            return;
-        }
-    } else {
-        setSubmitError("Por favor, insira sua data de nascimento.");
-        setTimeout(() => setSubmitError(null), 5000);
-        return;
-    }
     
     setIsSubmitting(true);
     setSubmitError(null);

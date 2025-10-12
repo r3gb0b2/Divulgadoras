@@ -3,12 +3,13 @@ import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { Promoter, PromoterStatus, RejectionReason, AdminUserData } from '../types';
-import { WhatsAppIcon, InstagramIcon, TikTokIcon, UsersIcon } from '../components/Icons';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon, UsersIcon, MapPinIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import ManageUsersModal from '../components/ManageUsersModal';
+import ManageStatesModal from '../components/ManageStatesModal';
 
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
@@ -76,6 +77,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
 
     const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
+    const [isStatesModalOpen, setIsStatesModalOpen] = useState(false);
 
     const fetchPromoters = useCallback(async () => {
         setIsLoading(true);
@@ -250,17 +252,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
                 <h1 className="text-3xl font-bold">Painel Administrativo</h1>
-                <div>
+                <div className="flex items-center gap-4 flex-wrap justify-end">
                     {adminData.role === 'superadmin' && (
-                         <button onClick={() => setIsUsersModalOpen(true)} className="mr-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
-                            <UsersIcon className="w-4 h-4 mr-2" />
-                            Gerenciar Usuários
-                        </button>
+                        <>
+                            <button onClick={() => setIsUsersModalOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
+                                <UsersIcon className="w-4 h-4 mr-2" />
+                                Gerenciar Usuários
+                            </button>
+                            <button onClick={() => setIsStatesModalOpen(true)} className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
+                                <MapPinIcon className="w-4 h-4 mr-2" />
+                                Gerenciar Localidades
+                            </button>
+                        </>
                     )}
                     {canManage && (
-                        <button onClick={() => setIsReasonsModalOpen(true)} className="mr-4 px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">
+                        <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">
                             Gerenciar Motivos
                         </button>
                     )}
@@ -530,12 +538,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         onClose={() => setIsReasonsModalOpen(false)}
                         onReasonsUpdated={fetchReasons}
                     />
-                     {adminData.role === 'superadmin' && (
-                        <ManageUsersModal
-                            isOpen={isUsersModalOpen}
-                            onClose={() => setIsUsersModalOpen(false)}
-                        />
-                    )}
+                </>
+            )}
+             {adminData.role === 'superadmin' && (
+                <>
+                    <ManageUsersModal
+                        isOpen={isUsersModalOpen}
+                        onClose={() => setIsUsersModalOpen(false)}
+                    />
+                    <ManageStatesModal
+                        isOpen={isStatesModalOpen}
+                        onClose={() => setIsStatesModalOpen(false)}
+                    />
                 </>
             )}
         </div>
