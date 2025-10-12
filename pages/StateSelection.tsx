@@ -14,7 +14,7 @@ const StateSelection: React.FC = () => {
       setError(null);
       try {
         const config = await getStatesConfig();
-        const enabledStates = allStates.filter(state => config[state.abbr]);
+        const enabledStates = allStates.filter(state => config[state.abbr]?.isActive);
         setActiveStates(enabledStates);
       } catch (err: any) {
         setError(err.message || "Não foi possível carregar as localidades. Tente novamente mais tarde.");

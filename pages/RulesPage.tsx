@@ -1,83 +1,89 @@
-import React from 'react';
-import { InstagramIcon } from '../components/Icons';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { getStateConfig } from '../services/settingsService';
+import { StateConfig } from '../types';
+import { WhatsAppIcon } from '../components/Icons';
 
 const RulesPage: React.FC = () => {
-  const whatsappGroupLink = 'https://chat.whatsapp.com/Dd3ztUQsQjc2hlsXldHFLe';
-  const instagramProfileLink = 'https://instagram.com/rafaelmacciel';
+  const { state } = useParams<{ state: string }>();
+  const [config, setConfig] = useState<StateConfig | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state) {
+      const fetchConfig = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+          const stateConfig = await getStateConfig(state);
+          if (stateConfig) {
+            setConfig(stateConfig);
+          } else {
+            setError(`Regras para a localidade "${state}" não encontradas.`);
+          }
+        } catch (err: any) {
+          setError(err.message || 'Ocorreu um erro ao carregar as regras.');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchConfig();
+    } else {
+      setError("Nenhuma localidade especificada.");
+      setIsLoading(false);
+    }
+  }, [state]);
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex justify-center items-center h-48">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return <p className="text-red-400 text-center">{error}</p>;
+    }
+
+    if (config) {
+      return (
+        <>
+          <div 
+            className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none space-y-6"
+            dangerouslySetInnerHTML={{ __html: config.rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para esta localidade.</p>' }}
+          />
+
+          {config.whatsappLink && (
+            <div className="mt-8 pt-6 border-t border-gray-700 text-center">
+              <p className="text-sm text-gray-400 mb-4">Ao entrar no grupo, você concorda com todas as regras acima.</p>
+              <a
+                  href={config.whatsappLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-lg"
+              >
+                  <WhatsAppIcon className="w-6 h-6 mr-2"/>
+                  Entrar no Grupo
+              </a>
+            </div>
+          )}
+        </>
+      );
+    }
+    
+    return null;
+  }
+
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="bg-secondary shadow-2xl rounded-lg p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-100 mb-4">Regras para Divulgadoras</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-100 mb-4">Regras para Divulgadoras - {state?.toUpperCase()}</h1>
         <p className="text-center text-gray-400 mb-8">Leia com atenção para garantir uma boa parceria.</p>
-
-        <div className="space-y-6 text-gray-300">
-          
-          <div className="p-4 border rounded-lg border-gray-700">
-            <h2 className="text-xl font-semibold text-primary mb-3">1. Envio de Prints</h2>
-            <ul className="list-disc list-inside space-y-2">
-              <li><span className="font-bold">Story:</span> Enviar print com pelo menos <span className="font-bold text-primary">5 horas</span> de postagem. Deixe o story apagar sozinho (não apague antes das 24h).</li>
-              <li><span className="font-bold">Feed:</span> Após <span className="font-bold text-primary">48 horas</span> da postagem, envie o print. Depois disso, você pode apagar a postagem.</li>
-              <li><span className="font-bold">Atenção na Postagem:</span> Verifique se a arte, o texto e a data (início de vendas, virada de lote, etc.) estão corretos antes de postar.</li>
-               <li>Se não puder fazer alguma postagem, avise com antecedência para evitar ser removida do grupo.</li>
-              <li className="italic font-semibold">Lembre-se: não enviar os prints é o mesmo que não postar.</li>
-            </ul>
-          </div>
-
-          <div className="p-4 border rounded-lg border-gray-700">
-            <h2 className="text-xl font-semibold text-primary mb-3">2. Permanência no Grupo</h2>
-            <ul className="list-disc list-inside space-y-2">
-              <li>Cada participante tem apenas <span className="font-bold">uma única chance</span> de entrar no grupo. Se sair ou for removida, não será adicionada novamente.</li>
-              <li><span className="font-bold">Exceções:</span> Se saiu sem querer, trocou de número ou teve algum problema, entre em contato para explicar a situação.</li>
-              <li><span className="font-bold">Ausências:</span> Se não puder postar por um curto período (luto, celular quebrado, provas, etc.), avise para que sua situação seja avaliada.</li>
-            </ul>
-          </div>
-
-          <div className="p-4 border rounded-lg border-gray-700">
-            <h2 className="text-xl font-semibold text-primary mb-3">3. Postagens Obrigatórias</h2>
-            <ul className="list-disc list-inside space-y-2">
-              <li><span className="font-bold">Todas as postagens</span> definidas no grupo são obrigatórias para todas as divulgadoras, mesmo para aquelas que não poderão comparecer ao evento.</li>
-            </ul>
-          </div>
-
-          <div className="p-4 border rounded-lg border-gray-700">
-            <h2 className="text-xl font-semibold text-primary mb-3">4. Conflito de Eventos</h2>
-            <ul className="list-disc list-inside space-y-2">
-              <li>É proibido divulgar outras festas ou eventos que aconteçam <span className="font-bold">no mesmo dia</span> dos eventos gerenciados por este grupo.</li>
-            </ul>
-          </div>
-
-          <div className="p-4 border rounded-lg border-gray-700">
-            <h2 className="text-xl font-semibold text-primary mb-3">5. Seguir no Instagram</h2>
-            <ul className="list-disc list-inside space-y-2">
-              <li>É fundamental seguir o perfil no Instagram para acompanhar as postagens e atualizações.
-                <a 
-                    href={instagramProfileLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="mt-2 inline-flex items-center gap-2 font-bold text-primary hover:text-primary-dark"
-                >
-                    <InstagramIcon className="w-5 h-5" />
-                    @rafaelmacciel
-                </a>
-              </li>
-            </ul>
-          </div>
-
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-gray-700 text-center">
-            <p className="text-sm text-gray-400 mb-4">Ao entrar no grupo, você concorda com todas as regras acima.</p>
-            <a
-                href={whatsappGroupLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-lg"
-            >
-                Entrar no Grupo
-            </a>
-        </div>
-
+        {renderContent()}
       </div>
     </div>
   );

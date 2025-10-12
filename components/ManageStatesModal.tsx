@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getStatesConfig, setStatesConfig, StatesConfig } from '../services/settingsService';
+// FIX: The `StatesConfig` type is defined in `types.ts`, not exported from `settingsService`.
+import { getStatesConfig, setStatesConfig } from '../services/settingsService';
+import { StatesConfig } from '../types';
 import { states } from '../constants/states';
 
 interface ManageStatesModalProps {
@@ -12,6 +14,7 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [expandedState, setExpandedState] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     setIsLoading(true);
@@ -29,6 +32,7 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
   useEffect(() => {
     if (isOpen) {
       fetchConfig();
+      setExpandedState(null);
     }
   }, [isOpen, fetchConfig]);
 
@@ -36,10 +40,13 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
     return null;
   }
 
-  const handleToggleState = (abbr: string) => {
+  const handleStateConfigChange = (abbr: string, field: string, value: string | boolean) => {
     setStatesConfig(prev => ({
       ...prev,
-      [abbr]: !prev[abbr],
+      [abbr]: {
+        ...prev[abbr],
+        [field]: value,
+      },
     }));
   };
 
@@ -60,15 +67,15 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-white">Gerenciar Localidades de Cadastro</h2>
+          <h2 className="text-2xl font-bold text-white">Gerenciar Localidades</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
 
         <div className="flex-grow overflow-y-auto border-t border-b border-gray-700 py-4">
           <p className="text-sm text-gray-400 mb-4">
-            Ative ou desative as localidades disponíveis para novas inscrições.
+            Clique em uma localidade para expandir e editar suas configurações.
           </p>
           {isLoading ? (
             <p>Carregando...</p>
@@ -76,20 +83,63 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
             <p className="text-red-500">{error}</p>
           ) : (
             <div className="space-y-2">
-              {allStates.map(state => (
-                <label key={state.abbr} className="flex items-center p-3 bg-gray-700/50 rounded-md cursor-pointer hover:bg-gray-700 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={!!statesConfig[state.abbr]}
-                    onChange={() => handleToggleState(state.abbr)}
-                    className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
-                  />
-                  <span className="ml-4 text-gray-200 font-medium">{state.name} ({state.abbr})</span>
-                  <span className={`ml-auto text-xs font-bold ${statesConfig[state.abbr] ? 'text-green-400' : 'text-red-400'}`}>
-                    {statesConfig[state.abbr] ? 'ATIVO' : 'INATIVO'}
-                  </span>
-                </label>
-              ))}
+              {allStates.map(state => {
+                const config = statesConfig[state.abbr];
+                const isExpanded = expandedState === state.abbr;
+                if (!config) return null;
+
+                return (
+                    <div key={state.abbr} className="bg-gray-700/50 rounded-md transition-all">
+                        <button 
+                            onClick={() => setExpandedState(isExpanded ? null : state.abbr)}
+                            className="flex items-center justify-between w-full p-3 text-left"
+                        >
+                            <span className="font-medium">{state.name} ({state.abbr})</span>
+                            <div className="flex items-center gap-4">
+                                <span className={`text-xs font-bold ${config.isActive ? 'text-green-400' : 'text-red-400'}`}>
+                                    {config.isActive ? 'ATIVO' : 'INATIVO'}
+                                </span>
+                                <svg className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </button>
+                        
+                        {isExpanded && (
+                            <div className="p-4 border-t border-gray-600 space-y-4">
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={config.isActive}
+                                    onChange={(e) => handleStateConfigChange(state.abbr, 'isActive', e.target.checked)}
+                                    className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
+                                  />
+                                  <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
+                                </label>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Link do Grupo WhatsApp</label>
+                                    <input 
+                                        type="text"
+                                        value={config.whatsappLink || ''}
+                                        onChange={(e) => handleStateConfigChange(state.abbr, 'whatsappLink', e.target.value)}
+                                        placeholder="https://chat.whatsapp.com/..."
+                                        className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Regras da Localidade</label>
+                                    <textarea 
+                                        value={config.rules || ''}
+                                        onChange={(e) => handleStateConfigChange(state.abbr, 'rules', e.target.value)}
+                                        placeholder="Digite as regras aqui. Use a tecla Enter para criar novas linhas."
+                                        className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 min-h-[150px]"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+              })}
             </div>
           )}
         </div>

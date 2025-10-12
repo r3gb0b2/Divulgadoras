@@ -44,3 +44,14 @@ export interface AdminUserData {
   role: AdminRole;
   assignedStates: string[];
 }
+
+// Types for State/Locality Management
+export interface StateConfig {
+  isActive: boolean;
+  rules: string;
+  whatsappLink: string;
+}
+
+export interface StatesConfig {
+  [key: string]: StateConfig;
+}

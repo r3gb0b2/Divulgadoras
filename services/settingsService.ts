@@ -1,17 +1,15 @@
 import { firestore } from '../firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { states } from '../constants/states';
-
-export interface StatesConfig {
-  [key: string]: boolean; // e.g., { CE: true, SE: false }
-}
+import { StatesConfig, StateConfig } from '../types';
 
 const STATES_CONFIG_DOC_ID = 'statesConfig';
 const SETTINGS_COLLECTION = 'settings';
 
 /**
- * Fetches the active/inactive configuration for registration states.
- * If no config exists in Firestore, it creates a default one with all states enabled.
+ * Fetches the configuration for all registration states.
+ * If no config exists, it creates a default one.
+ * It also handles migrating old boolean-based configs to the new object structure.
  * @returns A promise that resolves to the StatesConfig object.
  */
 export const getStatesConfig = async (): Promise<StatesConfig> => {
@@ -20,23 +18,43 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-            // Ensure all states from constants are present in the config
-            const config = docSnap.data() as StatesConfig;
+            const config = docSnap.data();
             let needsUpdate = false;
+            const newConfig: StatesConfig = {};
+
+            // Migrate old format and ensure all states are present
             states.forEach(state => {
-                if (!(state.abbr in config)) {
-                    config[state.abbr] = true; // Default new states to active
+                const existingStateConfig = config[state.abbr];
+                if (typeof existingStateConfig === 'object' && existingStateConfig !== null && 'isActive' in existingStateConfig) {
+                    // It's already the new format
+                    newConfig[state.abbr] = {
+                        isActive: existingStateConfig.isActive,
+                        rules: existingStateConfig.rules || '',
+                        whatsappLink: existingStateConfig.whatsappLink || '',
+                    };
+                } else {
+                    // It's the old boolean format or missing, so migrate/create
                     needsUpdate = true;
+                    newConfig[state.abbr] = {
+                        isActive: !!existingStateConfig, // Convert boolean or undefined to boolean
+                        rules: '',
+                        whatsappLink: '',
+                    };
                 }
             });
+
             if (needsUpdate) {
-                await setDoc(docRef, config);
+                await setDoc(docRef, newConfig);
             }
-            return config;
+            return newConfig;
         } else {
-            // No config found, create a default one with all states enabled
+            // No config found, create a default one with all states active but empty rules/links
             const defaultConfig: StatesConfig = states.reduce((acc, state) => {
-                acc[state.abbr] = true;
+                acc[state.abbr] = {
+                    isActive: true,
+                    rules: '',
+                    whatsappLink: '',
+                };
                 return acc;
             }, {} as StatesConfig);
             
@@ -50,13 +68,28 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
 };
 
 /**
+ * Fetches the configuration for a single state.
+ * @param stateAbbr The abbreviation of the state (e.g., 'CE').
+ * @returns A promise that resolves to the StateConfig object or null if not found.
+ */
+export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | null> => {
+    try {
+        const fullConfig = await getStatesConfig();
+        return fullConfig[stateAbbr] || null;
+    } catch (error) {
+        console.error(`Error getting config for state ${stateAbbr}: `, error);
+        throw new Error(`Não foi possível carregar a configuração para ${stateAbbr}.`);
+    }
+}
+
+/**
  * Updates the states configuration in Firestore.
  * @param config The new StatesConfig object to save.
  */
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        await setDoc(docRef, config);
+        await setDoc(docRef, config, { merge: true });
     } catch (error) {
         console.error("Error setting states config: ", error);
         throw new Error("Não foi possível salvar a configuração das localidades.");
