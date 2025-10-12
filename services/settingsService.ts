@@ -89,9 +89,10 @@ export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | n
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        // Use setDoc to completely overwrite the document with the new configuration.
-        // This is a more robust method for this case and ensures all changes,
-        // including deactivations, are saved correctly.
+        // Using setDoc without merge overwrites the entire document.
+        // This is the most direct and reliable way to ensure the database state
+        // exactly matches the state from the UI, resolving the persistent issue
+        // where deactivating a state was not being saved correctly.
         await setDoc(docRef, config);
     } catch (error) {
         console.error("Error setting states config: ", error);
