@@ -1,5 +1,5 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { states } from '../constants/states';
 import { StatesConfig, StateConfig } from '../types';
 
@@ -89,9 +89,10 @@ export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | n
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        // Use updateDoc for more reliable modification of an existing document,
-        // which should definitively fix the issue with saving deactivation status.
-        await updateDoc(docRef, config);
+        // Use setDoc to completely overwrite the document with the new configuration.
+        // This is a more robust method for this case and ensures all changes,
+        // including deactivations, are saved correctly.
+        await setDoc(docRef, config);
     } catch (error) {
         console.error("Error setting states config: ", error);
         throw new Error("Não foi possível salvar a configuração das localidades.");
