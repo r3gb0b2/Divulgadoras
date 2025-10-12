@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { getAdminUserData } from '../services/adminService';
+import { getAdminUserData, setAdminUserData } from '../services/adminService';
 import { AdminUserData } from '../types';
 
 interface AdminAuthContextType {
@@ -25,7 +25,21 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                 sessionStorage.setItem('isAdminAuthenticated', 'true');
                 try {
                     // Use UID for secure data retrieval
-                    const data = await getAdminUserData(firebaseUser.uid);
+                    let data = await getAdminUserData(firebaseUser.uid);
+
+                    // If no admin data is found, check if it's the default superadmin email.
+                    // If so, create their admin record on the fly for the first login.
+                    if (!data && firebaseUser.email === 'rafael@agenciavitrine.com') {
+                        const superAdminPayload: Omit<AdminUserData, 'uid'> = {
+                            email: firebaseUser.email,
+                            role: 'superadmin',
+                            assignedStates: [], // Superadmin has access to all states
+                        };
+                        await setAdminUserData(firebaseUser.uid, superAdminPayload);
+                        // Set the data for the current session after creating it
+                        data = { uid: firebaseUser.uid, ...superAdminPayload };
+                    }
+
                     setAdminData(data);
                 } catch (error) {
                     console.error("Failed to fetch admin data", error);
