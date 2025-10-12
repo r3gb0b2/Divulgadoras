@@ -8,7 +8,7 @@ const RulesPage: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="bg-secondary shadow-2xl rounded-lg p-8">
-        <h1 className="text-3xl font-bold text-center text-light mb-4">Regras para Divulgadoras</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-100 mb-4">Regras para Divulgadoras</h1>
         <p className="text-center text-gray-400 mb-8">Leia com atenção para garantir uma boa parceria.</p>
 
         <div className="space-y-6 text-gray-300">
@@ -16,8 +16,8 @@ const RulesPage: React.FC = () => {
           <div className="p-4 border rounded-lg border-gray-700">
             <h2 className="text-xl font-semibold text-primary mb-3">1. Envio de Prints</h2>
             <ul className="list-disc list-inside space-y-2">
-              <li><span className="font-bold">Story:</span> Enviar print com pelo menos <span className="font-bold text-primary-dark">5 horas</span> de postagem. Deixe o story apagar sozinho (não apague antes das 24h).</li>
-              <li><span className="font-bold">Feed:</span> Após <span className="font-bold text-primary-dark">48 horas</span> da postagem, envie o print. Depois disso, você pode apagar a postagem.</li>
+              <li><span className="font-bold">Story:</span> Enviar print com pelo menos <span className="font-bold text-primary">5 horas</span> de postagem. Deixe o story apagar sozinho (não apague antes das 24h).</li>
+              <li><span className="font-bold">Feed:</span> Após <span className="font-bold text-primary">48 horas</span> da postagem, envie o print. Depois disso, você pode apagar a postagem.</li>
               <li><span className="font-bold">Atenção na Postagem:</span> Verifique se a arte, o texto e a data (início de vendas, virada de lote, etc.) estão corretos antes de postar.</li>
                <li>Se não puder fazer alguma postagem, avise com antecedência para evitar ser removida do grupo.</li>
               <li className="italic font-semibold">Lembre-se: não enviar os prints é o mesmo que não postar.</li>
@@ -55,7 +55,7 @@ const RulesPage: React.FC = () => {
                     href={instagramProfileLink} 
                     target="_blank" 
                     rel="noopener noreferrer" 
-                    className="mt-2 inline-flex items-center gap-2 font-bold text-orange-400 hover:underline"
+                    className="mt-2 inline-flex items-center gap-2 font-bold text-primary hover:text-primary-dark"
                 >
                     <InstagramIcon className="w-5 h-5" />
                     @rafaelmacciel

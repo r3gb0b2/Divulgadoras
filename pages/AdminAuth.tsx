@@ -1,45 +1,12 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { getUserProfile } from '../services/userService';
 import AdminPanel from './AdminPanel';
-import { AdminUser } from '../types';
 import { MailIcon } from '../components/Icons';
 
+
 const AdminAuth: React.FC = () => {
-    const [userProfile, setUserProfile] = useState<AdminUser | null>(() => {
-        try {
-            const storedUser = sessionStorage.getItem('adminUserProfile');
-            if (!storedUser) {
-                return null; // No stored user, proceed to login form.
-            }
-            
-            // If user data exists, try to parse and validate it.
-            const parsedUser = JSON.parse(storedUser);
-
-            // Stricter validation to prevent crashes from malformed session data.
-            if (
-                parsedUser &&
-                typeof parsedUser === 'object' &&
-                'uid' in parsedUser &&
-                'role' in parsedUser &&
-                'states' in parsedUser &&
-                Array.isArray(parsedUser.states)
-            ) {
-                return parsedUser as AdminUser; // Data is valid.
-            }
-
-            // If data is invalid, remove it and proceed to login.
-            sessionStorage.removeItem('adminUserProfile');
-            return null;
-
-        } catch (error) {
-            // This catch block handles any error, including sessionStorage being disabled
-            // or JSON.parse failing. It should NOT attempt to access sessionStorage again.
-            console.error("Error retrieving user profile from session storage:", error);
-            return null;
-        }
-    });
+    const [isAuthenticated, setIsAuthenticated] = useState(sessionStorage.getItem('isAdminAuthenticated') === 'true');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -50,18 +17,9 @@ const AdminAuth: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const profile = await getUserProfile(userCredential.user.uid);
-            
-            if (profile) {
-                sessionStorage.setItem('adminUserProfile', JSON.stringify(profile));
-                setUserProfile(profile);
-            } else {
-                // User is authenticated with Firebase Auth but doesn't have a profile in our 'users' collection.
-                await auth.signOut(); // Log them out.
-                setError('Você não tem permissão para acessar esta área.');
-            }
-
+            await signInWithEmailAndPassword(auth, email, password);
+            sessionStorage.setItem('isAdminAuthenticated', 'true');
+            setIsAuthenticated(true);
         } catch (error: any) {
             console.error(error);
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
@@ -75,21 +33,15 @@ const AdminAuth: React.FC = () => {
         }
     };
 
-    const handleLogout = () => {
-        sessionStorage.removeItem('adminUserProfile');
-        setUserProfile(null);
-        auth.signOut();
-    };
-
-    if (userProfile) {
-        return <AdminPanel userProfile={userProfile} onLogout={handleLogout} />;
+    if (isAuthenticated) {
+        return <AdminPanel />;
     }
 
     return (
         <div className="flex items-center justify-center flex-grow">
             <div className="w-full max-w-md">
                 <form onSubmit={handleLogin} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
-                    <h1 className="text-2xl font-bold text-light mb-4">Acesso Restrito</h1>
+                    <h1 className="text-2xl font-bold text-white mb-4">Acesso Restrito</h1>
                     <p className="text-gray-400 mb-6">Por favor, insira suas credenciais para acessar o painel administrativo.</p>
                     
                     <div className="space-y-4">

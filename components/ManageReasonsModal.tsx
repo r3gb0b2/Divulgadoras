@@ -78,8 +78,8 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-light">Gerenciar Motivos de Rejeição</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-3xl">&times;</button>
+            <h2 className="text-2xl font-bold text-white">Gerenciar Motivos de Rejeição</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
 
         <div className="space-y-4 mb-4">

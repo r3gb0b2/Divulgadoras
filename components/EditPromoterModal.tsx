@@ -9,7 +9,7 @@ interface EditPromoterModalProps {
 }
 
 const formInputStyle = "mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary";
-const formCheckboxStyle = "h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary";
+const formCheckboxStyle = "h-4 w-4 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary";
 
 const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<Partial<Omit<Promoter, 'id'>>>({});
@@ -69,13 +69,13 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-light">Detalhes da Divulgadora</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">&times;</button>
+            <h2 className="text-2xl font-bold text-white">Detalhes da Divulgadora</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div className="md:col-span-2">
-                <h3 className="font-bold text-lg mb-2">Fotos</h3>
+                <h3 className="font-bold text-lg mb-2 text-gray-200">Fotos</h3>
                 <div className="flex gap-4 overflow-x-auto">
                     {(promoter.photoUrls || []).map((url, index) => (
                         <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
@@ -152,7 +152,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
               Cancelar
             </button>
-            <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-orange-300">
+            <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>

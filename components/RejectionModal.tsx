@@ -46,8 +46,8 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
       <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-light">Motivo da Rejeição</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-3xl">&times;</button>
+            <h2 className="text-2xl font-bold text-white">Motivo da Rejeição</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
         
         <div className="flex-grow overflow-y-auto space-y-4">
@@ -59,7 +59,7 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
                             type="checkbox"
                             checked={selectedReasons.has(reason.text)}
                             onChange={() => handleReasonToggle(reason.text)}
-                            className="h-4 w-4 text-primary bg-gray-300 border-gray-400 focus:ring-primary rounded"
+                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
                         />
                         <span className="ml-3 text-gray-200">{reason.text}</span>
                     </label>

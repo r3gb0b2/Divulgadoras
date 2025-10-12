@@ -105,13 +105,13 @@ const StatusCheck: React.FC = () => {
                             Ver as Regras (Obrigatório)
                         </Link>
                         
-                        <div className="p-3 border border-gray-500/50 rounded-md bg-white/5">
+                        <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
                             <label className="flex items-center cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={hasAcceptedRules}
                                     onChange={handleAcceptRules}
-                                    className="h-5 w-5 text-primary rounded border-gray-400 focus:ring-primary"
+                                    className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
                                 />
                                 <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
                             </label>
@@ -137,7 +137,7 @@ const StatusCheck: React.FC = () => {
     return (
         <div className="max-w-2xl mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-center text-light mb-2">Verificar Status do Cadastro</h1>
+                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Verificar Status do Cadastro</h1>
                 <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status.</p>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -152,7 +152,7 @@ const StatusCheck: React.FC = () => {
                      <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-orange-300 disabled:cursor-not-allowed transition-all duration-300"
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                     >
                         {isLoading ? 'Verificando...' : 'Verificar'}
                     </button>

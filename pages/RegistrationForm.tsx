@@ -192,18 +192,18 @@ const RegistrationForm: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto">
         <div className="bg-secondary shadow-2xl rounded-lg p-8">
-            <h1 className="text-3xl font-bold text-center text-light mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
+            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
             <p className="text-center text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
             {submitSuccess && (
-                <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded-md" role="alert">
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
                     <p>Seu cadastro foi enviado. Entraremos em contato em breve.</p>
                 </div>
             )}
 
             {submitError && (
-                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md" role="alert">
+                <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Erro</p>
                     <p>{submitError}</p>
                 </div>
@@ -246,7 +246,7 @@ const RegistrationForm: React.FC = () => {
                 <button
                     type="submit"
                     disabled={isSubmitting || isProcessingPhoto}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-orange-300 disabled:cursor-not-allowed transition-all duration-300"
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}
                 </button>

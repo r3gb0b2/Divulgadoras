@@ -1,5 +1,6 @@
+
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -43,39 +44,14 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
   }
 };
 
-export const getPromoters = async (allowedStates?: string[]): Promise<Promoter[]> => {
+export const getPromoters = async (): Promise<Promoter[]> => {
   try {
-    const promotersCollection = collection(firestore, "promoters");
-    let q;
-    let shouldSortManually = false;
-
-    // If the user is a state admin, filter by their allowed states.
-    // Firestore 'in' query supports up to 30 elements. If more are needed, logic must be split.
-    // **FIX**: Firestore cannot orderBy a different field than the one used in an inequality 'where' clause (like 'in').
-    // The query will fail. We must remove the orderBy and sort the results client-side.
-    if (allowedStates && allowedStates.length > 0) {
-      q = query(promotersCollection, where("state", "in", allowedStates));
-      shouldSortManually = true; // Flag to sort after fetching
-    } else {
-      // Super admin or no restriction gets all promoters, which can be ordered by the DB.
-      q = query(promotersCollection, orderBy("createdAt", "desc"));
-    }
-
+    const q = query(collection(firestore, "promoters"), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
-    
-    // If we had to remove the server-side ordering, we apply it here.
-    if (shouldSortManually) {
-        promoters.sort((a, b) => {
-            const timeA = (a.createdAt as Timestamp)?.seconds || 0;
-            const timeB = (b.createdAt as Timestamp)?.seconds || 0;
-            return timeB - timeA; // Sort descending (newest first)
-        });
-    }
-
     return promoters;
   } catch (error) {
     console.error("Error getting promoters: ", error);

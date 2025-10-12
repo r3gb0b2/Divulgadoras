@@ -14,7 +14,7 @@ const StateSelection: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto text-center">
       <div className="bg-secondary shadow-2xl rounded-lg p-8">
-        <h1 className="text-3xl font-bold text-light mb-2">
+        <h1 className="text-3xl font-bold text-gray-100 mb-2">
           Seja uma Divulgadora
         </h1>
         <p className="text-gray-400 mb-8">
