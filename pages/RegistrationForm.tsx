@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-// Fix: Corrected import paths for services and components.
+import { useParams } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 
@@ -53,8 +53,21 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
   });
 };
 
+const states: { [key: string]: string } = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia',
+  CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás',
+  MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais',
+  PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí',
+  RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul',
+  RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo',
+  SE: 'Sergipe', TO: 'Tocantins'
+};
+
 
 const RegistrationForm: React.FC = () => {
+  const { state } = useParams<{ state: string }>();
+  const stateFullName = state ? states[state.toUpperCase()] : 'Brasil';
+  
   const [formData, setFormData] = useState({
     name: '',
     whatsapp: '',
@@ -112,6 +125,12 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!state) {
+        setSubmitError("Estado não selecionado. Volte para a página inicial e selecione seu estado.");
+        return;
+    }
+
     if (photoFiles.length === 0) {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
@@ -142,7 +161,7 @@ const RegistrationForm: React.FC = () => {
     setSubmitError(null);
     
     try {
-      await addPromoter({ ...formData, photos: photoFiles });
+      await addPromoter({ ...formData, photos: photoFiles, state });
       setSubmitSuccess(true);
       
       // Reset form
@@ -174,7 +193,7 @@ const RegistrationForm: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto">
         <div className="bg-white dark:bg-gray-800 shadow-2xl rounded-lg p-8">
-            <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Seja uma Divulgadora</h1>
+            <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
             <p className="text-center text-gray-600 dark:text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
             {submitSuccess && (

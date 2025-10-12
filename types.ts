@@ -15,6 +15,7 @@ export interface Promoter {
   createdAt: FieldValue;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
+  state: string;
 }
 
 export interface PromoterApplicationData {
@@ -25,6 +26,7 @@ export interface PromoterApplicationData {
   tiktok?: string;
   dateOfBirth: string;
   photos: File[];
+  state: string;
 }
 
 export interface RejectionReason {

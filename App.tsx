@@ -3,7 +3,8 @@ import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
-import RulesPage from './pages/RulesPage'; // Import the new page
+import RulesPage from './pages/RulesPage';
+import StateSelection from './pages/StateSelection';
 
 const App: React.FC = () => {
   return (
@@ -13,7 +14,7 @@ const App: React.FC = () => {
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
             <Link to="/" className="text-2xl font-bold text-primary">DivulgaAqui</Link>
             <div className='space-x-4'>
-              <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Cadastro</Link>
+              <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Início</Link>
               <Link to="/status" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
               <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-primary-light px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
             </div>
@@ -21,7 +22,8 @@ const App: React.FC = () => {
         </header>
         <main className="container mx-auto p-4 md:p-8 flex-grow">
           <Routes>
-            <Route path="/" element={<RegistrationForm />} />
+            <Route path="/" element={<StateSelection />} />
+            <Route path="/register/:state" element={<RegistrationForm />} />
             <Route path="/admin" element={<AdminAuth />} />
             <Route path="/status" element={<StatusCheck />} />
             <Route path="/rules" element={<RulesPage />} />

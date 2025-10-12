@@ -46,11 +46,12 @@ const formatSocialUrl = (value: string | undefined, platform: 'instagram' | 'tik
 };
 
 const AdminPanel: React.FC = () => {
-    const [promoters, setPromoters] = useState<Promoter[]>([]);
+    const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [filteredPromoters, setFilteredPromoters] = useState<Promoter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
+    const [stateFilter, setStateFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Modals state
@@ -72,7 +73,7 @@ const AdminPanel: React.FC = () => {
         setError(null);
         try {
             const data = await getPromoters();
-            setPromoters(data);
+            setAllPromoters(data);
         } catch (error) {
             setError("Falha ao buscar divulgadoras.");
             console.error(error);
@@ -98,14 +99,24 @@ const AdminPanel: React.FC = () => {
     }, [fetchPromoters, fetchReasons]);
     
     const stats = useMemo(() => ({
-        total: promoters.length,
-        pending: promoters.filter(p => p.status === 'pending').length,
-        approved: promoters.filter(p => p.status === 'approved').length,
-        rejected: promoters.filter(p => p.status === 'rejected').length,
-    }), [promoters]);
+        total: allPromoters.length,
+        pending: allPromoters.filter(p => p.status === 'pending').length,
+        approved: allPromoters.filter(p => p.status === 'approved').length,
+        rejected: allPromoters.filter(p => p.status === 'rejected').length,
+    }), [allPromoters]);
+
+    const availableStates = useMemo(() => {
+        const states = new Set(allPromoters.map(p => p.state).filter(Boolean));
+        return Array.from(states).sort();
+    }, [allPromoters]);
 
     useEffect(() => {
-        let result = promoters;
+        let result = allPromoters;
+        
+        if (stateFilter !== 'all') {
+            result = result.filter(p => p.state === stateFilter);
+        }
+
         if (filter !== 'all') {
             result = result.filter(p => p.status === filter);
         }
@@ -119,7 +130,7 @@ const AdminPanel: React.FC = () => {
             );
         }
         setFilteredPromoters(result);
-    }, [promoters, filter, searchTerm]);
+    }, [allPromoters, filter, stateFilter, searchTerm]);
 
     const handleLogout = async () => {
         try {
@@ -132,14 +143,14 @@ const AdminPanel: React.FC = () => {
     };
     
     const handleUpdate = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
-        const originalPromoters = [...promoters];
-        const updatedPromoters = promoters.map(p => p.id === id ? { ...p, ...data } : p);
-        setPromoters(updatedPromoters);
+        const originalPromoters = [...allPromoters];
+        const updatedPromoters = allPromoters.map(p => p.id === id ? { ...p, ...data } : p);
+        setAllPromoters(updatedPromoters);
 
         try {
             await updatePromoter(id, data);
         } catch (error) {
-            setPromoters(originalPromoters); // Revert on error
+            setAllPromoters(originalPromoters); // Revert on error
             alert("Falha ao atualizar a divulgadora.");
         }
     };
@@ -179,12 +190,12 @@ const AdminPanel: React.FC = () => {
 
     const handleDelete = async (id: string) => {
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
-             const originalPromoters = [...promoters];
-             setPromoters(promoters.filter(p => p.id !== id));
+             const originalPromoters = [...allPromoters];
+             setAllPromoters(allPromoters.filter(p => p.id !== id));
              try {
                 await deletePromoter(id);
              } catch (error) {
-                setPromoters(originalPromoters);
+                setAllPromoters(originalPromoters);
                 alert("Falha ao excluir a inscrição.");
              }
         }
@@ -254,7 +265,7 @@ const AdminPanel: React.FC = () => {
             </div>
 
             <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <input
                         type="text"
                         placeholder="Buscar por nome, e-mail, telefone ou Instagram..."
@@ -262,6 +273,16 @@ const AdminPanel: React.FC = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="md:col-span-2 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
                     />
+                    <select
+                        value={stateFilter}
+                        onChange={(e) => setStateFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                    >
+                        <option value="all">Todos os Estados</option>
+                        {availableStates.map(state => (
+                            <option key={state} value={state}>{state}</option>
+                        ))}
+                    </select>
                     <select
                         value={filter}
                         onChange={(e) => setFilter(e.target.value as PromoterStatus | 'all')}
@@ -296,7 +317,10 @@ const AdminPanel: React.FC = () => {
                                     {filteredPromoters.map((promoter) => (
                                         <tr key={promoter.id}>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-white">{promoter.name}</div>
+                                                <div className="flex items-center">
+                                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{promoter.name}</div>
+                                                    <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">{promoter.state}</span>
+                                                </div>
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</div>
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">{calculateAge(promoter.dateOfBirth)}</div>
                                             </td>
@@ -375,7 +399,10 @@ const AdminPanel: React.FC = () => {
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{promoter.email}</p>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                                         </div>
-                                        {getStatusBadge(promoter.status)}
+                                        <div className="flex flex-col items-end gap-2">
+                                            {getStatusBadge(promoter.status)}
+                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">{promoter.state}</span>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-4 mb-3">
