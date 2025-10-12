@@ -83,13 +83,14 @@ export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | n
 }
 
 /**
- * Updates the states configuration in Firestore.
+ * Updates the states configuration in Firestore by completely overwriting the document.
  * @param config The new StatesConfig object to save.
  */
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        await setDoc(docRef, config, { merge: true });
+        // Overwrite the entire document instead of merging to ensure deactivation (true -> false) is saved correctly.
+        await setDoc(docRef, config);
     } catch (error) {
         console.error("Error setting states config: ", error);
         throw new Error("Não foi possível salvar a configuração das localidades.");
