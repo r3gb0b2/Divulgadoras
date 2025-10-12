@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
+import { stateMap } from '../constants/states';
 
 // Helper function to resize and compress images and return a Blob
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
@@ -53,19 +54,10 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
   });
 };
 
-const states: { [key: string]: string } = {
-  CE: 'Ceará',
-  SE: 'Sergipe',
-  PA: 'Pará',
-  PI: 'Piauí',
-  ES: 'Espírito Santo',
-  PB: 'Paraíba'
-};
-
 
 const RegistrationForm: React.FC = () => {
   const { state } = useParams<{ state: string }>();
-  const stateFullName = state ? states[state.toUpperCase()] : 'Brasil';
+  const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   
   const [formData, setFormData] = useState({
     name: '',

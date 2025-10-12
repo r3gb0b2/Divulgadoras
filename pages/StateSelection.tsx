@@ -1,14 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-
-const states = [
-  { abbr: 'CE', name: 'Ceará' },
-  { abbr: 'SE', name: 'Aracaju' },
-  { abbr: 'PA', name: 'Belém' },
-  { abbr: 'PI', name: 'Teresina' },
-  { abbr: 'ES', name: 'Vitória' },
-  { abbr: 'PB', name: 'Paraíba' },
-];
+import { states } from '../constants/states';
 
 const StateSelection: React.FC = () => {
   return (

@@ -33,3 +33,14 @@ export interface RejectionReason {
   id: string;
   text: string;
 }
+
+// Types for Admin User Management
+export type AdminRole = 'superadmin' | 'admin' | 'viewer';
+
+export interface AdminUserData {
+  // FIX: Add uid to uniquely identify admin users.
+  uid: string;
+  email: string;
+  role: AdminRole;
+  assignedStates: string[];
+}

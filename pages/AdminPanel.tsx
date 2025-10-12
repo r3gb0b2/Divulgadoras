@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
-import { Promoter, PromoterStatus, RejectionReason } from '../types';
-import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
+import { Promoter, PromoterStatus, RejectionReason, AdminUserData } from '../types';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon, UsersIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
+import ManageUsersModal from '../components/ManageUsersModal';
 
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
@@ -45,7 +46,11 @@ const formatSocialUrl = (value: string | undefined, platform: 'instagram' | 'tik
     return '#';
 };
 
-const AdminPanel: React.FC = () => {
+interface AdminPanelProps {
+    adminData: AdminUserData;
+}
+
+const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [filteredPromoters, setFilteredPromoters] = useState<Promoter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +58,8 @@ const AdminPanel: React.FC = () => {
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [stateFilter, setStateFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
+
+    const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
     // Modals state
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -68,11 +75,14 @@ const AdminPanel: React.FC = () => {
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
 
+    const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
+
     const fetchPromoters = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const data = await getPromoters();
+            const statesToFetch = adminData.role === 'superadmin' ? null : adminData.assignedStates;
+            const data = await getPromoters(statesToFetch);
             setAllPromoters(data);
         } catch (error) {
             setError("Falha ao buscar divulgadoras.");
@@ -80,7 +90,7 @@ const AdminPanel: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [adminData]);
 
     const fetchReasons = useCallback(async () => {
         try {
@@ -95,8 +105,10 @@ const AdminPanel: React.FC = () => {
 
     useEffect(() => {
         fetchPromoters();
-        fetchReasons();
-    }, [fetchPromoters, fetchReasons]);
+        if (canManage) {
+            fetchReasons();
+        }
+    }, [fetchPromoters, fetchReasons, canManage]);
     
     const stats = useMemo(() => ({
         total: allPromoters.length,
@@ -106,9 +118,12 @@ const AdminPanel: React.FC = () => {
     }), [allPromoters]);
 
     const availableStates = useMemo(() => {
-        const states = new Set(allPromoters.map(p => p.state).filter(Boolean));
-        return Array.from(states).sort();
-    }, [allPromoters]);
+        if (adminData.role === 'superadmin') {
+            const states = new Set(allPromoters.map(p => p.state).filter(Boolean));
+            return Array.from(states).sort();
+        }
+        return [...adminData.assignedStates].sort();
+    }, [allPromoters, adminData]);
 
     useEffect(() => {
         let result = allPromoters;
@@ -135,14 +150,14 @@ const AdminPanel: React.FC = () => {
     const handleLogout = async () => {
         try {
             await signOut(auth);
-            sessionStorage.removeItem('isAdminAuthenticated');
-            window.location.reload(); // Simple way to reset state
+            // The context will handle state reset
         } catch (error) {
             console.error("Logout failed", error);
         }
     };
     
     const handleUpdate = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
+        if (!canManage) return;
         const originalPromoters = [...allPromoters];
         const updatedPromoters = allPromoters.map(p => p.id === id ? { ...p, ...data } : p);
         setAllPromoters(updatedPromoters);
@@ -189,6 +204,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
+        if (!canManage) return;
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
              const originalPromoters = [...allPromoters];
              setAllPromoters(allPromoters.filter(p => p.id !== id));
@@ -237,9 +253,17 @@ const AdminPanel: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Painel Administrativo</h1>
                 <div>
-                    <button onClick={() => setIsReasonsModalOpen(true)} className="mr-4 px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">
-                        Gerenciar Motivos
-                    </button>
+                    {adminData.role === 'superadmin' && (
+                         <button onClick={() => setIsUsersModalOpen(true)} className="mr-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
+                            <UsersIcon className="w-4 h-4 mr-2" />
+                            Gerenciar Usuários
+                        </button>
+                    )}
+                    {canManage && (
+                        <button onClick={() => setIsReasonsModalOpen(true)} className="mr-4 px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">
+                            Gerenciar Motivos
+                        </button>
+                    )}
                     <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
                         Sair
                     </button>
@@ -311,7 +335,7 @@ const AdminPanel: React.FC = () => {
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Contato</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fotos</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
+                                        {canManage && <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-secondary divide-y divide-gray-700">
@@ -366,24 +390,27 @@ const AdminPanel: React.FC = () => {
                                                                 checked={!!promoter.hasJoinedGroup}
                                                                 onChange={(e) => handleGroupStatusChange(promoter.id, e.target.checked)}
                                                                 className="h-4 w-4 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
+                                                                disabled={!canManage}
                                                             />
                                                             <span className="ml-2">Entrou no grupo</span>
                                                         </label>
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <div className="flex items-center space-x-2">
-                                                    {promoter.status === 'pending' && (
-                                                        <>
-                                                            <button onClick={() => handleApprove(promoter.id)} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                                            <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                                        </>
-                                                    )}
-                                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                                    <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
-                                                </div>
-                                            </td>
+                                            {canManage && (
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                    <div className="flex items-center space-x-2">
+                                                        {promoter.status === 'pending' && (
+                                                            <>
+                                                                <button onClick={() => handleApprove(promoter.id)} className="text-green-400 hover:text-green-300">Aprovar</button>
+                                                                <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                                            </>
+                                                        )}
+                                                        <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                                        <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>
@@ -446,22 +473,25 @@ const AdminPanel: React.FC = () => {
                                                     checked={!!promoter.hasJoinedGroup}
                                                     onChange={(e) => handleGroupStatusChange(promoter.id, e.target.checked)}
                                                     className="h-4 w-4 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
+                                                    disabled={!canManage}
                                                 />
                                                 <span className="ml-2">Entrou no grupo</span>
                                             </label>
                                         </div>
                                     )}
 
-                                    <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-2 justify-end text-sm font-medium">
-                                        {promoter.status === 'pending' && (
-                                            <>
-                                                <button onClick={() => handleApprove(promoter.id)} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                                <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                            </>
-                                        )}
-                                        <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                        <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
-                                    </div>
+                                    {canManage && (
+                                        <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-2 justify-end text-sm font-medium">
+                                            {promoter.status === 'pending' && (
+                                                <>
+                                                    <button onClick={() => handleApprove(promoter.id)} className="text-green-400 hover:text-green-300">Aprovar</button>
+                                                    <button onClick={() => handleOpenRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                                </>
+                                            )}
+                                            <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                            <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -478,26 +508,36 @@ const AdminPanel: React.FC = () => {
                 imageUrls={photoViewerUrls}
                 startIndex={photoViewerStartIndex}
             />
-            <EditPromoterModal
-                isOpen={isEditModalOpen}
-                onClose={() => {
-                    setIsEditModalOpen(false);
-                    setEditingPromoter(null);
-                }}
-                onSave={handleSavePromoter}
-                promoter={editingPromoter}
-            />
-            <RejectionModal
-                isOpen={isRejectionModalOpen}
-                onClose={() => setIsRejectionModalOpen(false)}
-                onConfirm={handleConfirmRejection}
-                reasons={rejectionReasons}
-            />
-            <ManageReasonsModal
-                isOpen={isReasonsModalOpen}
-                onClose={() => setIsReasonsModalOpen(false)}
-                onReasonsUpdated={fetchReasons}
-            />
+            {canManage && (
+                <>
+                    <EditPromoterModal
+                        isOpen={isEditModalOpen}
+                        onClose={() => {
+                            setIsEditModalOpen(false);
+                            setEditingPromoter(null);
+                        }}
+                        onSave={handleSavePromoter}
+                        promoter={editingPromoter}
+                    />
+                    <RejectionModal
+                        isOpen={isRejectionModalOpen}
+                        onClose={() => setIsRejectionModalOpen(false)}
+                        onConfirm={handleConfirmRejection}
+                        reasons={rejectionReasons}
+                    />
+                    <ManageReasonsModal
+                        isOpen={isReasonsModalOpen}
+                        onClose={() => setIsReasonsModalOpen(false)}
+                        onReasonsUpdated={fetchReasons}
+                    />
+                     {adminData.role === 'superadmin' && (
+                        <ManageUsersModal
+                            isOpen={isUsersModalOpen}
+                            onClose={() => setIsUsersModalOpen(false)}
+                        />
+                    )}
+                </>
+            )}
         </div>
     );
 };

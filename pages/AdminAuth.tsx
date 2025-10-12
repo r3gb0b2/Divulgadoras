@@ -3,10 +3,9 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import AdminPanel from './AdminPanel';
 import { MailIcon } from '../components/Icons';
+import { AdminAuthProvider, useAdminAuth } from '../contexts/AdminAuthContext';
 
-
-const AdminAuth: React.FC = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(sessionStorage.getItem('isAdminAuthenticated') === 'true');
+const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -18,8 +17,7 @@ const AdminAuth: React.FC = () => {
         setIsLoading(true);
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            sessionStorage.setItem('isAdminAuthenticated', 'true');
-            setIsAuthenticated(true);
+            // The context will handle the rest
         } catch (error: any) {
             console.error(error);
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
@@ -32,10 +30,6 @@ const AdminAuth: React.FC = () => {
             setPassword('');
         }
     };
-
-    if (isAuthenticated) {
-        return <AdminPanel />;
-    }
 
     return (
         <div className="flex items-center justify-center flex-grow">
@@ -81,6 +75,35 @@ const AdminAuth: React.FC = () => {
                 </form>
             </div>
         </div>
+    );
+};
+
+
+const AdminPageContent: React.FC = () => {
+    const { adminData, loading } = useAdminAuth();
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center flex-grow">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+    
+    // adminData being null means user is not an admin or not logged in
+    if (adminData) {
+        return <AdminPanel adminData={adminData} />;
+    }
+
+    return <LoginForm />;
+}
+
+
+const AdminAuth: React.FC = () => {
+    return (
+        <AdminAuthProvider>
+            <AdminPageContent />
+        </AdminAuthProvider>
     );
 };
 

@@ -44,9 +44,19 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
   }
 };
 
-export const getPromoters = async (): Promise<Promoter[]> => {
+export const getPromoters = async (states?: string[] | null): Promise<Promoter[]> => {
   try {
-    const q = query(collection(firestore, "promoters"), orderBy("createdAt", "desc"));
+    const promotersRef = collection(firestore, "promoters");
+    let q;
+
+    if (states && states.length > 0) {
+      q = query(promotersRef, where("state", "in", states), orderBy("createdAt", "desc"));
+    } else if (states === null) { // null means fetch all (for superadmin)
+      q = query(promotersRef, orderBy("createdAt", "desc"));
+    } else { // states is an empty array, so return empty
+      return [];
+    }
+    
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
