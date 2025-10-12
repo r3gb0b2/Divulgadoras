@@ -13,12 +13,13 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
         const docSnap = await getDoc(adminDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // FIX: Ensure assignedStates is always an array, defaulting to [] if missing.
+            const states = data.assignedStates;
+            // FIX: Robustly ensure assignedStates is always an array.
             return {
                 uid,
                 email: data.email,
                 role: data.role,
-                assignedStates: data.assignedStates || [],
+                assignedStates: Array.isArray(states) ? states : [],
             } as AdminUserData;
         }
         return null;
@@ -40,12 +41,13 @@ export const getAllAdmins = async (): Promise<AdminUserData[]> => {
         const admins: AdminUserData[] = [];
         querySnapshot.forEach(doc => {
             const data = doc.data();
-            // FIX: Ensure assignedStates is always an array, defaulting to [] if missing.
+            const states = data.assignedStates;
+            // FIX: Robustly ensure assignedStates is always an array.
             admins.push({
                 uid: doc.id,
                 email: data.email,
                 role: data.role,
-                assignedStates: data.assignedStates || [],
+                assignedStates: Array.isArray(states) ? states : [],
             } as AdminUserData);
         });
         return admins;
