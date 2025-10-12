@@ -15,6 +15,7 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [expandedState, setExpandedState] = useState<string | null>(null);
+  const [autoSavingState, setAutoSavingState] = useState<string | null>(null);
 
   const fetchConfig = useCallback(async () => {
     setIsLoading(true);
@@ -48,6 +49,33 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
         [field]: value,
       },
     }));
+  };
+
+  const handleIsActiveToggle = async (abbr: string, newIsActiveValue: boolean) => {
+    setAutoSavingState(abbr);
+    setError('');
+
+    const originalConfig = statesConfig;
+    const newConfig = {
+      ...statesConfig,
+      [abbr]: {
+        ...statesConfig[abbr],
+        isActive: newIsActiveValue,
+      },
+    };
+
+    // Optimistically update UI
+    setStatesConfig(newConfig);
+
+    try {
+      await setStatesConfig(newConfig);
+    } catch (err: any) {
+      setError(err.message || 'Falha ao salvar. A alteração foi desfeita.');
+      // Revert UI on error
+      setStatesConfig(originalConfig);
+    } finally {
+      setAutoSavingState(null);
+    }
   };
 
   const handleSave = async () => {
@@ -96,9 +124,13 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
                         >
                             <span className="font-medium">{state.name} ({state.abbr})</span>
                             <div className="flex items-center gap-4">
-                                <span className={`text-xs font-bold ${config.isActive ? 'text-green-400' : 'text-red-400'}`}>
-                                    {config.isActive ? 'ATIVO' : 'INATIVO'}
-                                </span>
+                               {autoSavingState === state.abbr ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                                ) : (
+                                    <span className={`text-xs font-bold ${config.isActive ? 'text-green-400' : 'text-red-400'}`}>
+                                        {config.isActive ? 'ATIVO' : 'INATIVO'}
+                                    </span>
+                                )}
                                 <svg className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
@@ -111,8 +143,9 @@ const ManageStatesModal: React.FC<ManageStatesModalProps> = ({ isOpen, onClose }
                                   <input
                                     type="checkbox"
                                     checked={config.isActive}
-                                    onChange={(e) => handleStateConfigChange(state.abbr, 'isActive', e.target.checked)}
-                                    className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
+                                    onChange={(e) => handleIsActiveToggle(state.abbr, e.target.checked)}
+                                    disabled={autoSavingState === state.abbr}
+                                    className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm disabled:opacity-50"
                                   />
                                   <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
                                 </label>
