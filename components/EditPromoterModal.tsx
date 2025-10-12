@@ -77,7 +77,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             <div className="md:col-span-2">
                 <h3 className="font-bold text-lg mb-2">Fotos</h3>
                 <div className="flex gap-4 overflow-x-auto">
-                    {promoter.photoUrls.map((url, index) => (
+                    {(promoter.photoUrls || []).map((url, index) => (
                         <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
                             <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg" />
                         </a>
