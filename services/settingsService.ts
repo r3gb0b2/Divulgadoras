@@ -8,8 +8,9 @@ const SETTINGS_COLLECTION = 'settings';
 
 /**
  * Fetches the configuration for all registration states.
- * If no config exists, it creates a default one.
- * It also handles migrating old boolean-based configs to the new object structure.
+ * This function is now more robust and includes self-healing logic for the config document.
+ * It ensures that any old data formats are migrated and any new states from the constants
+ * are added to the configuration without overwriting existing settings.
  * @returns A promise that resolves to the StatesConfig object.
  */
 export const getStatesConfig = async (): Promise<StatesConfig> => {
@@ -17,50 +18,50 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
         const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-            const config = docSnap.data();
-            let needsUpdate = false;
-            const newConfig: StatesConfig = {};
+        const currentConfigData = docSnap.exists() ? docSnap.data() : {};
+        let needsUpdate = false;
+        const newConfig: StatesConfig = {};
 
-            // Migrate old format and ensure all states are present
-            states.forEach(state => {
-                const existingStateConfig = config[state.abbr];
-                if (typeof existingStateConfig === 'object' && existingStateConfig !== null && 'isActive' in existingStateConfig) {
-                    // It's already the new format
+        // Iterate over the canonical list of states from the constants file
+        states.forEach(state => {
+            const existingStateConfig = currentConfigData[state.abbr];
+
+            // Case 1: The state config is in the correct, modern object format.
+            if (typeof existingStateConfig === 'object' && existingStateConfig !== null && typeof existingStateConfig.isActive === 'boolean') {
+                newConfig[state.abbr] = {
+                    isActive: existingStateConfig.isActive,
+                    rules: existingStateConfig.rules || '',
+                    whatsappLink: existingStateConfig.whatsappLink || '',
+                };
+            } else {
+                // Case 2: The state config needs to be migrated or created.
+                needsUpdate = true;
+                // Subcase 2a: It's the old boolean format. Respect the value.
+                if (typeof existingStateConfig === 'boolean') {
                     newConfig[state.abbr] = {
-                        isActive: existingStateConfig.isActive,
-                        rules: existingStateConfig.rules || '',
-                        whatsappLink: existingStateConfig.whatsappLink || '',
+                        isActive: existingStateConfig,
+                        rules: '',
+                        whatsappLink: '',
                     };
                 } else {
-                    // It's the old boolean format or missing, so migrate/create
-                    needsUpdate = true;
+                    // Subcase 2b: It's missing (undefined) or a malformed object. Default to active.
                     newConfig[state.abbr] = {
-                        isActive: !!existingStateConfig, // Convert boolean or undefined to boolean
+                        isActive: true,
                         rules: '',
                         whatsappLink: '',
                     };
                 }
-            });
-
-            if (needsUpdate) {
-                await setDoc(docRef, newConfig);
             }
-            return newConfig;
-        } else {
-            // No config found, create a default one with all states active but empty rules/links
-            const defaultConfig: StatesConfig = states.reduce((acc, state) => {
-                acc[state.abbr] = {
-                    isActive: true,
-                    rules: '',
-                    whatsappLink: '',
-                };
-                return acc;
-            }, {} as StatesConfig);
-            
-            await setDoc(docRef, defaultConfig);
-            return defaultConfig;
+        });
+
+        // If the migration logic created or changed anything, persist it back to Firestore.
+        // This self-heals the configuration document over time.
+        if (needsUpdate || !docSnap.exists()) {
+            await setDoc(docRef, newConfig);
         }
+        
+        return newConfig;
+
     } catch (error) {
         console.error("Error getting states config: ", error);
         throw new Error("Não foi possível carregar a configuração das localidades.");
