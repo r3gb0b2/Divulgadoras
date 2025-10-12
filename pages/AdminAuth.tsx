@@ -12,8 +12,16 @@ const AdminAuth: React.FC = () => {
             const storedUser = sessionStorage.getItem('adminUserProfile');
             if (storedUser) {
                 const parsedUser = JSON.parse(storedUser);
-                // Structural validation to prevent crashes from malformed session data
-                if (parsedUser && typeof parsedUser === 'object' && 'uid' in parsedUser && 'role' in parsedUser && 'states' in parsedUser) {
+                // **FIX**: Stricter validation to prevent crashes from malformed session data.
+                // Ensures 'states' is specifically an array.
+                if (
+                    parsedUser &&
+                    typeof parsedUser === 'object' &&
+                    'uid' in parsedUser &&
+                    'role' in parsedUser &&
+                    'states' in parsedUser &&
+                    Array.isArray(parsedUser.states)
+                ) {
                     return parsedUser as AdminUser;
                 }
             }
