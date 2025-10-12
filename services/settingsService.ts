@@ -8,9 +8,9 @@ const SETTINGS_COLLECTION = 'settings';
 
 /**
  * Fetches the configuration for all registration states.
- * This is a read-only function. It merges the configuration from the database
- * with the canonical list of states from the constants, filling in defaults
- * for any missing or malformed configurations. It does NOT write back to the DB.
+ * This is a read-only function that merges the configuration from the database
+ * with the canonical list of states, providing safe defaults for any missing
+ * or malformed configurations without writing back to the DB.
  * @returns A promise that resolves to the StatesConfig object.
  */
 export const getStatesConfig = async (): Promise<StatesConfig> => {
@@ -21,34 +21,41 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const dbConfig = docSnap.exists() ? (docSnap.data() as Partial<StatesConfig>) : {};
         const finalConfig: StatesConfig = {};
 
-        // Iterate through all canonical states defined in the application
+        // Use the canonical list of states as the source of truth for iteration.
         for (const state of states) {
             const stateAbbr = state.abbr;
-            const existingConfig: any = dbConfig[stateAbbr];
-
-            // Define a safe default for each state
-            const defaultConfig = {
+            
+            // Define a complete, safe default for any state.
+            const defaultConfig: StateConfig = {
                 isActive: true,
                 rules: '',
                 whatsappLink: '',
             };
 
-            if (existingConfig && typeof existingConfig === 'object' && !Array.isArray(existingConfig)) {
-                // If a valid config object exists in the DB, use it, but ensure all keys are present
-                finalConfig[stateAbbr] = {
-                    isActive: typeof existingConfig.isActive === 'boolean' ? existingConfig.isActive : true,
-                    rules: typeof existingConfig.rules === 'string' ? existingConfig.rules : '',
-                    whatsappLink: typeof existingConfig.whatsappLink === 'string' ? existingConfig.whatsappLink : '',
-                };
-            } else if (typeof existingConfig === 'boolean') {
-                 // Handle legacy boolean format (where the whole value was just true/false)
-                 finalConfig[stateAbbr] = { ...defaultConfig, isActive: existingConfig };
-            } else {
-                // If state is missing from DB or has a malformed type, use the default in-memory config for it.
-                finalConfig[stateAbbr] = defaultConfig;
-            }
-        }
+            // Get the raw config for this specific state from the database. It could be an object, a boolean (legacy), or undefined.
+            const existingConfig: unknown = dbConfig[stateAbbr];
 
+            // Start building the final config for this state with the safe default.
+            let stateFinalConfig = { ...defaultConfig };
+
+            // Intelligently merge data from the database.
+            if (typeof existingConfig === 'object' && existingConfig !== null && !Array.isArray(existingConfig)) {
+                // If it's a valid object, spread it over the default. This preserves any valid fields from DB.
+                stateFinalConfig = { ...stateFinalConfig, ...existingConfig };
+            } else if (typeof existingConfig === 'boolean') {
+                // Handle the legacy format where the value was just a boolean for the active status.
+                stateFinalConfig.isActive = existingConfig;
+            }
+            
+            // Final safety check: ensure isActive is explicitly a boolean. If after merging it's
+            // something else (e.g., from a malformed DB entry like { isActive: "true" }), default it.
+            if (typeof stateFinalConfig.isActive !== 'boolean') {
+                stateFinalConfig.isActive = true;
+            }
+
+            finalConfig[stateAbbr] = stateFinalConfig;
+        }
+        
         return finalConfig;
 
     } catch (error) {
