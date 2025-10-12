@@ -10,27 +10,33 @@ const AdminAuth: React.FC = () => {
     const [userProfile, setUserProfile] = useState<AdminUser | null>(() => {
         try {
             const storedUser = sessionStorage.getItem('adminUserProfile');
-            if (storedUser) {
-                const parsedUser = JSON.parse(storedUser);
-                // **FIX**: Stricter validation to prevent crashes from malformed session data.
-                // Ensures 'states' is specifically an array.
-                if (
-                    parsedUser &&
-                    typeof parsedUser === 'object' &&
-                    'uid' in parsedUser &&
-                    'role' in parsedUser &&
-                    'states' in parsedUser &&
-                    Array.isArray(parsedUser.states)
-                ) {
-                    return parsedUser as AdminUser;
-                }
+            if (!storedUser) {
+                return null; // No stored user, proceed to login form.
             }
-            // If data is invalid or doesn't exist, ensure it's cleared.
+            
+            // If user data exists, try to parse and validate it.
+            const parsedUser = JSON.parse(storedUser);
+
+            // Stricter validation to prevent crashes from malformed session data.
+            if (
+                parsedUser &&
+                typeof parsedUser === 'object' &&
+                'uid' in parsedUser &&
+                'role' in parsedUser &&
+                'states' in parsedUser &&
+                Array.isArray(parsedUser.states)
+            ) {
+                return parsedUser as AdminUser; // Data is valid.
+            }
+
+            // If data is invalid, remove it and proceed to login.
             sessionStorage.removeItem('adminUserProfile');
             return null;
+
         } catch (error) {
-            console.error("Failed to parse user profile from session storage", error);
-            sessionStorage.removeItem('adminUserProfile');
+            // This catch block handles any error, including sessionStorage being disabled
+            // or JSON.parse failing. It should NOT attempt to access sessionStorage again.
+            console.error("Error retrieving user profile from session storage:", error);
             return null;
         }
     });
