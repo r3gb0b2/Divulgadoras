@@ -199,14 +199,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userProfile, onLogout }) => {
         await fetchPromoters(); 
     };
 
-    const getStatusBadge = (status: PromoterStatus) => {
+    const getStatusBadge = (status: PromoterStatus | undefined) => {
+        const safeStatus = status || 'pending';
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
             approved: "bg-green-900/50 text-green-300",
             rejected: "bg-red-900/50 text-red-300",
         };
         const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado" };
-        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[safeStatus]}`}>{text[safeStatus]}</span>;
     };
 
     return (
