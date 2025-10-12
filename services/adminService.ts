@@ -12,8 +12,14 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
         const adminDocRef = doc(firestore, 'admins', uid);
         const docSnap = await getDoc(adminDocRef);
         if (docSnap.exists()) {
-            // FIX: Add the uid to the returned object to match the updated AdminUserData type.
-            return { uid, ...docSnap.data() } as AdminUserData;
+            const data = docSnap.data();
+            // FIX: Ensure assignedStates is always an array, defaulting to [] if missing.
+            return {
+                uid,
+                email: data.email,
+                role: data.role,
+                assignedStates: data.assignedStates || [],
+            } as AdminUserData;
         }
         return null;
     } catch (error) {
@@ -33,8 +39,14 @@ export const getAllAdmins = async (): Promise<AdminUserData[]> => {
         const querySnapshot = await getDocs(adminsCollectionRef);
         const admins: AdminUserData[] = [];
         querySnapshot.forEach(doc => {
-            // FIX: Add the document ID as 'uid' to each admin object.
-            admins.push({ uid: doc.id, ...doc.data() } as AdminUserData);
+            const data = doc.data();
+            // FIX: Ensure assignedStates is always an array, defaulting to [] if missing.
+            admins.push({
+                uid: doc.id,
+                email: data.email,
+                role: data.role,
+                assignedStates: data.assignedStates || [],
+            } as AdminUserData);
         });
         return admins;
     } catch (error) {
