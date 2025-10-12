@@ -127,10 +127,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userProfile, onLogout }) => {
         if (searchTerm) {
             const lowercasedSearchTerm = searchTerm.toLowerCase();
             result = result.filter(p =>
-                p.name.toLowerCase().includes(lowercasedSearchTerm) ||
-                p.email.toLowerCase().includes(lowercasedSearchTerm) ||
-                p.whatsapp.includes(searchTerm) ||
-                p.instagram.toLowerCase().includes(lowercasedSearchTerm)
+                (p.name || '').toLowerCase().includes(lowercasedSearchTerm) ||
+                (p.email || '').toLowerCase().includes(lowercasedSearchTerm) ||
+                (p.whatsapp || '').includes(searchTerm) ||
+                (p.instagram || '').toLowerCase().includes(lowercasedSearchTerm)
             );
         }
         setFilteredPromoters(result);
