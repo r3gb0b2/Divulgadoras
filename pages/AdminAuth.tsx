@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { getUserProfile } from '../services/userService';
 import AdminPanel from './AdminPanel';
+import { AdminUser } from '../types';
 import { MailIcon } from '../components/Icons';
 
-
 const AdminAuth: React.FC = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(sessionStorage.getItem('isAdminAuthenticated') === 'true');
+    const [userProfile, setUserProfile] = useState<AdminUser | null>(() => {
+        const storedUser = sessionStorage.getItem('adminUserProfile');
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -17,9 +21,18 @@ const AdminAuth: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            sessionStorage.setItem('isAdminAuthenticated', 'true');
-            setIsAuthenticated(true);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const profile = await getUserProfile(userCredential.user.uid);
+            
+            if (profile) {
+                sessionStorage.setItem('adminUserProfile', JSON.stringify(profile));
+                setUserProfile(profile);
+            } else {
+                // User is authenticated with Firebase Auth but doesn't have a profile in our 'users' collection.
+                await auth.signOut(); // Log them out.
+                setError('Você não tem permissão para acessar esta área.');
+            }
+
         } catch (error: any) {
             console.error(error);
             if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email') {
@@ -33,8 +46,14 @@ const AdminAuth: React.FC = () => {
         }
     };
 
-    if (isAuthenticated) {
-        return <AdminPanel />;
+    const handleLogout = () => {
+        sessionStorage.removeItem('adminUserProfile');
+        setUserProfile(null);
+        auth.signOut();
+    };
+
+    if (userProfile) {
+        return <AdminPanel userProfile={userProfile} onLogout={handleLogout} />;
     }
 
     return (

@@ -1,6 +1,5 @@
-
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, WhereFilterOp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -44,9 +43,20 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
   }
 };
 
-export const getPromoters = async (): Promise<Promoter[]> => {
+export const getPromoters = async (allowedStates?: string[]): Promise<Promoter[]> => {
   try {
-    const q = query(collection(firestore, "promoters"), orderBy("createdAt", "desc"));
+    const promotersCollection = collection(firestore, "promoters");
+    let q;
+    
+    // If the user is a state admin, filter by their allowed states.
+    // Firestore 'in' query supports up to 30 elements. If more are needed, logic must be split.
+    if (allowedStates && allowedStates.length > 0) {
+      q = query(promotersCollection, where("state", "in", allowedStates), orderBy("createdAt", "desc"));
+    } else {
+      // Super admin or no restriction gets all promoters
+      q = query(promotersCollection, orderBy("createdAt", "desc"));
+    }
+
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {

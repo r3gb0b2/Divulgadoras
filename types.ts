@@ -33,3 +33,15 @@ export interface RejectionReason {
   id: string;
   text: string;
 }
+
+// New types for Admin User Management
+export type UserRole = 'superadmin' | 'stateadmin';
+
+export interface AdminUser {
+  id: string; // Firestore document ID
+  uid: string; // Firebase Auth UID
+  email: string;
+  displayName?: string;
+  role: UserRole;
+  states: string[]; // List of state abbreviations the user can manage (e.g., ['CE', 'SE'])
+}

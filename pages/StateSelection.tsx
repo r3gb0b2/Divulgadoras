@@ -2,20 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const states = [
-  { abbr: 'AC', name: 'Acre' }, { abbr: 'AL', name: 'Alagoas' },
-  { abbr: 'AP', name: 'Amapá' }, { abbr: 'AM', name: 'Amazonas' },
-  { abbr: 'BA', name: 'Bahia' }, { abbr: 'CE', name: 'Ceará' },
-  { abbr: 'DF', name: 'Distrito Federal' }, { abbr: 'ES', name: 'Espírito Santo' },
-  { abbr: 'GO', name: 'Goiás' }, { abbr: 'MA', name: 'Maranhão' },
-  { abbr: 'MT', name: 'Mato Grosso' }, { abbr: 'MS', name: 'Mato Grosso do Sul' },
-  { abbr: 'MG', name: 'Minas Gerais' }, { abbr: 'PA', name: 'Pará' },
-  { abbr: 'PB', name: 'Paraíba' }, { abbr: 'PR', name: 'Paraná' },
-  { abbr: 'PE', name: 'Pernambuco' }, { abbr: 'PI', name: 'Piauí' },
-  { abbr: 'RJ', name: 'Rio de Janeiro' }, { abbr: 'RN', name: 'Rio Grande do Norte' },
-  { abbr: 'RS', name: 'Rio Grande do Sul' }, { abbr: 'RO', name: 'Rondônia' },
-  { abbr: 'RR', name: 'Roraima' }, { abbr: 'SC', name: 'Santa Catarina' },
-  { abbr: 'SP', name: 'São Paulo' }, { abbr: 'SE', name: 'Sergipe' },
-  { abbr: 'TO', name: 'Tocantins' }
+  { abbr: 'CE', name: 'Ceará' },
+  { abbr: 'SE', name: 'Aracaju' },
+  { abbr: 'PA', name: 'Belém' },
+  { abbr: 'PI', name: 'Teresina' },
+  { abbr: 'ES', name: 'Vitória' },
+  { abbr: 'PB', name: 'Paraíba' },
 ];
 
 const StateSelection: React.FC = () => {
@@ -26,9 +18,9 @@ const StateSelection: React.FC = () => {
           Seja uma Divulgadora
         </h1>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
-          Selecione o seu estado para iniciar o cadastro.
+          Selecione a sua localidade para iniciar o cadastro.
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {states.map(state => (
             <Link
               key={state.abbr}
