@@ -18,49 +18,64 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
         const docSnap = await getDoc(docRef);
 
-        const currentConfigData = docSnap.exists() ? docSnap.data() : {};
+        const dbConfig = docSnap.exists() ? docSnap.data() as Partial<StatesConfig> : {};
+        const finalConfig: StatesConfig = {};
         let needsUpdate = false;
-        const newConfig: StatesConfig = {};
 
-        // Iterate over the canonical list of states from the constants file
-        states.forEach(state => {
-            const existingStateConfig = currentConfigData[state.abbr];
+        // Iterate through all canonical states defined in the application
+        for (const state of states) {
+            const stateAbbr = state.abbr;
+            const existingConfig: any = dbConfig[stateAbbr];
 
-            // Case 1: The state config is in the correct, modern object format.
-            if (typeof existingStateConfig === 'object' && existingStateConfig !== null && typeof existingStateConfig.isActive === 'boolean') {
-                newConfig[state.abbr] = {
-                    isActive: existingStateConfig.isActive,
-                    rules: existingStateConfig.rules || '',
-                    whatsappLink: existingStateConfig.whatsappLink || '',
-                };
-            } else {
-                // Case 2: The state config needs to be migrated or created.
-                needsUpdate = true;
-                // Subcase 2a: It's the old boolean format. Respect the value.
-                if (typeof existingStateConfig === 'boolean') {
-                    newConfig[state.abbr] = {
-                        isActive: existingStateConfig,
-                        rules: '',
-                        whatsappLink: '',
+            // Default configuration for a new or malformed state
+            const defaultConfig = {
+                isActive: true,
+                rules: '',
+                whatsappLink: '',
+            };
+
+            if (existingConfig) {
+                // Case 1: The config is the old boolean format. Migrate it.
+                if (typeof existingConfig === 'boolean') {
+                    finalConfig[stateAbbr] = { ...defaultConfig, isActive: existingConfig };
+                    needsUpdate = true;
+                }
+                // Case 2: The config is an object. Check if it's valid and preserve data.
+                else if (typeof existingConfig === 'object') {
+                    // This is the CRITICAL check. We preserve `isActive` if it's explicitly false,
+                    // otherwise we can default it. This prevents the bug where `false` was overwritten.
+                    const newIsActive = typeof existingConfig.isActive === 'boolean' ? existingConfig.isActive : true;
+                    
+                    finalConfig[stateAbbr] = {
+                        isActive: newIsActive,
+                        rules: existingConfig.rules || '',
+                        whatsappLink: existingConfig.whatsappLink || '',
                     };
-                } else {
-                    // Subcase 2b: It's missing (undefined) or a malformed object. Default to active.
-                    newConfig[state.abbr] = {
-                        isActive: true,
-                        rules: '',
-                        whatsappLink: '',
-                    };
+                    
+                    // If the DB version was missing a valid `isActive`, it needs an update.
+                    if (typeof existingConfig.isActive !== 'boolean') {
+                        needsUpdate = true;
+                    }
+                }
+                // Case 3: The config is some other malformed type (e.g., string, number). Overwrite it.
+                else {
+                    finalConfig[stateAbbr] = defaultConfig;
+                    needsUpdate = true;
                 }
             }
-        });
-
-        // If the migration logic created or changed anything, persist it back to Firestore.
-        // This self-heals the configuration document over time.
-        if (needsUpdate || !docSnap.exists()) {
-            await setDoc(docRef, newConfig);
+            // Case 4: The state is completely missing from the DB config. Add it.
+            else {
+                finalConfig[stateAbbr] = defaultConfig;
+                needsUpdate = true;
+            }
         }
         
-        return newConfig;
+        // If any state was migrated, created, or fixed, write the complete, clean config back to the DB.
+        if (needsUpdate || !docSnap.exists()) {
+            await setDoc(docRef, finalConfig);
+        }
+
+        return finalConfig;
 
     } catch (error) {
         console.error("Error getting states config: ", error);
