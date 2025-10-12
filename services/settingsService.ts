@@ -21,39 +21,37 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const dbConfig = docSnap.exists() ? (docSnap.data() as Partial<StatesConfig>) : {};
         const finalConfig: StatesConfig = {};
 
-        // Use the canonical list of states as the source of truth for iteration.
+        // Use the canonical list of states as the source of truth.
         for (const state of states) {
             const stateAbbr = state.abbr;
-            
-            // Define a complete, safe default for any state.
-            const defaultConfig: StateConfig = {
+            const dbStateConfig = dbConfig[stateAbbr] as Partial<StateConfig> | boolean | undefined;
+
+            // Start with a safe, complete default.
+            const currentState: StateConfig = {
                 isActive: true,
                 rules: '',
                 whatsappLink: '',
             };
 
-            // Get the raw config for this specific state from the database. It could be an object, a boolean (legacy), or undefined.
-            const existingConfig: unknown = dbConfig[stateAbbr];
-
-            // Start building the final config for this state with the safe default.
-            let stateFinalConfig = { ...defaultConfig };
-
-            // Intelligently merge data from the database.
-            if (typeof existingConfig === 'object' && existingConfig !== null && !Array.isArray(existingConfig)) {
-                // If it's a valid object, spread it over the default. This preserves any valid fields from DB.
-                stateFinalConfig = { ...stateFinalConfig, ...existingConfig };
-            } else if (typeof existingConfig === 'boolean') {
-                // Handle the legacy format where the value was just a boolean for the active status.
-                stateFinalConfig.isActive = existingConfig;
+            // Intelligently apply the configuration from the database.
+            if (typeof dbStateConfig === 'object' && dbStateConfig !== null) {
+                // If the config is an object, check its properties and apply them if valid.
+                // This correctly preserves `isActive: false` if it exists.
+                if (typeof dbStateConfig.isActive === 'boolean') {
+                    currentState.isActive = dbStateConfig.isActive;
+                }
+                if (typeof dbStateConfig.rules === 'string') {
+                    currentState.rules = dbStateConfig.rules;
+                }
+                if (typeof dbStateConfig.whatsappLink === 'string') {
+                    currentState.whatsappLink = dbStateConfig.whatsappLink;
+                }
+            } else if (typeof dbStateConfig === 'boolean') {
+                // Handle the legacy format where the value was just a boolean.
+                currentState.isActive = dbStateConfig;
             }
             
-            // Final safety check: ensure isActive is explicitly a boolean. If after merging it's
-            // something else (e.g., from a malformed DB entry like { isActive: "true" }), default it.
-            if (typeof stateFinalConfig.isActive !== 'boolean') {
-                stateFinalConfig.isActive = true;
-            }
-
-            finalConfig[stateAbbr] = stateFinalConfig;
+            finalConfig[stateAbbr] = currentState;
         }
         
         return finalConfig;
