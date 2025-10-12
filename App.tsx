@@ -20,7 +20,7 @@ const App: React.FC = () => {
             </div>
           </nav>
         </header>
-        <main className="container mx-auto p-4 md:p-8 flex-grow">
+        <main className="container mx-auto p-4 md:p-8 flex-grow flex flex-col">
           <Routes>
             <Route path="/" element={<StateSelection />} />
             <Route path="/register/:state" element={<RegistrationForm />} />
