@@ -1,26 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStateConfig } from '../services/settingsService';
-import { StateConfig } from '../types';
-import { WhatsAppIcon } from '../components/Icons';
+import { getCampaigns } from '../services/settingsService';
+import { Campaign } from '../types';
 
 const RulesPage: React.FC = () => {
-  const { state } = useParams<{ state: string }>();
-  const [config, setConfig] = useState<StateConfig | null>(null);
+  const { state, campaignName } = useParams<{ state: string; campaignName: string }>();
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state) {
-      const fetchConfig = async () => {
+    if (state && campaignName) {
+      const fetchCampaign = async () => {
         setIsLoading(true);
         setError(null);
         try {
-          const stateConfig = await getStateConfig(state);
-          if (stateConfig) {
-            setConfig(stateConfig);
+          const campaigns = await getCampaigns(state);
+          const decodedCampaignName = decodeURIComponent(campaignName);
+          const foundCampaign = campaigns.find(c => c.name === decodedCampaignName);
+          if (foundCampaign) {
+            setCampaign(foundCampaign);
           } else {
-            setError(`Regras para a localidade "${state}" não encontradas.`);
+            setError(`Regras para o evento "${decodedCampaignName}" não encontradas.`);
           }
         } catch (err: any) {
           setError(err.message || 'Ocorreu um erro ao carregar as regras.');
@@ -28,12 +29,12 @@ const RulesPage: React.FC = () => {
           setIsLoading(false);
         }
       };
-      fetchConfig();
+      fetchCampaign();
     } else {
-      setError("Nenhuma localidade especificada.");
+      setError("Nenhuma localidade ou evento especificado.");
       setIsLoading(false);
     }
-  }, [state]);
+  }, [state, campaignName]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -48,14 +49,12 @@ const RulesPage: React.FC = () => {
       return <p className="text-red-400 text-center">{error}</p>;
     }
 
-    if (config) {
+    if (campaign) {
       return (
-        <>
-          <div 
-            className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none space-y-6"
-            dangerouslySetInnerHTML={{ __html: config.rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para esta localidade.</p>' }}
-          />
-        </>
+        <div 
+          className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none space-y-6"
+          dangerouslySetInnerHTML={{ __html: campaign.rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para este evento.</p>' }}
+        />
       );
     }
     
@@ -66,7 +65,7 @@ const RulesPage: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="bg-secondary shadow-2xl rounded-lg p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-100 mb-4">Regras para Divulgadoras - {state?.toUpperCase()}</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Regras - {campaign ? campaign.name : state?.toUpperCase()}</h1>
         <p className="text-center text-gray-400 mb-8">Leia com atenção para garantir uma boa parceria.</p>
         {renderContent()}
       </div>

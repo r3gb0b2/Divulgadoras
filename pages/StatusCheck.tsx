@@ -88,14 +88,23 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
             
             {promoter.status === 'approved' && (
                 <div className="mt-4 space-y-4">
-                    <Link
-                        to={`/rules/${promoter.state}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
-                    >
-                        Ver as Regras (Obrigatório)
-                    </Link>
+                    {promoter.campaignName ? (
+                        <Link
+                            to={`/rules/${promoter.state}/${encodeURIComponent(promoter.campaignName)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
+                        >
+                            Ver as Regras (Obrigatório)
+                        </Link>
+                    ) : (
+                        <button
+                            disabled
+                            className="inline-block w-full text-center bg-gray-600 text-white font-bold py-3 px-4 rounded cursor-not-allowed"
+                        >
+                            Regras Indisponíveis (Evento não especificado)
+                        </button>
+                    )}
                     
                     <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
                         <label className="flex items-center cursor-pointer">

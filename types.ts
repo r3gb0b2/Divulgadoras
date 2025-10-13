@@ -71,4 +71,5 @@ export interface Campaign {
   stateAbbr: string;
   isActive: boolean;
   whatsappLink: string;
+  rules: string;
 }

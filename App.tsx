@@ -28,7 +28,7 @@ const App: React.FC = () => {
             <Route path="/admin/*" element={<AdminAuth />} />
             <Route path="/admin-register" element={<AdminRegistrationPage />} />
             <Route path="/status" element={<StatusCheck />} />
-            <Route path="/rules/:state" element={<RulesPage />} />
+            <Route path="/rules/:state/:campaignName" element={<RulesPage />} />
           </Routes>
         </main>
         <footer className="text-center py-4 text-gray-400 text-sm">

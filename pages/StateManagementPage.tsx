@@ -44,7 +44,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
 
   // State for campaign form
-  const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true, whatsappLink: '' });
+  const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' });
   
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
@@ -141,7 +141,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     }
   };
 
-  const handleCampaignFormChange = (field: keyof Campaign, value: any) => {
+  const handleCampaignFormChange = (field: keyof Omit<Campaign, 'id' | 'stateAbbr'>, value: any) => {
     setCampaignForm(prev => ({...prev, [field]: value}));
   }
 
@@ -150,19 +150,22 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     if (!stateAbbr || !campaignForm.name) return;
     setIsSaving(true);
     try {
+      const dataToSave = {
+        name: campaignForm.name || '',
+        description: campaignForm.description || '',
+        isActive: campaignForm.isActive !== false,
+        whatsappLink: campaignForm.whatsappLink || '',
+        rules: campaignForm.rules || '',
+        stateAbbr
+      };
+
       if (campaignForm.id) { // Editing existing
         const { id, ...data } = campaignForm;
         await updateCampaign(id, data as Omit<Campaign, 'id'>);
       } else { // Adding new
-        await addCampaign({
-            name: campaignForm.name || '',
-            description: campaignForm.description || '',
-            isActive: campaignForm.isActive !== false,
-            whatsappLink: campaignForm.whatsappLink || '',
-            stateAbbr
-        });
+        await addCampaign(dataToSave);
       }
-      setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '' }); // Reset form
+      setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' }); // Reset form
       await fetchData(); // Refresh
     } catch (err) {
       alert('Falha ao salvar evento/gênero.');
@@ -234,7 +237,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
                 {adminData.role === 'superadmin' && (
                   <div className="bg-secondary p-5 rounded-lg shadow">
-                      <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais</h3>
+                      <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais da Localidade</h3>
                       {stateConfig && (
                           <div className="space-y-4">
                               <label className="flex items-center cursor-pointer">
@@ -244,19 +247,19 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                   onChange={(e) => handleConfigChange('isActive', e.target.checked)}
                                   className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
                                 />
-                                <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
+                                <span className="ml-3 font-medium text-gray-200">Inscrições Ativas na Localidade</span>
                               </label>
                               <div>
-                                  <label className="block text-sm font-medium text-gray-300 mb-1">Regras da Localidade</label>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Regras Gerais (Fallback)</label>
                                   <textarea 
                                       value={stateConfig.rules || ''}
                                       onChange={(e) => handleConfigChange('rules', e.target.value)}
-                                      placeholder="Digite as regras aqui..."
+                                      placeholder="Regras gerais caso um evento não tenha regras específicas..."
                                       className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 min-h-[150px]"
                                   />
                               </div>
                               <button onClick={handleSaveConfig} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
-                                  {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                                  {isSaving ? 'Salvando...' : 'Salvar Config. da Localidade'}
                               </button>
                           </div>
                       )}
@@ -288,10 +291,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                           <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                           <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                           <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                          <textarea placeholder="Regras do Evento/Gênero" value={campaignForm.rules || ''} onChange={(e) => handleCampaignFormChange('rules', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm min-h-[100px]"/>
                           <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
                           <div className="flex gap-2">
-                            <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar'}</button>
-                            {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
+                            <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar Evento'}</button>
+                            {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: '', rules: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
                           </div>
                       </form>
                     )}
