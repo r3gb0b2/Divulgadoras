@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signUpAndCreateOrganization } from '../services/adminService';
+// FIX: Added missing import for Icons
 import { MailIcon, LockClosedIcon } from '../components/Icons';
 
 const AdminRegistrationPage: React.FC = () => {

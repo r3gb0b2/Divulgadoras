@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
+// FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
+// FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 

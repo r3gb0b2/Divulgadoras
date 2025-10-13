@@ -1,4 +1,4 @@
-import { FieldValue, Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected';
 
@@ -11,27 +11,18 @@ export interface Promoter {
   tiktok?: string;
   dateOfBirth: string;
   photoUrls: string[];
+  state: string;
+  campaignName: string | null;
+  organizationId: string;
   status: PromoterStatus;
-  createdAt: FieldValue;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
-  state: string;
-  campaignName?: string;
-  organizationId: string;
+  createdAt: Timestamp | object;
 }
 
-export interface PromoterApplicationData {
-  name: string;
-  whatsapp: string;
-  email: string;
-  instagram: string;
-  tiktok?: string;
-  dateOfBirth: string;
+export type PromoterApplicationData = Omit<Promoter, 'id' | 'photoUrls' | 'status' | 'createdAt'> & {
   photos: File[];
-  state: string;
-  campaignName?: string;
-  organizationId: string;
-}
+};
 
 export interface RejectionReason {
   id: string;
@@ -39,58 +30,56 @@ export interface RejectionReason {
   organizationId: string;
 }
 
-// Types for Admin User Management
-export type AdminRole = 'superadmin' | 'admin' | 'viewer';
-
-export interface AdminUserData {
-  uid: string;
-  email: string;
-  role: AdminRole;
-  assignedStates: string[];
-  assignedCampaigns?: { [stateAbbr: string]: string[] };
-  organizationId?: string; // Superadmin (app owner) won't have this
-}
-
-export interface AdminApplication {
-    id: string;
-    uid: string;
-    email: string;
-    createdAt: FieldValue;
-}
-
-// Types for State/Locality Management
-export interface StateConfig {
-  isActive: boolean;
-  rules: string;
-}
-
-export interface StatesConfig {
-  [key: string]: StateConfig;
-}
-
 export interface Campaign {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   stateAbbr: string;
-  isActive: boolean;
-  whatsappLink: string;
-  rules: string;
   organizationId: string;
+  isActive: boolean;
+  rules: string;
+  whatsappLink: string;
 }
+
+export type AdminRole = 'superadmin' | 'admin' | 'viewer';
+
+export interface AdminUserData {
+    uid: string;
+    email: string;
+    role: AdminRole;
+    assignedStates: string[];
+    assignedCampaigns?: { [stateAbbr: string]: string[] };
+    organizationId?: string;
+}
+
+export interface StateConfig {
+    isActive: boolean;
+    rules: string;
+}
+
+export type StatesConfig = {
+    [stateAbbr: string]: StateConfig;
+};
 
 export interface Organization {
   id: string;
-  name: string;
   ownerUid: string;
   ownerEmail: string;
-  createdAt: FieldValue;
+  name: string;
   planId: 'basic' | 'professional';
-  subscriptionStatus: 'active' | 'canceled' | 'expired' | 'trialing';
-  subscriptionExpiresAt: Timestamp;
+  createdAt: Timestamp | object;
+}
+
+export interface AdminApplication {
+  id: string;
+  orgName: string;
+  email: string;
+  planId: 'basic' | 'professional';
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Timestamp | object;
 }
 
 export interface MercadoPagoCredentials {
-    publicKey?: string;
-    accessToken?: string;
+  publicKey?: string;
+  accessToken?: string;
 }

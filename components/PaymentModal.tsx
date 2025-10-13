@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plan } from '../pages/PricingPage';
-import { signUpAndCreateOrganization } from '../services/adminService';
 import { LockClosedIcon, MercadoPagoIcon } from './Icons';
 
 interface PaymentModalProps {
@@ -12,7 +10,6 @@ interface PaymentModalProps {
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) => {
   const [step, setStep] = useState(1);
-  const navigate = useNavigate();
 
   // Form State
   const [orgName, setOrgName] = useState('');
@@ -22,7 +19,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Processando sua inscrição...');
+  const [loadingMessage, setLoadingMessage] = useState('Processando...');
 
   useEffect(() => {
     // Reset form when modal opens or plan changes
@@ -34,7 +31,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
       setConfirmPassword('');
       setError('');
       setIsLoading(false);
-      setLoadingMessage('Processando sua inscrição...');
     }
   }, [isOpen, plan]);
 
@@ -58,26 +54,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    setLoadingMessage('Criando sua organização...');
-    
-    try {
-      // Create the organization before simulating the redirect
-      await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
-      
-      setLoadingMessage('Finalizando... Redirecionando para o Mercado Pago');
-      // Simulate redirection to payment gateway
-      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      alert('Inscrição realizada com sucesso! Sua organização foi criada. Você será redirecionado para a tela de login.');
-      onClose();
-      navigate('/admin');
+    // --- DEVELOPER NOTE ---
+    // This is where the real Mercado Pago integration would happen.
+    // 1. Send user details (email, orgName, plan.id) to your backend.
+    // 2. Your backend uses the Mercado Pago SDK to create a "payment preference".
+    // 3. Mercado Pago returns a checkout URL (init_point).
+    // 4. Your backend sends this URL back to the frontend.
+    // 5. The frontend redirects the user: window.location.href = init_point;
+    // 6. After successful payment, a webhook from Mercado Pago to your backend
+    //    triggers the signUpAndCreateOrganization function.
 
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao criar sua organização.');
-      setStep(1); // Go back to account step if org creation fails
-    } finally {
-      setIsLoading(false);
-    }
+    // --- SIMULATION ---
+    // We will simulate this process with a delay and a message.
+    setLoadingMessage('Redirecionando para o checkout seguro...');
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // After the simulated redirect, we show what would happen next.
+    setIsLoading(false);
+    setStep(3); // A new confirmation step.
   };
 
   return (
@@ -96,10 +91,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
                 <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
             </div>
             
-            <div className="flex items-center justify-between p-3 bg-gray-800 rounded-md mb-6">
-                <span className="font-semibold text-gray-300">Total Mensal</span>
-                <span className="text-2xl font-bold text-primary">{plan.priceFormatted}</span>
-            </div>
+            {step < 3 && (
+              <div className="flex items-center justify-between p-3 bg-gray-800 rounded-md mb-6">
+                  <span className="font-semibold text-gray-300">Total Mensal</span>
+                  <span className="text-2xl font-bold text-primary">{plan.priceFormatted}</span>
+              </div>
+            )}
 
             {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4 text-center">{error}</p>}
             
@@ -148,6 +145,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
                         <button type="button" onClick={() => setStep(1)} className="w-full py-2 bg-transparent text-gray-400 rounded-md hover:text-white font-semibold text-sm">Voltar</button>
                      </div>
                 </form>
+            )}
+
+            {/* Step 3: Confirmation Simulation */}
+            {step === 3 && (
+                <div className="text-center space-y-4 p-4">
+                    <h3 className="font-semibold text-xl text-green-400">Quase lá!</h3>
+                    <p className="text-gray-300">
+                        Em um ambiente real, você seria redirecionado para a página de pagamento segura do Mercado Pago.
+                    </p>
+                    <p className="text-gray-300">
+                        Após a confirmação do pagamento, sua organização e conta seriam criadas, e você receberia um e-mail de boas-vindas com instruções para o primeiro acesso.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold"
+                    >
+                        Entendido
+                    </button>
+                </div>
             )}
         </div>
       </div>
