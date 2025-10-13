@@ -80,9 +80,9 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             },
         });
 
-        const projectId = process.env.GCLOUD_PROJECT;
+        const projectId = admin.app().options().projectId;
         if (!projectId) {
-            logger.error("GCLOUD_PROJECT environment variable not set.");
+            logger.error("Could not determine Firebase Project ID from admin SDK.");
             throw new HttpsError('internal', 'Configuração do servidor incompleta (Project ID).');
         }
         const baseUrl = `https://${projectId}.web.app`;
