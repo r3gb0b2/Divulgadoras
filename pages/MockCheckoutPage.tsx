@@ -1,82 +1,112 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { Plan } from './PricingPage';
-import { getStripeCredentials } from '../services/credentialsService';
+import { Plan, plans } from './PricingPage';
+import { getPagSeguroCredentials } from '../services/credentialsService';
 
 declare global {
     interface Window {
-        Stripe: any;
+        PagSeguro: any;
     }
 }
 
 const CheckoutPage: React.FC = () => {
-    const location = useLocation();
+    const { planId, orgName, email, passwordB64 } = useParams();
     const navigate = useNavigate();
-    const { plan, orgName, email, password } = (location.state as { plan: Plan; orgName: string; email: string; password: string }) || {};
 
-    const [isLoading, setIsLoading] = useState(false);
+    const plan = plans.find(p => p.id === planId);
+    const password = passwordB64 ? atob(passwordB64) : '';
+
+    const [isLoading, setIsLoading] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState('');
-    const [stripePublicKey, setStripePublicKey] = useState<string | null>(null);
+    const [pagSeguroInstance, setPagSeguroInstance] = useState<any>(null);
+    const cardContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const fetchStripeKey = async () => {
+        const initializePagSeguro = async () => {
+            if (!plan) return;
             setIsLoading(true);
             try {
-                const creds = await getStripeCredentials();
+                const creds = await getPagSeguroCredentials();
                 if (!creds.publicKey) {
-                    throw new Error("Chave publicável do Stripe não configurada no painel do Super Admin.");
+                    throw new Error("Chave pública do PagSeguro não configurada.");
                 }
-                setStripePublicKey(creds.publicKey);
+
+                const pagseguro = window.PagSeguro;
+                if (!pagseguro) {
+                    throw new Error("SDK do PagSeguro não carregou.");
+                }
+
+                const instance = pagseguro.instance({
+                    publicKey: creds.publicKey,
+                    sandbox: false, // Use true for testing environment
+                });
+                
+                if (cardContainerRef.current) {
+                     instance.checkout.card({
+                        form: {
+                            id: 'pagseguro-card-form'
+                        },
+                        card: {
+                            id: 'pagseguro-card-container'
+                        }
+                    });
+                }
+                setPagSeguroInstance(instance);
+
             } catch (err: any) {
-                setError("Falha ao carregar a configuração de pagamento. Verifique se as chaves do Stripe foram salvas pelo Super Admin.");
+                setError(err.message || "Falha ao inicializar o pagamento.");
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchStripeKey();
-    }, []);
-    
+        initializePagSeguro();
+    }, [plan]);
 
-    const handlePaymentSubmit = async () => {
-        if (!stripePublicKey) {
-            setError("A configuração do Stripe não está pronta. Tente novamente.");
+    const handlePaymentSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!pagSeguroInstance) {
+            setError("O formulário de pagamento não está pronto.");
             return;
         }
 
-        setIsLoading(true);
+        setIsProcessing(true);
         setError('');
 
         try {
-            const createCheckoutSession = httpsCallable(functions, 'createStripeCheckoutSession');
-            const result = await createCheckoutSession({ 
-                planId: plan.id, 
-                orgName, 
-                email, 
-                password 
+            const response = await pagSeguroInstance.checkout.card.createToken({
+                useForm: true
             });
             
-            const { sessionId } = result.data as { sessionId: string };
-
-            const stripe = window.Stripe(stripePublicKey);
-            const { error } = await stripe.redirectToCheckout({ sessionId });
-
-            if (error) {
-                console.error("Stripe redirect error:", error);
-                setError(error.message || "Não foi possível redirecionar para o pagamento.");
-                setIsLoading(false);
+            if (response.error) {
+                throw new Error(response.error.message || 'Dados do cartão inválidos.');
             }
 
+            // At this point, PagSeguro has validated and tokenized the card.
+            // We now create the user and organization in our system.
+            const createOrgAndUser = httpsCallable(functions, 'createOrganizationAndUser');
+            await createOrgAndUser({
+                orgName: decodeURIComponent(orgName || ''),
+                email: decodeURIComponent(email || ''),
+                password,
+                planId,
+            });
+
+            // If the cloud function is successful, redirect to admin login
+            alert('Pagamento aprovado e conta criada com sucesso! Você já pode fazer o login.');
+            navigate('/admin/login');
+
         } catch (err: any) {
-            console.error("Cloud function error:", err);
-            setError(err.message || 'Ocorreu um erro ao iniciar o pagamento. Tente novamente.');
-            setIsLoading(false);
+            console.error("Payment/Creation error:", err);
+            setError(err.message || 'Ocorreu um erro. Verifique os dados ou tente novamente.');
+            setIsProcessing(false);
         }
     };
-
-    if (!plan || !orgName || !email || !password) {
+    
+     if (!plan || !orgName || !email || !password) {
         return (
             <div className="max-w-md mx-auto text-center bg-secondary p-8 rounded-lg">
                 <h1 className="text-2xl font-bold text-red-400">Erro</h1>
@@ -87,14 +117,14 @@ const CheckoutPage: React.FC = () => {
             </div>
         );
     }
-    
+
     return (
         <div className="max-w-lg mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8 relative">
-                 {isLoading && (
+                 {(isLoading || isProcessing) && (
                     <div className="absolute inset-0 bg-secondary bg-opacity-90 flex flex-col justify-center items-center rounded-lg z-10">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        <p className="mt-4 text-gray-300">Preparando checkout...</p>
+                        <p className="mt-4 text-gray-300">{isLoading ? 'Carregando checkout...' : 'Processando pagamento...'}</p>
                     </div>
                 )}
                 <h1 className="text-3xl font-bold text-center text-white mb-2">Finalizar Assinatura</h1>
@@ -102,28 +132,22 @@ const CheckoutPage: React.FC = () => {
 
                 {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4 text-center">{error}</p>}
                 
-                <div className="space-y-4 bg-gray-800/50 p-4 rounded-md">
-                    <div>
-                        <span className="text-sm font-medium text-gray-400">Empresa:</span>
-                        <p className="font-semibold text-gray-200">{orgName}</p>
+                <form id="pagseguro-card-form" onSubmit={handlePaymentSubmit} className="space-y-4">
+                    <div className="p-4 rounded-md bg-gray-800/50 text-gray-300">
+                        <p><strong>Empresa:</strong> {decodeURIComponent(orgName)}</p>
+                        <p><strong>E-mail:</strong> {decodeURIComponent(email)}</p>
                     </div>
-                     <div>
-                        <span className="text-sm font-medium text-gray-400">E-mail:</span>
-                        <p className="font-semibold text-gray-200">{email}</p>
-                    </div>
-                </div>
 
-                <div className="mt-6 space-y-4">
-                     <p className="text-sm text-center text-gray-400">Você será redirecionado para o ambiente seguro do Stripe para finalizar o pagamento com cartão de crédito.</p>
-                     <button 
-                        onClick={handlePaymentSubmit} 
-                        disabled={isLoading || !stripePublicKey}
+                    <div id="pagseguro-card-container" ref={cardContainerRef}></div>
+
+                    <button 
+                        type="submit" 
+                        disabled={isLoading || isProcessing || !pagSeguroInstance}
                         className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50"
                     >
                         Pagar com Cartão
                     </button>
-                </div>
-                
+                </form>
 
                 <div className="text-center mt-4">
                      <Link to="/planos" className="inline-block text-sm text-gray-400 hover:text-white">

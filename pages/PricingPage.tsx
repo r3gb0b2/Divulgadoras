@@ -17,7 +17,8 @@ export interface Plan {
     isPopular: boolean;
 }
 
-const plans: Plan[] = [
+// FIX: Export the 'plans' constant so it can be used in other components.
+export const plans: Plan[] = [
     {
         id: 'basic',
         name: 'Básico',

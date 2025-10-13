@@ -34,7 +34,7 @@ const App: React.FC = () => {
               <Route path="/admin/*" element={<AdminAuth />} />
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/planos" element={<PricingPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/checkout/:planId/:orgName/:email/:passwordB64" element={<CheckoutPage />} />
             </Routes>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">

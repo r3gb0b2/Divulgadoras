@@ -1,9 +1,9 @@
 import { firestore } from '../firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { MercadoPagoCredentials, StripeCredentials } from '../types';
+import { MercadoPagoCredentials, PagSeguroCredentials } from '../types';
 
 const CREDENTIALS_DOC_ID_MP = 'mercado_pago_credentials';
-const CREDENTIALS_DOC_ID_STRIPE = 'stripe_credentials';
+const CREDENTIALS_DOC_ID_PAGSEGURO = 'pagseguro_credentials';
 const SETTINGS_COLLECTION = 'settings';
 
 /**
@@ -45,40 +45,38 @@ export const setMercadoPagoCredentials = async (credentials: MercadoPagoCredenti
 };
 
 /**
- * Fetches the Stripe API credentials from Firestore.
+ * Fetches the PagSeguro API credentials from Firestore.
  * This should only be accessible by a superadmin.
- * @returns A promise that resolves to the StripeCredentials object.
+ * @returns A promise that resolves to the PagSeguroCredentials object.
  */
-export const getStripeCredentials = async (): Promise<StripeCredentials> => {
+export const getPagSeguroCredentials = async (): Promise<PagSeguroCredentials> => {
     try {
-        const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_STRIPE);
+        const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_PAGSEGURO);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-            return docSnap.data() as StripeCredentials;
+            return docSnap.data() as PagSeguroCredentials;
         }
         
-        return { publicKey: '', secretKey: '', basicPriceId: '', professionalPriceId: '' };
+        return { publicKey: '' };
 
     } catch (error) {
-        console.error("Error getting Stripe credentials: ", error);
-        throw new Error("Não foi possível carregar as credenciais do Stripe.");
+        console.error("Error getting PagSeguro credentials: ", error);
+        throw new Error("Não foi possível carregar as credenciais do PagSeguro.");
     }
 };
 
 /**
- * Sets or updates the Stripe API credentials in Firestore.
+ * Sets or updates the PagSeguro API credentials in Firestore.
  * This should only be accessible by a superadmin.
- * @param credentials - The credentials object containing publicKey and secretKey.
+ * @param credentials - The credentials object containing the publicKey.
  */
-export const setStripeCredentials = async (credentials: StripeCredentials): Promise<void> => {
+export const setPagSeguroCredentials = async (credentials: PagSeguroCredentials): Promise<void> => {
     try {
-        const { secretKey, ...rest } = credentials; // Exclude secretKey from being saved to Firestore
-        const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_STRIPE);
-        await setDoc(docRef, rest, { merge: true });
-    // FIX: Added curly braces to the catch block to fix a syntax error.
+        const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_PAGSEGURO);
+        await setDoc(docRef, credentials, { merge: true });
     } catch (error) {
-        console.error("Error setting Stripe credentials: ", error);
-        throw new Error("Não foi possível salvar as credenciais do Stripe.");
+        console.error("Error setting PagSeguro credentials: ", error);
+        throw new Error("Não foi possível salvar as credenciais do PagSeguro.");
     }
 };
