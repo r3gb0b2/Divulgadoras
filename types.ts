@@ -47,6 +47,12 @@ export interface AdminUserData {
   assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 
+export interface AdminApplication {
+    id: string;
+    email: string;
+    createdAt: FieldValue;
+}
+
 // Types for State/Locality Management
 export interface StateConfig {
   isActive: boolean;

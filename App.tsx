@@ -5,6 +5,7 @@ import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import RulesPage from './pages/RulesPage';
 import StateSelection from './pages/StateSelection';
+import AdminRegistrationPage from './pages/AdminRegistrationPage';
 
 const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ const App: React.FC = () => {
             <Route path="/" element={<StateSelection />} />
             <Route path="/register/:state/:campaignName?" element={<RegistrationForm />} />
             <Route path="/admin/*" element={<AdminAuth />} />
+            <Route path="/admin-register" element={<AdminRegistrationPage />} />
             <Route path="/status" element={<StatusCheck />} />
             <Route path="/rules/:state" element={<RulesPage />} />
           </Routes>

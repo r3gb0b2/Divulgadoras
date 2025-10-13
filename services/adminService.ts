@@ -1,6 +1,6 @@
 import { firestore } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
-import { AdminUserData } from '../types';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, addDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { AdminUserData, AdminApplication } from '../types';
 
 /**
  * Fetches the permission data for a specific admin user from Firestore.
@@ -89,5 +89,54 @@ export const deleteAdminUser = async (uid: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting admin user:", error);
         throw new Error("Failed to delete admin user.");
+    }
+};
+
+// --- Admin Application Service ---
+
+export const requestAdminAccess = async (email: string): Promise<void> => {
+    try {
+        // Check if email is already an admin
+        const qAdmin = query(collection(firestore, "admins"), where("email", "==", email.toLowerCase().trim()));
+        const adminSnapshot = await getDocs(qAdmin);
+        if (!adminSnapshot.empty) {
+            throw new Error("Este e-mail já pertence a um administrador.");
+        }
+        
+        // Check if there is already a pending application for this email
+        const qPending = query(collection(firestore, "admin_applications"), where("email", "==", email.toLowerCase().trim()));
+        const pendingSnapshot = await getDocs(qPending);
+        if (!pendingSnapshot.empty) {
+            throw new Error("Já existe uma solicitação pendente para este e-mail.");
+        }
+
+        await addDoc(collection(firestore, 'admin_applications'), {
+            email: email.toLowerCase().trim(),
+            createdAt: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error requesting admin access: ", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Não foi possível enviar a solicitação.");
+    }
+};
+
+export const getPendingAdminApplications = async (): Promise<AdminApplication[]> => {
+    try {
+        const q = query(collection(firestore, "admin_applications"), orderBy("createdAt", "asc"));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+    } catch (error) {
+        console.error("Error getting pending admin applications:", error);
+        throw new Error("Falha ao buscar solicitações de acesso.");
+    }
+}
+
+export const deleteAdminApplication = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "admin_applications", id));
+    } catch (error) {
+        console.error("Error deleting admin application:", error);
+        throw new Error("Falha ao remover solicitação de acesso.");
     }
 };

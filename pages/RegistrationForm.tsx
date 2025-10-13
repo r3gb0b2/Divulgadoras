@@ -296,7 +296,20 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 }
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
-    if (props.type !== 'date') {
+    if (props.type === 'date') {
+        const [isFocused, setIsFocused] = useState(false);
+        // The input type is 'date' if it has focus or a value. Otherwise, it's 'text' to show the placeholder.
+        const inputType = isFocused || props.value ? 'date' : 'text';
+
+        const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+            setIsFocused(true);
+            if (props.onFocus) props.onFocus(e);
+        };
+        const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+            setIsFocused(false);
+            if (props.onBlur) props.onBlur(e);
+        };
+
         return (
             <div className="relative">
                 <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -304,41 +317,17 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
                 </span>
                 <input
                     {...props}
+                    type={inputType}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
                     className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                    style={{ colorScheme: 'dark' }}
                 />
             </div>
         );
     }
 
-    // Special handling for date input to show placeholder correctly and reliably.
-    const [inputType, setInputType] = useState('text');
-
-    useEffect(() => {
-        // If the component receives a value (e.g., from form state), ensure the type is 'date'
-        // so the value is displayed, not the placeholder.
-        if (props.value) {
-            setInputType('date');
-        }
-    }, [props.value]);
-
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        // Always switch to 'date' on focus to show the picker.
-        setInputType('date');
-        if (props.onFocus) {
-            props.onFocus(e);
-        }
-    };
-    
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        // If the input is empty on blur, switch back to 'text' to show the placeholder.
-        if (!e.target.value) {
-            setInputType('text');
-        }
-        if (props.onBlur) {
-            props.onBlur(e);
-        }
-    };
-
+    // Default implementation for other input types
     return (
         <div className="relative">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -346,15 +335,10 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
-                type={inputType}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                style={{ colorScheme: 'dark' }}
             />
         </div>
     );
 };
-
 
 export default RegistrationFlowPage;

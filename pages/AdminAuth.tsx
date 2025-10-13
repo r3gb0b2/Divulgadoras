@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
+import { Link, Routes, Route } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import AdminPanel from './AdminPanel';
 import { MailIcon } from '../components/Icons';
 import { AdminAuthProvider, useAdminAuth } from '../contexts/AdminAuthContext';
-import { Routes, Route } from 'react-router-dom';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import ManageUsersPage from './ManageUsersPage';
@@ -76,6 +76,12 @@ const LoginForm: React.FC = () => {
                     >
                         {isLoading ? 'Entrando...' : 'Entrar'}
                     </button>
+                    <p className="text-sm text-gray-400 mt-4">
+                        Não tem uma conta?{' '}
+                        <Link to="/admin-register" className="font-medium text-primary hover:text-primary-dark">
+                            Solicite acesso
+                        </Link>
+                    </p>
                 </form>
             </div>
         </div>
