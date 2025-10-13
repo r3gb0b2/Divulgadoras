@@ -196,7 +196,7 @@ const ManageUsersModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-6 flex-grow min-h-0">
+                <div className="flex flex-col md:flex-row gap-6 flex-grow min-h-0 overflow-y-auto">
                     {/* Form Section */}
                     <form onSubmit={handleSubmit} className="w-full md:w-1/3 border border-gray-700 p-4 rounded-lg flex flex-col space-y-4">
                         <h3 className="text-xl font-semibold">{isEditing ? 'Editar Usuário' : 'Adicionar Usuário'}</h3>
@@ -274,14 +274,14 @@ const ManageUsersModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({
                          {isLoading && <p>Carregando...</p>}
                          <div className="space-y-2">
                             {admins.map(admin => (
-                                <div key={admin.uid} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-md">
-                                    <div>
-                                        <p className="font-semibold">{admin.email}</p>
-                                        <p className="text-sm text-gray-400">
+                                <div key={admin.uid} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-700/50 rounded-md gap-2">
+                                    <div className="flex-grow">
+                                        <p className="font-semibold break-all">{admin.email}</p>
+                                        <p className="text-sm text-gray-400 break-words">
                                             <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
                                         </p>
                                     </div>
-                                    <div className="flex gap-3">
+                                    <div className="flex gap-3 self-end sm:self-center flex-shrink-0">
                                         <button onClick={() => handleEditClick(admin)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                         <button onClick={() => handleDelete(admin)} className="text-red-400 hover:text-red-300">Excluir</button>
                                     </div>

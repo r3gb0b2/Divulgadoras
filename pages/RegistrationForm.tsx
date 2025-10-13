@@ -297,24 +297,6 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
     const isDate = props.type === 'date';
-    // Start as a 'text' input to show the placeholder, switch to 'date' on focus.
-    const [inputType, setInputType] = useState(isDate ? 'text' : props.type);
-
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-        if (isDate) {
-            setInputType('date');
-        }
-        if (props.onFocus) props.onFocus(e);
-    };
-
-    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        // If the user clicks away without selecting a date, switch back to text
-        // to show the placeholder again.
-        if (isDate && !e.currentTarget.value) {
-            setInputType('text');
-        }
-        if (props.onBlur) props.onBlur(e);
-    };
 
     return (
         <div className="relative">
@@ -323,9 +305,6 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
-                type={inputType}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                 // This hint helps mobile browsers render the date picker UI correctly on a dark theme.
                 style={isDate ? { colorScheme: 'dark' } : {}}
