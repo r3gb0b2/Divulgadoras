@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getOrganizations } from '../services/organizationService';
+import { getPublicOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
 
 interface PublicHomeProps {
@@ -18,7 +18,7 @@ const PublicHome: React.FC<PublicHomeProps> = ({ promptForOrg }) => {
       setIsLoading(true);
       setError(null);
       try {
-        const orgs = await getOrganizations();
+        const orgs = await getPublicOrganizations();
         setOrganizations(orgs);
       } catch (err: any) {
         setError("Não foi possível carregar a lista de organizações.");

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getStatesConfig } from '../services/settingsService';
 import { getOrganization } from '../services/organizationService';
 import { states } from '../constants/states';
 import { Organization } from '../types';
@@ -23,19 +22,24 @@ const StateSelection: React.FC = () => {
             setIsLoading(true);
             setError(null);
             try {
-                const [config, orgData] = await Promise.all([
-                    getStatesConfig(),
-                    getOrganization(organizationId)
-                ]);
+                const orgData = await getOrganization(organizationId);
 
                 if (!orgData) {
                     throw new Error("Organização não encontrada.");
                 }
+
+                if (orgData.status === 'inactive') {
+                    throw new Error("Esta organização está temporariamente inativa e não pode receber novos cadastros.");
+                }
+
                 setOrganization(orgData);
+
+                // If org has assigned states, use them. Otherwise, show all.
+                const statesToDisplay = orgData.assignedStates && orgData.assignedStates.length > 0
+                    ? states.filter(s => orgData.assignedStates.includes(s.abbr))
+                    : states; // Fallback to all states if none are assigned
                 
-                const available = states
-                    .filter(state => config[state.abbr]?.isActive ?? true)
-                    .sort((a, b) => a.name.localeCompare(b.name));
+                const available = statesToDisplay.sort((a, b) => a.name.localeCompare(b.name));
                 
                 setActiveStates(available);
 
@@ -58,7 +62,7 @@ const StateSelection: React.FC = () => {
     }
     
     if (error) {
-        return <p className="text-red-400 text-center">{error}</p>;
+        return <p className="text-red-400 text-center bg-red-900/50 p-4 rounded-md">{error}</p>;
     }
 
     return (
@@ -83,7 +87,7 @@ const StateSelection: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <p className="text-gray-400">Nenhuma localidade ativa para cadastro no momento.</p>
+                    <p className="text-gray-400">Nenhuma localidade ativa para cadastro nesta organização no momento.</p>
                 )}
             </div>
         </div>

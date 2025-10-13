@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, KeyIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
     const handleLogout = async () => {
@@ -38,10 +38,10 @@ const SuperAdminDashboard: React.FC = () => {
 
                     <Link to="/admin/organizations" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
-                            <UsersIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Organizações</h2>
+                            <BuildingOfficeIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Organizações</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Gerenciar organizações e seus planos de assinatura.</p>
+                        <p className="mt-2 text-gray-400">Ativar, ocultar, excluir e gerenciar os planos das organizações clientes.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                     

@@ -68,6 +68,9 @@ export interface Organization {
   name: string;
   planId: 'basic' | 'professional';
   createdAt: Timestamp | object;
+  status: 'active' | 'inactive';
+  isPublic: boolean;
+  assignedStates: string[];
 }
 
 export interface AdminApplication {

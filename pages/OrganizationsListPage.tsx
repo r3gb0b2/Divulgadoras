@@ -47,6 +47,8 @@ const OrganizationsListPage: React.FC = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Organização</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Proprietário (Email)</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Plano</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Visibilidade</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
@@ -58,6 +60,16 @@ const OrganizationsListPage: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <span className={`capitalize px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${org.planId === 'professional' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'}`}>
                                             {org.planId}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                         <span className={`capitalize px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${org.status === 'active' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                                            {org.status === 'active' ? 'Ativa' : 'Inativa'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                         <span className={`capitalize px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${org.isPublic ? 'bg-sky-900/50 text-sky-300' : 'bg-gray-600 text-gray-300'}`}>
+                                            {org.isPublic ? 'Pública' : 'Oculta'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
