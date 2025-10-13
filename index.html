@@ -17,24 +17,25 @@
     }
     </script>
     <script src="https://sdk.mercadopago.com/js/v2"></script>
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                DEFAULT: '#e83a93',
-                dark: '#c82a7a',
-              },
-              secondary: '#1a1a2e',
-              dark: '#16213e',
-            }
-          }
-        }
+    <link rel="stylesheet" href="https://aistudiocdn.com/styles/tailwind.css">
+    <style>
+      :root {
+        --color-primary: #e83a93;
+        --color-primary-dark: #c82a7a;
+        --color-secondary: #1a1a2e;
+        --color-dark: #16213e;
       }
-    </script>
+      .bg-primary { background-color: var(--color-primary); }
+      .bg-primary-dark { background-color: var(--color-primary-dark); }
+      .text-primary { color: var(--color-primary); }
+      .hover\:bg-primary-dark:hover { background-color: var(--color-primary-dark); }
+      .hover\:text-primary:hover { color: var(--color-primary); }
+      .focus\:ring-primary:focus { --tw-ring-color: var(--color-primary); }
+      .focus\:border-primary:focus { border-color: var(--color-primary); }
+      .bg-secondary { background-color: var(--color-secondary); }
+      .bg-dark { background-color: var(--color-dark); }
+      .border-primary { border-color: var(--color-primary); }
+    </style>
 </head>
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

@@ -1,22 +1,121 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { signUpAndCreateOrganization } from '../services/adminService';
+import { getMercadoPagoCredentials } from '../services/credentialsService';
 import { Plan } from './PricingPage';
-import { MercadoPagoIcon } from '../components/Icons';
+
+// This is a global variable from the Mercado Pago script
+declare global {
+    interface Window {
+        MercadoPago: any;
+    }
+}
 
 const MockCheckoutPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { plan, orgName, email, password } = (location.state as { plan: Plan; orgName: string; email: string; password: string }) || {};
 
-    const [isLoading, setIsLoading] = useState(false);
+    const cardPaymentBrickController = useRef<any>(null);
+    const [isLoading, setIsLoading] = useState(true); // Start loading to initialize MP
+    const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        const initializeMercadoPago = async () => {
+            setError('');
+            try {
+                const creds = await getMercadoPagoCredentials();
+                if (!creds.publicKey) {
+                    throw new Error("A chave pública do Mercado Pago não foi configurada pelo administrador.");
+                }
+
+                const mp = new window.MercadoPago(creds.publicKey);
+
+                const bricksBuilder = mp.bricks();
+
+                const renderCardPaymentBrick = async (bricksBuilder: any) => {
+                    const settings = {
+                        initialization: {
+                            amount: plan.price,
+                            payer: {
+                                email: email,
+                            },
+                        },
+                        customization: {
+                            visual: {
+                                style: {
+                                    theme: 'dark',
+                                }
+                            }
+                        },
+                        callbacks: {
+                            onReady: () => {
+                                setIsLoading(false);
+                            },
+                            onSubmit: async (cardFormData: any) => {
+                                // This is where the real payment processing would happen.
+                                // The frontend receives a tokenized card and sends it to the backend.
+                                // The backend uses the Access Token to create the payment.
+                                // Here, we will SIMULATE this by directly calling our account creation function.
+                                setIsProcessing(true);
+                                setError('');
+                                try {
+                                    // SIMULATION: In a real app, you would send cardFormData
+                                    // to your backend, process the payment, and only then create the organization.
+                                    console.log('Simulating payment processing with data:', cardFormData);
+                                    
+                                    await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
+                                    
+                                    alert('Pagamento processado e organização criada com sucesso! Você será redirecionado para a tela de login.');
+                                    navigate('/admin/login');
+
+                                } catch (err: any) {
+                                    setError(err.message || 'Ocorreu um erro ao criar sua conta após o pagamento. Nenhum valor foi cobrado.');
+                                    setIsProcessing(false);
+                                }
+                            },
+                            onError: (error: any) => {
+                                console.error(error);
+                                setError("Ocorreu um erro com o formulário de pagamento. Verifique seus dados.");
+                                setIsLoading(false);
+                                setIsProcessing(false);
+                            },
+                        },
+                    };
+                    cardPaymentBrickController.current = await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', settings);
+                };
+                
+                await renderCardPaymentBrick(bricksBuilder);
+
+            } catch (err: any) {
+                setError(err.message || "Não foi possível iniciar o checkout.");
+                setIsLoading(false);
+            }
+        };
+
+        if (plan) {
+            initializeMercadoPago();
+        }
+
+        // Cleanup function to unmount the brick
+        return () => {
+            if (cardPaymentBrickController.current) {
+                try {
+                  cardPaymentBrickController.current.unmount();
+                } catch (e) {
+                  console.error("Error unmounting brick: ", e);
+                }
+            }
+        }
+    }, [plan, email, password, orgName, navigate]);
     
     if (!plan || !orgName || !email || !password) {
+        // This handles cases where the user navigates directly to /checkout
         return (
             <div className="max-w-md mx-auto text-center bg-secondary p-8 rounded-lg">
                 <h1 className="text-2xl font-bold text-red-400">Erro</h1>
-                <p className="text-gray-300 mt-4">Informações do plano ou da conta ausentes. Por favor, volte e tente novamente.</p>
+                <p className="text-gray-300 mt-4">Informações da assinatura ausentes. Por favor, inicie o processo pela página de planos.</p>
                 <Link to="/planos" className="inline-block mt-6 px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
                     Voltar aos Planos
                 </Link>
@@ -24,66 +123,25 @@ const MockCheckoutPage: React.FC = () => {
         );
     }
     
-    const handleConfirmPayment = async () => {
-        setIsLoading(true);
-        setError('');
-        try {
-            await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
-            alert('Pagamento confirmado e organização criada com sucesso! Você será redirecionado para a tela de login.');
-            navigate('/admin/login');
-        } catch (err: any) {
-            setError(err.message || 'Ocorreu um erro ao processar seu cadastro. Nenhum valor foi cobrado.');
-            setIsLoading(false);
-        }
-    };
-    
     return (
         <div className="max-w-lg mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8 relative">
-                {isLoading && (
+                 {(isLoading || isProcessing) && (
                     <div className="absolute inset-0 bg-secondary bg-opacity-80 flex flex-col justify-center items-center rounded-lg z-10">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        <p className="mt-4 text-gray-300">Finalizando seu cadastro...</p>
+                        <p className="mt-4 text-gray-300">{isProcessing ? 'Processando pagamento...' : 'Carregando checkout...'}</p>
                     </div>
                 )}
-                <h1 className="text-3xl font-bold text-center text-white mb-4">Finalizar Assinatura</h1>
-                <p className="text-center text-gray-400 mb-6">Revise os detalhes e confirme o pagamento para ativar sua conta.</p>
+                <h1 className="text-3xl font-bold text-center text-white mb-2">Pagamento Seguro</h1>
+                <p className="text-center text-gray-400 mb-6">Plano {plan.name} - {plan.priceFormatted}/mês</p>
 
-                <div className="space-y-4 mb-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-300">Organização:</span>
-                        <span className="font-semibold text-white">{orgName}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-300">E-mail de Acesso:</span>
-                        <span className="font-semibold text-white">{email}</span>
-                    </div>
-                    <div className="border-t border-gray-700 my-2"></div>
-                    <div className="flex justify-between items-center">
-                        <span className="text-gray-300">Plano Selecionado:</span>
-                        <span className="font-semibold text-primary">{plan.name}</span>
-                    </div>
-                     <div className="flex justify-between items-center text-2xl">
-                        <span className="text-gray-300">Total:</span>
-                        <span className="font-bold text-white">{plan.priceFormatted}<span className="text-base font-medium text-gray-400">/mês</span></span>
-                    </div>
-                </div>
-                
                 {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4 text-center">{error}</p>}
                 
-                <div className="text-center">
-                    <p className="text-sm text-gray-400 mb-4">
-                        Esta é uma página de demonstração. Clicar no botão abaixo irá simular um pagamento bem-sucedido e criar sua conta.
-                    </p>
-                    <button
-                        onClick={handleConfirmPayment}
-                        disabled={isLoading}
-                        className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:cursor-not-allowed"
-                    >
-                         <MercadoPagoIcon className="mr-3" />
-                        Confirmar Pagamento e Criar Conta
-                    </button>
-                    <Link to="/planos" className="inline-block mt-4 text-sm text-gray-400 hover:text-white">
+                {/* The Mercado Pago Brick will be rendered here */}
+                <div id="cardPaymentBrick_container"></div>
+
+                <div className="text-center mt-4">
+                     <Link to="/planos" className="inline-block text-sm text-gray-400 hover:text-white">
                         Cancelar e voltar
                     </Link>
                 </div>
