@@ -44,7 +44,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
 
   // State for campaign form
-  const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true });
+  const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true, whatsappLink: '' });
   
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
@@ -142,10 +142,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
             name: campaignForm.name || '',
             description: campaignForm.description || '',
             isActive: campaignForm.isActive !== false,
+            whatsappLink: campaignForm.whatsappLink || '',
             stateAbbr
         });
       }
-      setCampaignForm({ name: '', description: '', isActive: true }); // Reset form
+      setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '' }); // Reset form
       await fetchData(); // Refresh
     } catch (err) {
       alert('Falha ao salvar evento/gênero.');
@@ -229,16 +230,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                               <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
                             </label>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Link do Grupo WhatsApp</label>
-                                <input 
-                                    type="text"
-                                    value={stateConfig.whatsappLink || ''}
-                                    onChange={(e) => handleConfigChange('whatsappLink', e.target.value)}
-                                    placeholder="https://chat.whatsapp.com/..."
-                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
-                                />
-                            </div>
-                            <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Regras da Localidade</label>
                                 <textarea 
                                     value={stateConfig.rules || ''}
@@ -264,6 +255,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                     <span className={`px-2 py-0.5 text-xs rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span>
                                 </div>
                                 <p className="text-gray-400 text-xs">{c.description}</p>
+                                {c.whatsappLink && <p className="text-gray-400 text-xs truncate">Link: {c.whatsappLink}</p>}
                                 <div className="flex gap-2 justify-end mt-1">
                                     <button onClick={() => setCampaignForm(c)} className="text-indigo-400 hover:underline text-xs">Editar</button>
                                     <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>
@@ -275,10 +267,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
                         <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                         <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                        <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                         <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
                         <div className="flex gap-2">
                            <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar'}</button>
-                           {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
+                           {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
                         </div>
                     </form>
                 </div>

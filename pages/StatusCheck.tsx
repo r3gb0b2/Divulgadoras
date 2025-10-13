@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
-import { getStateConfig } from '../services/settingsService';
-import { Promoter, StateConfig } from '../types';
+import { getCampaigns } from '../services/settingsService';
+import { Promoter } from '../types';
 import { WhatsAppIcon } from '../components/Icons';
 
 const StatusCheck: React.FC = () => {
     const [email, setEmail] = useState('');
     const [promoter, setPromoter] = useState<Promoter | null>(null);
-    const [currentStateConfig, setCurrentStateConfig] = useState<StateConfig | null>(null);
+    const [whatsappGroupLink, setWhatsappGroupLink] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
@@ -25,14 +25,17 @@ const StatusCheck: React.FC = () => {
         setIsLoading(true);
         setError(null);
         setPromoter(null);
-        setCurrentStateConfig(null);
+        setWhatsappGroupLink('');
         setSearched(true);
         try {
             const result = await checkPromoterStatus(email);
             setPromoter(result);
-            if (result && result.status === 'approved') {
-                const config = await getStateConfig(result.state);
-                setCurrentStateConfig(config);
+            if (result && result.status === 'approved' && result.campaignName) {
+                const campaigns = await getCampaigns(result.state);
+                const campaign = campaigns.find(c => c.name === result.campaignName);
+                if (campaign) {
+                    setWhatsappGroupLink(campaign.whatsappLink);
+                }
             }
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
@@ -95,8 +98,6 @@ const StatusCheck: React.FC = () => {
             ? promoter.rejectionReason
             : statusInfo.message;
         
-        const whatsappGroupLink = currentStateConfig?.whatsappLink || '#';
-
         return (
             <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
                 <p className="font-bold">{statusInfo.title}</p>
@@ -129,10 +130,10 @@ const StatusCheck: React.FC = () => {
                                 href={whatsappGroupLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!currentStateConfig?.whatsappLink ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!whatsappGroupLink ? 'opacity-50 cursor-not-allowed' : ''}`}
                            >
                                 <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                                {currentStateConfig?.whatsappLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
+                                {whatsappGroupLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
                            </a>
                         )}
                     </div>

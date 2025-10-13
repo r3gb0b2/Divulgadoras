@@ -51,7 +51,6 @@ export interface AdminUserData {
 export interface StateConfig {
   isActive: boolean;
   rules: string;
-  whatsappLink: string;
 }
 
 export interface StatesConfig {
@@ -64,4 +63,5 @@ export interface Campaign {
   description: string;
   stateAbbr: string;
   isActive: boolean;
+  whatsappLink: string;
 }

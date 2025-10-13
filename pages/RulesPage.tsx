@@ -55,21 +55,6 @@ const RulesPage: React.FC = () => {
             className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none space-y-6"
             dangerouslySetInnerHTML={{ __html: config.rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para esta localidade.</p>' }}
           />
-
-          {config.whatsappLink && (
-            <div className="mt-8 pt-6 border-t border-gray-700 text-center">
-              <p className="text-sm text-gray-400 mb-4">Ao entrar no grupo, você concorda com todas as regras acima.</p>
-              <a
-                  href={config.whatsappLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors text-lg"
-              >
-                  <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                  Entrar no Grupo
-              </a>
-            </div>
-          )}
         </>
       );
     }

@@ -29,7 +29,6 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
             const defaultConfig: StateConfig = {
                 isActive: true,
                 rules: '',
-                whatsappLink: '',
             };
 
             const dbStateConfig = dbConfig[stateAbbr] as Partial<StateConfig> | boolean | undefined;
