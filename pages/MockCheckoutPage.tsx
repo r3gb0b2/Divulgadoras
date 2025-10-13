@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { signUpAndCreateOrganization } from '../services/adminService';
 import { getMercadoPagoCredentials } from '../services/credentialsService';
+import { functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { Plan } from './PricingPage';
 
 // This is a global variable from the Mercado Pago script
@@ -57,11 +58,7 @@ const CheckoutPage: React.FC = () => {
                                 setIsProcessing(true);
                                 setError('');
                                 try {
-                                    const creds = await getMercadoPagoCredentials();
-                                    if (!creds.accessToken) {
-                                        throw new Error("O Access Token do Mercado Pago não foi configurado pelo administrador. Pagamento não pode ser processado.");
-                                    }
-
+                                    // Prepare data for the cloud function
                                     const paymentData = {
                                         transaction_amount: cardFormData.transaction_amount,
                                         token: cardFormData.token,
@@ -74,30 +71,27 @@ const CheckoutPage: React.FC = () => {
                                         }
                                     };
 
-                                    const response = await fetch('https://api.mercadopago.com/v1/payments', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${creds.accessToken}`
-                                        },
-                                        body: JSON.stringify(paymentData)
-                                    });
+                                    const newUser = {
+                                        email,
+                                        password,
+                                        orgName,
+                                        planId: plan.id,
+                                    };
 
-                                    const result = await response.json();
+                                    const processPayment = httpsCallable(functions, 'processMercadoPagoPayment');
+                                    const result = await processPayment({ paymentData, newUser });
+                                    
+                                    const data = result.data as { success: boolean; message?: string };
 
-                                    if (!response.ok) {
-                                        const errorMessage = result.cause?.[0]?.description || result.message || 'O pagamento foi recusado pelo processador.';
-                                        throw new Error(errorMessage);
-                                    }
-
-                                    if (result.status === 'approved' || result.status === 'in_process') {
-                                        await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
+                                    if (data.success) {
                                         alert('Pagamento processado e organização criada com sucesso! Você será redirecionado para a tela de login.');
                                         navigate('/admin/login');
                                     } else {
-                                        throw new Error(`O pagamento não foi aprovado. Status: ${result.status_detail}`);
+                                        throw new Error(data.message || 'Ocorreu um erro desconhecido durante o processo.');
                                     }
+
                                 } catch (err: any) {
+                                    // Firebase functions throw HttpsError which has a `message` property
                                     setError(err.message || 'Ocorreu um erro ao processar o pagamento. Nenhum valor foi cobrado.');
                                     setIsProcessing(false);
                                 }

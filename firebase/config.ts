@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 
 // TODO: Add your own Firebase configuration from your Firebase console
 // ATENÇÃO: Substitua os valores abaixo pelas credenciais do SEU projeto no Firebase
@@ -28,3 +29,6 @@ export const storage = getStorage(app);
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
+
+// Initialize Firebase Functions and get a reference to the service
+export const functions = getFunctions(app, 'southamerica-east1');
