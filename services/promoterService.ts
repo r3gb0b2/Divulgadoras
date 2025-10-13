@@ -114,8 +114,7 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter[] | n
     try {
         const q = query(
             collection(firestore, "promoters"), 
-            where("email", "==", email.toLowerCase().trim()),
-            orderBy("createdAt", "desc")
+            where("email", "==", email.toLowerCase().trim())
         );
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
@@ -126,6 +125,14 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter[] | n
         querySnapshot.forEach((doc) => {
             promoters.push({ id: doc.id, ...doc.data() } as Promoter);
         });
+
+        // Sort manually to avoid composite index requirement
+        promoters.sort((a, b) => {
+            const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+            const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+            return timeB - timeA; // Descending
+        });
+
         return promoters;
     } catch (error) {
         console.error("Error checking promoter status: ", error);
