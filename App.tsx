@@ -3,7 +3,6 @@ import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
-import RulesPage from './pages/RulesPage';
 import StateSelection from './pages/StateSelection';
 import AdminRegistrationPage from './pages/AdminRegistrationPage';
 
@@ -28,7 +27,6 @@ const App: React.FC = () => {
             <Route path="/admin/*" element={<AdminAuth />} />
             <Route path="/admin-register" element={<AdminRegistrationPage />} />
             <Route path="/status" element={<StatusCheck />} />
-            <Route path="/rules/:state/:campaignName" element={<RulesPage />} />
           </Routes>
         </main>
         <footer className="text-center py-4 text-gray-400 text-sm">

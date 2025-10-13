@@ -1,32 +1,96 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
-import { Promoter } from '../types';
+import { Promoter, Campaign } from '../types';
 import { WhatsAppIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
-// This new component will handle displaying the status for a single registration
+// Modal Component defined within the same file for simplicity
+interface RulesModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  rules: string;
+  campaignName: string;
+}
+
+const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaignName }) => {
+  if (!isOpen) {
+    return null;
+  }
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+    >
+      <div
+        className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the modal
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-white">Regras - {campaignName}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
+        </div>
+
+        <div className="flex-grow overflow-y-auto pr-2 space-y-4">
+           <div
+             className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none"
+             dangerouslySetInnerHTML={{ __html: rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para este evento.</p>' }}
+           />
+        </div>
+
+        <div className="mt-6 flex justify-end border-t border-gray-700 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// This component displays the status for a single registration
 const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
-    const [whatsappGroupLink, setWhatsappGroupLink] = useState<string>('');
+    const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [cardError, setCardError] = useState<string | null>(null);
+    const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
     useEffect(() => {
-        const fetchCampaignLink = async () => {
+        const fetchCampaignData = async () => {
             if (promoter && promoter.status === 'approved' && promoter.campaignName) {
                 try {
                     const campaigns = await getCampaigns(promoter.state);
-                    const campaign = campaigns.find(c => c.name === promoter.campaignName);
-                    if (campaign) {
-                        setWhatsappGroupLink(campaign.whatsappLink);
+                    const foundCampaign = campaigns.find(c => c.name === promoter.campaignName);
+                    if (foundCampaign) {
+                        setCampaign(foundCampaign);
                     }
                 } catch (e) {
-                    console.error("Failed to fetch campaign link", e);
+                    console.error("Failed to fetch campaign data", e);
                 }
             }
         };
-        fetchCampaignLink();
+        fetchCampaignData();
     }, [promoter]);
 
     const handleAcceptRules = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,64 +138,65 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
         : statusInfo.message;
 
     return (
-        <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
-            <div className="flex justify-between items-start">
-                <div>
-                    <p className="font-bold">{statusInfo.title}</p>
-                    {promoter.campaignName && <p className="text-sm font-semibold -mt-1">{promoter.campaignName}</p>}
+        <>
+            <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="font-bold">{statusInfo.title}</p>
+                        {promoter.campaignName && <p className="text-sm font-semibold -mt-1">{promoter.campaignName}</p>}
+                    </div>
+                    <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">{stateMap[promoter.state.toUpperCase()] || promoter.state}</div>
                 </div>
-                <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">{stateMap[promoter.state.toUpperCase()] || promoter.state}</div>
-            </div>
 
-            <p className="mt-2 whitespace-pre-wrap">{finalMessage}</p>
-            {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
-            
-            {promoter.status === 'approved' && (
-                <div className="mt-4 space-y-4">
-                    {promoter.campaignName ? (
-                        <Link
-                            to={`/rules/${promoter.state}/${encodeURIComponent(promoter.campaignName)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
+                <p className="mt-2 whitespace-pre-wrap">{finalMessage}</p>
+                {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
+                
+                {promoter.status === 'approved' && (
+                    <div className="mt-4 space-y-4">
+                        <button
+                            onClick={() => setIsRulesModalOpen(true)}
+                            disabled={!campaign}
+                            className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed"
                         >
                             Ver as Regras (Obrigatório)
-                        </Link>
-                    ) : (
-                        <button
-                            disabled
-                            className="inline-block w-full text-center bg-gray-600 text-white font-bold py-3 px-4 rounded cursor-not-allowed"
-                        >
-                            Regras Indisponíveis (Evento não especificado)
                         </button>
-                    )}
-                    
-                    <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
-                        <label className="flex items-center cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={hasAcceptedRules}
-                                onChange={handleAcceptRules}
-                                className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
-                            />
-                            <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
-                        </label>
-                    </div>
+                        
+                        <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={hasAcceptedRules}
+                                    onChange={handleAcceptRules}
+                                    className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
+                                />
+                                <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
+                            </label>
+                        </div>
 
-                    {hasAcceptedRules && (
-                       <a
-                            href={whatsappGroupLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!whatsappGroupLink ? 'opacity-50 cursor-not-allowed' : ''}`}
-                       >
-                            <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                            {whatsappGroupLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
-                       </a>
-                    )}
-                </div>
+                        {hasAcceptedRules && (
+                           <a
+                                href={campaign?.whatsappLink || ''}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!campaign?.whatsappLink ? 'opacity-50 cursor-not-allowed' : ''}`}
+                           >
+                                <WhatsAppIcon className="w-6 h-6 mr-2"/>
+                                {campaign?.whatsappLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
+                           </a>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {campaign && (
+                <RulesModal
+                    isOpen={isRulesModalOpen}
+                    onClose={() => setIsRulesModalOpen(false)}
+                    rules={campaign.rules}
+                    campaignName={campaign.name}
+                />
             )}
-        </div>
+        </>
     );
 };
 
