@@ -297,16 +297,26 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
     if (props.type === 'date') {
-        const [isFocused, setIsFocused] = useState(false);
-        // The input type is 'date' if it has focus or a value. Otherwise, it's 'text' to show the placeholder.
-        const inputType = isFocused || props.value ? 'date' : 'text';
+        const [inputType, setInputType] = useState('text');
+
+        // This effect ensures that if the component receives a value prop (e.g., from form state),
+        // it correctly displays as a date input.
+        useEffect(() => {
+            if (props.value) {
+                setInputType('date');
+            }
+        }, [props.value]);
 
         const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-            setIsFocused(true);
+            setInputType('date');
             if (props.onFocus) props.onFocus(e);
         };
+
         const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-            setIsFocused(false);
+            // If the field is empty on blur, switch back to text to show the placeholder.
+            if (!e.target.value) {
+                setInputType('text');
+            }
             if (props.onBlur) props.onBlur(e);
         };
 
