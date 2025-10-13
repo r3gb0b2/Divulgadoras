@@ -112,13 +112,17 @@ export const deletePromoter = async (id: string): Promise<void> => {
     }
 };
 
-export const checkPromoterStatus = async (email: string, organizationId: string): Promise<Promoter[] | null> => {
+export const checkPromoterStatus = async (email: string, organizationId?: string): Promise<Promoter[] | null> => {
     try {
-        const q = query(
+        let q = query(
             collection(firestore, "promoters"), 
-            where("email", "==", email.toLowerCase().trim()),
-            where("organizationId", "==", organizationId)
+            where("email", "==", email.toLowerCase().trim())
         );
+
+        if (organizationId) {
+            q = query(q, where("organizationId", "==", organizationId));
+        }
+
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
             return null;

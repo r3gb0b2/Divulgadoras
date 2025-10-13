@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
-import { Promoter, Campaign } from '../types';
+import { Promoter, Campaign, Organization } from '../types';
 import { WhatsAppIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { getOrganizations } from '../services/organizationService';
 
 // Modal Component defined within the same file for simplicity
 interface RulesModalProps {
@@ -71,7 +71,7 @@ const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaig
 
 
 // This component displays the status for a single registration
-const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
+const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = ({ promoter, organizationName }) => {
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [cardError, setCardError] = useState<string | null>(null);
@@ -144,7 +144,8 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
                 <div className="flex justify-between items-start">
                     <div>
                         <p className="font-bold">{statusInfo.title}</p>
-                        {promoter.campaignName && <p className="text-sm font-semibold -mt-1">{promoter.campaignName}</p>}
+                        <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
+                        {promoter.campaignName && <p className="text-xs text-primary">{promoter.campaignName}</p>}
                     </div>
                     <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">{stateMap[promoter.state.toUpperCase()] || promoter.state}</div>
                 </div>
@@ -202,29 +203,40 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
 };
 
 const StatusCheck: React.FC = () => {
-    const { organizationId } = useParams<{ organizationId: string }>();
     const [email, setEmail] = useState('');
     const [promoters, setPromoters] = useState<Promoter[] | null>(null);
+    const [orgMap, setOrgMap] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     
     useEffect(() => {
-        if (!organizationId) {
-            setError("Nenhuma organização foi selecionada. Volte à página inicial para escolher uma.");
-        }
-    }, [organizationId]);
+        // Fetch all organizations to map IDs to names
+        const fetchOrgs = async () => {
+            try {
+                const orgs = await getOrganizations();
+                const map = orgs.reduce((acc, org) => {
+                    acc[org.id] = org.name;
+                    return acc;
+                }, {} as Record<string, string>);
+                setOrgMap(map);
+            } catch (e) {
+                console.error("Failed to fetch organizations for mapping", e);
+                setError("Não foi possível carregar dados das organizações.");
+            }
+        };
+        fetchOrgs();
+    }, []);
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!organizationId) return;
-
         setIsLoading(true);
         setError(null);
         setPromoters(null);
         setSearched(true);
         try {
-            const result = await checkPromoterStatus(email, organizationId);
+            // Global check, without organizationId
+            const result = await checkPromoterStatus(email);
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
@@ -239,12 +251,12 @@ const StatusCheck: React.FC = () => {
         }
 
         if (!promoters) {
-            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail nesta organização.</p>;
+            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail.</p>;
         }
 
         return (
             <div className="space-y-4">
-                {promoters.map(p => <StatusCard key={p.id} promoter={p} />)}
+                {promoters.map(p => <StatusCard key={p.id} promoter={p} organizationName={orgMap[p.organizationId] || 'Organização Desconhecida'} />)}
             </div>
         );
     };
@@ -253,7 +265,7 @@ const StatusCheck: React.FC = () => {
         <div className="max-w-2xl mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Verificar Status do Cadastro</h1>
-                <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status.</p>
+                <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status em todas as organizações.</p>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <input
@@ -263,11 +275,10 @@ const StatusCheck: React.FC = () => {
                         placeholder="Seu e-mail de cadastro"
                         className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         required
-                        disabled={!organizationId}
                     />
                      <button
                         type="submit"
-                        disabled={isLoading || !organizationId}
+                        disabled={isLoading}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                     >
                         {isLoading ? 'Verificando...' : 'Verificar'}

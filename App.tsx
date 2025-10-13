@@ -30,10 +30,9 @@ const App: React.FC = () => {
               <Route path="/" element={<PublicHome />} />
               <Route path="/:organizationId" element={<StateSelection />} />
               <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
-              <Route path="/:organizationId/status" element={<StatusCheck />} />
               
               <Route path="/admin/*" element={<AdminAuth />} />
-              <Route path="/status" element={<PublicHome promptForOrg={true} />} />
+              <Route path="/status" element={<StatusCheck />} />
               <Route path="/planos" element={<PricingPage />} />
               <Route path="/checkout" element={<MockCheckoutPage />} />
             </Routes>
