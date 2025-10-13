@@ -6,7 +6,6 @@ import { StripeCredentials } from '../types';
 const StripeSettingsPage: React.FC = () => {
     const [credentials, setCredentials] = useState<StripeCredentials>({
         publicKey: '',
-        secretKey: '',
         basicPriceId: '',
         professionalPriceId: ''
     });
@@ -41,14 +40,14 @@ const StripeSettingsPage: React.FC = () => {
         setIsSaving(true);
         setError('');
         setSuccess('');
-        if (!credentials.basicPriceId || !credentials.professionalPriceId) {
-            setError('Os IDs de Preço para os planos Básico e Profissional são obrigatórios.');
+        if (!credentials.publicKey || !credentials.basicPriceId || !credentials.professionalPriceId) {
+            setError('Todos os campos são obrigatórios.');
             setIsSaving(false);
             return;
         }
         try {
             await setStripeCredentials(credentials);
-            setSuccess('Credenciais salvas com sucesso!');
+            setSuccess('Credenciais salvas com sucesso! Lembre-se de configurar a Chave Secreta no terminal se ainda não o fez.');
         } catch (err: any) {
             setError(err.message || 'Falha ao salvar as credenciais.');
         } finally {
@@ -74,6 +73,19 @@ const StripeSettingsPage: React.FC = () => {
                     </p>
                     {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm text-center">{error}</p>}
                     {success && <p className="text-green-300 bg-green-900/50 p-3 rounded-md text-sm text-center">{success}</p>}
+                    
+                    {/* Secret Key Instructions */}
+                    <div className="p-4 rounded-md bg-gray-800 border border-yellow-500/30">
+                        <h3 className="font-bold text-yellow-400">Ação Manual Obrigatória: Chave Secreta</h3>
+                        <p className="text-sm text-gray-300 mt-2">
+                            Para que os pagamentos funcionem, sua Chave Secreta (Secret Key) deve ser configurada de forma segura no ambiente do servidor.
+                        </p>
+                        <p className="text-sm text-gray-300 mt-2">
+                            Execute o seguinte comando no terminal da pasta do seu projeto, substituindo `sk_live_...` pela sua chave real, e depois faça o deploy das funções.
+                        </p>
+                        <code className="block bg-black/50 text-gray-300 p-2 rounded-md text-xs mt-3 whitespace-pre-wrap">firebase functions:config:set stripe.secret_key="sk_live_..."</code>
+                    </div>
+
                     <div>
                         <label htmlFor="publicKey" className="block text-sm font-medium text-gray-300">Publishable Key (Chave Publicável)</label>
                         <input
@@ -86,7 +98,7 @@ const StripeSettingsPage: React.FC = () => {
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
-                        <p className="text-xs text-gray-500 mt-1">Esta chave é usada no frontend para se conectar com o Stripe.</p>
+                        <p className="text-xs text-gray-500 mt-1">Esta chave é usada no site para se conectar com o Stripe.</p>
                     </div>
                      <div>
                         <label htmlFor="basicPriceId" className="block text-sm font-medium text-gray-300">ID de Preço do Plano Básico</label>
@@ -116,25 +128,10 @@ const StripeSettingsPage: React.FC = () => {
                         />
                          <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço da API" do seu produto "Profissional" no painel do Stripe.</p>
                     </div>
-                    <div>
-                        <label htmlFor="secretKey" className="block text-sm font-medium text-gray-300">Secret Key (Chave Secreta)</label>
-                        <input
-                            type="password"
-                            id="secretKey"
-                            name="secretKey"
-                            value={credentials.secretKey || ''}
-                            onChange={handleChange}
-                            placeholder="••••••••••••••••••••••••••••••••••••••••"
-                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                            required
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                            Sua chave secreta é armazenada de forma segura e usada apenas no servidor para processar os pagamentos.
-                        </p>
-                    </div>
+
                      <div className="flex justify-end pt-4">
                         <button type="submit" disabled={isSaving} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
-                            {isSaving ? 'Salvando...' : 'Salvar Credenciais'}
+                            {isSaving ? 'Salvando...' : 'Salvar Configurações'}
                         </button>
                     </div>
                 </form>

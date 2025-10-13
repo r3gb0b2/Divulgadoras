@@ -73,8 +73,9 @@ export const getStripeCredentials = async (): Promise<StripeCredentials> => {
  */
 export const setStripeCredentials = async (credentials: StripeCredentials): Promise<void> => {
     try {
+        const { secretKey, ...rest } = credentials; // Exclude secretKey from being saved to Firestore
         const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_STRIPE);
-        await setDoc(docRef, credentials, { merge: true });
+        await setDoc(docRef, rest, { merge: true });
     // FIX: Added curly braces to the catch block to fix a syntax error.
     } catch (error) {
         console.error("Error setting Stripe credentials: ", error);

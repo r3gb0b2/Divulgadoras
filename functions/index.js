@@ -14,83 +14,77 @@ const db = admin.firestore();
 setGlobalOptions({ region: "southamerica-east1" });
 
 
-const getStripeCredentialsFromFirestore = async () => {
+const getStripeConfigFromFirestore = async () => {
     const docRef = db.collection('settings').doc('stripe_credentials');
     const docSnap = await docRef.get();
-    if (!docSnap.exists) {
+    if (!docSnap.exists()) {
         logger.error("Stripe credentials document not found in Firestore at 'settings/stripe_credentials'");
-        throw new HttpsError('failed-precondition', 'As credenciais de pagamento não foram configuradas no painel do Super Admin.');
+        throw new HttpsError('failed-precondition', 'As credenciais de pagamento (IDs de Preço) não foram configuradas no painel do Super Admin.');
     }
     return docSnap.data();
 };
 
 
 exports.createStripeCheckoutSession = onCall(async (request) => {
-    let stripeCredentials;
     try {
-        stripeCredentials = await getStripeCredentialsFromFirestore();
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
-        logger.error("Error fetching stripe credentials from Firestore", error);
-        throw new HttpsError('internal', 'Falha ao ler a configuração do servidor.');
-    }
-
-    const { secretKey, basicPriceId, professionalPriceId } = stripeCredentials;
-    
-    if (!secretKey || !basicPriceId || !professionalPriceId) {
-        logger.error("One or more Stripe credentials (secretKey, basicPriceId, professionalPriceId) are missing from the Firestore document.");
-        throw new HttpsError('failed-precondition', 'A configuração de pagamento no servidor está incompleta. Fale com o administrador.');
-    }
-
-    const stripe = stripePackage(secretKey);
-    
-    const { planId, orgName, email, password } = request.data;
-    
-    if (!planId || !orgName || !email || !password) {
-        throw new HttpsError('invalid-argument', 'Faltam parâmetros obrigatórios na requisição.');
-    }
-
-    const priceIdMap = {
-        basic: basicPriceId,
-        professional: professionalPriceId
-    };
-
-    const priceId = priceIdMap[planId];
-    if (!priceId) {
-        throw new HttpsError('not-found', `ID de preço para o plano '${planId}' não configurado no servidor.`);
-    }
-
-    let uid;
-    try {
-        const userRecord = await admin.auth().createUser({ email, password });
-        uid = userRecord.uid;
-    } catch (error) {
-         if (error.code === 'auth/email-already-exists') {
-            throw new HttpsError('already-exists', 'Este e-mail já está cadastrado. Por favor, tente fazer login ou use um e-mail diferente.');
+        // 1. Get secret key from environment config. This is synchronous and robust.
+        const secretKey = functions.config().stripe?.secret_key;
+        if (!secretKey) {
+            logger.error("Stripe secret key not set in Firebase environment config. Run 'firebase functions:config:set stripe.secret_key=...'");
+            throw new HttpsError('failed-precondition', 'A chave secreta de pagamento não está configurada no servidor. Contate o administrador.');
         }
-        logger.error("Error creating Firebase Auth user:", { code: error.code, email });
-        throw new HttpsError('internal', 'Falha ao criar o usuário. Tente novamente.');
-    }
 
-    try {
-        const stripeCustomer = await stripe.customers.create({
-            email: email,
-            metadata: {
-                firebaseUID: uid,
-            },
-        });
+        // 2. Get non-sensitive config (price IDs) from Firestore.
+        const { basicPriceId, professionalPriceId } = await getStripeConfigFromFirestore();
+        if (!basicPriceId || !professionalPriceId) {
+            logger.error("Stripe Price IDs are missing from the Firestore document.");
+            throw new HttpsError('failed-precondition', 'Os IDs de preço dos planos não estão configurados no painel.');
+        }
+
+        const stripe = stripePackage(secretKey);
+        
+        const { planId, orgName, email, password } = request.data;
+        if (!planId || !orgName || !email || !password) {
+            throw new HttpsError('invalid-argument', 'Faltam parâmetros obrigatórios na requisição.');
+        }
+
+        const priceId = planId === 'basic' ? basicPriceId : professionalPriceId;
+
+        let uid;
+        try {
+            const userRecord = await admin.auth().createUser({ email, password });
+            uid = userRecord.uid;
+        } catch (error) {
+            if (error.code === 'auth/email-already-exists') {
+                throw new HttpsError('already-exists', 'Este e-mail já está cadastrado. Por favor, tente fazer login ou use um e-mail diferente.');
+            }
+            logger.error("Error creating Firebase Auth user:", { code: error.code, email });
+            throw new HttpsError('internal', 'Falha ao criar o usuário. Tente novamente.');
+        }
 
         const origin = request.rawRequest?.headers?.origin;
         if (!origin) {
             logger.error("Could not determine request origin (origin header is missing). Cannot construct redirect URLs.");
-            throw new HttpsError('internal', 'Não foi possível determinar a origem da aplicação para o redirecionamento.');
+            // Fallback to a configured URL if necessary, or fail.
+            const projectId = admin.app().options().projectId;
+            if (!projectId) {
+                 throw new HttpsError('internal', 'Não foi possível determinar a origem da aplicação para o redirecionamento.');
+            }
         }
+        
+        // Use a reliable base URL construction
+        const baseUrl = origin || `https://${admin.app().options().projectId}.firebaseapp.com`;
+
+        const stripeCustomer = await stripe.customers.create({
+            email: email,
+            metadata: { firebaseUID: uid },
+        });
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
-            success_url: `${origin}/#/admin`,
-            cancel_url: `${origin}/#/planos`,
+            success_url: `${baseUrl}/#/admin`,
+            cancel_url: `${baseUrl}/#/planos`,
             customer: stripeCustomer.id,
             line_items: [{ price: priceId, quantity: 1 }],
             subscription_data: {
@@ -105,12 +99,29 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
         return { sessionId: session.id };
 
     } catch (error) {
-        logger.error('Error during Stripe operations:', { code: error.code, message: error.message, email });
-        if (uid) {
-            await admin.auth().deleteUser(uid);
-            logger.info(`Orphaned Firebase user with UID ${uid} deleted due to Stripe error.`);
+        logger.error('CRITICAL ERROR in createStripeCheckoutSession:', {
+            errorMessage: error.message,
+            errorCode: error.code,
+            requestData: request.data
+        });
+        
+        // Clean up created user if the process fails later
+        if (request.data.email && error.code !== 'already-exists') {
+             try {
+                const user = await admin.auth().getUserByEmail(request.data.email);
+                await admin.auth().deleteUser(user.uid);
+                logger.info(`Orphaned Firebase user ${request.data.email} deleted due to Stripe error.`);
+             } catch (cleanupError) {
+                logger.error(`Failed to clean up user ${request.data.email}`, cleanupError);
+             }
         }
-        const userFriendlyMessage = error.message || 'Ocorreu um erro inesperado com o provedor de pagamento. Verifique se os IDs de Preço estão corretos.';
+
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        const userFriendlyMessage = error.message?.includes('No such price') 
+            ? 'ID de Preço inválido. Verifique a configuração no painel.'
+            : 'Ocorreu um erro com o provedor de pagamento. Tente novamente.';
         throw new HttpsError('internal', userFriendlyMessage);
     }
 });
@@ -119,6 +130,10 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
 // This function triggers when the Stripe Extension creates a subscription document in Firestore.
 // It's responsible for the custom logic of creating the organization and linking it to the user.
 exports.createOrganizationAndAdmin = onDocumentCreated("customers/{customerId}/subscriptions/{subscriptionId}", async (event) => {
+    if (!event.data) {
+        logger.error("onDocumentCreated trigger for subscriptions received an event with no data.", event);
+        return null;
+    }
     const subscription = event.data.data();
 
     // Check if subscription is active and we haven't processed it before to ensure idempotency.
