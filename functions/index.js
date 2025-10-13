@@ -80,18 +80,17 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             },
         });
 
-        const projectId = admin.app().options().projectId;
-        if (!projectId) {
-            logger.error("Could not determine Firebase Project ID from admin SDK.");
-            throw new HttpsError('internal', 'Configuração do servidor incompleta (Project ID).');
+        const origin = request.rawRequest.headers.origin;
+        if (!origin) {
+            logger.error("Could not determine request origin. Cannot construct redirect URLs.");
+            throw new HttpsError('internal', 'Não foi possível determinar a origem da aplicação para o redirecionamento.');
         }
-        const baseUrl = `https://${projectId}.web.app`;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
-            success_url: `${baseUrl}/#/admin`,
-            cancel_url: `${baseUrl}/#/planos`,
+            success_url: `${origin}/#/admin`,
+            cancel_url: `${origin}/#/planos`,
             customer: stripeCustomer.id,
             line_items: [{ price: priceId, quantity: 1 }],
             subscription_data: {
@@ -106,12 +105,12 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
         return { sessionId: session.id };
 
     } catch (error) {
-        logger.error('Error during Stripe operations:', { message: error.message, email });
+        logger.error('Error during Stripe operations:', { code: error.code, message: error.message, email });
         if (uid) {
             await admin.auth().deleteUser(uid);
             logger.info(`Orphaned Firebase user with UID ${uid} deleted due to Stripe error.`);
         }
-        const userFriendlyMessage = error.raw?.message || 'Ocorreu um erro inesperado com o provedor de pagamento. Verifique se os IDs de Preço estão corretos.';
+        const userFriendlyMessage = error.message || 'Ocorreu um erro inesperado com o provedor de pagamento. Verifique se os IDs de Preço estão corretos.';
         throw new HttpsError('internal', userFriendlyMessage);
     }
 });
