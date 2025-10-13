@@ -8,6 +8,8 @@ import { AdminAuthProvider, useAdminAuth } from '../contexts/AdminAuthContext';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import ManageUsersPage from './ManageUsersPage';
+import SettingsPage from './SettingsPage';
+import SubscriptionPage from './SubscriptionPage';
 
 const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -78,8 +80,8 @@ const LoginForm: React.FC = () => {
                     </button>
                     <p className="text-sm text-gray-400 mt-4">
                         Não tem uma conta?{' '}
-                        <Link to="/admin-register" className="font-medium text-primary hover:text-primary-dark">
-                            Solicite acesso
+                        <Link to="/planos" className="font-medium text-primary hover:text-primary-dark">
+                            Crie uma conta
                         </Link>
                     </p>
                 </form>
@@ -104,11 +106,21 @@ const AdminPageContent: React.FC = () => {
         return (
             <Routes>
                 <Route index element={<AdminPanel adminData={adminData} />} />
+
+                {/* Org Admin & Superadmin Routes */}
+                {(adminData.role === 'superadmin' || adminData.role === 'admin') && (
+                    <>
+                        <Route path="settings" element={<SettingsPage />} />
+                        <Route path="settings/subscription" element={<SubscriptionPage />} />
+                        <Route path="users" element={<ManageUsersPage />} />
+                    </>
+                )}
+
+                {/* Superadmin Only Routes */}
                 {adminData.role === 'superadmin' && (
                     <>
                         <Route path="states" element={<StatesListPage />} />
                         <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
-                        <Route path="users" element={<ManageUsersPage />} />
                     </>
                 )}
             </Routes>

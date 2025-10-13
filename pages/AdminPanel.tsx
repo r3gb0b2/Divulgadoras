@@ -4,7 +4,7 @@ import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { Promoter, PromoterStatus, RejectionReason, AdminUserData } from '../types';
-import { WhatsAppIcon, InstagramIcon, TikTokIcon, UsersIcon, MapPinIcon } from '../components/Icons';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon, UsersIcon, MapPinIcon, CogIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
@@ -272,16 +272,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 <h1 className="text-3xl font-bold">Painel do Organizador</h1>
                 <div className="flex items-center gap-4 flex-wrap justify-end">
                     {adminData.role === 'superadmin' && (
-                        <>
-                            <Link to="/admin/users" className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
-                                <UsersIcon className="w-4 h-4 mr-2" />
-                                Gerenciar Usuários
-                            </Link>
-                            <Link to="/admin/states" className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
-                                <MapPinIcon className="w-4 h-4 mr-2" />
-                                Gerenciar Localidades
-                            </Link>
-                        </>
+                         <Link to="/admin/states" className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
+                            <MapPinIcon className="w-4 h-4 mr-2" />
+                            Gerenciar Localidades
+                        </Link>
+                    )}
+                    {adminData.organizationId && (
+                         <Link to="/admin/settings" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 inline-flex items-center">
+                            <CogIcon className="w-4 h-4 mr-2" />
+                            Configurações
+                        </Link>
                     )}
                     {canManage && (
                         <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">

@@ -78,3 +78,25 @@ export const LockClosedIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =
     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
   </svg>
 );
+
+export const CogIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M19.14 12.94a10 10 0 1 1-1.28-4.48l1.06 1.06.22-3.8-3.8.22 1.06 1.06a10 10 0 0 1 2.74 5.94z"/>
+        <circle cx="12" cy="12" r="3"/>
+    </svg>
+);
+
+export const CreditCardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+    </svg>
+);
+
+export const VisaIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="38" height="24" viewBox="0 0 38 24" {...props}><path d="M35 0H3C1.3 0 0 1.3 0 3v18c0 1.7 1.4 3 3 3h32c1.7 0 3-1.3 3-3V3c0-1.7-1.4-3-3-3z" fill="#3A5594"/><path d="M35 1c1.1 0 2 .9 2 2v18c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V3c0-1.1.9-2 2-2h32" fill="url(#a)"/><path d="M12.4 16.3h2.5l1.6-7.2h-2.5l-1.6 7.2zm11.2 0h2.5l4.1-10.3h-2.4l-2.9 7.9-1.2-3.8h-2.5l1.4 6.2zM27.9 9.1l-1.1 4.4-1.1-4.4h-2.1l2.2 7.2h2.5l3.8-7.2h-2.1l-2.1 4.5-1.1-4.5zM15.3 16.3h2.3L15.9 9h-2.3l-1.7 7.3h2.4l.2-1h2l.2 1zM14.6 14.4l.7-3 .7 3h-1.4z" fill="#fff"/></svg>
+);
+
+export const MastercardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="38" height="24" viewBox="0 0 38 24" {...props}><path d="M35 0H3C1.3 0 0 1.3 0 3v18c0 1.7 1.4 3 3 3h32c1.7 0 3-1.3 3-3V3c0-1.7-1.4-3-3-3z" fill="#222"/><path d="M35 1c1.1 0 2 .9 2 2v18c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V3c0-1.1.9-2 2-2h32" fill="url(#a)"/><circle cx="15" cy="12" r="7" fill="#EB001B"/><circle cx="23" cy="12" r="7" fill="#F79E1B"/><path d="M22 12c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8 8 3.6 8 8z" fill="#FF5F00"/></svg>
+);
