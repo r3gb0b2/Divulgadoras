@@ -11,7 +11,7 @@ declare global {
     }
 }
 
-const MockCheckoutPage: React.FC = () => {
+const CheckoutPage: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { plan, orgName, email, password } = (location.state as { plan: Plan; orgName: string; email: string; password: string }) || {};
@@ -54,24 +54,51 @@ const MockCheckoutPage: React.FC = () => {
                                 setIsLoading(false);
                             },
                             onSubmit: async (cardFormData: any) => {
-                                // This is where the real payment processing would happen.
-                                // The frontend receives a tokenized card and sends it to the backend.
-                                // The backend uses the Access Token to create the payment.
-                                // Here, we will SIMULATE this by directly calling our account creation function.
                                 setIsProcessing(true);
                                 setError('');
                                 try {
-                                    // SIMULATION: In a real app, you would send cardFormData
-                                    // to your backend, process the payment, and only then create the organization.
-                                    console.log('Simulating payment processing with data:', cardFormData);
-                                    
-                                    await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
-                                    
-                                    alert('Pagamento processado e organização criada com sucesso! Você será redirecionado para a tela de login.');
-                                    navigate('/admin/login');
+                                    const creds = await getMercadoPagoCredentials();
+                                    if (!creds.accessToken) {
+                                        throw new Error("O Access Token do Mercado Pago não foi configurado pelo administrador. Pagamento não pode ser processado.");
+                                    }
 
+                                    const paymentData = {
+                                        transaction_amount: cardFormData.transaction_amount,
+                                        token: cardFormData.token,
+                                        description: `Assinatura Plano ${plan.name} - ${orgName}`,
+                                        installments: cardFormData.installments,
+                                        payment_method_id: cardFormData.payment_method_id,
+                                        issuer_id: cardFormData.issuer_id,
+                                        payer: {
+                                            email: cardFormData.payer.email,
+                                        }
+                                    };
+
+                                    const response = await fetch('https://api.mercadopago.com/v1/payments', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${creds.accessToken}`
+                                        },
+                                        body: JSON.stringify(paymentData)
+                                    });
+
+                                    const result = await response.json();
+
+                                    if (!response.ok) {
+                                        const errorMessage = result.cause?.[0]?.description || result.message || 'O pagamento foi recusado pelo processador.';
+                                        throw new Error(errorMessage);
+                                    }
+
+                                    if (result.status === 'approved' || result.status === 'in_process') {
+                                        await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
+                                        alert('Pagamento processado e organização criada com sucesso! Você será redirecionado para a tela de login.');
+                                        navigate('/admin/login');
+                                    } else {
+                                        throw new Error(`O pagamento não foi aprovado. Status: ${result.status_detail}`);
+                                    }
                                 } catch (err: any) {
-                                    setError(err.message || 'Ocorreu um erro ao criar sua conta após o pagamento. Nenhum valor foi cobrado.');
+                                    setError(err.message || 'Ocorreu um erro ao processar o pagamento. Nenhum valor foi cobrado.');
                                     setIsProcessing(false);
                                 }
                             },
@@ -150,4 +177,4 @@ const MockCheckoutPage: React.FC = () => {
     );
 };
 
-export default MockCheckoutPage;
+export default CheckoutPage;
