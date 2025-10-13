@@ -2,7 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
-const fetch = require("node-fetch");
+const mercadopago = require("mercadopago");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -21,9 +21,7 @@ const getMercadoPagoCredentials = async () => {
 
 exports.processMercadoPagoPayment = onCall(async (request) => {
         
-    // The data sent from the client is in request.data
     const { paymentData, newUser } = request.data;
-    const uidFromAuth = request.auth ? request.auth.uid : null;
     
     if (!paymentData || !newUser) {
         throw new HttpsError('invalid-argument', 'A função deve ser chamada com os argumentos "paymentData" e "newUser".');
@@ -35,40 +33,21 @@ exports.processMercadoPagoPayment = onCall(async (request) => {
             throw new HttpsError('failed-precondition', 'O Access Token do Mercado Pago não foi configurado.');
         }
 
-        // 1. Process Payment with Mercado Pago
-        // Use authenticated user's UID for idempotency if available, otherwise use a timestamp
-        const idempotencyKey = uidFromAuth ? uidFromAuth + Date.now() : Date.now().toString();
-
-        const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${credentials.accessToken}`,
-                'X-Idempotency-Key': idempotencyKey
-            },
-            body: JSON.stringify(paymentData),
+        // 1. Configure and use the Mercado Pago SDK
+        mercadopago.configure({
+            access_token: credentials.accessToken,
         });
 
-        // Robust response handling
-        const responseText = await mpResponse.text();
-        let mpResult;
-        try {
-            mpResult = JSON.parse(responseText);
-        } catch (jsonError) {
-            logger.error("Mercado Pago non-JSON response", { status: mpResponse.status, text: responseText });
-            throw new HttpsError('unavailable', `O serviço de pagamento retornou uma resposta inesperada (status: ${mpResponse.status}). Tente novamente.`);
+        const mpResponse = await mercadopago.payment.create(paymentData);
+        const paymentResult = mpResponse.body;
+
+        // 2. Check if payment was successful
+        if (paymentResult.status !== 'approved') {
+            const errorMessage = paymentResult.status_detail || 'O pagamento foi recusado pelo processador.';
+            throw new HttpsError('aborted', `Pagamento não aprovado: ${errorMessage}`);
         }
 
-        if (!mpResponse.ok) {
-            const errorMessage = mpResult.cause?.[0]?.description || mpResult.message || 'O pagamento foi recusado.';
-            throw new HttpsError('aborted', errorMessage);
-        }
-
-        if (mpResult.status !== 'approved') {
-             throw new HttpsError('aborted', `Pagamento não aprovado. Status: ${mpResult.status_detail}`);
-        }
-
-        // 2. If payment is successful, create user and organization
+        // 3. If payment is successful, create user and organization
         const { email, password, orgName, planId } = newUser;
 
         // Create Firebase Auth user
@@ -108,19 +87,34 @@ exports.processMercadoPagoPayment = onCall(async (request) => {
         return { success: true, message: 'Pagamento bem-sucedido e conta criada.', organizationId: orgRef.id };
 
     } catch (error) {
-        logger.error('Error in processMercadoPagoPayment', { error, data: request.data });
+        logger.error('Error in processMercadoPagoPayment', { 
+            // Do not log the full request data in production if it contains sensitive info like password
+            error: error, 
+            userEmail: request.data.newUser?.email 
+        });
+
+        // Handle Mercado Pago SDK-specific errors
+        if (error.cause) {
+            const mpError = Array.isArray(error.cause) ? error.cause[0] : error.cause;
+            const errorMessage = mpError?.description || 'Ocorreu um erro ao se comunicar com o processador de pagamentos.';
+            throw new HttpsError('aborted', errorMessage);
+        }
 
         if (error instanceof HttpsError) {
             throw error;
         }
 
+        // Handle Firebase Auth errors after payment
         if (error.code && error.code.startsWith('auth/')) {
             if (error.code === 'auth/email-already-exists') {
-                throw new HttpsError('already-exists', 'Este e-mail já está cadastrado. Tente fazer login ou use um e-mail diferente.');
+                // IMPORTANT: The payment was successful but the user account could not be created.
+                // This requires manual intervention or a more complex refund/retry logic.
+                // For now, inform the user clearly.
+                throw new HttpsError('already-exists', 'Seu pagamento foi aprovado, mas não foi possível criar sua conta pois o e-mail já existe. Por favor, entre em contato com o suporte.');
             }
-            throw new HttpsError('internal', `Ocorreu um erro ao criar sua conta após o pagamento (código: ${error.code}).`);
+            throw new HttpsError('internal', `Ocorreu um erro ao criar sua conta após o pagamento (código: ${error.code}). Por favor, entre em contato com o suporte.`);
         }
         
-        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar sua solicitação.');
+        throw new HttpsError('internal', 'Ocorreu um erro interno desconhecido. Por favor, tente novamente ou contate o suporte.');
     }
 });
