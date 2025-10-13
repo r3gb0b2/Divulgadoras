@@ -10,7 +10,7 @@ import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
 import ManageUsersPage from './ManageUsersPage';
 import SubscriptionPage from './SubscriptionPage';
-import MercadoPagoSettingsPage from './MercadoPagoSettingsPage';
+import StripeSettingsPage from './StripeSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
 import { MailIcon, LockClosedIcon } from '../components/Icons';
@@ -129,7 +129,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
-                    <Route path="settings/mercado-pago" element={<ProtectedRoute><MercadoPagoSettingsPage /></ProtectedRoute>} />
+                    <Route path="settings/stripe" element={<ProtectedRoute><StripeSettingsPage /></ProtectedRoute>} />
                 </>
             )}
 

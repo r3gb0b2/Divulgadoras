@@ -86,3 +86,8 @@ export interface MercadoPagoCredentials {
   publicKey?: string;
   accessToken?: string;
 }
+
+export interface StripeCredentials {
+  publicKey?: string;
+  secretKey?: string;
+}
