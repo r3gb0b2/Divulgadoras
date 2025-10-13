@@ -80,9 +80,9 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             },
         });
 
-        const origin = request.rawRequest.headers.origin;
+        const origin = request.rawRequest?.headers?.origin;
         if (!origin) {
-            logger.error("Could not determine request origin. Cannot construct redirect URLs.");
+            logger.error("Could not determine request origin (origin header is missing). Cannot construct redirect URLs.");
             throw new HttpsError('internal', 'Não foi possível determinar a origem da aplicação para o redirecionamento.');
         }
 
