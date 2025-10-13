@@ -15,12 +15,12 @@ setGlobalOptions({ region: "southamerica-east1" });
 
 const getStripeCredentialsFromFirestore = async () => {
     const docRef = db.collection('settings').doc('stripe_credentials');
-    const doc = await doc.get();
-    if (!doc.exists) {
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
         logger.error("Stripe credentials document not found in Firestore at 'settings/stripe_credentials'");
         throw new HttpsError('failed-precondition', 'As credenciais de pagamento não foram configuradas no painel do Super Admin.');
     }
-    return doc.data();
+    return docSnap.data();
 };
 
 
@@ -79,7 +79,8 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             },
         });
 
-        const baseUrl = `https://${process.env.GCLOUD_PROJECT}.web.app`;
+        const projectId = admin.app().options.projectId;
+        const baseUrl = `https://${projectId}.web.app`;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
