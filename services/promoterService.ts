@@ -5,12 +5,18 @@ import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
-    // Check for existing email before proceeding
-    const q = query(collection(firestore, "promoters"), where("email", "==", promoterData.email.toLowerCase().trim()));
+    // Check for existing registration for the same email, state, and campaign
+    const q = query(
+      collection(firestore, "promoters"),
+      where("email", "==", promoterData.email.toLowerCase().trim()),
+      where("state", "==", promoterData.state),
+      where("campaignName", "==", promoterData.campaignName || null)
+    );
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
-      throw new Error("Este e-mail já foi cadastrado.");
+      throw new Error("Você já se cadastrou para este evento/gênero.");
     }
+
 
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
@@ -28,6 +34,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const newPromoter = {
       ...rest,
+      campaignName: promoterData.campaignName || null,
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
@@ -103,16 +110,23 @@ export const deletePromoter = async (id: string): Promise<void> => {
     }
 };
 
-export const checkPromoterStatus = async (email: string): Promise<Promoter | null> => {
+export const checkPromoterStatus = async (email: string): Promise<Promoter[] | null> => {
     try {
-        const q = query(collection(firestore, "promoters"), where("email", "==", email.toLowerCase().trim()));
+        const q = query(
+            collection(firestore, "promoters"), 
+            where("email", "==", email.toLowerCase().trim()),
+            orderBy("createdAt", "desc")
+        );
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
             return null;
         }
-        // Assuming one registration per email
-        const promoterDoc = querySnapshot.docs[0];
-        return { id: promoterDoc.id, ...promoterDoc.data() } as Promoter;
+        
+        const promoters: Promoter[] = [];
+        querySnapshot.forEach((doc) => {
+            promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+        });
+        return promoters;
     } catch (error) {
         console.error("Error checking promoter status: ", error);
         throw new Error("Não foi possível verificar o status.");

@@ -4,63 +4,47 @@ import { checkPromoterStatus, updatePromoter } from '../services/promoterService
 import { getCampaigns } from '../services/settingsService';
 import { Promoter } from '../types';
 import { WhatsAppIcon } from '../components/Icons';
+import { stateMap } from '../constants/states';
 
-const StatusCheck: React.FC = () => {
-    const [email, setEmail] = useState('');
-    const [promoter, setPromoter] = useState<Promoter | null>(null);
+// This new component will handle displaying the status for a single registration
+const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
     const [whatsappGroupLink, setWhatsappGroupLink] = useState<string>('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [searched, setSearched] = useState(false);
-    const [hasAcceptedRules, setHasAcceptedRules] = useState(false);
-    
-    useEffect(() => {
-        if(promoter?.status === 'approved') {
-            setHasAcceptedRules(promoter.hasJoinedGroup || false);
-        }
-    }, [promoter]);
+    const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
+    const [cardError, setCardError] = useState<string | null>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setError(null);
-        setPromoter(null);
-        setWhatsappGroupLink('');
-        setSearched(true);
-        try {
-            const result = await checkPromoterStatus(email);
-            setPromoter(result);
-            if (result && result.status === 'approved' && result.campaignName) {
-                const campaigns = await getCampaigns(result.state);
-                const campaign = campaigns.find(c => c.name === result.campaignName);
-                if (campaign) {
-                    setWhatsappGroupLink(campaign.whatsappLink);
+    useEffect(() => {
+        const fetchCampaignLink = async () => {
+            if (promoter && promoter.status === 'approved' && promoter.campaignName) {
+                try {
+                    const campaigns = await getCampaigns(promoter.state);
+                    const campaign = campaigns.find(c => c.name === promoter.campaignName);
+                    if (campaign) {
+                        setWhatsappGroupLink(campaign.whatsappLink);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch campaign link", e);
                 }
             }
-        } catch (err: any) {
-            setError(err.message || 'Ocorreu um erro.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
+        };
+        fetchCampaignLink();
+    }, [promoter]);
+
     const handleAcceptRules = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
-        setHasAcceptedRules(isChecked); // Update UI immediately
+        setHasAcceptedRules(isChecked);
 
         if (isChecked && promoter && !promoter.hasJoinedGroup) {
             try {
                 await updatePromoter(promoter.id, { hasJoinedGroup: true });
-                // Also update local state to prevent re-triggering the update
-                setPromoter(prev => prev ? { ...prev, hasJoinedGroup: true } : null);
+                // No need to update local state promoter, this is a one-time action per card
             } catch (updateError) {
                 console.error("Failed to update status:", updateError);
-                setError("Não foi possível salvar sua confirmação. Tente novamente.");
+                setCardError("Não foi possível salvar sua confirmação. Tente novamente.");
                 setHasAcceptedRules(false); // Revert on failure
             }
         }
     };
-
+    
     const statusInfoMap = {
         pending: {
             title: 'Em Análise',
@@ -78,66 +62,105 @@ const StatusCheck: React.FC = () => {
             styles: 'bg-red-900/50 border-red-500 text-red-300'
         }
     };
+
+    const statusInfo = statusInfoMap[promoter.status];
+
+    if (!statusInfo) {
+         return <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md"><p>Ocorreu um erro ao verificar o status deste cadastro.</p></div>;
+    }
+
+    const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
+        ? promoter.rejectionReason
+        : statusInfo.message;
+
+    return (
+        <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-bold">{statusInfo.title}</p>
+                    {promoter.campaignName && <p className="text-sm font-semibold -mt-1">{promoter.campaignName}</p>}
+                </div>
+                <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">{stateMap[promoter.state.toUpperCase()] || promoter.state}</div>
+            </div>
+
+            <p className="mt-2 whitespace-pre-wrap">{finalMessage}</p>
+            {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
+            
+            {promoter.status === 'approved' && (
+                <div className="mt-4 space-y-4">
+                    <Link
+                        to={`/rules/${promoter.state}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
+                    >
+                        Ver as Regras (Obrigatório)
+                    </Link>
+                    
+                    <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={hasAcceptedRules}
+                                onChange={handleAcceptRules}
+                                className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
+                            />
+                            <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
+                        </label>
+                    </div>
+
+                    {hasAcceptedRules && (
+                       <a
+                            href={whatsappGroupLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!whatsappGroupLink ? 'opacity-50 cursor-not-allowed' : ''}`}
+                       >
+                            <WhatsAppIcon className="w-6 h-6 mr-2"/>
+                            {whatsappGroupLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
+                       </a>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const StatusCheck: React.FC = () => {
+    const [email, setEmail] = useState('');
+    const [promoters, setPromoters] = useState<Promoter[] | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [searched, setSearched] = useState(false);
+    
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError(null);
+        setPromoters(null);
+        setSearched(true);
+        try {
+            const result = await checkPromoterStatus(email);
+            setPromoters(result);
+        } catch (err: any) {
+            setError(err.message || 'Ocorreu um erro.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     const renderStatusResult = () => {
         if (!searched || isLoading || error) {
             return null;
         }
 
-        if (!promoter) {
-            return <p className="text-center text-gray-400">Nenhum cadastro encontrado para este e-mail.</p>;
+        if (!promoters) {
+            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail.</p>;
         }
 
-        const statusInfo = statusInfoMap[promoter.status];
-
-        if (!statusInfo) {
-             return <p className="text-center text-red-400">Ocorreu um erro ao verificar o status. Por favor, contate o suporte.</p>;
-        }
-
-        const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
-            ? promoter.rejectionReason
-            : statusInfo.message;
-        
         return (
-            <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
-                <p className="font-bold">{statusInfo.title}</p>
-                <p className="whitespace-pre-wrap">{finalMessage}</p>
-                {promoter.status === 'approved' && (
-                    <div className="mt-4 space-y-4">
-                        <Link
-                            to={`/rules/${promoter.state}`}
-                            target="_blank" // Open in new tab so user doesn't lose this page
-                            rel="noopener noreferrer"
-                            className="inline-block w-full text-center bg-primary text-white font-bold py-3 px-4 rounded hover:bg-primary-dark transition-colors"
-                        >
-                            Ver as Regras (Obrigatório)
-                        </Link>
-                        
-                        <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={hasAcceptedRules}
-                                    onChange={handleAcceptRules}
-                                    className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
-                                />
-                                <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
-                            </label>
-                        </div>
-
-                        {hasAcceptedRules && (
-                           <a
-                                href={whatsappGroupLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`inline-flex items-center justify-center w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-lg ${!whatsappGroupLink ? 'opacity-50 cursor-not-allowed' : ''}`}
-                           >
-                                <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                                {whatsappGroupLink ? 'Entrar no Grupo' : 'Link do grupo indisponível'}
-                           </a>
-                        )}
-                    </div>
-                )}
+            <div className="space-y-4">
+                {promoters.map(p => <StatusCard key={p.id} promoter={p} />)}
             </div>
         );
     };
