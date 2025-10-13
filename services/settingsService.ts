@@ -1,5 +1,5 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firestore';
 import { states } from '../constants/states';
 import { StatesConfig, StateConfig, Campaign } from '../types';
 
@@ -77,17 +77,24 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        let q = query(
-            collection(firestore, "campaigns"), 
-            where("stateAbbr", "==", stateAbbr)
-        );
-
-        if (organizationId) {
-            q = query(q, where("organizationId", "==", organizationId));
+        if (!organizationId) {
+            // In a multi-tenant system, an organization context is required.
+            return [];
         }
 
+        // Query by organizationId first to avoid composite index, then filter by state client-side.
+        const q = query(
+            collection(firestore, "campaigns"), 
+            where("organizationId", "==", organizationId)
+        );
+
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
+        const allOrgCampaigns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
+
+        const stateCampaigns = allOrgCampaigns.filter(c => c.stateAbbr === stateAbbr);
+        
+        return stateCampaigns.sort((a, b) => a.name.localeCompare(b.name));
+
     } catch (error) {
         console.error("Error getting campaigns: ", error);
         throw new Error("Não foi possível buscar os eventos/gêneros.");
