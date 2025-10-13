@@ -296,48 +296,6 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 }
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
-    if (props.type === 'date') {
-        const [inputType, setInputType] = useState('text');
-
-        // This effect ensures that if the component receives a value prop (e.g., from form state),
-        // it correctly displays as a date input.
-        useEffect(() => {
-            if (props.value) {
-                setInputType('date');
-            }
-        }, [props.value]);
-
-        const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-            setInputType('date');
-            if (props.onFocus) props.onFocus(e);
-        };
-
-        const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-            // If the field is empty on blur, switch back to text to show the placeholder.
-            if (!e.target.value) {
-                setInputType('text');
-            }
-            if (props.onBlur) props.onBlur(e);
-        };
-
-        return (
-            <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                    <Icon className="h-5 w-5 text-gray-400" />
-                </span>
-                <input
-                    {...props}
-                    type={inputType}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                    style={{ colorScheme: 'dark' }}
-                />
-            </div>
-        );
-    }
-
-    // Default implementation for other input types
     return (
         <div className="relative">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -346,6 +304,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             <input
                 {...props}
                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                style={props.type === 'date' ? { colorScheme: 'dark' } : undefined}
             />
         </div>
     );
