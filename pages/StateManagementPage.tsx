@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
 import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign } from '../services/settingsService';
-import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign } from '../types';
+import { getOrganizations } from '../services/organizationService';
+import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization } from '../types';
 import { stateMap } from '../constants/states';
 import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
@@ -32,6 +33,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [promoters, setPromoters] = useState<Promoter[]>([]);
   const [stateConfig, setStateConfig] = useState<StateConfig | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,10 +63,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     setIsLoading(true);
     setError(null);
     try {
-      const [promotersData, configData, campaignsData] = await Promise.all([
+      const [promotersData, configData, campaignsData, orgsData] = await Promise.all([
         getPromoters(adminData.organizationId, [stateAbbr]),
         getStateConfig(stateAbbr),
         getCampaigns(stateAbbr, adminData.organizationId),
+        adminData.role === 'superadmin' ? getOrganizations() : Promise.resolve([]),
       ]);
       
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
@@ -81,6 +84,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
       setPromoters(filteredPromoters);
       setStateConfig(configData);
       setCampaigns(filteredCampaigns);
+      if (adminData.role === 'superadmin') {
+        setOrganizations(orgsData);
+      }
 
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados da localidade.');
@@ -156,19 +162,23 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stateAbbr || !campaignForm.name) return;
-    if (!adminData.organizationId && adminData.role !== 'superadmin') {
+    
+    if (adminData.role !== 'superadmin' && !adminData.organizationId) {
       alert('Apenas administradores de uma organização podem criar campanhas.');
       return;
     }
-    // Prevent superadmin from creating org-less campaigns from this UI
+    
     if (adminData.role === 'superadmin' && !campaignForm.organizationId) {
-       alert('Super Admins não podem criar campanhas diretamente. Esta ação deve ser feita por um admin de organização.');
+       alert('Como Super Admin, você deve selecionar uma organização para criar um novo evento/gênero.');
        return;
     }
 
     setIsSaving(true);
     try {
-      const orgId = campaignForm.organizationId || adminData.organizationId;
+      const orgId = adminData.role === 'superadmin' 
+        ? campaignForm.organizationId 
+        : adminData.organizationId;
+        
       if (!orgId) throw new Error("Organization ID is missing");
 
       const dataToSave = {
@@ -309,6 +319,26 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                     {canManage && (
                       <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
                           <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
+                          
+                           {adminData.role === 'superadmin' && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-300">Organização</label>
+                                <select
+                                  name="organizationId"
+                                  value={campaignForm.organizationId || ''}
+                                  onChange={(e) => handleCampaignFormChange('organizationId' as any, e.target.value)}
+                                  required
+                                  disabled={!!campaignForm.id}
+                                  className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                >
+                                  <option value="" disabled>Selecione a organização</option>
+                                  {organizations.map(org => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
                           <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                           <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
                           <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
