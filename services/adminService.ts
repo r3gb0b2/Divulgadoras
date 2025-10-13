@@ -94,7 +94,7 @@ export const deleteAdminUser = async (uid: string): Promise<void> => {
 
 // --- New Organization Sign Up Flow ---
 
-export const signUpAndCreateOrganization = async (email: string, password: string, orgName: string): Promise<void> => {
+export const signUpAndCreateOrganization = async (email: string, password: string, orgName: string, planId: 'basic' | 'professional'): Promise<void> => {
     try {
         const normalizedEmail = email.toLowerCase().trim();
         
@@ -103,7 +103,7 @@ export const signUpAndCreateOrganization = async (email: string, password: strin
         const { uid } = userCredential.user;
 
         // 2. Create the organization document
-        const newOrgId = await createOrganization(uid, normalizedEmail, orgName);
+        const newOrgId = await createOrganization(uid, normalizedEmail, orgName, planId);
 
         // 3. Create the admin user document and link it to the organization
         const adminData: Omit<AdminUserData, 'uid'> = {

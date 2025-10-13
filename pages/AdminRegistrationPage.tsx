@@ -21,7 +21,8 @@ const AdminRegistrationPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await signUpAndCreateOrganization(email, password, orgName);
+            // FIX: Added 'basic' as the planId argument to satisfy the function signature.
+            await signUpAndCreateOrganization(email, password, orgName, 'basic');
             alert('Sua organização foi criada com sucesso! Você será redirecionado para a tela de login.');
             navigate('/admin');
         } catch (err: any) {

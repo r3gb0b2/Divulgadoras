@@ -68,7 +68,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
 
     try {
       // On successful "payment", create the organization
-      await signUpAndCreateOrganization(email, password, orgName);
+      await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
       alert('Inscrição realizada com sucesso! Sua organização foi criada. Você será redirecionado para a tela de login.');
       onClose();
       navigate('/admin');

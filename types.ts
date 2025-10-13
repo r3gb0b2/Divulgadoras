@@ -1,4 +1,4 @@
-import { FieldValue } from 'firebase/firestore';
+import { FieldValue, Timestamp } from 'firebase/firestore';
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected';
 
@@ -83,5 +83,9 @@ export interface Organization {
   id: string;
   name: string;
   ownerUid: string;
+  ownerEmail: string;
   createdAt: FieldValue;
+  planId: 'basic' | 'professional';
+  subscriptionStatus: 'active' | 'canceled' | 'expired' | 'trialing';
+  subscriptionExpiresAt: Timestamp;
 }

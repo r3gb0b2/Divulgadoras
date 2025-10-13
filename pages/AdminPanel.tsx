@@ -59,6 +59,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [stateFilter, setStateFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
+    const isSuperAdmin = adminData.role === 'superadmin';
     const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
     // Modals state
@@ -79,7 +80,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsLoading(true);
         setError(null);
         try {
-            const statesToFetch = adminData.role === 'superadmin' ? null : adminData.assignedStates;
+            const statesToFetch = isSuperAdmin ? null : adminData.assignedStates;
             const data = await getPromoters(adminData.organizationId, statesToFetch);
             setAllPromoters(data);
         } catch (error) {
@@ -88,7 +89,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [adminData]);
+    }, [adminData, isSuperAdmin]);
 
     const fetchReasons = useCallback(async () => {
         if (!adminData.organizationId) return;
@@ -113,7 +114,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         // Superadmin without org sees all. Org-admin sees their org's promoters.
         // The getPromoters function already scopes by orgId.
         // This additional filter is for campaign-level permissions for non-superadmins.
-        if (adminData.role === 'superadmin' || !adminData.assignedCampaigns) {
+        if (isSuperAdmin || !adminData.assignedCampaigns) {
             return allPromoters;
         }
         return allPromoters.filter(promoter => {
@@ -125,7 +126,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // If campaigns are specified, check if promoter's campaign is in the list.
             return promoter.campaignName && stateCampaigns.includes(promoter.campaignName);
         });
-    }, [allPromoters, adminData]);
+    }, [allPromoters, adminData, isSuperAdmin]);
     
     const stats = useMemo(() => ({
         total: promotersInScope.length,
@@ -135,12 +136,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }), [promotersInScope]);
 
     const availableStates = useMemo(() => {
-        if (adminData.role === 'superadmin') {
+        if (isSuperAdmin) {
             const states = new Set(allPromoters.map(p => p.state).filter(Boolean));
             return Array.from(states).sort();
         }
         return [...adminData.assignedStates].sort();
-    }, [allPromoters, adminData]);
+    }, [allPromoters, adminData, isSuperAdmin]);
 
     useEffect(() => {
         let result = promotersInScope;
@@ -222,16 +223,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if (adminData.role !== 'superadmin') return;
-        if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
-             const originalPromoters = [...allPromoters];
-             setAllPromoters(allPromoters.filter(p => p.id !== id));
-             try {
-                await deletePromoter(id);
-             } catch (error) {
-                setAllPromoters(originalPromoters);
-                alert("Falha ao excluir a inscrição.");
-             }
+        if (isSuperAdmin) {
+            if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
+                 const originalPromoters = [...allPromoters];
+                 setAllPromoters(allPromoters.filter(p => p.id !== id));
+                 try {
+                    await deletePromoter(id);
+                 } catch (error) {
+                    setAllPromoters(originalPromoters);
+                    alert("Falha ao excluir a inscrição.");
+                 }
+            }
         }
     };
     
@@ -269,21 +271,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-                <h1 className="text-3xl font-bold">Painel do Organizador</h1>
+                <h1 className="text-3xl font-bold">{isSuperAdmin ? 'Todas as Divulgadoras' : 'Painel do Organizador'}</h1>
                 <div className="flex items-center gap-4 flex-wrap justify-end">
-                    {adminData.role === 'superadmin' && (
+                    {isSuperAdmin && (
+                        <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">
+                            &larr; Voltar ao Dashboard
+                        </Link>
+                    )}
+                    {isSuperAdmin && (
                          <Link to="/admin/states" className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
                             <MapPinIcon className="w-4 h-4 mr-2" />
                             Gerenciar Localidades
                         </Link>
                     )}
-                    {adminData.organizationId && (
+                    {!isSuperAdmin && adminData.organizationId && (
                          <Link to="/admin/settings" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 inline-flex items-center">
                             <CogIcon className="w-4 h-4 mr-2" />
                             Configurações
                         </Link>
                     )}
-                    {canManage && (
+                    {canManage && !isSuperAdmin && (
                         <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-700 text-gray-200 rounded-md hover:bg-gray-600">
                             Gerenciar Motivos
                         </button>
@@ -432,7 +439,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                                             </>
                                                         )}
                                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                                        {adminData.role === 'superadmin' && (
+                                                        {isSuperAdmin && (
                                                           <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
                                                         )}
                                                     </div>
@@ -517,7 +524,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                                 </>
                                             )}
                                             <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                            {adminData.role === 'superadmin' && (
+                                            {isSuperAdmin && (
                                                 <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
                                             )}
                                         </div>

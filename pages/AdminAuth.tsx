@@ -10,6 +10,7 @@ import StateManagementPage from './StateManagementPage';
 import ManageUsersPage from './ManageUsersPage';
 import SettingsPage from './SettingsPage';
 import SubscriptionPage from './SubscriptionPage';
+import SuperAdminDashboard from './SuperAdminDashboard';
 
 const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -103,24 +104,26 @@ const AdminPageContent: React.FC = () => {
     }
     
     if (adminData) {
+        if (adminData.role === 'superadmin') {
+            return (
+                <Routes>
+                    <Route index element={<SuperAdminDashboard />} />
+                    <Route path="promoters" element={<AdminPanel adminData={adminData} />} />
+                    <Route path="states" element={<StatesListPage />} />
+                    <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                </Routes>
+            );
+        }
+
+        // Routes for 'admin' and 'viewer'
         return (
             <Routes>
                 <Route index element={<AdminPanel adminData={adminData} />} />
-
-                {/* Org Admin & Superadmin Routes */}
-                {(adminData.role === 'superadmin' || adminData.role === 'admin') && (
+                {(adminData.role === 'admin') && (
                     <>
                         <Route path="settings" element={<SettingsPage />} />
                         <Route path="settings/subscription" element={<SubscriptionPage />} />
                         <Route path="users" element={<ManageUsersPage />} />
-                    </>
-                )}
-
-                {/* Superadmin Only Routes */}
-                {adminData.role === 'superadmin' && (
-                    <>
-                        <Route path="states" element={<StatesListPage />} />
-                        <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
                     </>
                 )}
             </Routes>
