@@ -312,7 +312,12 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
     }
 
     // Special handling for date input to show placeholder
-    const [inputType, setInputType] = useState('text');
+    const [inputType, setInputType] = useState(props.value ? 'date' : 'text');
+
+    useEffect(() => {
+        // This syncs the input type if the value is changed from the parent component (e.g., form reset)
+        setInputType(props.value ? 'date' : 'text');
+    }, [props.value]);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
         setInputType('date');
