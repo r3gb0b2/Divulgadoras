@@ -140,20 +140,25 @@ const ManageUsersPage: React.FC = () => {
         e.preventDefault();
         setError('');
         if (!email) return setError("O campo de e-mail é obrigatório.");
-        if (isApproving && !password) return setError("É obrigatório definir uma senha para aprovar um novo usuário.");
-        
+        // Password is now only required for the manual "Add User" flow.
+        if (!editingTarget && !isApproving && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário manualmente.");
+
         setIsLoading(true);
         try {
             let targetUid: string | null = null;
             
             if (isApproving) {
-                // Approving a new user
-                const { user } = await createUserWithEmailAndPassword(auth, email, password);
-                targetUid = user.uid;
-                alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
+                // Approving a new user: UID already exists from the application.
+                targetUid = (editingTarget as AdminApplication).uid;
+                alert(`Usuário ${email} aprovado com sucesso.`);
             } else if (editingTarget) {
                 // Editing an existing user
                 targetUid = (editingTarget as AdminUserData).uid;
+            } else {
+                // Manually adding a new user (Superadmin only)
+                const { user } = await createUserWithEmailAndPassword(auth, email, password);
+                targetUid = user.uid;
+                alert(`Usuário ${email} criado manualmente com sucesso. Lembre-se de compartilhar a senha com ele.`);
             }
 
             if (!targetUid) throw new Error("Não foi possível encontrar o UID do usuário.");
@@ -192,7 +197,7 @@ const ManageUsersPage: React.FC = () => {
     };
 
     const handleDeny = async (appToDeny: AdminApplication) => {
-        if (window.confirm(`Tem certeza que deseja negar o acesso para ${appToDeny.email}?`)) {
+        if (window.confirm(`Tem certeza que deseja negar o acesso para ${appToDeny.email}? A conta de autenticação criada será mantida, mas a solicitação será removida.`)) {
             setIsLoading(true);
             try {
                 await deleteAdminApplication(appToDeny.id);
@@ -235,12 +240,15 @@ const ManageUsersPage: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-300">Email</label>
                             <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!!editingTarget} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"/>
                         </div>
-                        {isApproving && (
+                        
+                        {/* Password field only shown for manual user creation */}
+                        {!editingTarget && !isApproving && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Definir Senha Inicial</label>
+                                <label className="block text-sm font-medium text-gray-300">Definir Senha</label>
                                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" placeholder="Mínimo 6 caracteres" />
                             </div>
                         )}
+                        
                          <div>
                             <label className="block text-sm font-medium text-gray-300">Nível de Acesso</label>
                             <select value={role} onChange={e => setRole(e.target.value as AdminRole)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">

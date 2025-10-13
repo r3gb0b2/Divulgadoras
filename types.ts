@@ -49,6 +49,7 @@ export interface AdminUserData {
 
 export interface AdminApplication {
     id: string;
+    uid: string;
     email: string;
     createdAt: FieldValue;
 }

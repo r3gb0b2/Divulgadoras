@@ -1,5 +1,6 @@
-import { firestore } from '../firebase/config';
+import { firestore, auth } from '../firebase/config';
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, addDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { AdminUserData, AdminApplication } from '../types';
 
 /**
@@ -94,28 +95,41 @@ export const deleteAdminUser = async (uid: string): Promise<void> => {
 
 // --- Admin Application Service ---
 
-export const requestAdminAccess = async (email: string): Promise<void> => {
+export const createAdminAndApplication = async (email: string, password: string): Promise<void> => {
     try {
+        const normalizedEmail = email.toLowerCase().trim();
         // Check if email is already an admin
-        const qAdmin = query(collection(firestore, "admins"), where("email", "==", email.toLowerCase().trim()));
+        const qAdmin = query(collection(firestore, "admins"), where("email", "==", normalizedEmail));
         const adminSnapshot = await getDocs(qAdmin);
         if (!adminSnapshot.empty) {
             throw new Error("Este e-mail já pertence a um administrador.");
         }
         
         // Check if there is already a pending application for this email
-        const qPending = query(collection(firestore, "admin_applications"), where("email", "==", email.toLowerCase().trim()));
+        const qPending = query(collection(firestore, "admin_applications"), where("email", "==", normalizedEmail));
         const pendingSnapshot = await getDocs(qPending);
         if (!pendingSnapshot.empty) {
             throw new Error("Já existe uma solicitação pendente para este e-mail.");
         }
 
+        // Create the user in Firebase Auth first
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const { uid } = userCredential.user;
+
+        // Then, create the application document for approval
         await addDoc(collection(firestore, 'admin_applications'), {
-            email: email.toLowerCase().trim(),
+            uid,
+            email: normalizedEmail,
             createdAt: serverTimestamp()
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error requesting admin access: ", error);
+        if (error.code === 'auth/email-already-in-use') {
+            throw new Error("Este e-mail já está cadastrado. Se você já tem acesso, faça login. Se esqueceu sua senha, contate o suporte.");
+        }
+        if (error.code === 'auth/weak-password') {
+            throw new Error("A senha deve ter pelo menos 6 caracteres.");
+        }
         if (error instanceof Error) throw error;
         throw new Error("Não foi possível enviar a solicitação.");
     }
