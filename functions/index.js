@@ -15,10 +15,11 @@ const db = admin.firestore();
 setGlobalOptions({ region: "southamerica-east1" });
 
 
-// IMPORTANT: Replace these with your actual Price IDs from your Stripe Dashboard
+// ATENÇÃO: Estes IDs de preço são exemplos. Você PRECISA substituí-los
+// pelos IDs de Preço REAIS do seu painel Stripe para que a assinatura funcione.
 const STRIPE_PRICE_IDS = {
-    basic: 'price_1PbydWRx7f8p2bWBRYd8b9eA',
-    professional: 'price_1PbydWRx7f8p2bWBTGfA9cDE',
+    basic: 'price_1PbydWRx7f8p2bWBRYd8b9eA', // Substitua pelo seu ID de preço do plano Básico
+    professional: 'price_1PbydWRx7f8p2bWBTGfA9cDE', // Substitua pelo seu ID de preço do plano Profissional
 };
 
 
@@ -49,12 +50,16 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
 
         const uid = userRecord.uid;
 
+        // Dynamically construct the base URL from the Firebase project ID
+        const baseUrl = `https://${process.env.GCLOUD_PROJECT}.web.app`;
+
         // Step 2: Create the Stripe Checkout session
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
-            success_url: `${process.env.BASE_URL}/admin`, // Define BASE_URL in your env
-            cancel_url: `${process.env.BASE_URL}/planos`,
+            // Use the dynamically generated URL. The '#' is needed for HashRouter.
+            success_url: `${baseUrl}/#/admin`,
+            cancel_url: `${baseUrl}/#/planos`,
             customer_email: email,
             line_items: [{ price: priceId, quantity: 1 }],
             // IMPORTANT: Pass the new user's UID and other necessary info in metadata.
