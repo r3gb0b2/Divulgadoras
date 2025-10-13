@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 import { Promoter, Campaign } from '../types';
@@ -80,7 +81,7 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
         const fetchCampaignData = async () => {
             if (promoter && promoter.status === 'approved' && promoter.campaignName) {
                 try {
-                    const campaigns = await getCampaigns(promoter.state);
+                    const campaigns = await getCampaigns(promoter.state, promoter.organizationId);
                     const foundCampaign = campaigns.find(c => c.name === promoter.campaignName);
                     if (foundCampaign) {
                         setCampaign(foundCampaign);
@@ -201,20 +202,29 @@ const StatusCard: React.FC<{ promoter: Promoter }> = ({ promoter }) => {
 };
 
 const StatusCheck: React.FC = () => {
+    const { organizationId } = useParams<{ organizationId: string }>();
     const [email, setEmail] = useState('');
     const [promoters, setPromoters] = useState<Promoter[] | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     
+    useEffect(() => {
+        if (!organizationId) {
+            setError("Nenhuma organização foi selecionada. Volte à página inicial para escolher uma.");
+        }
+    }, [organizationId]);
+    
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!organizationId) return;
+
         setIsLoading(true);
         setError(null);
         setPromoters(null);
         setSearched(true);
         try {
-            const result = await checkPromoterStatus(email);
+            const result = await checkPromoterStatus(email, organizationId);
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
@@ -229,7 +239,7 @@ const StatusCheck: React.FC = () => {
         }
 
         if (!promoters) {
-            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail.</p>;
+            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail nesta organização.</p>;
         }
 
         return (
@@ -253,10 +263,11 @@ const StatusCheck: React.FC = () => {
                         placeholder="Seu e-mail de cadastro"
                         className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         required
+                        disabled={!organizationId}
                     />
                      <button
                         type="submit"
-                        disabled={isLoading}
+                        disabled={isLoading || !organizationId}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                     >
                         {isLoading ? 'Verificando...' : 'Verificar'}

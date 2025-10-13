@@ -17,6 +17,7 @@ export interface Promoter {
   hasJoinedGroup?: boolean;
   state: string;
   campaignName?: string;
+  organizationId: string;
 }
 
 export interface PromoterApplicationData {
@@ -29,11 +30,13 @@ export interface PromoterApplicationData {
   photos: File[];
   state: string;
   campaignName?: string;
+  organizationId: string;
 }
 
 export interface RejectionReason {
   id: string;
   text: string;
+  organizationId: string;
 }
 
 // Types for Admin User Management
@@ -45,6 +48,7 @@ export interface AdminUserData {
   role: AdminRole;
   assignedStates: string[];
   assignedCampaigns?: { [stateAbbr: string]: string[] };
+  organizationId?: string; // Superadmin (app owner) won't have this
 }
 
 export interface AdminApplication {
@@ -72,4 +76,12 @@ export interface Campaign {
   isActive: boolean;
   whatsappLink: string;
   rules: string;
+  organizationId: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  ownerUid: string;
+  createdAt: FieldValue;
 }

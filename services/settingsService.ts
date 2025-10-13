@@ -7,10 +7,8 @@ const STATES_CONFIG_DOC_ID = 'statesConfig';
 const SETTINGS_COLLECTION = 'settings';
 
 /**
- * Fetches the configuration for all registration states.
- * This is a read-only function that merges the configuration from the database
- * with the canonical list of states, providing safe defaults for any missing
- * or malformed configurations without writing back to the DB.
+ * Fetches the global configuration for all registration states.
+ * This remains a global setting managed by the superadmin.
  * @returns A promise that resolves to the StatesConfig object.
  */
 export const getStatesConfig = async (): Promise<StatesConfig> => {
@@ -21,32 +19,19 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
         const dbConfig = docSnap.exists() ? (docSnap.data() as Partial<StatesConfig>) : {};
         const finalConfig: StatesConfig = {};
 
-        // Use the canonical list of states as the source of truth.
         for (const state of states) {
             const stateAbbr = state.abbr;
-
-            // Start with a complete, safe default object. This applies to new states not yet in the DB.
-            const defaultConfig: StateConfig = {
-                isActive: true,
-                rules: '',
-            };
-
+            const defaultConfig: StateConfig = { isActive: true, rules: '' };
             const dbStateConfig = dbConfig[stateAbbr] as Partial<StateConfig> | boolean | undefined;
             
             let stateFinalConfig: StateConfig;
-
             if (typeof dbStateConfig === 'object' && dbStateConfig !== null) {
-                // If there's an object in the DB, merge it over the default.
-                // This correctly preserves all valid properties from the DB, including `isActive: false`.
                 stateFinalConfig = { ...defaultConfig, ...dbStateConfig };
             } else if (typeof dbStateConfig === 'boolean') {
-                // Handle legacy boolean format, merging it with other defaults.
                 stateFinalConfig = { ...defaultConfig, isActive: dbStateConfig };
             } else {
-                // If there's nothing in the DB for this state, use the default config.
                 stateFinalConfig = defaultConfig;
             }
-
             finalConfig[stateAbbr] = stateFinalConfig;
         }
         
@@ -81,9 +66,6 @@ export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | n
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        // Using setDoc without merge overwrites the entire document.
-        // This is the most direct and reliable way to ensure the database state
-        // exactly matches the state from the UI.
         await setDoc(docRef, config);
     } catch (error) {
         console.error("Error setting states config: ", error);
@@ -91,13 +73,14 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     }
 };
 
-// --- Campaign Service Functions ---
+// --- Campaign Service Functions (Now Multi-tenant) ---
 
-export const getCampaigns = async (stateAbbr: string): Promise<Campaign[]> => {
+export const getCampaigns = async (stateAbbr: string, organizationId: string): Promise<Campaign[]> => {
     try {
         const q = query(
             collection(firestore, "campaigns"), 
-            where("stateAbbr", "==", stateAbbr)
+            where("stateAbbr", "==", stateAbbr),
+            where("organizationId", "==", organizationId)
         );
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
@@ -107,9 +90,13 @@ export const getCampaigns = async (stateAbbr: string): Promise<Campaign[]> => {
     }
 };
 
-export const getAllCampaigns = async (): Promise<Campaign[]> => {
+export const getAllCampaigns = async (organizationId?: string): Promise<Campaign[]> => {
     try {
-        const querySnapshot = await getDocs(collection(firestore, "campaigns"));
+        let q = query(collection(firestore, "campaigns"));
+        if (organizationId) {
+            q = query(q, where("organizationId", "==", organizationId));
+        }
+        const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
         console.error("Error getting all campaigns: ", error);

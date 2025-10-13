@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { states as allStates } from '../constants/states';
 import { getStatesConfig } from '../services/settingsService';
 
 const StateSelection: React.FC = () => {
+  const { organizationId } = useParams<{ organizationId: string }>();
   const [activeStates, setActiveStates] = useState<{ abbr: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ const StateSelection: React.FC = () => {
         {activeStates.map(state => (
           <Link
             key={state.abbr}
-            to={`/register/${state.abbr}`}
+            to={`/${organizationId}/register/${state.abbr}`}
             className="block p-4 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
           >
             <span className="text-2xl">{state.abbr}</span>

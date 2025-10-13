@@ -4,18 +4,21 @@ import { getCampaigns } from '../services/settingsService';
 import { Campaign } from '../types';
 
 const RulesPage: React.FC = () => {
-  const { state, campaignName } = useParams<{ state: string; campaignName: string }>();
+  // FIX: Added organizationId to useParams to be able to fetch campaigns.
+  const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state && campaignName) {
+    // FIX: Added organizationId check.
+    if (organizationId && state && campaignName) {
       const fetchCampaign = async () => {
         setIsLoading(true);
         setError(null);
         try {
-          const campaigns = await getCampaigns(state);
+          // FIX: Passed organizationId to getCampaigns to fix missing argument error.
+          const campaigns = await getCampaigns(state, organizationId);
           const decodedCampaignName = decodeURIComponent(campaignName);
           const foundCampaign = campaigns.find(c => c.name === decodedCampaignName);
           if (foundCampaign) {
@@ -34,7 +37,8 @@ const RulesPage: React.FC = () => {
       setError("Nenhuma localidade ou evento especificado.");
       setIsLoading(false);
     }
-  }, [state, campaignName]);
+    // FIX: Added organizationId to dependency array.
+  }, [organizationId, state, campaignName]);
 
   const renderContent = () => {
     if (isLoading) {

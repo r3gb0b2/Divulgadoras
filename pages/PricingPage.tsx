@@ -46,7 +46,7 @@ const PricingPage: React.FC = () => {
                             </ul>
                         </div>
                         <Link 
-                            to="/admin-register" 
+                            to="/organizacao-register" 
                             className="mt-8 block w-full py-3 px-6 text-center rounded-md text-white font-medium bg-gray-600 hover:bg-gray-500 transition-colors"
                         >
                             Começar agora
@@ -85,7 +85,7 @@ const PricingPage: React.FC = () => {
                             </ul>
                         </div>
                          <Link 
-                            to="/admin-register" 
+                            to="/organizacao-register" 
                             className="mt-8 block w-full py-3 px-6 text-center rounded-md text-white font-medium bg-primary hover:bg-primary-dark transition-colors"
                         >
                             Escolher plano Profissional

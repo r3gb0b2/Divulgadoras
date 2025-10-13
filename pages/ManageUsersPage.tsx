@@ -1,48 +1,48 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AdminUserData, AdminRole, Campaign, AdminApplication } from '../types';
-import { getAllAdmins, setAdminUserData, deleteAdminUser, getPendingAdminApplications, deleteAdminApplication } from '../services/adminService';
+import { AdminUserData, AdminRole, Campaign } from '../types';
+import { getAllAdmins, setAdminUserData, deleteAdminUser } from '../services/adminService';
 import { getAllCampaigns } from '../services/settingsService';
 import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 
 const ManageUsersPage: React.FC = () => {
+    const { adminData: currentAdmin } = useAdminAuth();
     const [admins, setAdmins] = useState<AdminUserData[]>([]);
-    const [pendingApps, setPendingApps] = useState<AdminApplication[]>([]);
     const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     
     // Form state for new/editing admin
-    const [editingTarget, setEditingTarget] = useState<AdminUserData | AdminApplication | null>(null);
+    const [editingTarget, setEditingTarget] = useState<AdminUserData | null>(null);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState<AdminRole>('viewer');
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
     const [assignedCampaigns, setAssignedCampaigns] = useState<{ [stateAbbr: string]: string[] }>({});
     
-    const isApproving = editingTarget ? 'createdAt' in editingTarget : false;
+    const isSuperAdmin = currentAdmin?.role === 'superadmin';
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError('');
         try {
-            const [adminData, campaignData, pendingData] = await Promise.all([
-                getAllAdmins(), 
-                getAllCampaigns(),
-                getPendingAdminApplications()
+            // Org admins only fetch their own users and campaigns
+            const [adminData, campaignData] = await Promise.all([
+                getAllAdmins(currentAdmin?.organizationId), 
+                getAllCampaigns(currentAdmin?.organizationId),
             ]);
             setAdmins(adminData);
             setAllCampaigns(campaignData);
-            setPendingApps(pendingData);
         } catch (err) {
             setError('Falha ao carregar dados.');
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [currentAdmin]);
 
     useEffect(() => {
         fetchData();
@@ -75,7 +75,6 @@ const ManageUsersPage: React.FC = () => {
         
         setAssignedStates(newAssignedStates);
 
-        // Also clean up campaign assignments if a state is removed
         if (isCurrentlyAssigned) {
             setAssignedCampaigns(prev => {
                 const newCampaigns = {...prev};
@@ -120,57 +119,51 @@ const ManageUsersPage: React.FC = () => {
         });
     }
 
-    const handleEditClick = (target: AdminUserData | AdminApplication) => {
+    const handleEditClick = (target: AdminUserData) => {
         setEditingTarget(target);
         setEmail(target.email);
         setPassword(''); 
-        
-        if ('role' in target) { // is AdminUserData
-            setRole(target.role);
-            setAssignedStates(target.assignedStates || []);
-            setAssignedCampaigns(target.assignedCampaigns || {});
-        } else { // is AdminApplication
-            setRole('viewer');
-            setAssignedStates([]);
-            setAssignedCampaigns({});
-        }
+        setRole(target.role);
+        setAssignedStates(target.assignedStates || []);
+        setAssignedCampaigns(target.assignedCampaigns || {});
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         if (!email) return setError("O campo de e-mail é obrigatório.");
-        // Password is now only required for the manual "Add User" flow.
-        if (!editingTarget && !isApproving && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário manualmente.");
+        if (!editingTarget && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário.");
+        if (!isSuperAdmin && !currentAdmin?.organizationId) return setError("Você não está associado a uma organização.");
 
         setIsLoading(true);
         try {
             let targetUid: string | null = null;
             
-            if (isApproving) {
-                // Approving a new user: UID already exists from the application.
-                targetUid = (editingTarget as AdminApplication).uid;
-                alert(`Usuário ${email} aprovado com sucesso.`);
-            } else if (editingTarget) {
-                // Editing an existing user
-                targetUid = (editingTarget as AdminUserData).uid;
+            if (editingTarget) {
+                targetUid = editingTarget.uid;
             } else {
-                // Manually adding a new user (Superadmin only)
                 const { user } = await createUserWithEmailAndPassword(auth, email, password);
                 targetUid = user.uid;
-                alert(`Usuário ${email} criado manualmente com sucesso. Lembre-se de compartilhar a senha com ele.`);
+                alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
             }
 
             if (!targetUid) throw new Error("Não foi possível encontrar o UID do usuário.");
 
-            const dataToSave = { email, role, assignedStates, assignedCampaigns };
+            const dataToSave: Omit<AdminUserData, 'uid'> = { 
+                email, 
+                role, 
+                assignedStates, 
+                assignedCampaigns,
+                organizationId: currentAdmin?.organizationId
+            };
+
+            // Superadmin can create other superadmins without an orgId
+            if (isSuperAdmin && role === 'superadmin') {
+                delete dataToSave.organizationId;
+            }
+            
             await setAdminUserData(targetUid, dataToSave);
             
-            // If we were approving, delete the application now
-            if (isApproving) {
-                await deleteAdminApplication(editingTarget!.id);
-            }
-
             resetForm();
             await fetchData();
         } catch (err: any) {
@@ -183,27 +176,13 @@ const ManageUsersPage: React.FC = () => {
     };
     
     const handleDelete = async (adminToDelete: AdminUserData) => {
-        if (window.confirm(`Tem certeza que deseja remover as permissões de admin para ${adminToDelete.email}? Esta ação não remove o usuário da autenticação, apenas do painel.`)) {
+        if (window.confirm(`Tem certeza que deseja remover as permissões de admin para ${adminToDelete.email}?`)) {
             setIsLoading(true);
             try {
                 await deleteAdminUser(adminToDelete.uid);
                 await fetchData();
             } catch (err: any) {
                 setError(err.message || 'Falha ao remover administrador.');
-            } finally {
-                setIsLoading(false);
-            }
-        }
-    };
-
-    const handleDeny = async (appToDeny: AdminApplication) => {
-        if (window.confirm(`Tem certeza que deseja negar o acesso para ${appToDeny.email}? A conta de autenticação criada será mantida, mas a solicitação será removida.`)) {
-            setIsLoading(true);
-            try {
-                await deleteAdminApplication(appToDeny.id);
-                await fetchData();
-            } catch (err: any) {
-                setError(err.message || 'Falha ao negar a solicitação.');
             } finally {
                 setIsLoading(false);
             }
@@ -224,7 +203,7 @@ const ManageUsersPage: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Gerenciar Usuários Admin</h1>
+                <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
                 <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     &larr; Voltar ao Painel
                 </Link>
@@ -234,15 +213,14 @@ const ManageUsersPage: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-6">
                     {/* Form Section */}
                     <form onSubmit={handleSubmit} className="w-full md:w-1/3 border border-gray-700 p-4 rounded-lg flex flex-col space-y-4">
-                        <h3 className="text-xl font-semibold">{isApproving ? 'Aprovar Solicitação' : (editingTarget ? 'Editar Usuário' : 'Adicionar Usuário')}</h3>
+                        <h3 className="text-xl font-semibold">{editingTarget ? 'Editar Usuário' : 'Adicionar Usuário'}</h3>
                         
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Email</label>
                             <input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!!editingTarget} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"/>
                         </div>
                         
-                        {/* Password field only shown for manual user creation */}
-                        {!editingTarget && !isApproving && (
+                        {!editingTarget && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Definir Senha</label>
                                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" placeholder="Mínimo 6 caracteres" />
@@ -254,7 +232,7 @@ const ManageUsersPage: React.FC = () => {
                             <select value={role} onChange={e => setRole(e.target.value as AdminRole)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
                                 <option value="viewer">Visualizador</option>
                                 <option value="admin">Admin</option>
-                                <option value="superadmin">Super Admin</option>
+                                {isSuperAdmin && <option value="superadmin">Super Admin</option>}
                             </select>
                         </div>
 
@@ -308,25 +286,6 @@ const ManageUsersPage: React.FC = () => {
 
                     {/* Users List Section */}
                     <div className="w-full md:w-2/3 flex-grow overflow-y-auto border border-gray-700 p-4 rounded-lg space-y-6">
-                         <div>
-                            <h3 className="text-xl font-semibold mb-4">Solicitações Pendentes</h3>
-                            {isLoading ? <p>Carregando...</p> : (
-                                pendingApps.length === 0 
-                                ? <p className="text-sm text-gray-400">Nenhuma solicitação pendente.</p>
-                                : <div className="space-y-3">
-                                    {pendingApps.map(app => (
-                                        <div key={app.id} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
-                                            <p className="font-semibold break-words flex-1">{app.email}</p>
-                                            <div className="flex justify-end items-center gap-4 mt-3 md:mt-0 md:ml-4 flex-shrink-0">
-                                                <button onClick={() => handleEditClick(app)} className="text-green-400 hover:text-green-300 text-sm font-medium">Aprovar</button>
-                                                <button onClick={() => handleDeny(app)} className="text-red-400 hover:text-red-300 text-sm font-medium">Negar</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                         </div>
-
                          <div>
                              <h3 className="text-xl font-semibold mb-4">Usuários Existentes</h3>
                              {isLoading ? <p>Carregando...</p> : (

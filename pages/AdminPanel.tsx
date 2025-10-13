@@ -80,7 +80,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setError(null);
         try {
             const statesToFetch = adminData.role === 'superadmin' ? null : adminData.assignedStates;
-            const data = await getPromoters(statesToFetch);
+            const data = await getPromoters(adminData.organizationId, statesToFetch);
             setAllPromoters(data);
         } catch (error) {
             setError("Falha ao buscar divulgadoras.");
@@ -91,24 +91,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [adminData]);
 
     const fetchReasons = useCallback(async () => {
+        if (!adminData.organizationId) return;
         try {
-            const data = await getRejectionReasons();
+            const data = await getRejectionReasons(adminData.organizationId);
             setRejectionReasons(data);
         } catch (error) {
             setError("Falha ao buscar motivos de rejeição.");
             console.error(error);
         }
-    }, []);
+    }, [adminData.organizationId]);
 
 
     useEffect(() => {
         fetchPromoters();
-        if (canManage) {
+        if (canManage && adminData.organizationId) {
             fetchReasons();
         }
-    }, [fetchPromoters, fetchReasons, canManage]);
+    }, [fetchPromoters, fetchReasons, canManage, adminData.organizationId]);
     
     const promotersInScope = useMemo(() => {
+        // Superadmin without org sees all. Org-admin sees their org's promoters.
+        // The getPromoters function already scopes by orgId.
+        // This additional filter is for campaign-level permissions for non-superadmins.
         if (adminData.role === 'superadmin' || !adminData.assignedCampaigns) {
             return allPromoters;
         }
@@ -265,7 +269,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
-                <h1 className="text-3xl font-bold">Painel Administrativo</h1>
+                <h1 className="text-3xl font-bold">Painel do Organizador</h1>
                 <div className="flex items-center gap-4 flex-wrap justify-end">
                     {adminData.role === 'superadmin' && (
                         <>
@@ -551,11 +555,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         onConfirm={handleConfirmRejection}
                         reasons={rejectionReasons}
                     />
-                    <ManageReasonsModal
+                    {adminData.organizationId && <ManageReasonsModal
                         isOpen={isReasonsModalOpen}
                         onClose={() => setIsReasonsModalOpen(false)}
                         onReasonsUpdated={fetchReasons}
-                    />
+                        organizationId={adminData.organizationId}
+                    />}
                 </>
             )}
         </div>

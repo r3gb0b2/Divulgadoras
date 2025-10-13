@@ -6,6 +6,7 @@ import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import AdminRegistrationPage from './pages/AdminRegistrationPage';
 import PricingPage from './pages/PricingPage';
+import PublicHome from './pages/PublicHome';
 
 const App: React.FC = () => {
   return (
@@ -16,19 +17,22 @@ const App: React.FC = () => {
             <Link to="/" className="text-2xl font-bold text-primary">DIVULGAÇÕES D&E MUSIC</Link>
             <div className='space-x-4'>
               <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-              <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
+              <a href="#/public-home" onClick={(e) => { e.preventDefault(); window.location.hash = '/'; }} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</a>
               <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
-              <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
+              <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Login Organizador</Link>
             </div>
           </nav>
         </header>
         <main className="container mx-auto p-4 md:p-8 flex-grow">
           <Routes>
-            <Route path="/" element={<StateSelection />} />
-            <Route path="/register/:state/:campaignName?" element={<RegistrationForm />} />
+            <Route path="/" element={<PublicHome />} />
+            <Route path="/:organizationId" element={<StateSelection />} />
+            <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
+            <Route path="/:organizationId/status" element={<StatusCheck />} />
+            
             <Route path="/admin/*" element={<AdminAuth />} />
-            <Route path="/admin-register" element={<AdminRegistrationPage />} />
-            <Route path="/status" element={<StatusCheck />} />
+            <Route path="/organizacao-register" element={<AdminRegistrationPage />} />
+            <Route path="/status" element={<PublicHome promptForOrg={true} />} />
             <Route path="/planos" element={<PricingPage />} />
           </Routes>
         </main>

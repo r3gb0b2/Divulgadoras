@@ -49,14 +49,20 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
   const fetchData = useCallback(async () => {
-    if (!stateAbbr) return;
+    if (!stateAbbr || !adminData.organizationId) {
+        if(adminData.role !== 'superadmin'){
+             setError("Organização não encontrada para este administrador.");
+             setIsLoading(false);
+             return;
+        }
+    }
     setIsLoading(true);
     setError(null);
     try {
       const [promotersData, configData, campaignsData] = await Promise.all([
-        getPromoters([stateAbbr]),
+        getPromoters(adminData.organizationId, [stateAbbr]),
         getStateConfig(stateAbbr),
-        getCampaigns(stateAbbr),
+        getCampaigns(stateAbbr, adminData.organizationId || ''),
       ]);
       
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
@@ -147,7 +153,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stateAbbr || !campaignForm.name) return;
+    if (!stateAbbr || !campaignForm.name || !adminData.organizationId) return;
     setIsSaving(true);
     try {
       const dataToSave = {
@@ -156,14 +162,15 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         isActive: campaignForm.isActive !== false,
         whatsappLink: campaignForm.whatsappLink || '',
         rules: campaignForm.rules || '',
-        stateAbbr
+        stateAbbr,
+        organizationId: adminData.organizationId,
       };
 
       if (campaignForm.id) { // Editing existing
         const { id, ...data } = campaignForm;
         await updateCampaign(id, data as Omit<Campaign, 'id'>);
       } else { // Adding new
-        await addCampaign(dataToSave);
+        await addCampaign(dataToSave as Omit<Campaign, 'id'>);
       }
       setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' }); // Reset form
       await fetchData(); // Refresh
@@ -285,7 +292,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                             </div>
                         ))}
                     </div>
-                    {adminData.role === 'superadmin' && (
+                    {canManage && (
                       <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
                           <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
                           <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>

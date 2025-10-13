@@ -5,18 +5,18 @@ import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
-    // Check for existing registration for the same email, state, and campaign
+    // Check for existing registration for the same email, state, campaign and organization
     const q = query(
       collection(firestore, "promoters"),
       where("email", "==", promoterData.email.toLowerCase().trim()),
       where("state", "==", promoterData.state),
-      where("campaignName", "==", promoterData.campaignName || null)
+      where("campaignName", "==", promoterData.campaignName || null),
+      where("organizationId", "==", promoterData.organizationId)
     );
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
       throw new Error("Você já se cadastrou para este evento/gênero.");
     }
-
 
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
@@ -50,20 +50,23 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
   }
 };
 
-export const getPromoters = async (states?: string[] | null): Promise<Promoter[]> => {
+export const getPromoters = async (organizationId: string | undefined, states?: string[] | null): Promise<Promoter[]> => {
   try {
-    const promotersRef = collection(firestore, "promoters");
-    let q;
+    let q = query(collection(firestore, "promoters"));
     let shouldSortManually = false;
 
+    // Filter by organization if an ID is provided
+    if (organizationId) {
+      q = query(q, where("organizationId", "==", organizationId));
+    }
+
     if (states && states.length > 0) {
-      // FIX: Query without orderBy to avoid composite index errors.
-      // Sorting will be handled on the client-side after fetching.
-      q = query(promotersRef, where("state", "in", states));
+      q = query(q, where("state", "in", states));
       shouldSortManually = true;
-    } else if (states === null) { // null means fetch all (for superadmin)
-      q = query(promotersRef, orderBy("createdAt", "desc"));
-    } else { // states is an empty array, so return nothing.
+    } else if (states === null) {
+       // null means fetch all (for superadmin with no orgId or org admin for their org)
+       q = query(q, orderBy("createdAt", "desc"));
+    } else {
       return [];
     }
     
@@ -73,13 +76,11 @@ export const getPromoters = async (states?: string[] | null): Promise<Promoter[]
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
     
-    // If we couldn't order by date in the query, do it now.
     if (shouldSortManually) {
         promoters.sort((a, b) => {
-            // Firestore timestamps need to be converted to compare.
             const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
             const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-            return timeB - timeA; // Sort descending (newest first).
+            return timeB - timeA;
         });
     }
 
@@ -103,18 +104,18 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
 export const deletePromoter = async (id: string): Promise<void> => {
     try {
       await deleteDoc(doc(firestore, "promoters", id));
-      // Note: This does not delete photos from storage. That would require more logic.
     } catch (error) {
       console.error("Error deleting promoter: ", error);
       throw new Error("Não foi possível deletar a divulgadora.");
     }
 };
 
-export const checkPromoterStatus = async (email: string): Promise<Promoter[] | null> => {
+export const checkPromoterStatus = async (email: string, organizationId: string): Promise<Promoter[] | null> => {
     try {
         const q = query(
             collection(firestore, "promoters"), 
-            where("email", "==", email.toLowerCase().trim())
+            where("email", "==", email.toLowerCase().trim()),
+            where("organizationId", "==", organizationId)
         );
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
@@ -126,11 +127,10 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter[] | n
             promoters.push({ id: doc.id, ...doc.data() } as Promoter);
         });
 
-        // Sort manually to avoid composite index requirement
         promoters.sort((a, b) => {
             const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
             const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-            return timeB - timeA; // Descending
+            return timeB - timeA;
         });
 
         return promoters;
@@ -142,20 +142,24 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter[] | n
 
 // --- Rejection Reasons Service ---
 
-export const getRejectionReasons = async (): Promise<RejectionReason[]> => {
+export const getRejectionReasons = async (organizationId: string): Promise<RejectionReason[]> => {
     try {
-        const q = query(collection(firestore, "rejectionReasons"), orderBy("text", "asc"));
+        const q = query(
+            collection(firestore, "rejectionReasons"),
+            where("organizationId", "==", organizationId),
+            orderBy("text", "asc")
+        );
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, text: doc.data().text } as RejectionReason));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RejectionReason));
     } catch (error) {
         console.error("Error getting rejection reasons: ", error);
         throw new Error("Não foi possível buscar os motivos de rejeição.");
     }
 };
 
-export const addRejectionReason = async (text: string): Promise<string> => {
+export const addRejectionReason = async (text: string, organizationId: string): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text });
+        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text, organizationId });
         return docRef.id;
     } catch (error) {
         console.error("Error adding rejection reason: ", error);

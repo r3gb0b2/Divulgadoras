@@ -6,9 +6,10 @@ interface ManageReasonsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onReasonsUpdated: () => void;
+  organizationId: string;
 }
 
-const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose, onReasonsUpdated }) => {
+const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose, onReasonsUpdated, organizationId }) => {
   const [reasons, setReasons] = useState<RejectionReason[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -16,17 +17,18 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
   const [editingReason, setEditingReason] = useState<RejectionReason | null>(null);
 
   const fetchReasons = useCallback(async () => {
+    if (!organizationId) return;
     setIsLoading(true);
     setError('');
     try {
-      const data = await getRejectionReasons();
+      const data = await getRejectionReasons(organizationId);
       setReasons(data);
     } catch (err) {
       setError('Falha ao carregar os motivos.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [organizationId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -39,9 +41,9 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
   }
 
   const handleAddReason = async () => {
-    if (!newReasonText.trim()) return;
+    if (!newReasonText.trim() || !organizationId) return;
     try {
-      await addRejectionReason(newReasonText);
+      await addRejectionReason(newReasonText, organizationId);
       setNewReasonText('');
       await fetchReasons();
       onReasonsUpdated();

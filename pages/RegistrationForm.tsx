@@ -57,7 +57,7 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
 };
 
 const PromoterForm: React.FC = () => {
-  const { state, campaignName } = useParams<{ state: string; campaignName?: string }>();
+  const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   
   const [formData, setFormData] = useState({
@@ -117,6 +117,10 @@ const PromoterForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    if (!organizationId) {
+        setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
+        return;
+    }
     if (!state) {
         setSubmitError("Estado não selecionado. Volte para a página inicial e selecione seu estado.");
         return;
@@ -132,7 +136,7 @@ const PromoterForm: React.FC = () => {
     
     try {
       const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
-      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName });
+      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
       setSubmitSuccess(true);
       
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
@@ -227,15 +231,15 @@ const PromoterForm: React.FC = () => {
 };
 
 const RegistrationFlowPage: React.FC = () => {
-    const { state, campaignName } = useParams<{ state: string, campaignName?: string }>();
+    const { organizationId, state, campaignName } = useParams<{ organizationId: string, state: string, campaignName?: string }>();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
+        if (organizationId && state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
             setIsLoading(true);
-            getCampaigns(state)
+            getCampaigns(state, organizationId)
                 .then(data => {
                     const activeCampaigns = data.filter(c => c.isActive);
                     setCampaigns(activeCampaigns);
@@ -245,7 +249,7 @@ const RegistrationFlowPage: React.FC = () => {
         } else {
             setIsLoading(false);
         }
-    }, [state, campaignName]);
+    }, [organizationId, state, campaignName]);
 
     if (isLoading) {
         return (
@@ -278,7 +282,7 @@ const RegistrationFlowPage: React.FC = () => {
                     {campaigns.map(campaign => (
                         <Link
                             key={campaign.id}
-                            to={`/register/${state}/${encodeURIComponent(campaign.name)}`}
+                            to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`}
                             className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
                         >
                             <span className="text-xl">{campaign.name}</span>
