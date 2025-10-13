@@ -218,7 +218,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!canManage) return;
+        if (adminData.role !== 'superadmin') return;
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
              const originalPromoters = [...allPromoters];
              setAllPromoters(allPromoters.filter(p => p.id !== id));
@@ -428,7 +428,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                                             </>
                                                         )}
                                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                                        <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                                        {adminData.role === 'superadmin' && (
+                                                          <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             )}
@@ -511,7 +513,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                                 </>
                                             )}
                                             <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                            <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                            {adminData.role === 'superadmin' && (
+                                                <button onClick={() => handleDelete(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                            )}
                                         </div>
                                     )}
                                 </div>

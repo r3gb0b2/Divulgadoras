@@ -130,7 +130,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   };
 
   const handleDeletePromoter = async (id: string) => {
-    if (!canManage) return;
+    if (adminData.role !== 'superadmin') return;
     if (window.confirm("Tem certeza que deseja excluir esta inscrição?")) {
          try {
             await deletePromoter(id);
@@ -342,7 +342,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                             </>
                                         )}
                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                        <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                        {adminData.role === 'superadmin' && (
+                                            <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                        )}
                                     </div>
                                 )}
                             </div>
