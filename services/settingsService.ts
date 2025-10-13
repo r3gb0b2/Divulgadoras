@@ -1,5 +1,5 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { states } from '../constants/states';
 import { StatesConfig, StateConfig, Campaign } from '../types';
 

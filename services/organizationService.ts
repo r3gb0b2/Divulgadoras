@@ -55,13 +55,16 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
         const q = query(
             collection(firestore, "organizations"),
-            where("status", "==", "active"),
-            where("isPublic", "==", true)
+            where("status", "==", "active")
         );
         const querySnapshot = await getDocs(q);
         const orgs: Organization[] = [];
         querySnapshot.forEach(doc => {
-            orgs.push({ id: doc.id, ...doc.data() } as Organization);
+            const data = doc.data();
+            // Filter for isPublic client-side to avoid composite index
+            if (data.isPublic === true) {
+                orgs.push({ id: doc.id, ...data } as Organization);
+            }
         });
         return orgs.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
