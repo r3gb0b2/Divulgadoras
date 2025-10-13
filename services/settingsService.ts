@@ -75,13 +75,17 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 // --- Campaign Service Functions (Now Multi-tenant) ---
 
-export const getCampaigns = async (stateAbbr: string, organizationId: string): Promise<Campaign[]> => {
+export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        const q = query(
+        let q = query(
             collection(firestore, "campaigns"), 
-            where("stateAbbr", "==", stateAbbr),
-            where("organizationId", "==", organizationId)
+            where("stateAbbr", "==", stateAbbr)
         );
+
+        if (organizationId) {
+            q = query(q, where("organizationId", "==", organizationId));
+        }
+
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {

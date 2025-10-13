@@ -49,20 +49,22 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
   const fetchData = useCallback(async () => {
-    if (!stateAbbr || !adminData.organizationId) {
-        if(adminData.role !== 'superadmin'){
-             setError("Organização não encontrada para este administrador.");
-             setIsLoading(false);
-             return;
-        }
+    if (!stateAbbr) return;
+    
+    // Org admins must have an organizationId
+    if (adminData.role !== 'superadmin' && !adminData.organizationId) {
+         setError("Organização não encontrada para este administrador.");
+         setIsLoading(false);
+         return;
     }
+
     setIsLoading(true);
     setError(null);
     try {
       const [promotersData, configData, campaignsData] = await Promise.all([
         getPromoters(adminData.organizationId, [stateAbbr]),
         getStateConfig(stateAbbr),
-        getCampaigns(stateAbbr, adminData.organizationId || ''),
+        getCampaigns(stateAbbr, adminData.organizationId),
       ]);
       
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
@@ -153,9 +155,22 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stateAbbr || !campaignForm.name || !adminData.organizationId) return;
+    if (!stateAbbr || !campaignForm.name) return;
+    if (!adminData.organizationId && adminData.role !== 'superadmin') {
+      alert('Apenas administradores de uma organização podem criar campanhas.');
+      return;
+    }
+    // Prevent superadmin from creating org-less campaigns from this UI
+    if (adminData.role === 'superadmin' && !campaignForm.organizationId) {
+       alert('Super Admins não podem criar campanhas diretamente. Esta ação deve ser feita por um admin de organização.');
+       return;
+    }
+
     setIsSaving(true);
     try {
+      const orgId = campaignForm.organizationId || adminData.organizationId;
+      if (!orgId) throw new Error("Organization ID is missing");
+
       const dataToSave = {
         name: campaignForm.name || '',
         description: campaignForm.description || '',
@@ -163,14 +178,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         whatsappLink: campaignForm.whatsappLink || '',
         rules: campaignForm.rules || '',
         stateAbbr,
-        organizationId: adminData.organizationId,
+        organizationId: orgId,
       };
 
       if (campaignForm.id) { // Editing existing
-        const { id, ...data } = campaignForm;
-        await updateCampaign(id, data as Omit<Campaign, 'id'>);
+        await updateCampaign(campaignForm.id, dataToSave);
       } else { // Adding new
-        await addCampaign(dataToSave as Omit<Campaign, 'id'>);
+        await addCampaign(dataToSave);
       }
       setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' }); // Reset form
       await fetchData(); // Refresh
