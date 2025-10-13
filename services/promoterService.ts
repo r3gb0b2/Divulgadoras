@@ -58,16 +58,18 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
     // Filter by organization if an ID is provided
     if (organizationId) {
       q = query(q, where("organizationId", "==", organizationId));
+      // When filtering by organization, we will sort manually to avoid composite index requirement
+      shouldSortManually = true; 
     }
 
     if (states && states.length > 0) {
       // Admin with specific state assignments
       q = query(q, where("state", "in", states));
-      shouldSortManually = true; // Manual sort because 'in' query doesn't preserve order
-    } else {
-      // If no state filter, just order by creation time.
-      // This covers superadmin (states=null) and org admin with no state filter (states=[])
+      shouldSortManually = true; // Manual sort because 'in' query doesn't preserve order anyway
+    } else if (!organizationId) { 
+      // This is a superadmin with no state filter. We can use Firestore ordering.
       q = query(q, orderBy("createdAt", "desc"));
+      shouldSortManually = false; // Firestore is handling sorting
     }
     
     const querySnapshot = await getDocs(q);
@@ -76,7 +78,6 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
     
-    // Manual sort is only needed when using the 'in' filter, as Firestore doesn't guarantee order.
     if (shouldSortManually) {
         promoters.sort((a, b) => {
             const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
