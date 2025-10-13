@@ -43,7 +43,15 @@ exports.processMercadoPagoPayment = functions
             body: JSON.stringify(paymentData),
         });
 
-        const mpResult = await mpResponse.json();
+        // Robust response handling
+        const responseText = await mpResponse.text();
+        let mpResult;
+        try {
+            mpResult = JSON.parse(responseText);
+        } catch (jsonError) {
+            functions.logger.error("Mercado Pago non-JSON response", { status: mpResponse.status, text: responseText });
+            throw new functions.https.HttpsError('unavailable', `O serviço de pagamento retornou uma resposta inesperada (status: ${mpResponse.status}). Tente novamente.`);
+        }
 
         if (!mpResponse.ok) {
             const errorMessage = mpResult.cause?.[0]?.description || mpResult.message || 'O pagamento foi recusado.';
@@ -94,14 +102,19 @@ exports.processMercadoPagoPayment = functions
         return { success: true, message: 'Pagamento bem-sucedido e conta criada.', organizationId: orgRef.id };
 
     } catch (error) {
-        console.error("Erro ao processar pagamento:", error);
+        functions.logger.error('Error in processMercadoPagoPayment', { error, data });
+
         if (error instanceof functions.https.HttpsError) {
             throw error;
         }
-        functions.logger.error('Unhandled error in processMercadoPagoPayment', {
-            data,
-            error,
-        });
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro interno ao processar o pagamento.');
+
+        if (error.code && error.code.startsWith('auth/')) {
+            if (error.code === 'auth/email-already-exists') {
+                throw new functions.https.HttpsError('already-exists', 'Este e-mail já está cadastrado. Tente fazer login ou use um e-mail diferente.');
+            }
+            throw new functions.https.HttpsError('internal', `Ocorreu um erro ao criar sua conta após o pagamento (código: ${error.code}).`);
+        }
+        
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro interno ao processar sua solicitação.');
     }
 });
