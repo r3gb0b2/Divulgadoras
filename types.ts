@@ -89,3 +89,8 @@ export interface Organization {
   subscriptionStatus: 'active' | 'canceled' | 'expired' | 'trialing';
   subscriptionExpiresAt: Timestamp;
 }
+
+export interface MercadoPagoCredentials {
+    publicKey?: string;
+    accessToken?: string;
+}

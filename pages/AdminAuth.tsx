@@ -11,6 +11,7 @@ import ManageUsersPage from './ManageUsersPage';
 import SettingsPage from './SettingsPage';
 import SubscriptionPage from './SubscriptionPage';
 import SuperAdminDashboard from './SuperAdminDashboard';
+import MercadoPagoSettingsPage from './MercadoPagoSettingsPage';
 
 const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -112,6 +113,7 @@ const AdminPageContent: React.FC = () => {
                     <Route path="states" element={<StatesListPage />} />
                     <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
                     <Route path="users" element={<ManageUsersPage />} />
+                    <Route path="settings/mercado-pago" element={<MercadoPagoSettingsPage />} />
                 </Routes>
             );
         }

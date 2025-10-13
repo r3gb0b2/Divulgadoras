@@ -2,21 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plan } from '../pages/PricingPage';
 import { signUpAndCreateOrganization } from '../services/adminService';
-import { MailIcon, LockClosedIcon, UserIcon, VisaIcon, MastercardIcon, CreditCardIcon } from './Icons';
+import { LockClosedIcon, MercadoPagoIcon } from './Icons';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   plan: Plan | null;
 }
-
-// Helper to detect card type
-const getCardType = (cardNumber: string): 'visa' | 'mastercard' | 'unknown' => {
-    const cleaned = cardNumber.replace(/\s/g, '');
-    if (/^4/.test(cleaned)) return 'visa';
-    if (/^5[1-5]/.test(cleaned)) return 'mastercard';
-    return 'unknown';
-};
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) => {
   const [step, setStep] = useState(1);
@@ -27,13 +19,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardType, setCardType] = useState<'visa' | 'mastercard' | 'unknown'>('unknown');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Processando sua inscrição...');
 
   useEffect(() => {
     // Reset form when modal opens or plan changes
@@ -43,12 +32,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
       setEmail('');
       setPassword('');
       setConfirmPassword('');
-      setCardNumber('');
-      setCardExpiry('');
-      setCardCvc('');
-      setCardType('unknown');
       setError('');
       setIsLoading(false);
+      setLoadingMessage('Processando sua inscrição...');
     }
   }, [isOpen, plan]);
 
@@ -71,70 +57,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    // --- Enhanced Validation ---
-    if (cardNumber.replace(/\s/g, '').length < 16) {
-        setError('Número do cartão de crédito inválido.');
-        return;
-    }
-    const expiryParts = cardExpiry.split(' / ');
-    if (expiryParts.length !== 2 || expiryParts[0].length !== 2 || expiryParts[1].length !== 2) {
-        setError('Data de validade inválida. Use o formato MM / AA.');
-        return;
-    }
-    const month = parseInt(expiryParts[0], 10);
-    const year = parseInt(expiryParts[1], 10);
-    const currentYear = new Date().getFullYear() % 100;
-    const currentMonth = new Date().getMonth() + 1;
-
-    if (month < 1 || month > 12) {
-        setError('O mês na data de validade é inválido.');
-        return;
-    }
-    if (year < currentYear || (year === currentYear && month < currentMonth)) {
-        setError('Este cartão de crédito está expirado.');
-        return;
-    }
-    if (cardCvc.length < 3) {
-        setError('O código CVC é inválido.');
-        return;
-    }
-    // --- End Validation ---
-
     setIsLoading(true);
+    setLoadingMessage('Criando sua organização...');
     
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     try {
-      // On successful "payment", create the organization
+      // Create the organization before simulating the redirect
       await signUpAndCreateOrganization(email, password, orgName, plan.id as 'basic' | 'professional');
+      
+      setLoadingMessage('Finalizando... Redirecionando para o Mercado Pago');
+      // Simulate redirection to payment gateway
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       alert('Inscrição realizada com sucesso! Sua organização foi criada. Você será redirecionado para a tela de login.');
       onClose();
       navigate('/admin');
+
     } catch (err: any) {
-      // If organization creation fails, show error and potentially go back to step 1
       setError(err.message || 'Ocorreu um erro ao criar sua organização.');
-      setStep(1);
+      setStep(1); // Go back to account step if org creation fails
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const formatCardNumber = (value: string) => {
-    return value.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-  }
-  
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCardNumber(e.target.value);
-    setCardNumber(formatted);
-    setCardType(getCardType(formatted));
-  };
-
-
-  const formatExpiry = (value: string) => {
-    return value.replace(/\D/g, '').replace(/(\d{2})(?=\d)/g, '$1 / ').trim();
-  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4" onClick={onClose}>
@@ -142,7 +86,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
         {isLoading && (
             <div className="absolute inset-0 bg-secondary bg-opacity-80 flex flex-col justify-center items-center rounded-lg z-10">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                <p className="mt-4 text-gray-300">Processando sua inscrição...</p>
+                <p className="mt-4 text-gray-300">{loadingMessage}</p>
             </div>
         )}
         
@@ -188,30 +132,20 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
             {/* Step 2: Payment Info */}
             {step === 2 && (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                     <h3 className="font-semibold text-lg text-gray-200">2. Informações de Pagamento</h3>
-                     <div className="p-3 bg-gray-700/50 rounded-md">
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Cartão de Crédito</label>
-                        <div className="relative">
-                            <input type="text" value={cardNumber} onChange={handleCardNumberChange} maxLength={19} placeholder="0000 0000 0000 0000" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
-                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                <VisaIcon className={`w-8 transition-opacity ${cardType === 'visa' || cardType === 'unknown' ? 'opacity-100' : 'opacity-30'}`}/>
-                                <MastercardIcon className={`w-8 transition-opacity ${cardType === 'mastercard' || cardType === 'unknown' ? 'opacity-100' : 'opacity-30'}`}/>
-                            </div>
-                        </div>
-                        <div className="flex gap-4 mt-3">
-                             <input type="text" value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} maxLength={7} placeholder="MM / AA" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
-                             <input type="text" value={cardCvc} onChange={e => setCardCvc(e.target.value.replace(/\D/g, ''))} maxLength={4} placeholder="CVC" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
-                        </div>
+                     <h3 className="font-semibold text-lg text-gray-200">2. Pagamento</h3>
+                     <div className="p-4 bg-gray-700/50 rounded-md text-center">
+                        <p className="text-gray-300">Você será redirecionado para o ambiente seguro do Mercado Pago para finalizar sua assinatura.</p>
                      </div>
                      <p className="text-xs text-gray-500 text-center">
                         <LockClosedIcon className="w-3 h-3 inline-block mr-1"/>
                         Pagamento seguro. Você pode cancelar a qualquer momento.
                      </p>
-                     <div className="flex gap-2">
-                        <button type="button" onClick={() => setStep(1)} className="w-1/3 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold text-sm">Voltar</button>
-                        <button type="submit" className="w-2/3 py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold">
-                            Assinar e Pagar {plan.priceFormatted}
+                     <div className="flex flex-col gap-2">
+                        <button type="submit" className="w-full py-3 bg-[#009EE3] text-white rounded-md hover:bg-[#0089CC] font-semibold flex items-center justify-center">
+                            <MercadoPagoIcon className="mr-2" />
+                            Pagar com Mercado Pago
                         </button>
+                        <button type="button" onClick={() => setStep(1)} className="w-full py-2 bg-transparent text-gray-400 rounded-md hover:text-white font-semibold text-sm">Voltar</button>
                      </div>
                 </form>
             )}
