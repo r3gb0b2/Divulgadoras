@@ -100,7 +100,7 @@ const StripeSettingsPage: React.FC = () => {
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
-                        <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço" do seu produto "Básico" no painel do Stripe.</p>
+                        <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço da API" do seu produto "Básico" no painel do Stripe.</p>
                     </div>
                      <div>
                         <label htmlFor="professionalPriceId" className="block text-sm font-medium text-gray-300">ID de Preço do Plano Profissional</label>
@@ -114,7 +114,7 @@ const StripeSettingsPage: React.FC = () => {
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
-                         <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço" do seu produto "Profissional" no painel do Stripe.</p>
+                         <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço da API" do seu produto "Profissional" no painel do Stripe.</p>
                     </div>
                     <div>
                         <label htmlFor="secretKey" className="block text-sm font-medium text-gray-300">Secret Key (Chave Secreta)</label>
@@ -128,12 +128,9 @@ const StripeSettingsPage: React.FC = () => {
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
-                        <div className="text-sm text-yellow-400 bg-yellow-900/50 p-3 rounded-md mt-2 space-y-1">
-                            <p className="font-bold">Ação Manual Necessária:</p>
-                            <p className="text-yellow-300">Esta chave secreta também <strong>precisa ser configurada no ambiente do backend (Firebase Functions)</strong> para que os pagamentos funcionem. Salvar aqui apenas armazena a chave para referência.</p>
-                            <p className="text-yellow-300">Peça ao seu desenvolvedor para executar o seguinte comando no terminal do projeto e depois reimplantar as funções:</p>
-                            <code className="block bg-black/50 p-2 rounded-md mt-1 text-white text-xs break-all">firebase functions:config:set stripe.secret_key="SUA_CHAVE_SECRETA_AQUI"</code>
-                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Sua chave secreta é armazenada de forma segura e usada apenas no servidor para processar os pagamentos.
+                        </p>
                     </div>
                      <div className="flex justify-end pt-4">
                         <button type="submit" disabled={isSaving} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
