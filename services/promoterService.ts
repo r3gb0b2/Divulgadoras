@@ -61,13 +61,13 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
     }
 
     if (states && states.length > 0) {
+      // Admin with specific state assignments
       q = query(q, where("state", "in", states));
-      shouldSortManually = true;
-    } else if (states === null) {
-       // null means fetch all (for superadmin with no orgId or org admin for their org)
-       q = query(q, orderBy("createdAt", "desc"));
+      shouldSortManually = true; // Manual sort because 'in' query doesn't preserve order
     } else {
-      return [];
+      // If no state filter, just order by creation time.
+      // This covers superadmin (states=null) and org admin with no state filter (states=[])
+      q = query(q, orderBy("createdAt", "desc"));
     }
     
     const querySnapshot = await getDocs(q);
@@ -76,6 +76,7 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
     
+    // Manual sort is only needed when using the 'in' filter, as Firestore doesn't guarantee order.
     if (shouldSortManually) {
         promoters.sort((a, b) => {
             const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
@@ -146,11 +147,15 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
     try {
         const q = query(
             collection(firestore, "rejectionReasons"),
-            where("organizationId", "==", organizationId),
-            orderBy("text", "asc")
+            where("organizationId", "==", organizationId)
         );
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RejectionReason));
+        const reasons = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RejectionReason));
+        
+        // Sort client-side to avoid needing a composite index in Firestore
+        reasons.sort((a, b) => a.text.localeCompare(b.text));
+
+        return reasons;
     } catch (error) {
         console.error("Error getting rejection reasons: ", error);
         throw new Error("Não foi possível buscar os motivos de rejeição.");
