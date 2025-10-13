@@ -53,16 +53,14 @@ export const getOrganizations = async (): Promise<Organization[]> => {
  */
 export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        const q = query(
-            collection(firestore, "organizations"),
-            where("status", "==", "active")
-        );
-        const querySnapshot = await getDocs(q);
+        // Fetch ALL organizations to avoid any index-related issues.
+        const querySnapshot = await getDocs(collection(firestore, "organizations"));
         const orgs: Organization[] = [];
         querySnapshot.forEach(doc => {
             const data = doc.data();
-            // Filter for isPublic client-side to avoid composite index
-            if (data.isPublic === true) {
+            // Filter for both status and isPublic on the client-side.
+            // This is less efficient but guarantees the query won't fail due to missing indexes.
+            if (data.status === 'active' && data.isPublic === true) {
                 orgs.push({ id: doc.id, ...data } as Organization);
             }
         });
@@ -72,6 +70,7 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
         throw new Error("Failed to fetch public organizations.");
     }
 };
+
 
 /**
  * Fetches a single organization by its ID.
