@@ -120,6 +120,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         if (!canManage) return;
         try {
             await updatePromoter(id, data);
+            if (data.status === 'approved') {
+                alert('Divulgadora aprovada! Ela poderá ver o novo status ao consultar o site.');
+            }
             await fetchData(); // Refresh data
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
@@ -325,7 +328,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 </div>
                                 
                                 <div className="border-t border-gray-700 pt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                                    <a href={`https://wa.me/${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center"><WhatsAppIcon className="w-4 h-4 mr-2" /><span>WhatsApp</span></a>
+                                    <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center"><WhatsAppIcon className="w-4 h-4 mr-2" /><span>WhatsApp</span></a>
                                     <a href={`https://instagram.com/${(promoter.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center"><InstagramIcon className="w-4 h-4 mr-2" /><span>Instagram</span></a>
                                     {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline flex items-center"><TikTokIcon className="w-4 h-4 mr-2" /><span>TikTok</span></a>}
                                 </div>

@@ -197,6 +197,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleApprove = (id: string) => {
         handleStatusChange(id, 'approved', '');
+        alert('Divulgadora aprovada! Ela poderá ver o novo status ao consultar o site.');
     };
 
     const handleOpenRejectionModal = (promoter: Promoter) => {
@@ -371,7 +372,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex flex-col space-y-2 text-sm">
-                                                    <a href={`https://wa.me/${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline inline-flex items-center">
+                                                    <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline inline-flex items-center">
                                                         <WhatsAppIcon className="w-4 h-4 mr-2" />
                                                         <span>{promoter.whatsapp || 'N/A'}</span>
                                                     </a>
@@ -470,7 +471,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     </div>
                                     
                                     <div className="border-t border-gray-700 pt-3 space-y-2 text-sm">
-                                        <a href={`https://wa.me/${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center">
+                                        <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center">
                                             <WhatsAppIcon className="w-4 h-4 mr-2" />
                                             <span>{promoter.whatsapp || 'N/A'}</span>
                                         </a>

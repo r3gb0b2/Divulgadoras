@@ -64,7 +64,7 @@ const StatusCheck: React.FC = () => {
     const statusInfoMap = {
         pending: {
             title: 'Em Análise',
-            message: 'Seu cadastro está em análise. Entraremos em contato em breve!',
+            message: 'Seu cadastro está em análise. Continue consultando esta página para saber o resultado da sua aprovação, pois não entramos em contato para informar.',
             styles: 'bg-blue-900/50 border-blue-500 text-blue-300'
         },
         approved: {
