@@ -16,6 +16,7 @@ export interface Promoter {
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
   state: string;
+  campaignName?: string;
 }
 
 export interface PromoterApplicationData {
@@ -27,6 +28,7 @@ export interface PromoterApplicationData {
   dateOfBirth: string;
   photos: File[];
   state: string;
+  campaignName?: string;
 }
 
 export interface RejectionReason {
@@ -54,4 +56,12 @@ export interface StateConfig {
 
 export interface StatesConfig {
   [key: string]: StateConfig;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  description: string;
+  stateAbbr: string;
+  isActive: boolean;
 }

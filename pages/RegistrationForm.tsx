@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
+import { getCampaigns } from '../services/settingsService';
+import { Campaign } from '../types';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
@@ -54,9 +56,8 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
   });
 };
 
-
-const RegistrationForm: React.FC = () => {
-  const { state } = useParams<{ state: string }>();
+const PromoterForm: React.FC = () => {
+  const { state, campaignName } = useParams<{ state: string; campaignName?: string }>();
   const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   
   const [formData, setFormData] = useState({
@@ -93,7 +94,6 @@ const RegistrationForm: React.FC = () => {
       try {
         const fileList = Array.from(files);
         const processedFiles = await Promise.all(
-          // FIX: Explicitly type 'file' as 'File' to resolve a TypeScript inference issue.
           fileList.map(async (file: File) => {
             const compressedBlob = await resizeImage(file, 800, 800, 0.8);
             return new File([compressedBlob], file.name, { type: 'image/jpeg' });
@@ -131,10 +131,10 @@ const RegistrationForm: React.FC = () => {
     setSubmitError(null);
     
     try {
-      await addPromoter({ ...formData, photos: photoFiles, state });
+      const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
+      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName });
       setSubmitSuccess(true);
       
-      // Reset form
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
@@ -142,8 +142,6 @@ const RegistrationForm: React.FC = () => {
       if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
-    // FIX: The catch block now safely handles errors of 'unknown' type.
-    // This prevents runtime errors from trying to access properties on a non-Error object.
     } catch (error) {
       console.error("Failed to submit form", error);
       const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
@@ -164,6 +162,7 @@ const RegistrationForm: React.FC = () => {
     <div className="max-w-2xl mx-auto">
         <div className="bg-secondary shadow-2xl rounded-lg p-8">
             <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
+            {campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(campaignName)}</p>}
             <p className="text-center text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
             {submitSuccess && (
@@ -227,6 +226,71 @@ const RegistrationForm: React.FC = () => {
   );
 };
 
+const RegistrationFlowPage: React.FC = () => {
+    const { state, campaignName } = useParams<{ state: string, campaignName?: string }>();
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
+            setIsLoading(true);
+            getCampaigns(state)
+                .then(data => {
+                    const activeCampaigns = data.filter(c => c.isActive);
+                    setCampaigns(activeCampaigns);
+                })
+                .catch(() => setError("Erro ao carregar os eventos disponíveis."))
+                .finally(() => setIsLoading(false));
+        } else {
+            setIsLoading(false);
+        }
+    }, [state, campaignName]);
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center py-10">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return <p className="text-red-400 text-center">{error}</p>;
+    }
+
+    // If a campaign is already in the URL, or if there are no campaigns for this state, show the form.
+    if (campaignName || campaigns.length === 0) {
+        return <PromoterForm />;
+    }
+
+    // If there are campaigns, show the selection screen.
+    return (
+        <div className="max-w-4xl mx-auto text-center">
+            <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                <h1 className="text-3xl font-bold text-gray-100 mb-2">
+                    Selecione o Evento ou Gênero
+                </h1>
+                <p className="text-gray-400 mb-8">
+                    Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {campaigns.map(campaign => (
+                        <Link
+                            key={campaign.id}
+                            to={`/register/${state}/${encodeURIComponent(campaign.name)}`}
+                            className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
+                        >
+                            <span className="text-xl">{campaign.name}</span>
+                            {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white transition-all">{campaign.description}</span>}
+                        </Link>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
     Icon: React.ElementType;
 }
@@ -246,4 +310,4 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
 };
 
 
-export default RegistrationForm;
+export default RegistrationFlowPage;

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
-import { getStateConfig, setStatesConfig, getStatesConfig } from '../services/settingsService';
-import { Promoter, StateConfig, AdminUserData, PromoterStatus } from '../types';
+import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign } from '../services/settingsService';
+import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign } from '../types';
 import { stateMap } from '../constants/states';
 import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
@@ -31,6 +31,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
   const [promoters, setPromoters] = useState<Promoter[]>([]);
   const [stateConfig, setStateConfig] = useState<StateConfig | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
+
+  // State for campaign form
+  const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true });
   
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
@@ -49,12 +53,14 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     setIsLoading(true);
     setError(null);
     try {
-      const [promotersData, configData] = await Promise.all([
+      const [promotersData, configData, campaignsData] = await Promise.all([
         getPromoters([stateAbbr]),
-        getStateConfig(stateAbbr)
+        getStateConfig(stateAbbr),
+        getCampaigns(stateAbbr),
       ]);
       setPromoters(promotersData);
       setStateConfig(configData);
+      setCampaigns(campaignsData);
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados da localidade.');
     } finally {
@@ -118,6 +124,46 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
          }
     }
   };
+
+  const handleCampaignFormChange = (field: keyof Campaign, value: any) => {
+    setCampaignForm(prev => ({...prev, [field]: value}));
+  }
+
+  const handleSaveCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stateAbbr || !campaignForm.name) return;
+    setIsSaving(true);
+    try {
+      if (campaignForm.id) { // Editing existing
+        const { id, ...data } = campaignForm;
+        await updateCampaign(id, data as Omit<Campaign, 'id'>);
+      } else { // Adding new
+        await addCampaign({
+            name: campaignForm.name || '',
+            description: campaignForm.description || '',
+            isActive: campaignForm.isActive !== false,
+            stateAbbr
+        });
+      }
+      setCampaignForm({ name: '', description: '', isActive: true }); // Reset form
+      await fetchData(); // Refresh
+    } catch (err) {
+      alert('Falha ao salvar evento/gênero.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const handleDeleteCampaign = async (id: string) => {
+    if (window.confirm("Tem certeza que deseja excluir este evento/gênero?")) {
+      try {
+        await deleteCampaign(id);
+        await fetchData();
+      } catch (err) {
+        alert('Falha ao excluir evento/gênero.');
+      }
+    }
+  }
   
   const openPhotoViewer = (urls: string[], startIndex: number) => {
     setPhotoViewerUrls(urls);
@@ -170,7 +216,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 </div>
 
                 <div className="bg-secondary p-5 rounded-lg shadow">
-                    <h3 className="text-xl font-semibold mb-4 text-white">Configurações</h3>
+                    <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais</h3>
                     {stateConfig && (
                         <div className="space-y-4">
                              <label className="flex items-center cursor-pointer">
@@ -207,6 +253,36 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         </div>
                     )}
                 </div>
+
+                <div className="bg-secondary p-5 rounded-lg shadow">
+                    <h3 className="text-xl font-semibold mb-4 text-white">Eventos / Gêneros</h3>
+                    <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                        {campaigns.map(c => (
+                            <div key={c.id} className="p-2 bg-gray-700/50 rounded-md text-sm">
+                                <div className="flex justify-between items-center">
+                                    <p className="font-semibold text-gray-200">{c.name}</p>
+                                    <span className={`px-2 py-0.5 text-xs rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span>
+                                </div>
+                                <p className="text-gray-400 text-xs">{c.description}</p>
+                                <div className="flex gap-2 justify-end mt-1">
+                                    <button onClick={() => setCampaignForm(c)} className="text-indigo-400 hover:underline text-xs">Editar</button>
+                                    <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
+                        <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
+                        <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                        <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                        <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
+                        <div className="flex gap-2">
+                           <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar'}</button>
+                           {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
+                        </div>
+                    </form>
+                </div>
+
             </div>
 
             {/* Right Column: Promoters List */}
@@ -221,6 +297,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
                                         <p className="font-bold text-lg text-white">{promoter.name}</p>
+                                        {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
                                         <p className="text-sm text-gray-400">{promoter.email}</p>
                                         <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                                     </div>

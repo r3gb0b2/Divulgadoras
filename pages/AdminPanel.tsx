@@ -353,6 +353,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                                     <div className="text-sm font-medium text-white">{promoter.name || 'N/A'}</div>
                                                     <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/50 text-blue-300">{promoter.state || 'N/A'}</span>
                                                 </div>
+                                                {promoter.campaignName && <div className="text-sm text-primary">{promoter.campaignName}</div>}
                                                 <div className="text-sm text-gray-400">{promoter.email || 'N/A'}</div>
                                                 <div className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</div>
                                             </td>
@@ -431,6 +432,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     <div className="flex justify-between items-start mb-3">
                                         <div>
                                             <p className="font-bold text-lg text-white">{promoter.name || 'N/A'}</p>
+                                            {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
                                             <p className="text-sm text-gray-400">{promoter.email || 'N/A'}</p>
                                             <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                                         </div>

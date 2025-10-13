@@ -1,7 +1,7 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { states } from '../constants/states';
-import { StatesConfig, StateConfig } from '../types';
+import { StatesConfig, StateConfig, Campaign } from '../types';
 
 const STATES_CONFIG_DOC_ID = 'statesConfig';
 const SETTINGS_COLLECTION = 'settings';
@@ -89,5 +89,49 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     } catch (error) {
         console.error("Error setting states config: ", error);
         throw new Error("Não foi possível salvar a configuração das localidades.");
+    }
+};
+
+// --- Campaign Service Functions ---
+
+export const getCampaigns = async (stateAbbr: string): Promise<Campaign[]> => {
+    try {
+        const q = query(
+            collection(firestore, "campaigns"), 
+            where("stateAbbr", "==", stateAbbr)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+        console.error("Error getting campaigns: ", error);
+        throw new Error("Não foi possível buscar os eventos/gêneros.");
+    }
+};
+
+export const addCampaign = async (campaignData: Omit<Campaign, 'id'>): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(firestore, 'campaigns'), campaignData);
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding campaign: ", error);
+        throw new Error("Não foi possível adicionar o evento/gênero.");
+    }
+};
+
+export const updateCampaign = async (id: string, data: Partial<Omit<Campaign, 'id'>>): Promise<void> => {
+    try {
+        await updateDoc(doc(firestore, 'campaigns', id), data);
+    } catch (error) {
+        console.error("Error updating campaign: ", error);
+        throw new Error("Não foi possível atualizar o evento/gênero.");
+    }
+};
+
+export const deleteCampaign = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "campaigns", id));
+    } catch (error) {
+        console.error("Error deleting campaign: ", error);
+        throw new Error("Não foi possível deletar o evento/gênero.");
     }
 };

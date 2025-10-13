@@ -87,6 +87,12 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         </div>
 
         <form className="space-y-4">
+          {promoter.campaignName && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">Evento / Gênero</label>
+              <input type="text" value={promoter.campaignName} readOnly className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-400 cursor-not-allowed" />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-300">Nome</label>
             <input type="text" name="name" value={formData.name || ''} onChange={handleChange} className={formInputStyle} />

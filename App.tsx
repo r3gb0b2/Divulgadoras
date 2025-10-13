@@ -23,7 +23,7 @@ const App: React.FC = () => {
         <main className="container mx-auto p-4 md:p-8 flex-grow">
           <Routes>
             <Route path="/" element={<StateSelection />} />
-            <Route path="/register/:state" element={<RegistrationForm />} />
+            <Route path="/register/:state/:campaignName?" element={<RegistrationForm />} />
             <Route path="/admin/*" element={<AdminAuth />} />
             <Route path="/status" element={<StatusCheck />} />
             <Route path="/rules/:state" element={<RulesPage />} />
