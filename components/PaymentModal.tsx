@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plan } from '../pages/PricingPage';
-import { LockClosedIcon, MercadoPagoIcon } from './Icons';
+import { LockClosedIcon, CreditCardIcon } from './Icons';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -118,16 +118,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
                 <form onSubmit={handlePaymentSubmit} className="space-y-4">
                      <h3 className="font-semibold text-lg text-gray-200">2. Pagamento</h3>
                      <div className="p-4 bg-gray-700/50 rounded-md text-center">
-                        <p className="text-gray-300">Você será redirecionado para o ambiente seguro do Mercado Pago para finalizar sua assinatura.</p>
+                        <p className="text-gray-300">Você será redirecionado para o ambiente seguro do Stripe para finalizar sua assinatura com cartão de crédito.</p>
                      </div>
                      <p className="text-xs text-gray-500 text-center">
                         <LockClosedIcon className="w-3 h-3 inline-block mr-1"/>
                         Pagamento seguro. Você pode cancelar a qualquer momento.
                      </p>
                      <div className="flex flex-col gap-2">
-                        <button type="submit" className="w-full py-3 bg-[#009EE3] text-white rounded-md hover:bg-[#0089CC] font-semibold flex items-center justify-center">
-                            <MercadoPagoIcon className="mr-2" />
-                            Pagar com Mercado Pago
+                        <button type="submit" className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold flex items-center justify-center">
+                            <CreditCardIcon className="w-5 h-5 mr-2" />
+                            Pagar com Cartão
                         </button>
                         <button type="button" onClick={() => setStep(1)} className="w-full py-2 bg-transparent text-gray-400 rounded-md hover:text-white font-semibold text-sm">Voltar</button>
                      </div>
