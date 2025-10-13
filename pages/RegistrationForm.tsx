@@ -296,7 +296,6 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 }
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
-    // We only care about this special behavior for date inputs
     if (props.type !== 'date') {
         return (
             <div className="relative">
@@ -311,28 +310,30 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
         );
     }
 
-    // Special handling for date input to show placeholder
-    const [inputType, setInputType] = useState(props.value ? 'date' : 'text');
+    // Special handling for date input to show placeholder correctly and reliably.
+    const [inputType, setInputType] = useState('text');
 
     useEffect(() => {
-        // This syncs the input type if the value is changed from the parent component (e.g., form reset)
-        setInputType(props.value ? 'date' : 'text');
+        // If the component receives a value (e.g., from form state), ensure the type is 'date'
+        // so the value is displayed, not the placeholder.
+        if (props.value) {
+            setInputType('date');
+        }
     }, [props.value]);
 
     const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+        // Always switch to 'date' on focus to show the picker.
         setInputType('date');
-        // If there's an onFocus prop from the parent, call it.
         if (props.onFocus) {
             props.onFocus(e);
         }
     };
     
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        // If the input is empty after blurring, switch back to text to show the placeholder
+        // If the input is empty on blur, switch back to 'text' to show the placeholder.
         if (!e.target.value) {
             setInputType('text');
         }
-        // If there's an onBlur prop from the parent, call it.
         if (props.onBlur) {
             props.onBlur(e);
         }

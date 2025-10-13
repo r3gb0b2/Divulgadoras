@@ -7,6 +7,7 @@ import { AdminAuthProvider, useAdminAuth } from '../contexts/AdminAuthContext';
 import { Routes, Route } from 'react-router-dom';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
+import ManageUsersPage from './ManageUsersPage';
 
 const LoginForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -101,6 +102,7 @@ const AdminPageContent: React.FC = () => {
                     <>
                         <Route path="states" element={<StatesListPage />} />
                         <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                        <Route path="users" element={<ManageUsersPage />} />
                     </>
                 )}
             </Routes>

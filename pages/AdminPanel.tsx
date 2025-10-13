@@ -9,7 +9,6 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
-import ManageUsersModal from '../components/ManageUsersModal';
 
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
@@ -75,8 +74,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
-
-    const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
 
     const fetchPromoters = useCallback(async () => {
         setIsLoading(true);
@@ -271,10 +268,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 <div className="flex items-center gap-4 flex-wrap justify-end">
                     {adminData.role === 'superadmin' && (
                         <>
-                            <button onClick={() => setIsUsersModalOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
+                            <Link to="/admin/users" className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 inline-flex items-center">
                                 <UsersIcon className="w-4 h-4 mr-2" />
                                 Gerenciar Usuários
-                            </button>
+                            </Link>
                             <Link to="/admin/states" className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 inline-flex items-center">
                                 <MapPinIcon className="w-4 h-4 mr-2" />
                                 Gerenciar Localidades
@@ -553,14 +550,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         isOpen={isReasonsModalOpen}
                         onClose={() => setIsReasonsModalOpen(false)}
                         onReasonsUpdated={fetchReasons}
-                    />
-                </>
-            )}
-             {adminData.role === 'superadmin' && (
-                <>
-                    <ManageUsersModal
-                        isOpen={isUsersModalOpen}
-                        onClose={() => setIsUsersModalOpen(false)}
                     />
                 </>
             )}
