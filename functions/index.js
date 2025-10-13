@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
 const stripePackage = require("stripe");
@@ -79,7 +80,11 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             },
         });
 
-        const projectId = admin.app().options.projectId;
+        const projectId = process.env.GCLOUD_PROJECT;
+        if (!projectId) {
+            logger.error("GCLOUD_PROJECT environment variable not set.");
+            throw new HttpsError('internal', 'Configuração do servidor incompleta (Project ID).');
+        }
         const baseUrl = `https://${projectId}.web.app`;
 
         const session = await stripe.checkout.sessions.create({
@@ -108,5 +113,78 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
         }
         const userFriendlyMessage = error.raw?.message || 'Ocorreu um erro inesperado com o provedor de pagamento. Verifique se os IDs de Preço estão corretos.';
         throw new HttpsError('internal', userFriendlyMessage);
+    }
+});
+
+
+// This function triggers when the Stripe Extension creates a subscription document in Firestore.
+// It's responsible for the custom logic of creating the organization and linking it to the user.
+exports.createOrganizationAndAdmin = onDocumentCreated("customers/{customerId}/subscriptions/{subscriptionId}", async (event) => {
+    const subscription = event.data.data();
+
+    // Check if subscription is active and we haven't processed it before to ensure idempotency.
+    if (
+        (subscription.status !== 'active' && subscription.status !== 'trialing') ||
+        subscription.metadata.organizationCreated === 'true'
+    ) {
+        logger.log(`Skipping subscription ${event.params.subscriptionId}. Status: ${subscription.status}, Processed: ${subscription.metadata.organizationCreated}`);
+        return null;
+    }
+
+    const { firebaseUID, organizationName, planId } = subscription.metadata;
+
+    if (!firebaseUID || !organizationName || !planId) {
+        logger.error("Missing required metadata from subscription object.", { subscriptionId: event.params.subscriptionId, metadata: subscription.metadata });
+        return null;
+    }
+    
+    try {
+        // 1. Get user email from Firebase Auth
+        const userRecord = await admin.auth().getUser(firebaseUID);
+        if (!userRecord.email) {
+            logger.error(`User ${firebaseUID} does not have an email.`);
+            return null; // Can't proceed without an email
+        }
+        const ownerEmail = userRecord.email;
+
+        // 2. Create the organization document
+        const orgRef = await db.collection('organizations').add({
+            ownerUid: firebaseUID,
+            ownerEmail: ownerEmail,
+            name: organizationName,
+            planId: planId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'active',
+            isPublic: true,
+            assignedStates: [],
+            stripeCustomerId: event.params.customerId,
+            stripeSubscriptionId: event.params.subscriptionId,
+        });
+        const newOrgId = orgRef.id;
+
+        // 3. Create/update the admin user document with the new organization ID
+        const adminRef = db.collection('admins').doc(firebaseUID);
+        await adminRef.set({
+            uid: firebaseUID,
+            email: ownerEmail,
+            role: 'admin', // The owner is always an admin
+            organizationId: newOrgId,
+            assignedStates: [],
+        }, { merge: true });
+
+        // 4. Mark the subscription as processed to prevent duplicate runs
+        await event.data.ref.set({
+            metadata: {
+                ...subscription.metadata,
+                organizationCreated: 'true'
+            }
+        }, { merge: true });
+        
+        logger.info(`Successfully created organization ${newOrgId} for user ${firebaseUID}`);
+        return { success: true, organizationId: newOrgId };
+
+    } catch (error) {
+        logger.error("Error in createOrganizationAndAdmin trigger for subscription " + event.params.subscriptionId, error);
+        return null; // Return null to indicate non-retriable error
     }
 });
