@@ -274,14 +274,14 @@ const ManageUsersModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({
                          {isLoading && <p>Carregando...</p>}
                          <div className="space-y-2">
                             {admins.map(admin => (
-                                <div key={admin.uid} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-700/50 rounded-md gap-2">
-                                    <div className="flex-grow">
+                                <div key={admin.uid} className="sm:flex sm:items-center sm:justify-between p-3 bg-gray-700/50 rounded-md">
+                                    <div className="flex-grow min-w-0">
                                         <p className="font-semibold break-all">{admin.email}</p>
                                         <p className="text-sm text-gray-400 break-words">
                                             <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
                                         </p>
                                     </div>
-                                    <div className="flex gap-3 self-end sm:self-center flex-shrink-0">
+                                    <div className="flex gap-3 justify-end mt-2 sm:mt-0 sm:justify-start flex-shrink-0">
                                         <button onClick={() => handleEditClick(admin)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                         <button onClick={() => handleDelete(admin)} className="text-red-400 hover:text-red-300">Excluir</button>
                                     </div>

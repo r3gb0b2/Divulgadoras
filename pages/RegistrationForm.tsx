@@ -296,7 +296,42 @@ interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement>
 }
 
 const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
-    const isDate = props.type === 'date';
+    // We only care about this special behavior for date inputs
+    if (props.type !== 'date') {
+        return (
+            <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                    <Icon className="h-5 w-5 text-gray-400" />
+                </span>
+                <input
+                    {...props}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                />
+            </div>
+        );
+    }
+
+    // Special handling for date input to show placeholder
+    const [inputType, setInputType] = useState('text');
+
+    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+        setInputType('date');
+        // If there's an onFocus prop from the parent, call it.
+        if (props.onFocus) {
+            props.onFocus(e);
+        }
+    };
+    
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        // If the input is empty after blurring, switch back to text to show the placeholder
+        if (!e.target.value) {
+            setInputType('text');
+        }
+        // If there's an onBlur prop from the parent, call it.
+        if (props.onBlur) {
+            props.onBlur(e);
+        }
+    };
 
     return (
         <div className="relative">
@@ -305,9 +340,11 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
+                type={inputType}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                // This hint helps mobile browsers render the date picker UI correctly on a dark theme.
-                style={isDate ? { colorScheme: 'dark' } : {}}
+                style={{ colorScheme: 'dark' }}
             />
         </div>
     );
