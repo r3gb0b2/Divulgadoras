@@ -58,15 +58,28 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         getStateConfig(stateAbbr),
         getCampaigns(stateAbbr),
       ]);
-      setPromoters(promotersData);
+      
+      const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
+      const hasSpecificCampaigns = adminData.role !== 'superadmin' && assignedCampaignsForState && assignedCampaignsForState.length > 0;
+      
+      const filteredPromoters = hasSpecificCampaigns
+        ? promotersData.filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
+        : promotersData;
+
+      const filteredCampaigns = hasSpecificCampaigns
+        ? campaignsData.filter(c => assignedCampaignsForState.includes(c.name))
+        : campaignsData;
+
+      setPromoters(filteredPromoters);
       setStateConfig(configData);
-      setCampaigns(campaignsData);
+      setCampaigns(filteredCampaigns);
+
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados da localidade.');
     } finally {
       setIsLoading(false);
     }
-  }, [stateAbbr]);
+  }, [stateAbbr, adminData]);
 
   useEffect(() => {
     fetchData();
@@ -216,34 +229,37 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                     </div>
                 </div>
 
-                <div className="bg-secondary p-5 rounded-lg shadow">
-                    <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais</h3>
-                    {stateConfig && (
-                        <div className="space-y-4">
-                             <label className="flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={stateConfig.isActive}
-                                onChange={(e) => handleConfigChange('isActive', e.target.checked)}
-                                className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
-                              />
-                              <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
-                            </label>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Regras da Localidade</label>
-                                <textarea 
-                                    value={stateConfig.rules || ''}
-                                    onChange={(e) => handleConfigChange('rules', e.target.value)}
-                                    placeholder="Digite as regras aqui..."
-                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 min-h-[150px]"
+                {adminData.role === 'superadmin' && (
+                  <div className="bg-secondary p-5 rounded-lg shadow">
+                      <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais</h3>
+                      {stateConfig && (
+                          <div className="space-y-4">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={stateConfig.isActive}
+                                  onChange={(e) => handleConfigChange('isActive', e.target.checked)}
+                                  className="h-5 w-5 text-primary bg-gray-800 border-gray-600 focus:ring-primary rounded-sm"
                                 />
-                            </div>
-                            <button onClick={handleSaveConfig} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
-                                {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-                            </button>
-                        </div>
-                    )}
-                </div>
+                                <span className="ml-3 font-medium text-gray-200">Inscrições Ativas</span>
+                              </label>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Regras da Localidade</label>
+                                  <textarea 
+                                      value={stateConfig.rules || ''}
+                                      onChange={(e) => handleConfigChange('rules', e.target.value)}
+                                      placeholder="Digite as regras aqui..."
+                                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 min-h-[150px]"
+                                  />
+                              </div>
+                              <button onClick={handleSaveConfig} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
+                                  {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                              </button>
+                          </div>
+                      )}
+                  </div>
+                )}
+
 
                 <div className="bg-secondary p-5 rounded-lg shadow">
                     <h3 className="text-xl font-semibold mb-4 text-white">Eventos / Gêneros</h3>
@@ -258,22 +274,24 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 {c.whatsappLink && <p className="text-gray-400 text-xs truncate">Link: {c.whatsappLink}</p>}
                                 <div className="flex gap-2 justify-end mt-1">
                                     <button onClick={() => setCampaignForm(c)} className="text-indigo-400 hover:underline text-xs">Editar</button>
-                                    <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>
+                                    {adminData.role === 'superadmin' && <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>}
                                 </div>
                             </div>
                         ))}
                     </div>
-                    <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
-                        <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
-                        <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                        <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                        <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                        <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
-                        <div className="flex gap-2">
-                           <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar'}</button>
-                           {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
-                        </div>
-                    </form>
+                    {adminData.role === 'superadmin' && (
+                      <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
+                          <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
+                          <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                          <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                          <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                          <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar'}</button>
+                            {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
+                          </div>
+                      </form>
+                    )}
                 </div>
 
             </div>

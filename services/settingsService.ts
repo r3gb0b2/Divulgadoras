@@ -107,6 +107,16 @@ export const getCampaigns = async (stateAbbr: string): Promise<Campaign[]> => {
     }
 };
 
+export const getAllCampaigns = async (): Promise<Campaign[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(firestore, "campaigns"));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+        console.error("Error getting all campaigns: ", error);
+        throw new Error("Não foi possível buscar todos os eventos/gêneros.");
+    }
+};
+
 export const addCampaign = async (campaignData: Omit<Campaign, 'id'>): Promise<string> => {
     try {
         const docRef = await addDoc(collection(firestore, 'campaigns'), campaignData);

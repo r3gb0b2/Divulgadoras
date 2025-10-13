@@ -13,14 +13,14 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
         const docSnap = await getDoc(adminDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // FIX: Robustly ensure assignedStates is always an array to prevent render errors.
-            // If the field is missing, null, or not an array, default to an empty array.
             const assignedStates = Array.isArray(data.assignedStates) ? data.assignedStates : [];
+            const assignedCampaigns = typeof data.assignedCampaigns === 'object' && data.assignedCampaigns !== null ? data.assignedCampaigns : {};
             return {
                 uid,
                 email: data.email,
                 role: data.role,
                 assignedStates: assignedStates,
+                assignedCampaigns: assignedCampaigns,
             } as AdminUserData;
         }
         return null;
@@ -42,13 +42,14 @@ export const getAllAdmins = async (): Promise<AdminUserData[]> => {
         const admins: AdminUserData[] = [];
         querySnapshot.forEach(doc => {
             const data = doc.data();
-            // FIX: Robustly ensure assignedStates is always an array.
             const assignedStates = Array.isArray(data.assignedStates) ? data.assignedStates : [];
+            const assignedCampaigns = typeof data.assignedCampaigns === 'object' && data.assignedCampaigns !== null ? data.assignedCampaigns : {};
             admins.push({
                 uid: doc.id,
                 email: data.email,
                 role: data.role,
                 assignedStates: assignedStates,
+                assignedCampaigns: assignedCampaigns,
             } as AdminUserData);
         });
         return admins;
@@ -65,8 +66,6 @@ export const getAllAdmins = async (): Promise<AdminUserData[]> => {
  * @param uid The UID of the user to grant/update permissions.
  * @param data The permission data (email, role, assignedStates).
  */
-// FIX: Update function signature to not include 'uid' in the data payload,
-// as it's the document ID and should not be stored inside the document.
 export const setAdminUserData = async (uid: string, data: Omit<AdminUserData, 'uid'>): Promise<void> => {
     try {
         const adminDocRef = doc(firestore, 'admins', uid);

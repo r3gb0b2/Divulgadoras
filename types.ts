@@ -40,11 +40,11 @@ export interface RejectionReason {
 export type AdminRole = 'superadmin' | 'admin' | 'viewer';
 
 export interface AdminUserData {
-  // FIX: Add uid to uniquely identify admin users.
   uid: string;
   email: string;
   role: AdminRole;
   assignedStates: string[];
+  assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 
 // Types for State/Locality Management

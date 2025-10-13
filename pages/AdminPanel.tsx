@@ -111,12 +111,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     }, [fetchPromoters, fetchReasons, canManage]);
     
+    const promotersInScope = useMemo(() => {
+        if (adminData.role === 'superadmin' || !adminData.assignedCampaigns) {
+            return allPromoters;
+        }
+        return allPromoters.filter(promoter => {
+            const stateCampaigns = adminData.assignedCampaigns?.[promoter.state];
+            // If no campaigns are specified for this state, admin has access to all.
+            if (!stateCampaigns || stateCampaigns.length === 0) {
+                return true;
+            }
+            // If campaigns are specified, check if promoter's campaign is in the list.
+            return promoter.campaignName && stateCampaigns.includes(promoter.campaignName);
+        });
+    }, [allPromoters, adminData]);
+    
     const stats = useMemo(() => ({
-        total: allPromoters.length,
-        pending: allPromoters.filter(p => p.status === 'pending').length,
-        approved: allPromoters.filter(p => p.status === 'approved').length,
-        rejected: allPromoters.filter(p => p.status === 'rejected').length,
-    }), [allPromoters]);
+        total: promotersInScope.length,
+        pending: promotersInScope.filter(p => p.status === 'pending').length,
+        approved: promotersInScope.filter(p => p.status === 'approved').length,
+        rejected: promotersInScope.filter(p => p.status === 'rejected').length,
+    }), [promotersInScope]);
 
     const availableStates = useMemo(() => {
         if (adminData.role === 'superadmin') {
@@ -127,7 +142,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allPromoters, adminData]);
 
     useEffect(() => {
-        let result = allPromoters;
+        let result = promotersInScope;
         
         if (stateFilter !== 'all') {
             result = result.filter(p => p.state === stateFilter);
@@ -146,7 +161,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             );
         }
         setFilteredPromoters(result);
-    }, [allPromoters, filter, stateFilter, searchTerm]);
+    }, [promotersInScope, filter, stateFilter, searchTerm]);
 
     const handleLogout = async () => {
         try {
