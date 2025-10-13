@@ -77,24 +77,21 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        // Query by stateAbbr first. This is a simple query and does not require a composite index.
-        const q = query(
-            collection(firestore, "campaigns"), 
-            where("stateAbbr", "==", stateAbbr)
-        );
-
-        const querySnapshot = await getDocs(q);
-        const campaignsInState = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
-        
-        let result: Campaign[];
+        let campaignsToFilter: Campaign[];
 
         if (organizationId) {
-            // For organization admins, filter down to their specific organization.
-            result = campaignsInState.filter(c => c.organizationId === organizationId);
+            // Fetch all campaigns for a specific organization (more efficient query)
+            const q = query(collection(firestore, "campaigns"), where("organizationId", "==", organizationId));
+            const querySnapshot = await getDocs(q);
+            campaignsToFilter = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
         } else {
-            // For superadmins (organizationId is undefined), return all campaigns for that state.
-            result = campaignsInState;
+            // Superadmin case: fetch all campaigns from all organizations
+            const querySnapshot = await getDocs(collection(firestore, "campaigns"));
+            campaignsToFilter = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
         }
+
+        // Now, filter the results by the selected state on the client side
+        const result = campaignsToFilter.filter(c => c.stateAbbr === stateAbbr);
         
         return result.sort((a, b) => a.name.localeCompare(b.name));
 
