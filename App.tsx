@@ -5,6 +5,7 @@ import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import AdminRegistrationPage from './pages/AdminRegistrationPage';
+import PricingPage from './pages/PricingPage';
 
 const App: React.FC = () => {
   return (
@@ -16,6 +17,7 @@ const App: React.FC = () => {
             <div className='space-x-4'>
               <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
               <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
+              <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
               <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
             </div>
           </nav>
@@ -27,6 +29,7 @@ const App: React.FC = () => {
             <Route path="/admin/*" element={<AdminAuth />} />
             <Route path="/admin-register" element={<AdminRegistrationPage />} />
             <Route path="/status" element={<StatusCheck />} />
+            <Route path="/planos" element={<PricingPage />} />
           </Routes>
         </main>
         <footer className="text-center py-4 text-gray-400 text-sm">
