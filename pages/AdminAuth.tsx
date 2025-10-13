@@ -91,7 +91,8 @@ const AdminLogin: React.FC = () => {
 };
 
 
-const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
+// FIX: Changed JSX.Element to React.ReactElement to fix "Cannot find namespace 'JSX'" error.
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
     const { user, loading, adminData } = useAdminAuth();
 
     if (loading) {
@@ -122,6 +123,7 @@ const AdminAuth: React.FC = () => {
              {/* Routes for SuperAdmins */}
             {adminData?.role === 'superadmin' && (
                 <>
+                    <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
                     <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
                     <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
