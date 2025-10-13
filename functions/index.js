@@ -35,12 +35,13 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
         throw new HttpsError('not-found', `Price ID for plan '${planId}' not found.`);
     }
 
+    let uid;
     try {
         // Step 1: Create the user in Firebase Auth FIRST.
-        // This is crucial because the Stripe Extension links customers based on UID.
         let userRecord;
         try {
             userRecord = await admin.auth().createUser({ email, password });
+            uid = userRecord.uid;
         } catch (error) {
              if (error.code === 'auth/email-already-exists') {
                 throw new HttpsError('already-exists', 'Este e-mail já está cadastrado. Por favor, tente fazer login ou use um e-mail diferente.');
@@ -48,23 +49,27 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
             throw new HttpsError('internal', 'Falha ao criar o usuário. Tente novamente.');
         }
 
-        const uid = userRecord.uid;
+        // Step 2: Explicitly create a Stripe Customer and link it to the Firebase user UID.
+        // This is the most reliable method for the Stripe Extension to sync correctly.
+        const stripeCustomer = await stripe.customers.create({
+            email: email,
+            metadata: {
+                firebaseUID: uid,
+            },
+        });
 
         // Dynamically construct the base URL from the Firebase project ID
         const baseUrl = `https://${process.env.GCLOUD_PROJECT}.web.app`;
 
-        // Step 2: Create the Stripe Checkout session
+        // Step 3: Create the Stripe Checkout session linked to the specific customer.
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
-            // Use the dynamically generated URL. The '#' is needed for HashRouter.
             success_url: `${baseUrl}/#/admin`,
             cancel_url: `${baseUrl}/#/planos`,
-            customer_email: email,
+            customer: stripeCustomer.id, // Use the customer ID instead of just the email
             line_items: [{ price: priceId, quantity: 1 }],
-            // IMPORTANT: Pass the new user's UID and other necessary info in metadata.
-            // The Stripe Firebase Extension will use this to create the organization
-            // and admin documents after successful payment.
+            // Pass UID and other info in metadata for the Stripe Extension webhook.
             subscription_data: {
                 metadata: {
                     firebaseUID: uid,
@@ -78,9 +83,12 @@ exports.createStripeCheckoutSession = onCall(async (request) => {
 
     } catch (error) {
         logger.error('Error creating Stripe checkout session:', { error, email });
+        // If the process fails after user creation, we should delete the orphaned user.
+        if (uid) {
+            await admin.auth().deleteUser(uid);
+            logger.info(`Orphaned Firebase user with UID ${uid} deleted due to Stripe error.`);
+        }
         if (error instanceof HttpsError) {
-            // If user creation succeeded but Stripe failed, we should ideally delete the user.
-            // For now, we'll just throw the error.
             throw error;
         }
         throw new HttpsError('internal', error.message || 'An unexpected error occurred.');
