@@ -77,23 +77,26 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        if (!organizationId) {
-            // In a multi-tenant system, an organization context is required.
-            return [];
-        }
-
-        // Query by organizationId first to avoid composite index, then filter by state client-side.
+        // Query by stateAbbr first. This is a simple query and does not require a composite index.
         const q = query(
             collection(firestore, "campaigns"), 
-            where("organizationId", "==", organizationId)
+            where("stateAbbr", "==", stateAbbr)
         );
 
         const querySnapshot = await getDocs(q);
-        const allOrgCampaigns = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
-
-        const stateCampaigns = allOrgCampaigns.filter(c => c.stateAbbr === stateAbbr);
+        const campaignsInState = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
         
-        return stateCampaigns.sort((a, b) => a.name.localeCompare(b.name));
+        let result: Campaign[];
+
+        if (organizationId) {
+            // For organization admins, filter down to their specific organization.
+            result = campaignsInState.filter(c => c.organizationId === organizationId);
+        } else {
+            // For superadmins (organizationId is undefined), return all campaigns for that state.
+            result = campaignsInState;
+        }
+        
+        return result.sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
         console.error("Error getting campaigns: ", error);
