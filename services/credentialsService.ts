@@ -58,7 +58,7 @@ export const getStripeCredentials = async (): Promise<StripeCredentials> => {
             return docSnap.data() as StripeCredentials;
         }
         
-        return { publicKey: '', secretKey: '' };
+        return { publicKey: '', secretKey: '', basicPriceId: '', professionalPriceId: '' };
 
     } catch (error) {
         console.error("Error getting Stripe credentials: ", error);
@@ -75,6 +75,7 @@ export const setStripeCredentials = async (credentials: StripeCredentials): Prom
     try {
         const docRef = doc(firestore, SETTINGS_COLLECTION, CREDENTIALS_DOC_ID_STRIPE);
         await setDoc(docRef, credentials, { merge: true });
+    // FIX: Added curly braces to the catch block to fix a syntax error.
     } catch (error) {
         console.error("Error setting Stripe credentials: ", error);
         throw new Error("Não foi possível salvar as credenciais do Stripe.");

@@ -6,7 +6,9 @@ import { StripeCredentials } from '../types';
 const StripeSettingsPage: React.FC = () => {
     const [credentials, setCredentials] = useState<StripeCredentials>({
         publicKey: '',
-        secretKey: ''
+        secretKey: '',
+        basicPriceId: '',
+        professionalPriceId: ''
     });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +41,11 @@ const StripeSettingsPage: React.FC = () => {
         setIsSaving(true);
         setError('');
         setSuccess('');
+        if (!credentials.basicPriceId || !credentials.professionalPriceId) {
+            setError('Os IDs de Preço para os planos Básico e Profissional são obrigatórios.');
+            setIsSaving(false);
+            return;
+        }
         try {
             await setStripeCredentials(credentials);
             setSuccess('Credenciais salvas com sucesso!');
@@ -62,7 +69,7 @@ const StripeSettingsPage: React.FC = () => {
             <div className="max-w-2xl">
                 <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                     <p className="text-sm text-gray-400">
-                        Insira as chaves de API da sua conta do Stripe para habilitar o processamento de assinaturas.
+                        Insira as chaves e IDs da sua conta do Stripe para habilitar o processamento de assinaturas.
                         Você pode encontrar suas credenciais no <a href="https://dashboard.stripe.com/apikeys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">painel do desenvolvedor do Stripe</a>.
                     </p>
                     {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm text-center">{error}</p>}
@@ -75,10 +82,39 @@ const StripeSettingsPage: React.FC = () => {
                             name="publicKey"
                             value={credentials.publicKey || ''}
                             onChange={handleChange}
-                            placeholder="pk_test_..."
+                            placeholder="pk_live_..."
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            required
                         />
-                        <p className="text-xs text-gray-500 mt-1">Esta chave é usada no frontend para redirecionar o cliente para o checkout do Stripe de forma segura.</p>
+                        <p className="text-xs text-gray-500 mt-1">Esta chave é usada no frontend para se conectar com o Stripe.</p>
+                    </div>
+                     <div>
+                        <label htmlFor="basicPriceId" className="block text-sm font-medium text-gray-300">ID de Preço do Plano Básico</label>
+                        <input
+                            type="text"
+                            id="basicPriceId"
+                            name="basicPriceId"
+                            value={credentials.basicPriceId || ''}
+                            onChange={handleChange}
+                            placeholder="price_..."
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço" do seu produto "Básico" no painel do Stripe.</p>
+                    </div>
+                     <div>
+                        <label htmlFor="professionalPriceId" className="block text-sm font-medium text-gray-300">ID de Preço do Plano Profissional</label>
+                        <input
+                            type="text"
+                            id="professionalPriceId"
+                            name="professionalPriceId"
+                            value={credentials.professionalPriceId || ''}
+                            onChange={handleChange}
+                            placeholder="price_..."
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            required
+                        />
+                         <p className="text-xs text-gray-500 mt-1">Copie o "ID do preço" do seu produto "Profissional" no painel do Stripe.</p>
                     </div>
                     <div>
                         <label htmlFor="secretKey" className="block text-sm font-medium text-gray-300">Secret Key (Chave Secreta)</label>
@@ -90,6 +126,7 @@ const StripeSettingsPage: React.FC = () => {
                             onChange={handleChange}
                             placeholder="••••••••••••••••••••••••••••••••••••••••"
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            required
                         />
                         <div className="text-sm text-yellow-400 bg-yellow-900/50 p-3 rounded-md mt-2 space-y-1">
                             <p className="font-bold">Ação Manual Necessária:</p>

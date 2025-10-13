@@ -90,4 +90,6 @@ export interface MercadoPagoCredentials {
 export interface StripeCredentials {
   publicKey?: string;
   secretKey?: string;
+  basicPriceId?: string;
+  professionalPriceId?: string;
 }
