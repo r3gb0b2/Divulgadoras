@@ -10,6 +10,14 @@ interface PaymentModalProps {
   plan: Plan | null;
 }
 
+// Helper to detect card type
+const getCardType = (cardNumber: string): 'visa' | 'mastercard' | 'unknown' => {
+    const cleaned = cardNumber.replace(/\s/g, '');
+    if (/^4/.test(cleaned)) return 'visa';
+    if (/^5[1-5]/.test(cleaned)) return 'mastercard';
+    return 'unknown';
+};
+
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) => {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
@@ -22,6 +30,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
+  const [cardType, setCardType] = useState<'visa' | 'mastercard' | 'unknown'>('unknown');
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +46,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
       setCardNumber('');
       setCardExpiry('');
       setCardCvc('');
+      setCardType('unknown');
       setError('');
       setIsLoading(false);
     }
@@ -61,6 +71,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // --- Enhanced Validation ---
+    if (cardNumber.replace(/\s/g, '').length < 16) {
+        setError('Número do cartão de crédito inválido.');
+        return;
+    }
+    const expiryParts = cardExpiry.split(' / ');
+    if (expiryParts.length !== 2 || expiryParts[0].length !== 2 || expiryParts[1].length !== 2) {
+        setError('Data de validade inválida. Use o formato MM / AA.');
+        return;
+    }
+    const month = parseInt(expiryParts[0], 10);
+    const year = parseInt(expiryParts[1], 10);
+    const currentYear = new Date().getFullYear() % 100;
+    const currentMonth = new Date().getMonth() + 1;
+
+    if (month < 1 || month > 12) {
+        setError('O mês na data de validade é inválido.');
+        return;
+    }
+    if (year < currentYear || (year === currentYear && month < currentMonth)) {
+        setError('Este cartão de crédito está expirado.');
+        return;
+    }
+    if (cardCvc.length < 3) {
+        setError('O código CVC é inválido.');
+        return;
+    }
+    // --- End Validation ---
+
     setIsLoading(true);
     
     // Simulate payment processing
@@ -84,6 +124,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const formatCardNumber = (value: string) => {
     return value.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ').trim();
   }
+  
+  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatCardNumber(e.target.value);
+    setCardNumber(formatted);
+    setCardType(getCardType(formatted));
+  };
+
 
   const formatExpiry = (value: string) => {
     return value.replace(/\D/g, '').replace(/(\d{2})(?=\d)/g, '$1 / ').trim();
@@ -110,7 +157,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
                 <span className="text-2xl font-bold text-primary">{plan.priceFormatted}</span>
             </div>
 
-            {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4">{error}</p>}
+            {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4 text-center">{error}</p>}
             
             {/* Step 1: Account Info */}
             {step === 1 && (
@@ -145,15 +192,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
                      <div className="p-3 bg-gray-700/50 rounded-md">
                         <label className="block text-sm font-medium text-gray-400 mb-2">Cartão de Crédito</label>
                         <div className="relative">
-                            <input type="text" value={formatCardNumber(cardNumber)} onChange={e => setCardNumber(e.target.value)} maxLength={19} placeholder="0000 0000 0000 0000" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
+                            <input type="text" value={cardNumber} onChange={handleCardNumberChange} maxLength={19} placeholder="0000 0000 0000 0000" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                                <VisaIcon className="w-8"/>
-                                <MastercardIcon className="w-8"/>
+                                <VisaIcon className={`w-8 transition-opacity ${cardType === 'visa' || cardType === 'unknown' ? 'opacity-100' : 'opacity-30'}`}/>
+                                <MastercardIcon className={`w-8 transition-opacity ${cardType === 'mastercard' || cardType === 'unknown' ? 'opacity-100' : 'opacity-30'}`}/>
                             </div>
                         </div>
                         <div className="flex gap-4 mt-3">
-                             <input type="text" value={formatExpiry(cardExpiry)} onChange={e => setCardExpiry(e.target.value)} maxLength={7} placeholder="MM / AA" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
-                             <input type="text" value={cardCvc.replace(/\D/g, '')} onChange={e => setCardCvc(e.target.value)} maxLength={4} placeholder="CVC" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
+                             <input type="text" value={cardExpiry} onChange={e => setCardExpiry(formatExpiry(e.target.value))} maxLength={7} placeholder="MM / AA" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
+                             <input type="text" value={cardCvc} onChange={e => setCardCvc(e.target.value.replace(/\D/g, ''))} maxLength={4} placeholder="CVC" required className="w-1/2 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
                         </div>
                      </div>
                      <p className="text-xs text-gray-500 text-center">

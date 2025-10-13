@@ -111,6 +111,7 @@ const AdminPageContent: React.FC = () => {
                     <Route path="promoters" element={<AdminPanel adminData={adminData} />} />
                     <Route path="states" element={<StatesListPage />} />
                     <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                    <Route path="users" element={<ManageUsersPage />} />
                 </Routes>
             );
         }

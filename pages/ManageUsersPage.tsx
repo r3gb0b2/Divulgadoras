@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AdminUserData, AdminRole, Campaign } from '../types';
+import { AdminUserData, AdminRole, Campaign, Organization } from '../types';
 import { getAllAdmins, setAdminUserData, deleteAdminUser } from '../services/adminService';
 import { getAllCampaigns } from '../services/settingsService';
+import { getOrganizations } from '../services/organizationService';
 import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -13,6 +14,7 @@ const ManageUsersPage: React.FC = () => {
     const { adminData: currentAdmin } = useAdminAuth();
     const [admins, setAdmins] = useState<AdminUserData[]>([]);
     const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     
@@ -23,6 +25,7 @@ const ManageUsersPage: React.FC = () => {
     const [role, setRole] = useState<AdminRole>('viewer');
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
     const [assignedCampaigns, setAssignedCampaigns] = useState<{ [stateAbbr: string]: string[] }>({});
+    const [selectedOrg, setSelectedOrg] = useState('');
     
     const isSuperAdmin = currentAdmin?.role === 'superadmin';
 
@@ -30,19 +33,25 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            // Org admins only fetch their own users and campaigns
-            const [adminData, campaignData] = await Promise.all([
-                getAllAdmins(currentAdmin?.organizationId), 
-                getAllCampaigns(currentAdmin?.organizationId),
+            const adminDataPromise = getAllAdmins(currentAdmin?.organizationId);
+            const campaignDataPromise = getAllCampaigns(currentAdmin?.organizationId);
+            const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
+
+            const [adminData, campaignData, orgData] = await Promise.all([
+                adminDataPromise, 
+                campaignDataPromise,
+                orgDataPromise
             ]);
+
             setAdmins(adminData);
             setAllCampaigns(campaignData);
+            setOrganizations(orgData);
         } catch (err) {
             setError('Falha ao carregar dados.');
         } finally {
             setIsLoading(false);
         }
-    }, [currentAdmin]);
+    }, [currentAdmin, isSuperAdmin]);
 
     useEffect(() => {
         fetchData();
@@ -65,6 +74,7 @@ const ManageUsersPage: React.FC = () => {
         setRole('viewer');
         setAssignedStates([]);
         setAssignedCampaigns({});
+        setSelectedOrg('');
     };
 
     const handleStateToggle = (stateAbbr: string) => {
@@ -126,6 +136,7 @@ const ManageUsersPage: React.FC = () => {
         setRole(target.role);
         setAssignedStates(target.assignedStates || []);
         setAssignedCampaigns(target.assignedCampaigns || {});
+        setSelectedOrg(target.organizationId || '');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -133,6 +144,10 @@ const ManageUsersPage: React.FC = () => {
         setError('');
         if (!email) return setError("O campo de e-mail é obrigatório.");
         if (!editingTarget && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário.");
+        
+        if (isSuperAdmin && role !== 'superadmin' && !selectedOrg) {
+            return setError("Por favor, selecione uma organização para este usuário.");
+        }
         if (!isSuperAdmin && !currentAdmin?.organizationId) return setError("Você não está associado a uma organização.");
 
         setIsLoading(true);
@@ -154,13 +169,10 @@ const ManageUsersPage: React.FC = () => {
                 role, 
                 assignedStates, 
                 assignedCampaigns,
-                organizationId: currentAdmin?.organizationId
+                organizationId: isSuperAdmin 
+                    ? (role === 'superadmin' ? undefined : selectedOrg)
+                    : currentAdmin?.organizationId,
             };
-
-            // Superadmin can create other superadmins without an orgId
-            if (isSuperAdmin && role === 'superadmin') {
-                delete dataToSave.organizationId;
-            }
             
             await setAdminUserData(targetUid, dataToSave);
             
@@ -203,9 +215,9 @@ const ManageUsersPage: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
+                <h1 className="text-3xl font-bold">{isSuperAdmin ? 'Gerenciar Todos os Usuários' : 'Gerenciar Usuários da Organização'}</h1>
                 <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    &larr; Voltar ao Painel
+                    &larr; Voltar
                 </Link>
             </div>
             
@@ -235,6 +247,19 @@ const ManageUsersPage: React.FC = () => {
                                 {isSuperAdmin && <option value="superadmin">Super Admin</option>}
                             </select>
                         </div>
+                        
+                        {isSuperAdmin && role !== 'superadmin' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Organização</label>
+                                <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                                    <option value="" disabled>Selecione uma organização</option>
+                                    {organizations.map(org => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
 
                         <div className="flex-grow flex flex-col min-h-0 space-y-4">
                             <div className="flex flex-col">
@@ -290,20 +315,26 @@ const ManageUsersPage: React.FC = () => {
                              <h3 className="text-xl font-semibold mb-4">Usuários Existentes</h3>
                              {isLoading ? <p>Carregando...</p> : (
                                 <div className="space-y-3">
-                                    {admins.map(admin => (
-                                        <div key={admin.uid} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
-                                            <div className="min-w-0 md:flex-1">
-                                                <p className="font-semibold break-words">{admin.email}</p>
-                                                <p className="text-sm text-gray-400 break-words">
-                                                    <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
-                                                </p>
+                                    {admins.map(admin => {
+                                        const orgName = isSuperAdmin 
+                                            ? organizations.find(o => o.id === admin.organizationId)?.name || 'N/A (Global)'
+                                            : '';
+                                        return (
+                                            <div key={admin.uid} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
+                                                <div className="min-w-0 md:flex-1">
+                                                    <p className="font-semibold break-words">{admin.email}</p>
+                                                    {isSuperAdmin && <p className="text-sm text-gray-300">Organização: <span className="font-medium">{orgName}</span></p>}
+                                                    <p className="text-sm text-gray-400 break-words">
+                                                        <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
+                                                    </p>
+                                                </div>
+                                                <div className="flex justify-end items-center gap-4 mt-3 md:mt-0 md:ml-4 flex-shrink-0">
+                                                    <button onClick={() => handleEditClick(admin)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">Editar</button>
+                                                    <button onClick={() => handleDelete(admin)} className="text-red-400 hover:text-red-300 text-sm font-medium">Excluir</button>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-end items-center gap-4 mt-3 md:mt-0 md:ml-4 flex-shrink-0">
-                                                <button onClick={() => handleEditClick(admin)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">Editar</button>
-                                                <button onClick={() => handleDelete(admin)} className="text-red-400 hover:text-red-300 text-sm font-medium">Excluir</button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                              )}
                          </div>

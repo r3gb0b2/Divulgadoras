@@ -31,7 +31,6 @@ const App: React.FC = () => {
             <Route path="/:organizationId/status" element={<StatusCheck />} />
             
             <Route path="/admin/*" element={<AdminAuth />} />
-            <Route path="/organizacao-register" element={<AdminRegistrationPage />} />
             <Route path="/status" element={<PublicHome promptForOrg={true} />} />
             <Route path="/planos" element={<PricingPage />} />
           </Routes>

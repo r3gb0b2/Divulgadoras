@@ -4,7 +4,7 @@ import { getOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { HomeIcon, UsersIcon, MapPinIcon } from '../components/Icons';
+import { HomeIcon, UsersIcon, MapPinIcon, AdminUsersIcon } from '../components/Icons';
 
 const planDetails: { [key in 'basic' | 'professional']: { name: string; price: number } } = {
     basic: { name: 'Básico', price: 49 },
@@ -93,20 +93,27 @@ const SuperAdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                  <Link to="/admin/promoters" className="group block p-6 bg-secondary rounded-lg shadow hover:bg-gray-800 transition-colors">
                     <div className="flex items-center">
                         <UsersIcon className="w-8 h-8 text-primary"/>
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Ver Todas Divulgadoras</h2>
                     </div>
-                    <p className="mt-2 text-gray-400">Visualize e gerencie as inscrições de todas as organizações em um só lugar.</p>
+                    <p className="mt-2 text-gray-400">Visualize as inscrições de todas as organizações em um só lugar.</p>
                  </Link>
                  <Link to="/admin/states" className="group block p-6 bg-secondary rounded-lg shadow hover:bg-gray-800 transition-colors">
                     <div className="flex items-center">
                         <MapPinIcon className="w-8 h-8 text-primary"/>
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Localidades</h2>
                     </div>
-                    <p className="mt-2 text-gray-400">Ative ou desative localidades e defina regras gerais para as inscrições.</p>
+                    <p className="mt-2 text-gray-400">Ative localidades e defina regras gerais para as inscrições.</p>
+                 </Link>
+                 <Link to="/admin/users" className="group block p-6 bg-secondary rounded-lg shadow hover:bg-gray-800 transition-colors">
+                    <div className="flex items-center">
+                        <AdminUsersIcon className="w-8 h-8 text-primary"/>
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Administradores</h2>
+                    </div>
+                    <p className="mt-2 text-gray-400">Adicione ou remova administradores das organizações clientes.</p>
                  </Link>
             </div>
 
