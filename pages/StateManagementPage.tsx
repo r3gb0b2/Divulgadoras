@@ -181,7 +181,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         
       if (!orgId) throw new Error("Organization ID is missing");
 
-      const dataToSave = {
+      const dataToSave: any = {
         name: campaignForm.name || '',
         description: campaignForm.description || '',
         isActive: campaignForm.isActive !== false,
@@ -328,8 +328,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                   value={campaignForm.organizationId || ''}
                                   onChange={(e) => handleCampaignFormChange('organizationId' as any, e.target.value)}
                                   required
-                                  disabled={!!campaignForm.id}
-                                  className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                  className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"
                                 >
                                   <option value="" disabled>Selecione a organização</option>
                                   {organizations.map(org => (
