@@ -79,44 +79,69 @@ const createRejectedEmailHtml = (promoter) => {
 exports.onPromoterStatusChange = functions.firestore
   .document("promoters/{promoterId}")
   .onUpdate(async (change, context) => {
+    const { promoterId } = context.params;
+    logger.info(`[${promoterId}] Function triggered for update.`);
+
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
     // Exit if status has not changed
     if (beforeData.status === afterData.status) {
+      logger.info(`[${promoterId}] Status unchanged (${afterData.status}). Exiting.`);
       return null;
     }
 
-    logger.info(`Status changed for promoter ${context.params.promoterId} from ${beforeData.status} to ${afterData.status}`);
+    logger.info(`[${promoterId}] Status changed from '${beforeData.status}' to '${afterData.status}'.`);
+
+    // Ensure email exists
+    if (!afterData.email) {
+      logger.error(`[${promoterId}] Promoter document is missing 'email' field. Cannot send notification.`);
+      return null;
+    }
 
     try {
-        let organizationName = "Nossa Equipe";
-        if (afterData.organizationId) {
-            const orgDoc = await db.collection('organizations').doc(afterData.organizationId).get();
-            if (orgDoc.exists) {
-                organizationName = orgDoc.data().name;
-            }
+      let organizationName = "Nossa Equipe";
+      if (afterData.organizationId) {
+        try {
+          const orgDoc = await db.collection('organizations').doc(afterData.organizationId).get();
+          if (orgDoc.exists) {
+            organizationName = orgDoc.data().name;
+            logger.info(`[${promoterId}] Found organization name: '${organizationName}'.`);
+          } else {
+            logger.warn(`[${promoterId}] Organization document with ID '${afterData.organizationId}' not found.`);
+          }
+        } catch (orgError) {
+          logger.error(`[${promoterId}] Error fetching organization '${afterData.organizationId}'.`, orgError);
+          // Continue with default name
         }
-        
-        const promoterData = { ...afterData, organizationName };
+      } else {
+         logger.warn(`[${promoterId}] Promoter document has no 'organizationId'. Using default name.`);
+      }
 
-        if (afterData.status === 'approved') {
-            const subject = `Parabéns! Sua candidatura para ${promoterData.organizationName} foi aprovada!`;
-            const html = createApprovedEmailHtml(promoterData);
-            await sendEmail(promoterData.email, subject, html);
-            logger.info(`Approval email queued for ${promoterData.email}`);
+      const promoterData = { ...afterData, organizationName };
 
-        } else if (afterData.status === 'rejected') {
-            const subject = `Resultado da sua candidatura para ${promoterData.organizationName}`;
-            const html = createRejectedEmailHtml(promoterData);
-            await sendEmail(promoterData.email, subject, html);
-            logger.info(`Rejection email queued for ${promoterData.email}`);
-        }
+      let subject = "";
+      let html = "";
 
+      if (afterData.status === 'approved') {
+        subject = `Parabéns! Sua candidatura para ${promoterData.organizationName} foi aprovada!`;
+        html = createApprovedEmailHtml(promoterData);
+        logger.info(`[${promoterId}] Preparing 'approved' email for ${promoterData.email}.`);
+      } else if (afterData.status === 'rejected') {
+        subject = `Resultado da sua candidatura para ${promoterData.organizationName}`;
+        html = createRejectedEmailHtml(promoterData);
+        logger.info(`[${promoterId}] Preparing 'rejected' email for ${promoterData.email}.`);
+      } else {
+        logger.info(`[${promoterId}] New status '${afterData.status}' does not trigger an email. Exiting.`);
+        return null; // Don't send email for other status changes
+      }
+
+      logger.info(`[${promoterId}] Adding email document to 'mail' collection for ${promoterData.email}.`);
+      const mailResult = await sendEmail(promoterData.email, subject, html);
+      logger.info(`[${promoterId}] Successfully created mail document with ID: ${mailResult.id}. The 'Trigger Email' extension will now process it.`);
+      
     } catch (error) {
-        logger.error("Failed to send status change email", error);
-        // We don't re-throw the error, as that could cause infinite retries.
-        // The error is logged for monitoring.
+      logger.error(`[${promoterId}] An unexpected error occurred while processing the email notification.`, error);
     }
 
     return null;
