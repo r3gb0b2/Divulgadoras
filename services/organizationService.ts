@@ -90,16 +90,23 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
         const q = query(
             collection(firestore, ORGS_COLLECTION),
-            where("public", "==", true),
-            where("status", "in", ["active", "trial"])
+            where("public", "==", true)
         );
         const querySnapshot = await getDocs(q);
-        const orgs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        const allPublicOrgs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+
+        // Client-side filter for backward compatibility with older organizations without a status field.
+        const visibleOrgs = allPublicOrgs.filter(org => {
+            // An org is visible if:
+            // 1. It has no status (old data, assume it's active)
+            // 2. Its status is explicitly 'active' or 'trial'
+            return !org.status || org.status === 'active' || org.status === 'trial';
+        });
         
         // Sort alphabetically
-        orgs.sort((a, b) => a.name.localeCompare(b.name));
+        visibleOrgs.sort((a, b) => a.name.localeCompare(b.name));
 
-        return orgs;
+        return visibleOrgs;
     } catch (error) {
         console.error("Error getting public organizations: ", error);
         throw new Error("Não foi possível buscar as organizações públicas.");
