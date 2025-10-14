@@ -132,7 +132,7 @@ export const signUpAndCreateOrganization = async (email: string, password: strin
 // --- Admin Application for SuperAdmin Approval ---
 
 /**
- * Creates an Auth user and submits an application for a new admin/organization.
+ * Creates an Auth user and submits an application for a new admin.
  * @param applicationData The data from the application form.
  * @param password The user's chosen password.
  */
@@ -175,49 +175,35 @@ export const submitAdminApplication = async (applicationData: Omit<AdminApplicat
 };
 
 /**
- * Approves an admin application by creating an organization and admin permissions using an atomic batch write.
+ * Approves an admin application by creating admin permissions and linking them to an existing organization.
  * @param application The application object to approve.
+ * @param organizationId The ID of the organization to assign the new admin to.
  */
-export const acceptAdminApplication = async (application: AdminApplication): Promise<void> => {
+export const acceptAdminApplication = async (application: AdminApplication, organizationId: string): Promise<void> => {
     try {
+        if (!organizationId) {
+            throw new Error("A organização é obrigatória para aprovar um novo admin.");
+        }
         const batch = writeBatch(firestore);
 
-        // 1. Define the new organization document reference and data
-        const newOrgRef = doc(collection(firestore, 'organizations'));
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 3); // 3-day trial
-
-        const newOrgData = {
-            name: application.orgName,
-            ownerUid: application.uid,
-            ownerEmail: application.email,
-            status: 'trial' as OrganizationStatus,
-            planId: 'basic' as PlanId,
-            createdAt: Timestamp.now(), // Use client-side timestamp for batches
-            planExpiresAt: Timestamp.fromDate(trialEndDate),
-            assignedStates: [],
-            public: true,
-        };
-        
-        // 2. Define the admin user document reference and data
+        // 1. Define the admin user document reference and data
         const adminDocRef = doc(firestore, 'admins', application.uid);
         const adminData: Omit<AdminUserData, 'uid'> = {
             email: application.email,
-            role: 'admin',
+            role: 'admin', // New admins default to 'admin' role. Can be changed later.
             assignedStates: [],
             assignedCampaigns: {},
-            organizationId: newOrgRef.id,
+            organizationId: organizationId,
         };
 
-        // 3. Define the application document reference to be deleted
+        // 2. Define the application document reference to be deleted
         const appDocRef = doc(firestore, 'adminApplications', application.id);
 
-        // 4. Add all writes to the batch
-        batch.set(newOrgRef, newOrgData);
+        // 3. Add all writes to the batch
         batch.set(adminDocRef, adminData);
         batch.delete(appDocRef);
 
-        // 5. Commit the batch atomically
+        // 4. Commit the batch atomically
         await batch.commit();
 
     } catch (error) {
@@ -225,6 +211,7 @@ export const acceptAdminApplication = async (application: AdminApplication): Pro
         throw new Error("Falha ao aprovar a solicitação. A operação falhou e foi revertida. Verifique os logs e tente novamente.");
     }
 };
+
 
 /**
  * Fetches all pending admin applications. For superadmins only.

@@ -22,7 +22,6 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
         name: '',
         email: '',
         phone: '',
-        orgName: '',
         message: '',
         password: '',
         confirmPassword: ''
@@ -72,7 +71,7 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
     return (
         <div className="w-full max-w-md">
             <form onSubmit={handleSubmit} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
-                <h1 className="text-2xl font-bold text-white mb-4">Solicitar Acesso</h1>
+                <h1 className="text-2xl font-bold text-white mb-4">Solicitar Acesso de Admin</h1>
                 <p className="text-gray-400 mb-6">Preencha os dados abaixo. Após aprovação, seu acesso será liberado.</p>
                 
                 {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
@@ -81,10 +80,9 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
                     <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Seu nome completo" value={formData.name} onChange={handleChange} required />
                     <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail (será seu login)" value={formData.email} onChange={handleChange} required />
                     <InputWithIcon Icon={PhoneIcon} type="tel" name="phone" placeholder="WhatsApp (com DDD)" value={formData.phone} onChange={handleChange} required />
-                    <InputWithIcon Icon={BuildingOfficeIcon} type="text" name="orgName" placeholder="Nome da sua Produtora/Agência" value={formData.orgName} onChange={handleChange} required />
                     <InputWithIcon Icon={LockClosedIcon} type="password" name="password" placeholder="Crie uma senha de acesso" value={formData.password} onChange={handleChange} required />
                     <InputWithIcon Icon={LockClosedIcon} type="password" name="confirmPassword" placeholder="Confirme sua senha" value={formData.confirmPassword} onChange={handleChange} required />
-                    <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Fale um pouco sobre seu evento (opcional)" className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" rows={2}></textarea>
+                    <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Mensagem (opcional)" className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" rows={2}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
@@ -158,7 +156,7 @@ const AdminLogin: React.FC = () => {
                         </button>
 
                         <p className="text-sm text-gray-400 mt-4">
-                            Quer cadastrar sua produtora?{' '}
+                            Precisa de acesso de administrador?{' '}
                             <button type="button" onClick={() => setIsRegistering(true)} className="font-medium text-primary hover:text-primary-dark">
                                 Solicite seu acesso
                             </button>

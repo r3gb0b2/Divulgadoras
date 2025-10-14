@@ -76,7 +76,6 @@ export interface AdminApplication {
     name: string;
     email: string;
     phone: string;
-    orgName: string;
     message: string;
     status: 'pending';
     createdAt: Timestamp;
