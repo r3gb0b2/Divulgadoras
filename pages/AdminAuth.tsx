@@ -18,7 +18,15 @@ import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import t
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
-    const [formData, setFormData] = useState({ name: '', email: '', phone: '', orgName: '', message: '' });
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        orgName: '',
+        message: '',
+        password: '',
+        confirmPassword: ''
+    });
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
@@ -31,8 +39,16 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
         e.preventDefault();
         setError('');
         setIsLoading(true);
+
+        if (formData.password !== formData.confirmPassword) {
+            setError("As senhas não coincidem.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
-            await submitAdminApplication(formData);
+            const { password, confirmPassword, ...applicationData } = formData;
+            await submitAdminApplication(applicationData, password);
             setIsSuccess(true);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
@@ -45,7 +61,7 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
         return (
             <div className="w-full max-w-md bg-secondary shadow-2xl rounded-lg p-8 text-center">
                 <h2 className="text-2xl font-bold text-white mb-4">Solicitação Enviada!</h2>
-                <p className="text-gray-300 mb-6">Sua solicitação de acesso foi enviada com sucesso. Nossa equipe entrará em contato em breve.</p>
+                <p className="text-gray-300 mb-6">Sua solicitação de acesso foi enviada com sucesso. Após a aprovação, você poderá fazer login com o e-mail e senha cadastrados.</p>
                 <button onClick={onSwitchToLogin} className="font-medium text-primary hover:text-primary-dark">
                     &larr; Voltar para o Login
                 </button>
@@ -57,16 +73,18 @@ const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = 
         <div className="w-full max-w-md">
             <form onSubmit={handleSubmit} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
                 <h1 className="text-2xl font-bold text-white mb-4">Solicitar Acesso</h1>
-                <p className="text-gray-400 mb-6">Preencha os dados abaixo. Entraremos em contato para liberar seu acesso.</p>
+                <p className="text-gray-400 mb-6">Preencha os dados abaixo. Após aprovação, seu acesso será liberado.</p>
                 
                 {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
                 
                 <div className="space-y-4 text-left">
                     <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Seu nome completo" value={formData.name} onChange={handleChange} required />
-                    <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
+                    <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail (será seu login)" value={formData.email} onChange={handleChange} required />
                     <InputWithIcon Icon={PhoneIcon} type="tel" name="phone" placeholder="WhatsApp (com DDD)" value={formData.phone} onChange={handleChange} required />
                     <InputWithIcon Icon={BuildingOfficeIcon} type="text" name="orgName" placeholder="Nome da sua Produtora/Agência" value={formData.orgName} onChange={handleChange} required />
-                    <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Fale um pouco sobre seu evento ou necessidade (opcional)" className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" rows={3}></textarea>
+                    <InputWithIcon Icon={LockClosedIcon} type="password" name="password" placeholder="Crie uma senha de acesso" value={formData.password} onChange={handleChange} required />
+                    <InputWithIcon Icon={LockClosedIcon} type="password" name="confirmPassword" placeholder="Confirme sua senha" value={formData.confirmPassword} onChange={handleChange} required />
+                    <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Fale um pouco sobre seu evento (opcional)" className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" rows={2}></textarea>
                 </div>
                 
                 <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
@@ -113,7 +131,7 @@ const AdminLogin: React.FC = () => {
             navigate('/admin');
         } catch (error) {
             console.error(error);
-            setError("E-mail ou senha inválidos.");
+            setError("E-mail ou senha inválidos. Sua conta pode estar pendente de aprovação.");
             setIsLoading(false);
         }
     };

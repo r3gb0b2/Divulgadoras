@@ -1,6 +1,6 @@
 import { firestore, auth } from '../firebase/config';
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { AdminUserData, AdminApplication } from '../types';
 import { createOrganization } from './organizationService';
 
@@ -132,29 +132,72 @@ export const signUpAndCreateOrganization = async (email: string, password: strin
 // --- Admin Application for SuperAdmin Approval ---
 
 /**
- * Submits an application for a new admin/organization.
+ * Creates an Auth user and submits an application for a new admin/organization.
  * @param applicationData The data from the application form.
+ * @param password The user's chosen password.
  */
-export const submitAdminApplication = async (applicationData: Omit<AdminApplication, 'id' | 'status' | 'createdAt'>): Promise<void> => {
+export const submitAdminApplication = async (applicationData: Omit<AdminApplication, 'id' | 'status' | 'createdAt' | 'uid'>, password: string): Promise<void> => {
     try {
+        const normalizedEmail = applicationData.email.toLowerCase().trim();
         // Check for existing application with the same email
-        const q = query(collection(firestore, "adminApplications"), where("email", "==", applicationData.email.toLowerCase().trim()));
+        const q = query(collection(firestore, "adminApplications"), where("email", "==", normalizedEmail));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
             throw new Error("Já existe uma solicitação de acesso para este e-mail. Aguarde o contato da nossa equipe.");
         }
 
+        // IMPORTANT: We create the user in Auth immediately. This can fail if email is already in use by another admin.
+        const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+        const { uid } = userCredential.user;
+
+        // Sign out immediately so they don't get logged in and redirected.
+        await signOut(auth);
+
         const dataToSave = {
             ...applicationData,
-            email: applicationData.email.toLowerCase().trim(),
+            uid,
+            email: normalizedEmail,
             status: 'pending' as const,
             createdAt: serverTimestamp(),
         };
         await addDoc(collection(firestore, 'adminApplications'), dataToSave);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error submitting admin application: ", error);
+        if (error.code === 'auth/email-already-in-use') {
+            throw new Error("Este e-mail já está em uso por outro administrador. Por favor, use um e-mail diferente ou faça login.");
+        }
+        if (error.code === 'auth/weak-password') {
+            throw new Error("A senha deve ter pelo menos 6 caracteres.");
+        }
         if (error instanceof Error) throw error;
         throw new Error("Não foi possível enviar sua solicitação. Tente novamente.");
+    }
+};
+
+/**
+ * Approves an admin application by creating an organization and admin permissions.
+ * @param application The application object to approve.
+ */
+export const acceptAdminApplication = async (application: AdminApplication): Promise<void> => {
+    try {
+        // 1. Create the organization (defaults to 'basic' plan on a 3-day trial)
+        const newOrgId = await createOrganization(application.uid, application.email, application.orgName, 'basic');
+
+        // 2. Create the admin user document, linking them to the organization
+        const adminData: Omit<AdminUserData, 'uid'> = {
+            email: application.email,
+            role: 'admin',
+            assignedStates: [],
+            assignedCampaigns: {},
+            organizationId: newOrgId,
+        };
+        await setAdminUserData(application.uid, adminData);
+
+        // 3. Delete the now-processed application
+        await deleteAdminApplication(application.id);
+    } catch (error) {
+        console.error("Error accepting admin application:", error);
+        throw new Error("Falha ao aprovar a solicitação. A organização ou o admin podem ter sido criados parcialmente. Verifique manualmente.");
     }
 };
 

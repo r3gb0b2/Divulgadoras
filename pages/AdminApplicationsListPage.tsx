@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getAdminApplications, deleteAdminApplication } from '../services/adminService';
+import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
 import { AdminApplication } from '../types';
 import { Timestamp } from 'firebase/firestore';
 
 const AdminApplicationsListPage: React.FC = () => {
     const [applications, setApplications] = useState<AdminApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const fetchApplications = useCallback(async () => {
@@ -26,8 +27,23 @@ const AdminApplicationsListPage: React.FC = () => {
         fetchApplications();
     }, [fetchApplications]);
 
+    const handleAccept = async (app: AdminApplication) => {
+        if (window.confirm(`Tem certeza que deseja aprovar o acesso para ${app.orgName}? Uma nova organização e um usuário admin serão criados.`)) {
+            setIsProcessing(app.id);
+            setError(null);
+            try {
+                await acceptAdminApplication(app);
+                await fetchApplications(); // Refresh the list
+            } catch (err: any) {
+                setError(err.message || "Falha ao aprovar a solicitação.");
+            } finally {
+                setIsProcessing(null);
+            }
+        }
+    };
+
     const handleDelete = async (id: string) => {
-        if (window.confirm("Tem certeza que deseja remover esta solicitação? Faça isso apenas após criar o usuário ou se a solicitação for negada.")) {
+        if (window.confirm("Tem certeza que deseja recusar e remover esta solicitação? Esta ação é permanente.")) {
             try {
                 await deleteAdminApplication(id);
                 fetchApplications(); // Refresh the list
@@ -67,14 +83,24 @@ const AdminApplicationsListPage: React.FC = () => {
                                 <p className="text-sm text-gray-400">{app.email} | {app.phone}</p>
                                 {app.message && <p className="text-sm text-gray-400 mt-2 italic border-l-2 border-gray-600 pl-2">"{app.message}"</p>}
                             </div>
-                            <div className="flex-shrink-0 mt-3 md:mt-0 text-right">
-                                <p className="text-xs text-gray-500 mb-2">Enviado em: {formatDate(app.createdAt)}</p>
-                                <button
-                                    onClick={() => handleDelete(app.id)}
-                                    className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                                >
-                                    Remover Solicitação
-                                </button>
+                            <div className="flex-shrink-0 mt-3 md:mt-0 text-right space-y-2">
+                                <p className="text-xs text-gray-500">Enviado em: {formatDate(app.createdAt)}</p>
+                                <div className="flex justify-end gap-2">
+                                     <button
+                                        onClick={() => handleAccept(app)}
+                                        disabled={isProcessing === app.id}
+                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                                    >
+                                        {isProcessing === app.id ? 'Aprovando...' : 'Aprovar'}
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(app.id)}
+                                        disabled={isProcessing === app.id}
+                                        className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
+                                    >
+                                        Recusar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -93,9 +119,11 @@ const AdminApplicationsListPage: React.FC = () => {
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 <div className="bg-blue-900/50 border border-blue-700 text-blue-300 p-3 mb-6 rounded-md text-sm">
-                    <p className="font-bold">Como aprovar uma solicitação:</p>
-                    <p>1. Crie a organização e o usuário administrador nas respectivas páginas de gerenciamento.</p>
-                    <p>2. Após a criação e comunicação com o novo administrador, remova a solicitação desta lista.</p>
+                    <p className="font-bold">Como processar uma solicitação:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>Clique em <strong>Aprovar</strong> para criar a organização e liberar o acesso do usuário automaticamente. Ele poderá fazer login com o e-mail e senha que cadastrou.</li>
+                        <li>Clique em <strong>Recusar</strong> para remover permanentemente a solicitação da lista.</li>
+                    </ul>
                 </div>
                 {renderContent()}
             </div>

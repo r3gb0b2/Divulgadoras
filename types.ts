@@ -72,6 +72,7 @@ export interface AdminUserData {
 
 export interface AdminApplication {
     id: string;
+    uid: string;
     name: string;
     email: string;
     phone: string;
