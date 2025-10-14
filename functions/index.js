@@ -6,6 +6,8 @@ admin.initializeApp();
 
 /**
  * Creates a freshly authenticated Brevo API client instance.
+ * This function uses the official singleton pattern but re-authenticates on every call,
+ * making it robust for serverless environments where instances can be reused.
  * @param {object} brevoConfig - The Brevo configuration from Firebase functions config.
  * @returns {Brevo.TransactionalEmailsApi} A configured API instance.
  * @throws {functions.https.HttpsError} If config is missing.
@@ -16,12 +18,16 @@ const createBrevoClient = (brevoConfig) => {
         throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
     }
     
-    // Create a new, isolated ApiClient for each function call
-    const apiClient = new Brevo.ApiClient();
-    apiClient.authentications['api-key'].apiKey = brevoConfig.key;
+    // Use the official singleton pattern for the API client.
+    const defaultClient = Brevo.ApiClient.instance;
+
+    // Re-authenticate the singleton instance for every function call. This is crucial for serverless environments
+    // to prevent state issues from reused function instances.
+    const apiKeyAuth = defaultClient.authentications['api-key'];
+    apiKeyAuth.apiKey = brevoConfig.key;
     
-    // Pass the authenticated client to the API constructor
-    return new Brevo.TransactionalEmailsApi(apiClient);
+    // Return a new TransactionalEmailsApi instance which will use the globally configured client.
+    return new Brevo.TransactionalEmailsApi();
 };
 
 
@@ -135,6 +141,7 @@ exports.sendPromoterStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
+            let textContent = '';
 
             if (afterStatus === 'approved') {
                 subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
@@ -148,6 +155,7 @@ exports.sendPromoterStatusEmail = functions
                     <br>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
+                textContent = `Olá, ${promoterName}! Temos uma ótima notícia! Sua candidatura para ${campaignName} da organização ${orgName} foi APROVADA. Acesse seu portal para continuar: ${portalLink}`;
             } else { // 'rejected'
                 subject = `Resultado da sua candidatura para ${orgName}`;
                 const reason = afterData.rejectionReason || 'Não foi fornecido um motivo específico.';
@@ -160,6 +168,7 @@ exports.sendPromoterStatusEmail = functions
                     <br>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
+                textContent = `Olá, ${promoterName}. Agradecemos o seu interesse em fazer parte da nossa equipe para ${campaignName} da organização ${orgName}. Neste momento, não poderemos seguir com a sua candidatura. Motivo: ${reason}`;
             }
 
             // --- 4. Send Email via Brevo ---
@@ -170,6 +179,7 @@ exports.sendPromoterStatusEmail = functions
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
+            sendSmtpEmail.textContent = textContent;
 
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             
@@ -253,6 +263,7 @@ exports.manuallySendStatusEmail = functions
         const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
         let subject = '';
         let htmlContent = '';
+        let textContent = '';
 
         if (promoterData.status === 'approved') {
             subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
@@ -266,6 +277,7 @@ exports.manuallySendStatusEmail = functions
                 <br>
                 <p>Atenciosamente,<br/>Equipe Certa</p>
             `;
+            textContent = `Olá, ${promoterName}! Temos uma ótima notícia! Sua candidatura para ${campaignName} da organização ${orgName} foi APROVADA. Acesse seu portal para continuar: ${portalLink}`;
         } else { // 'rejected'
             subject = `Resultado da sua candidatura para ${orgName}`;
             const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
@@ -278,6 +290,7 @@ exports.manuallySendStatusEmail = functions
                 <br>
                 <p>Atenciosamente,<br/>Equipe Certa</p>
             `;
+            textContent = `Olá, ${promoterName}. Agradecemos o seu interesse em fazer parte da nossa equipe para ${campaignName} da organização ${orgName}. Neste momento, não poderemos seguir com a sua candidatura. Motivo: ${reason}`;
         }
         
         // --- 5. Send Email with specific error handling ---
@@ -289,6 +302,7 @@ exports.manuallySendStatusEmail = functions
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
+            sendSmtpEmail.textContent = textContent;
 
             await apiInstance.sendTransacEmail(sendSmtpEmail);
 
