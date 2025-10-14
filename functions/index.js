@@ -106,10 +106,13 @@ exports.sendPromoterStatusEmail = functions
 
             // --- 2. Fetch Organization Name ---
             let orgName = 'Nossa Equipe'; // Default name
-            if (afterData.organizationId) {
+            if (afterData.organizationId && typeof afterData.organizationId === 'string') {
                 const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
                 if (orgDoc.exists) {
-                    orgName = orgDoc.data().name || orgName;
+                    const orgData = orgDoc.data();
+                    if (orgData && orgData.name) {
+                       orgName = orgData.name;
+                    }
                 } else {
                     functions.logger.warn(`Organization document not found for ID: ${afterData.organizationId}.`, { promoterId });
                 }
@@ -171,6 +174,7 @@ exports.sendPromoterStatusEmail = functions
                 promoterId: promoterId,
                 errorSource: isBrevoError ? 'Brevo API' : 'Internal Logic/Firestore',
                 errorMessage: error instanceof Error ? error.message : String(error),
+                errorStack: error.stack,
                 brevoErrorBody: error.response?.body,
             });
             return null;
@@ -198,18 +202,31 @@ exports.manuallySendStatusEmail = functions
         try {
             const promoterDoc = await admin.firestore().collection('promoters').doc(promoterId).get();
             if (!promoterDoc.exists) {
-                throw new functions.https.HttpsError('not-found', 'Divulgadora não encontrada.');
+                throw new functions.https.HttpsError('not-found', 'Divulgadora não encontrada no banco de dados.');
             }
             promoterData = promoterDoc.data();
 
-            if (promoterData.organizationId) {
+            if (promoterData.organizationId && typeof promoterData.organizationId === 'string') {
                 const orgDoc = await admin.firestore().collection('organizations').doc(promoterData.organizationId).get();
-                if (orgDoc.exists) orgName = orgDoc.data().name || orgName;
+                if (orgDoc.exists) {
+                    const orgData = orgDoc.data();
+                     if (orgData && orgData.name) {
+                        orgName = orgData.name;
+                     }
+                } else {
+                    functions.logger.warn(`Organization document not found for ID: ${promoterData.organizationId}. Using default name.`, { promoterId });
+                }
             }
         } catch (error) {
-            functions.logger.error(`[FATAL ERROR] Firestore read failed in manual trigger.`, { promoterId, error });
-            if (error instanceof functions.https.HttpsError) throw error;
-            throw new functions.https.HttpsError('internal', 'Falha ao ler os dados da divulgadora no banco de dados.');
+            functions.logger.error(`[FATAL ERROR] Firestore data fetching failed in manual trigger.`, { 
+                promoterId: promoterId,
+                errorMessage: error.message,
+                errorStack: error.stack,
+            });
+            if (error instanceof functions.https.HttpsError) {
+                throw error;
+            }
+            throw new functions.https.HttpsError('internal', `Erro no servidor ao buscar dados: ${error.message}`);
         }
 
         // --- 3. Guard Clauses for business logic ---
