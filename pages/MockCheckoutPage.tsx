@@ -21,7 +21,7 @@ const CheckoutPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState('');
-    const [pagSeguroInstance, setPagSeguroInstance] = useState<any>(null);
+    const [cardInstance, setCardInstance] = useState<any>(null);
     const cardContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -45,7 +45,7 @@ const CheckoutPage: React.FC = () => {
                 });
                 
                 if (cardContainerRef.current) {
-                     instance.checkout.card({
+                     const card = instance.checkout.card({
                         form: {
                             id: 'pagseguro-card-form'
                         },
@@ -53,8 +53,8 @@ const CheckoutPage: React.FC = () => {
                             id: 'pagseguro-card-container'
                         }
                     });
+                    setCardInstance(card);
                 }
-                setPagSeguroInstance(instance);
 
             } catch (err: any) {
                 setError(err.message || "Falha ao inicializar o pagamento.");
@@ -68,7 +68,7 @@ const CheckoutPage: React.FC = () => {
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!pagSeguroInstance) {
+        if (!cardInstance) {
             setError("O formulário de pagamento não está pronto.");
             return;
         }
@@ -77,7 +77,7 @@ const CheckoutPage: React.FC = () => {
         setError('');
 
         try {
-            const response = await pagSeguroInstance.checkout.card.createToken({
+            const response = await cardInstance.createToken({
                 useForm: true
             });
             
@@ -142,7 +142,7 @@ const CheckoutPage: React.FC = () => {
 
                     <button 
                         type="submit" 
-                        disabled={isLoading || isProcessing || !pagSeguroInstance}
+                        disabled={isLoading || isProcessing || !cardInstance}
                         className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50"
                     >
                         Pagar com Cartão
