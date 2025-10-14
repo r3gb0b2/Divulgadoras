@@ -1,15 +1,35 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon } from '../components/Icons';
+import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
+    const [testEmailStatus, setTestEmailStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error', message: string }>({ type: 'idle', message: '' });
+
     const handleLogout = async () => {
         try {
             await signOut(auth);
         } catch (error) {
             console.error("Logout failed", error);
+        }
+    };
+
+    const handleSendTestEmail = async () => {
+        setTestEmailStatus({ type: 'loading', message: 'Enviando e-mail de teste...' });
+        try {
+            const sendTestEmail = httpsCallable(functions, 'sendTestEmail');
+            const result = await sendTestEmail();
+            const data = result.data as { success: boolean; message: string };
+            if (data.success) {
+                setTestEmailStatus({ type: 'success', message: data.message });
+            } else {
+                 throw new Error('A função retornou sucesso falso.');
+            }
+        } catch (error: any) {
+            console.error("Test email failed", error);
+            setTestEmailStatus({ type: 'error', message: `Falha no envio: ${error.message}` });
         }
     };
     
@@ -72,6 +92,31 @@ const SuperAdminDashboard: React.FC = () => {
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                 </div>
+            </div>
+
+            <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
+                <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
+                <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 className="font-semibold text-gray-100">Teste de Envio de E-mails</h3>
+                        <p className="text-sm text-gray-400 mt-1">
+                            Clique no botão para enviar um e-mail de teste para sua própria conta de Super Admin ({auth.currentUser?.email}). Isso verifica se a integração com a API (Brevo) está funcionando corretamente.
+                        </p>
+                    </div>
+                    <button 
+                        onClick={handleSendTestEmail}
+                        disabled={testEmailStatus.type === 'loading'}
+                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50"
+                    >
+                       <EnvelopeIcon className="w-5 h-5"/>
+                       {testEmailStatus.type === 'loading' ? 'Enviando...' : 'Testar Envio'}
+                    </button>
+                </div>
+                 {testEmailStatus.type !== 'idle' && testEmailStatus.type !== 'loading' && (
+                    <div className={`mt-4 p-3 rounded-md text-sm ${testEmailStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                        <p><span className="font-bold">{testEmailStatus.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testEmailStatus.message}</p>
+                    </div>
+                 )}
             </div>
         </div>
     );
