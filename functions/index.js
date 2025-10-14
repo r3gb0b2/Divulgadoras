@@ -26,53 +26,106 @@ const getMercadoPagoConfig = async () => {
 };
 
 /**
- * Inicia o processo de checkout, criando uma preferência no Mercado Pago e retornando o link de pagamento.
+ * Etapa 1: Cria a conta de usuário no Firebase Auth e a organização no Firestore com status 'pending_payment'.
+ * Esta função é chamada antes de qualquer interação com o Mercado Pago.
  */
-exports.initiateMercadoPagoCheckout = onCall({ allow: "unauthenticated" }, async (request) => {
-    const { planId, orgName, email, passwordB64 } = request.data;
+exports.createPendingOrganization = onCall({ allow: "unauthenticated" }, async (request) => {
+    const { orgName, email, password, planId } = request.data;
     const plan = plans[planId];
+    
+    if (!plan || !orgName || !email || !password) {
+        throw new HttpsError('invalid-argument', 'Todos os campos são obrigatórios.');
+    }
+    if (password.length < 6) {
+        throw new HttpsError('invalid-argument', 'A senha deve ter pelo menos 6 caracteres.');
+    }
 
-    if (!plan || !orgName || !email || !passwordB64) {
-        throw new HttpsError('invalid-argument', 'Todos os campos do formulário são obrigatórios.');
+    try {
+        // Criar o usuário no Firebase Authentication
+        const userRecord = await admin.auth().createUser({ email, password });
+        const { uid } = userRecord;
+
+        // Criar a organização no Firestore
+        const orgRef = db.collection('organizations').doc();
+        await orgRef.set({
+            ownerUid: uid,
+            ownerEmail: email,
+            name: orgName,
+            planId: planId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: 'pending_payment', // Novo status
+            isPublic: false, // Não é público até o pagamento ser concluído
+            assignedStates: [],
+        });
+
+        // Criar o documento de permissões do admin
+        const adminRef = db.collection('admins').doc(uid);
+        await adminRef.set({
+            uid, email, role: 'admin', organizationId: orgRef.id,
+            assignedStates: [], assignedCampaigns: {},
+        });
+
+        logger.info(`Organização pendente '${orgName}' e usuário '${email}' criados com ID: ${orgRef.id}`);
+        return { success: true, organizationId: orgRef.id };
+
+    } catch (error) {
+        logger.error("Erro ao criar organização pendente:", error);
+        if (error.code === 'auth/email-already-exists') {
+            throw new HttpsError('already-exists', 'Este e-mail já está cadastrado.');
+        }
+        throw new HttpsError('internal', 'Não foi possível criar a conta. Tente novamente.');
+    }
+});
+
+/**
+ * Etapa 2: Gera o link de pagamento do Mercado Pago para uma organização já criada e com status pendente.
+ * Esta função deve ser chamada por um usuário autenticado.
+ */
+exports.getCheckoutLinkForOrg = onCall(async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Você precisa estar logado para realizar esta ação.');
+    }
+    
+    const { orgId } = request.data;
+    if (!orgId) {
+        throw new HttpsError('invalid-argument', 'O ID da organização é obrigatório.');
+    }
+
+    const orgRef = db.collection('organizations').doc(orgId);
+    const orgDoc = await orgRef.get();
+
+    if (!orgDoc.exists) {
+        throw new HttpsError('not-found', 'Organização não encontrada.');
+    }
+    
+    const orgData = orgDoc.data();
+    // Security Check: Garante que o usuário logado é o dono da organização
+    if (orgData.ownerUid !== request.auth.uid) {
+         throw new HttpsError('permission-denied', 'Você não tem permissão para pagar por esta organização.');
+    }
+
+    const plan = plans[orgData.planId];
+    if (!plan) {
+        throw new HttpsError('failed-precondition', 'O plano selecionado é inválido.');
     }
     
     const config = await getMercadoPagoConfig();
     const client = new MercadoPagoConfig({ accessToken: config.accessToken });
     const preferenceClient = new Preference(client);
 
-    const referenceId = `ORG_${Date.now()}_${orgName.replace(/\s+/g, '_')}`;
-
-    // Armazena os dados do usuário/org pendente para criação posterior
-    await db.collection('pendingOrganizations').doc(referenceId).set({
-        orgName,
-        email,
-        passwordB64,
-        planId,
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
     // Constrói as URLs de notificação e redirecionamento de forma dinâmica
     const projectId = process.env.GCLOUD_PROJECT;
-    if (!projectId) {
-        logger.error("GCLOUD_PROJECT environment variable is not set.");
-        throw new HttpsError('internal', 'O ID do Projeto não foi encontrado no ambiente da função.');
-    }
     const functionRegion = "southamerica-east1";
     const notificationUrl = `https://${functionRegion}-${projectId}.cloudfunctions.net/handleMercadoPagoNotification`;
     const redirectBaseUrl = `https://${projectId}.web.app`;
 
     const preferencePayload = {
-        items: [
-            {
-                title: plan.name,
-                unit_price: plan.price,
-                quantity: 1,
-            },
-        ],
-        payer: {
-            email: email,
-        },
+        items: [{
+            title: `Assinatura Plano ${plan.name} - ${orgData.name}`,
+            unit_price: plan.price,
+            quantity: 1,
+        }],
+        payer: { email: orgData.ownerEmail },
         back_urls: {
             success: `${redirectBaseUrl}/#/checkout-complete`,
             failure: `${redirectBaseUrl}/#/planos`,
@@ -80,43 +133,34 @@ exports.initiateMercadoPagoCheckout = onCall({ allow: "unauthenticated" }, async
         },
         auto_return: "approved",
         notification_url: notificationUrl,
-        external_reference: referenceId,
+        external_reference: orgId, // A referência externa agora é o ID da organização
     };
 
     try {
         const response = await preferenceClient.create({ body: preferencePayload });
         return { checkoutUrl: response.init_point };
     } catch (error) {
-        logger.error("Erro ao criar preferência no Mercado Pago:", JSON.stringify(error));
-        let userMessage = 'Falha ao comunicar com o Mercado Pago para iniciar o pagamento.';
-        if (error.cause && Array.isArray(error.cause) && error.cause.length > 0) {
-            const firstError = error.cause[0];
-            logger.error("Causa do erro MP:", firstError);
-            userMessage = `Erro do Mercado Pago: ${firstError.description || 'Não foi possível criar a preferência.'}`;
-        }
-        throw new HttpsError('internal', userMessage);
+        logger.error("Erro ao criar preferência no Mercado Pago:", error);
+        throw new HttpsError('internal', 'Falha ao comunicar com o Mercado Pago.');
     }
 });
 
 
 /**
- * Webhook para receber notificações de pagamento do Mercado Pago.
+ * Webhook para receber notificações de pagamento e ATIVAR a organização.
  */
 exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, res) => {
-    logger.info("Notificação Mercado Pago Recebida, query:", req.query, "body:", req.body);
+    logger.info("Notificação MP Recebida:", { query: req.query, body: req.body });
 
-    const { topic, id } = req.query;
+    const paymentId = req.query.id || (req.body.data && req.body.data.id);
+    const topic = req.query.topic || req.body.action;
 
-    const paymentId = id || (req.body.type === 'payment' && req.body.data && req.body.data.id);
-    const notificationTopic = topic || (req.body.action);
-
-    if (notificationTopic !== 'payment.created' && notificationTopic !== 'payment.updated' && req.body.type !== 'payment') {
-        logger.log("Notificação não é sobre pagamento, ignorando.", req.body);
+    if (topic !== 'payment.created' && topic !== 'payment.updated' && req.body.type !== 'payment') {
+        logger.log("Notificação ignorada (não é de pagamento).");
         return res.status(200).send('OK');
     }
-
     if (!paymentId) {
-        logger.warn("ID de pagamento não encontrado na notificação.", req.body);
+        logger.warn("ID de pagamento não encontrado.");
         return res.status(400).send('Payment ID not found');
     }
 
@@ -124,51 +168,22 @@ exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, re
         const config = await getMercadoPagoConfig();
         const client = new MercadoPagoConfig({ accessToken: config.accessToken });
         const paymentClient = new Payment(client);
-
+        
         const payment = await paymentClient.get({ id: Number(paymentId) });
         
         if (payment && payment.status === 'approved' && payment.external_reference) {
-            const referenceId = payment.external_reference;
+            const orgId = payment.external_reference;
+            const orgRef = db.collection('organizations').doc(orgId);
             
-            const pendingOrgRef = db.collection('pendingOrganizations').doc(referenceId);
-            const pendingOrgDoc = await pendingOrgRef.get();
-
-            if (pendingOrgDoc.exists && pendingOrgDoc.data().status === 'pending') {
-                const { orgName, email, passwordB64, planId } = pendingOrgDoc.data();
-                const password = Buffer.from(passwordB64, 'base64').toString('utf-8');
-
-                await db.runTransaction(async (transaction) => {
-                    const freshDoc = await transaction.get(pendingOrgRef);
-                    if (freshDoc.data().status !== 'pending') return;
-
-                    const userRecord = await admin.auth().createUser({ email, password });
-                    const { uid } = userRecord;
-
-                    const orgRef = db.collection('organizations').doc();
-                    transaction.set(orgRef, {
-                        ownerUid: uid,
-                        ownerEmail: email,
-                        name: orgName,
-                        planId: planId,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        status: 'active',
-                        isPublic: true,
-                        assignedStates: [],
-                    });
-
-                    const adminRef = db.collection('admins').doc(uid);
-                    transaction.set(adminRef, {
-                        uid, email, role: 'admin', organizationId: orgRef.id,
-                        assignedStates: [], assignedCampaigns: {},
-                    });
-
-                    transaction.update(pendingOrgRef, { status: 'completed' });
-                });
-
-                logger.info(`Organização '${orgName}' criada com sucesso para a referência: ${referenceId}`);
-            } else {
-                logger.warn(`Organização pendente não encontrada ou já processada para a referência: ${referenceId}`);
-            }
+            await db.runTransaction(async (transaction) => {
+                const orgDoc = await transaction.get(orgRef);
+                if (orgDoc.exists && orgDoc.data().status === 'pending_payment') {
+                    transaction.update(orgRef, { status: 'active', isPublic: true });
+                    logger.info(`Organização ativada com sucesso: ${orgId}`);
+                } else {
+                     logger.warn(`Organização não encontrada ou já ativa: ${orgId}`);
+                }
+            });
         }
         
         return res.status(200).send('OK');

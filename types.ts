@@ -68,7 +68,7 @@ export interface Organization {
   name: string;
   planId: 'basic' | 'professional';
   createdAt: Timestamp | object;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending_payment';
   isPublic: boolean;
   assignedStates: string[];
 }

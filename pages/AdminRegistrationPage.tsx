@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { plans, Plan } from './PricingPage';
-import { functions } from '../firebase/config';
+import { functions, auth } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { BuildingOfficeIcon, MailIcon, LockClosedIcon } from '../components/Icons';
 
 const SubscriptionFlowPage: React.FC = () => {
@@ -39,34 +40,32 @@ const SubscriptionFlowPage: React.FC = () => {
             setError('As senhas não coincidem.');
             return;
         }
-        if (password.length < 6) {
-            setError('A senha deve ter pelo menos 6 caracteres.');
-            return;
-        }
         
         setIsProcessing(true);
 
         try {
             if (!selectedPlan) throw new Error("Plano não selecionado.");
             
-            const initiateCheckout = httpsCallable(functions, 'initiateMercadoPagoCheckout');
-            const passwordB64 = btoa(password);
-
-            const result: any = await initiateCheckout({
+            const createPendingOrg = httpsCallable(functions, 'createPendingOrganization');
+            
+            const result: any = await createPendingOrg({
                 planId: selectedPlan.id,
                 orgName,
                 email,
-                passwordB64,
+                password,
             });
             
-            if (result.data && result.data.checkoutUrl) {
-                window.location.href = result.data.checkoutUrl;
+            if (result.data.success && result.data.organizationId) {
+                // Log in the new user automatically
+                await signInWithEmailAndPassword(auth, email, password);
+                // Redirect to the payment finalization page
+                navigate(`/finish-payment/${result.data.organizationId}`);
             } else {
-                throw new Error(result.data.message || "Não foi possível obter o link de pagamento.");
+                throw new Error("Não foi possível criar a organização.");
             }
 
         } catch (err: any) {
-            console.error("Error initiating checkout:", err);
+            console.error("Error creating pending organization:", err);
             setError(err.message || 'Ocorreu um erro. Verifique os dados e tente novamente.');
             setIsProcessing(false);
         }
@@ -86,8 +85,7 @@ const SubscriptionFlowPage: React.FC = () => {
                 {isProcessing && (
                     <div className="absolute inset-0 bg-secondary bg-opacity-95 flex flex-col justify-center items-center rounded-lg z-10">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        <p className="mt-4 text-gray-300 font-semibold">Aguarde, estamos preparando seu checkout...</p>
-                        <p className="text-sm text-gray-400">Você será redirecionado em breve.</p>
+                        <p className="mt-4 text-gray-300 font-semibold">Criando sua conta, aguarde...</p>
                     </div>
                 )}
                 
@@ -105,17 +103,17 @@ const SubscriptionFlowPage: React.FC = () => {
                     
                     <InputWithIcon Icon={BuildingOfficeIcon} type="text" placeholder="Nome da Empresa / Evento" value={orgName} onChange={e => setOrgName(e.target.value)} required />
                     <InputWithIcon Icon={MailIcon} type="email" placeholder="Seu E-mail de Acesso" value={email} onChange={e => setEmail(e.target.value)} required />
-                    <InputWithIcon Icon={LockClosedIcon} type="password" placeholder="Crie uma Senha" value={password} onChange={e => setPassword(e.target.value)} required />
+                    <InputWithIcon Icon={LockClosedIcon} type="password" placeholder="Crie uma Senha (mín. 6 caracteres)" value={password} onChange={e => setPassword(e.target.value)} required />
                     <InputWithIcon Icon={LockClosedIcon} type="password" placeholder="Confirme a Senha" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
                     
                     <div className="pt-4">
                         <button type="submit" disabled={isProcessing} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300">
-                           {isProcessing ? 'Processando...' : `Ir para Pagamento Seguro`}
+                           {isProcessing ? 'Processando...' : `Criar Conta e Continuar`}
                         </button>
                     </div>
 
                     <p className="text-xs text-gray-500 text-center">
-                        Ao continuar, você concorda com nossos Termos de Serviço. O pagamento será processado de forma segura pelo Mercado Pago.
+                        Ao continuar, você concorda com nossos Termos de Serviço. A próxima etapa será o pagamento.
                     </p>
                 </form>
             </div>

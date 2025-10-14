@@ -8,6 +8,7 @@ import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import CheckoutCompletePage from './pages/MockCheckoutPage';
+import FinishPaymentPage from './components/PaymentModal'; // Renamed import for clarity
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
 
 const App: React.FC = () => {
@@ -36,6 +37,7 @@ const App: React.FC = () => {
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/planos" element={<PricingPage />} />
               <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
+              <Route path="/finish-payment/:orgId" element={<FinishPaymentPage />} />
               <Route path="/checkout-complete" element={<CheckoutCompletePage />} />
             </Routes>
           </main>
