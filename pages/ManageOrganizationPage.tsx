@@ -4,6 +4,7 @@ import { getOrganization, updateOrganization, deleteOrganization } from '../serv
 import { Organization, OrganizationStatus, PlanId } from '../types';
 import { states } from '../constants/states';
 import { Timestamp } from 'firebase/firestore';
+import { ArrowLeftIcon } from '../components/Icons';
 
 const timestampToInputDate = (ts: Timestamp | undefined): string => {
     if (!ts) return '';
@@ -136,7 +137,10 @@ const ManageOrganizationPage: React.FC = () => {
     return (
         <div>
             <div className="mb-6">
-                <Link to="/admin/organizations" className="text-sm text-primary hover:underline">&larr; Todas as Organizações</Link>
+                 <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Todas as Organizações</span>
+                </button>
                 <h1 className="text-3xl font-bold mt-1">Gerenciar: {organization.name}</h1>
             </div>
 

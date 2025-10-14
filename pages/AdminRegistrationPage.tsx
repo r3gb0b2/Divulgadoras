@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { plans, Plan } from './PricingPage';
 import { signUpAndCreateOrganization } from '../services/adminService';
-import { MailIcon, LockClosedIcon, BuildingOfficeIcon } from '../components/Icons';
+import { MailIcon, LockClosedIcon, BuildingOfficeIcon, ArrowLeftIcon } from '../components/Icons';
 
 const AdminRegistrationPage: React.FC = () => {
     const { planId } = useParams<{ planId: string }>();
@@ -67,6 +67,10 @@ const AdminRegistrationPage: React.FC = () => {
 
     return (
         <div className="max-w-md mx-auto">
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Voltar</span>
+            </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Criar sua Conta</h1>
                 <p className="text-center text-primary font-semibold text-lg mb-6">Plano {selectedPlan.name}</p>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getOrganization } from '../services/organizationService';
 import { states } from '../constants/states';
 import { Organization } from '../types';
+import { ArrowLeftIcon } from '../components/Icons';
 
 const StateSelection: React.FC = () => {
     const { organizationId } = useParams<{ organizationId: string }>();
@@ -10,6 +11,7 @@ const StateSelection: React.FC = () => {
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (!organizationId) {
@@ -68,6 +70,10 @@ const StateSelection: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto text-center">
+             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Voltar</span>
+            </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-gray-100 mb-2">
                     {organization?.name || 'Selecione a Localidade'}

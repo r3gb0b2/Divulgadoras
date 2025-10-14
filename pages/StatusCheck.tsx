@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon } from '../components/Icons';
+import { WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
 
@@ -236,6 +237,7 @@ const StatusCheck: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+    const navigate = useNavigate();
     
     useEffect(() => {
         // Fetch all organizations to map IDs to names
@@ -290,6 +292,10 @@ const StatusCheck: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Voltar</span>
+            </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Verificar Status do Cadastro</h1>
                 <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status em todas as organizações.</p>

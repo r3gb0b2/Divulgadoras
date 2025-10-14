@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getOrganizations } from '../services/organizationService';
 import { Organization, OrganizationStatus } from '../types';
 import { Timestamp } from 'firebase/firestore';
+import { ArrowLeftIcon } from '../components/Icons';
 
 const OrganizationsListPage: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const fetchOrganizations = useCallback(async () => {
     setIsLoading(true);
@@ -101,9 +103,10 @@ const OrganizationsListPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Gerenciar Organizações</h1>
-        <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-          &larr; Voltar ao Painel
-        </Link>
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+            <ArrowLeftIcon className="w-4 h-4" />
+            <span>Voltar</span>
+        </button>
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         {renderContent()}

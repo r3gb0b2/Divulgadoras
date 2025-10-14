@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign, getAllCampaigns } from '../services/settingsService';
 import { getOrganizations, getOrganization } from '../services/organizationService';
 import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization, RejectionReason } from '../types';
 import { stateMap } from '../constants/states';
-import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon, ArrowLeftIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
@@ -46,6 +46,7 @@ const formatDate = (timestamp: any): string => {
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
   const { stateAbbr } = useParams<{ stateAbbr: string }>();
   const stateFullName = stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Desconhecido';
+  const navigate = useNavigate();
 
   const [promoters, setPromoters] = useState<Promoter[]>([]);
   const [stateConfig, setStateConfig] = useState<StateConfig | null>(null);
@@ -363,7 +364,10 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   return (
     <div>
         <div className="mb-6">
-            <Link to="/admin/states" className="text-sm text-primary hover:underline">&larr; Todas as Localidades</Link>
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Voltar para Localidades</span>
+            </button>
             <h1 className="text-3xl font-bold mt-1">Gerenciamento de {stateFullName} ({stateAbbr})</h1>
         </div>
 

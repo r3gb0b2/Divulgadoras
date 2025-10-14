@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
 // FIX: Added missing import for Icons
-import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon } from '../components/Icons';
+import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
 // Helper function to resize and compress images and return a Blob
@@ -61,6 +61,7 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
 const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -166,6 +167,10 @@ const PromoterForm: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+            <ArrowLeftIcon className="w-5 h-5" />
+            <span>Voltar</span>
+        </button>
         <div className="bg-secondary shadow-2xl rounded-lg p-8">
             <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
             {campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(campaignName)}</p>}
@@ -237,6 +242,7 @@ const RegistrationFlowPage: React.FC = () => {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         if (organizationId && state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
@@ -273,6 +279,10 @@ const RegistrationFlowPage: React.FC = () => {
     // If there are campaigns, show the selection screen.
     return (
         <div className="max-w-4xl mx-auto text-center">
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Voltar</span>
+            </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-gray-100 mb-2">
                     Selecione o Evento ou Gênero

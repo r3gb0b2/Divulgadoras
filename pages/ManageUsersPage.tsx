@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AdminUserData, AdminRole, Campaign, Organization } from '../types';
 import { getAllAdmins, setAdminUserData, deleteAdminUser } from '../services/adminService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -8,6 +8,7 @@ import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { ArrowLeftIcon } from '../components/Icons';
 
 
 const ManageUsersPage: React.FC = () => {
@@ -17,6 +18,7 @@ const ManageUsersPage: React.FC = () => {
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const navigate = useNavigate();
     
     // Form state for new/editing admin
     const [editingTarget, setEditingTarget] = useState<AdminUserData | null>(null);
@@ -216,9 +218,10 @@ const ManageUsersPage: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">{isSuperAdmin ? 'Gerenciar Todos os Usuários' : 'Gerenciar Usuários da Organização'}</h1>
-                <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    &larr; Voltar
-                </Link>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
+                </button>
             </div>
             
             <div className="bg-secondary shadow-lg rounded-lg p-6">

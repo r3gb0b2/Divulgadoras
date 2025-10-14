@@ -1,15 +1,17 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon } from '../components/Icons';
+import { Link, useNavigate } from 'react-router-dom';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon } from '../components/Icons';
 
 const SettingsPage: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Configurações da Organização</h1>
-        <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-          &larr; Voltar ao Painel
-        </Link>
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+          <ArrowLeftIcon className="w-4 h-4" />
+          <span>Voltar ao Painel</span>
+        </button>
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">

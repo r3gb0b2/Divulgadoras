@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getStatesConfig } from '../services/settingsService';
 import { getOrganization } from '../services/organizationService';
 import { states as allStatesList } from '../constants/states';
 import { StatesConfig, Organization } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { ArrowLeftIcon } from '../components/Icons';
 
 const StatesListPage: React.FC = () => {
   const { adminData } = useAdminAuth();
@@ -12,6 +13,7 @@ const StatesListPage: React.FC = () => {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
   
   const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -112,9 +114,10 @@ const StatesListPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{pageTitle}</h1>
-        <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-          &larr; Voltar
-        </Link>
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+            <ArrowLeftIcon className="w-4 h-4" />
+            <span>Voltar</span>
+        </button>
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">

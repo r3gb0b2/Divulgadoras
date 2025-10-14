@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
 import { getOrganizations } from '../services/organizationService';
 import { AdminApplication, Organization } from '../types';
 import { Timestamp } from 'firebase/firestore';
+import { ArrowLeftIcon } from '../components/Icons';
 
 // Approval Modal Component
 const ApprovalModal: React.FC<{
@@ -82,6 +83,7 @@ const AdminApplicationsListPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     // State for modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -199,9 +201,10 @@ const AdminApplicationsListPage: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Solicitações de Acesso</h1>
-                <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    &larr; Voltar ao Painel
-                </Link>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
+                </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 <div className="bg-blue-900/50 border border-blue-700 text-blue-300 p-3 mb-6 rounded-md text-sm">

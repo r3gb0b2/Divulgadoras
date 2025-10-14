@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization, OrganizationStatus } from '../types';
 import { plans, Plan } from './PricingPage'; // Import plans array
 import { Timestamp } from 'firebase/firestore';
-import { CreditCardIcon, WhatsAppIcon } from '../components/Icons';
+import { CreditCardIcon, WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
 
 const SubscriptionPage: React.FC = () => {
     const { adminData } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchOrgData = async () => {
@@ -82,7 +83,10 @@ const SubscriptionPage: React.FC = () => {
     return (
         <div>
             <div className="mb-6">
-                <Link to="/admin/settings" className="text-sm text-primary hover:underline">&larr; Voltar para Configurações</Link>
+                <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Voltar para Configurações</span>
+                </button>
                 <h1 className="text-3xl font-bold mt-1">Gerenciar Assinatura</h1>
             </div>
 
