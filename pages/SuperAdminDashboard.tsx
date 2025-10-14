@@ -62,15 +62,6 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="mt-2 text-gray-400">Ativar, desativar e definir regras gerais para as localidades de inscrição.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
-                    
-                    <Link to="/admin/settings/mercadopago" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <MercadoPagoIcon className="w-8 h-8 text-white" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Credenciais de Pagamento</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Configurar a chave de API do Mercado Pago para processar assinaturas.</p>
-                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
-                    </Link>
                 </div>
             </div>
         </div>

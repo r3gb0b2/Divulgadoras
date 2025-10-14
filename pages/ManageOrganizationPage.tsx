@@ -3,6 +3,17 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getOrganization, updateOrganization, deleteOrganizationAndRelatedAdmins } from '../services/organizationService';
 import { Organization } from '../types';
 import { states } from '../constants/states';
+import { Timestamp } from 'firebase/firestore';
+
+// Helper to format Firestore Timestamp to 'yyyy-MM-ddThh:mm' for datetime-local input
+const formatTimestampForInput = (timestamp: Timestamp | object | undefined): string => {
+    if (!timestamp || typeof (timestamp as any).toDate !== 'function') return '';
+    const date = (timestamp as Timestamp).toDate();
+    // Adjust for timezone offset to display local time correctly in the input
+    const timezoneOffset = date.getTimezoneOffset() * 60000;
+    const localDate = new Date(date.getTime() - timezoneOffset);
+    return localDate.toISOString().slice(0, 16);
+};
 
 const ManageOrganizationPage: React.FC = () => {
     const { orgId } = useParams<{ orgId: string }>();
@@ -12,7 +23,6 @@ const ManageOrganizationPage: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // State for delete confirmation modal
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
 
@@ -42,9 +52,22 @@ const ManageOrganizationPage: React.FC = () => {
         setIsSaving(true);
         try {
             const { id, ...dataToSave } = organization;
+            // Handle date conversion back to Firestore Timestamp
+            if (typeof dataToSave.planExpiresAt === 'string') {
+                dataToSave.planExpiresAt = Timestamp.fromDate(new Date(dataToSave.planExpiresAt));
+            }
+
+            // Set status based on expiration date
+            const expiresDate = (dataToSave.planExpiresAt as Timestamp).toDate();
+            if (expiresDate > new Date()) {
+                dataToSave.status = 'active'; // or 'trial', but 'active' is safer
+            } else {
+                dataToSave.status = 'expired';
+            }
+
             await updateOrganization(orgId, dataToSave);
             alert('Organization updated successfully.');
-            // No navigation, stay on page
+            await fetchOrg(); // Re-fetch to show updated data
         } catch (err: any) {
             setError(err.message || 'Failed to save changes.');
         } finally {
@@ -55,7 +78,7 @@ const ManageOrganizationPage: React.FC = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         
-        let finalValue: string | boolean | string[] = value;
+        let finalValue: any = value;
 
         if (type === 'checkbox') {
             finalValue = (e.target as HTMLInputElement).checked;
@@ -131,20 +154,39 @@ const ManageOrganizationPage: React.FC = () => {
                                 <option value="professional">Profissional</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300">Status</label>
-                            <select name="status" value={organization.status} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
-                                <option value="active">Ativa</option>
-                                <option value="inactive">Inativa</option>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-300">Visibilidade Pública</label>
+                            <select name="isPublic" value={String(organization.isPublic)} onChange={(e) => handleChange({ ...e, target: {...e.target, name: 'isPublic', value: e.target.value === 'true' } } as any)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                                <option value="true">Pública (aparece na lista inicial)</option>
+                                <option value="false">Oculta (acesso apenas por link direto)</option>
                             </select>
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Visibilidade Pública</label>
-                        <select name="isPublic" value={String(organization.isPublic)} onChange={(e) => handleChange({ ...e, target: {...e.target, name: 'isPublic', value: e.target.value === 'true' } } as any)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
-                            <option value="true">Pública (aparece na lista inicial)</option>
-                            <option value="false">Oculta (acesso apenas por link direto)</option>
-                        </select>
+                     <div className="bg-gray-700/50 p-4 rounded-lg space-y-4">
+                        <h3 className="font-semibold text-lg text-primary">Gerenciamento de Assinatura</h3>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Data de Expiração do Plano</label>
+                            <input 
+                                type="datetime-local" 
+                                name="planExpiresAt" 
+                                value={formatTimestampForInput(organization.planExpiresAt)}
+                                onChange={handleChange} 
+                                className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
+                                style={{ colorScheme: 'dark' }}
+                            />
+                             <p className="text-xs text-gray-400 mt-1">A organização ficará inativa e oculta após esta data.</p>
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-gray-300">Link de Pagamento Manual</label>
+                            <input 
+                                type="text" 
+                                name="paymentLink" 
+                                value={organization.paymentLink || ''} 
+                                onChange={handleChange} 
+                                placeholder="https://wa.me/... ou link de pagamento"
+                                className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200" />
+                            <p className="text-xs text-gray-400 mt-1">Este link será exibido para o organizador renovar o plano.</p>
+                        </div>
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-300">Localidades Permitidas</label>
@@ -163,7 +205,6 @@ const ManageOrganizationPage: React.FC = () => {
                     </div>
                 </form>
 
-                {/* Danger Zone */}
                 <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6 border border-red-900/50">
                     <h3 className="text-xl font-semibold text-red-400">Zona de Perigo</h3>
                     <p className="text-sm text-gray-400 mt-2 mb-4">Estas ações são destrutivas e não podem ser desfeitas.</p>
@@ -173,7 +214,6 @@ const ManageOrganizationPage: React.FC = () => {
                 </div>
              </div>
 
-             {/* Delete Confirmation Modal */}
              {isDeleteModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4">
                     <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg">

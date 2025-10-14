@@ -28,7 +28,8 @@ const StateSelection: React.FC = () => {
                     throw new Error("Organização não encontrada.");
                 }
 
-                if (orgData.status === 'inactive') {
+                // FIX: Changed status check from 'inactive' to 'expired' to match the Organization type definition and prevent registrations for expired plans.
+                if (orgData.status === 'expired') {
                     throw new Error("Esta organização está temporariamente inativa e não pode receber novos cadastros.");
                 }
 

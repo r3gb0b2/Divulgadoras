@@ -1,5 +1,5 @@
 import { firestore } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, addDoc, serverTimestamp, setDoc, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, addDoc, serverTimestamp, setDoc, query, where, writeBatch, deleteDoc, Timestamp } from 'firebase/firestore';
 import { Organization } from '../types';
 
 /**
@@ -53,17 +53,22 @@ export const getOrganizations = async (): Promise<Organization[]> => {
  */
 export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        // Fetch ALL organizations to avoid any index-related issues.
-        const querySnapshot = await getDocs(collection(firestore, "organizations"));
+        const now = new Date();
+        const q = query(
+            collection(firestore, "organizations"),
+            where('isPublic', '==', true)
+        );
+
+        const querySnapshot = await getDocs(q);
         const orgs: Organization[] = [];
         querySnapshot.forEach(doc => {
-            const data = doc.data();
-            // Filter for both status and isPublic on the client-side.
-            // This is less efficient but guarantees the query won't fail due to missing indexes.
-            if (data.status === 'active' && data.isPublic === true) {
-                orgs.push({ id: doc.id, ...data } as Organization);
+            const orgData = doc.data() as Organization;
+            // Client-side filtering for expiration date to avoid composite index
+            if (orgData.planExpiresAt && (orgData.planExpiresAt as Timestamp).toDate() > now) {
+                orgs.push({ id: doc.id, ...orgData });
             }
         });
+        
         return orgs.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
         console.error("Error getting public organizations: ", error);

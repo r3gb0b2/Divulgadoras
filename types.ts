@@ -68,9 +68,11 @@ export interface Organization {
   name: string;
   planId: 'basic' | 'professional';
   createdAt: Timestamp | object;
-  status: 'active' | 'inactive' | 'pending_payment';
+  status: 'trial' | 'active' | 'expired';
   isPublic: boolean;
   assignedStates: string[];
+  planExpiresAt: Timestamp | object;
+  paymentLink?: string;
 }
 
 export interface AdminApplication {

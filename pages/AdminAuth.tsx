@@ -10,7 +10,8 @@ import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
 import ManageUsersPage from './ManageUsersPage';
 import SubscriptionPage from './SubscriptionPage';
-import MercadoPagoSettingsPage from './PagSeguroSettingsPage';
+// FIX: Corrected component name to match file and avoid module error.
+import PagSeguroSettingsPage from './PagSeguroSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
 import { MailIcon, LockClosedIcon } from '../components/Icons';
@@ -129,7 +130,8 @@ const AdminAuth: React.FC = () => {
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
-                    <Route path="settings/mercadopago" element={<ProtectedRoute><MercadoPagoSettingsPage /></ProtectedRoute>} />
+                    {/* FIX: Using the corrected component for this route. The route path seems to be a typo but is kept to avoid breaking changes. */}
+                    <Route path="settings/mercadopago" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
                 </>
             )}
 

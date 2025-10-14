@@ -46,9 +46,9 @@ const SubscriptionFlowPage: React.FC = () => {
         try {
             if (!selectedPlan) throw new Error("Plano não selecionado.");
             
-            const createPendingOrg = httpsCallable(functions, 'createPendingOrganization');
+            const createTrialOrg = httpsCallable(functions, 'createTrialOrganization');
             
-            const result: any = await createPendingOrg({
+            const result: any = await createTrialOrg({
                 planId: selectedPlan.id,
                 orgName,
                 email,
@@ -58,14 +58,14 @@ const SubscriptionFlowPage: React.FC = () => {
             if (result.data.success && result.data.organizationId) {
                 // Log in the new user automatically
                 await signInWithEmailAndPassword(auth, email, password);
-                // Redirect to the payment finalization page
-                navigate(`/finish-payment/${result.data.organizationId}`);
+                // Redirect to their new admin panel
+                navigate(`/admin`);
             } else {
                 throw new Error("Não foi possível criar a organização.");
             }
 
         } catch (err: any) {
-            console.error("Error creating pending organization:", err);
+            console.error("Error creating trial organization:", err);
             setError(err.message || 'Ocorreu um erro. Verifique os dados e tente novamente.');
             setIsProcessing(false);
         }
@@ -90,12 +90,8 @@ const SubscriptionFlowPage: React.FC = () => {
                 )}
                 
                 <div className="text-center mb-8">
-                     <h1 className="text-3xl font-bold text-white mb-2">Quase lá!</h1>
-                     <p className="text-gray-400">Você está assinando o <span className="font-bold text-primary">{selectedPlan.name}</span> por <span className="font-bold text-white">{selectedPlan.priceFormatted}/mês</span>.</p>
-                </div>
-                
-                <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-200 border-b-2 border-primary pb-2">1. Crie sua conta de Organizador</h2>
+                     <h1 className="text-3xl font-bold text-white mb-2">Crie sua Conta</h1>
+                     <p className="text-gray-400">Você está iniciando um teste gratuito do <span className="font-bold text-primary">{selectedPlan.name}</span>.</p>
                 </div>
 
                 <form onSubmit={handleFormSubmit} className="space-y-6">
@@ -108,12 +104,12 @@ const SubscriptionFlowPage: React.FC = () => {
                     
                     <div className="pt-4">
                         <button type="submit" disabled={isProcessing} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300">
-                           {isProcessing ? 'Processando...' : `Criar Conta e Continuar`}
+                           {isProcessing ? 'Processando...' : `Iniciar Teste Gratuito`}
                         </button>
                     </div>
 
                     <p className="text-xs text-gray-500 text-center">
-                        Ao continuar, você concorda com nossos Termos de Serviço. A próxima etapa será o pagamento.
+                        Ao continuar, você concorda com nossos Termos de Serviço e inicia seu período de teste de 3 dias.
                     </p>
                 </form>
             </div>
