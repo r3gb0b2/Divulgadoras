@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { plans, Plan } from './PricingPage';
-import { functions, auth } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { firestore, auth } from '../firebase/config';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+// FIX: Added missing 'collection' import from 'firebase/firestore'.
+import { doc, writeBatch, Timestamp, collection } from 'firebase/firestore';
 import { BuildingOfficeIcon, MailIcon, LockClosedIcon } from '../components/Icons';
 
 const SubscriptionFlowPage: React.FC = () => {
@@ -40,33 +41,71 @@ const SubscriptionFlowPage: React.FC = () => {
             setError('As senhas não coincidem.');
             return;
         }
+        if (password.length < 6) {
+            setError('A senha deve ter pelo menos 6 caracteres.');
+            return;
+        }
         
         setIsProcessing(true);
 
         try {
             if (!selectedPlan) throw new Error("Plano não selecionado.");
             
-            const createTrialOrg = httpsCallable(functions, 'createTrialOrganization');
+            // 1. Create user with Firebase Auth (client-side)
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const { user } = userCredential;
+
+            // 2. Prepare data for Firestore documents
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 3);
             
-            const result: any = await createTrialOrg({
+            const newOrgRef = doc(collection(firestore, 'organizations'));
+            const adminRef = doc(firestore, 'admins', user.uid);
+
+            const orgData = {
+                id: newOrgRef.id,
+                ownerUid: user.uid,
+                ownerEmail: email,
+                name: orgName,
                 planId: selectedPlan.id,
-                orgName,
+                createdAt: Timestamp.now(),
+                status: 'trial',
+                isPublic: true,
+                assignedStates: [],
+                planExpiresAt: Timestamp.fromDate(trialEndDate),
+                paymentLink: null,
+            };
+
+            const adminData = {
+                uid: user.uid,
                 email,
-                password,
-            });
+                role: 'admin',
+                organizationId: newOrgRef.id,
+                assignedStates: [],
+                assignedCampaigns: {},
+            };
             
-            if (result.data.success && result.data.organizationId) {
-                // Log in the new user automatically
-                await signInWithEmailAndPassword(auth, email, password);
-                // Redirect to their new admin panel
-                navigate(`/admin`);
-            } else {
-                throw new Error("Não foi possível criar a organização.");
-            }
+            // 3. Use a batch write for atomicity
+            const batch = writeBatch(firestore);
+            batch.set(newOrgRef, orgData);
+            batch.set(adminRef, adminData);
+            await batch.commit();
+            
+            // 4. On success, Firebase automatically signs the user in. Redirect to admin panel.
+            navigate('/admin');
 
         } catch (err: any) {
-            console.error("Error creating trial organization:", err);
-            setError(err.message || 'Ocorreu um erro. Verifique os dados e tente novamente.');
+            console.error("Error during client-side registration:", err);
+            if (err.code === 'auth/email-already-in-use') {
+                setError("Este e-mail já está cadastrado. Tente fazer o login.");
+            } else if (err.code === 'auth/weak-password') {
+                setError("A senha é muito fraca. Use pelo menos 6 caracteres.");
+            } else if (err.code === 'auth/invalid-email') {
+                setError("O formato do e-mail é inválido.");
+            } else {
+                 setError(err.message || 'Ocorreu um erro inesperado. Tente novamente.');
+            }
+        } finally {
             setIsProcessing(false);
         }
     };
