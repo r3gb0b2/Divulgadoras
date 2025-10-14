@@ -1,5 +1,5 @@
 const functions = require("firebase-functions");
-const { onCall, HttpsError } = require("firebase-functions/v2/onCall");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
