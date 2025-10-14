@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
-import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign } from '../services/settingsService';
-import { getOrganizations } from '../services/organizationService';
+import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign, getAllCampaigns } from '../services/settingsService';
+import { getOrganizations, getOrganization } from '../services/organizationService';
 import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization } from '../types';
 import { stateMap } from '../constants/states';
 import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
@@ -34,6 +34,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [stateConfig, setStateConfig] = useState<StateConfig | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [allOrgCampaigns, setAllOrgCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const fetchData = useCallback(async () => {
     if (!stateAbbr) return;
     
-    // Org admins must have an organizationId
     if (adminData.role !== 'superadmin' && !adminData.organizationId) {
          setError("Organização não encontrada para este administrador.");
          setIsLoading(false);
@@ -63,30 +64,48 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     setIsLoading(true);
     setError(null);
     try {
-      const [promotersData, configData, campaignsData, orgsData] = await Promise.all([
-        getPromoters(adminData.organizationId, [stateAbbr]),
+      const orgId = adminData.organizationId;
+
+      const promises = [
+        getPromoters(orgId, [stateAbbr]),
         getStateConfig(stateAbbr),
-        getCampaigns(stateAbbr, adminData.organizationId),
-        adminData.role === 'superadmin' ? getOrganizations() : Promise.resolve([]),
-      ]);
+        getCampaigns(stateAbbr, orgId),
+        adminData.role === 'superadmin' ? getOrganizations() : getOrganization(orgId!),
+        adminData.role === 'superadmin' ? Promise.resolve([]) : getAllCampaigns(orgId!),
+      ];
+
+      const [
+        promotersData,
+        configData,
+        campaignsData,
+        orgsOrOrgData,
+        allCampaignsForOrgData
+      ] = await Promise.all(promises);
       
+      if (adminData.role === 'superadmin') {
+        setOrganizations(orgsOrOrgData as Organization[]);
+        setOrganization(null);
+        setAllOrgCampaigns([]);
+      } else {
+        setOrganizations([]);
+        setOrganization(orgsOrOrgData as Organization);
+        setAllOrgCampaigns(allCampaignsForOrgData as Campaign[]);
+      }
+
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
       const hasSpecificCampaigns = adminData.role !== 'superadmin' && assignedCampaignsForState && assignedCampaignsForState.length > 0;
       
       const filteredPromoters = hasSpecificCampaigns
-        ? promotersData.filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
-        : promotersData;
+        ? (promotersData as Promoter[]).filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
+        : (promotersData as Promoter[]);
 
       const filteredCampaigns = hasSpecificCampaigns
-        ? campaignsData.filter(c => assignedCampaignsForState.includes(c.name))
-        : campaignsData;
+        ? (campaignsData as Campaign[]).filter(c => assignedCampaignsForState.includes(c.name))
+        : (campaignsData as Campaign[]);
 
       setPromoters(filteredPromoters);
-      setStateConfig(configData);
+      setStateConfig(configData as StateConfig | null);
       setCampaigns(filteredCampaigns);
-      if (adminData.role === 'superadmin') {
-        setOrganizations(orgsData);
-      }
 
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados da localidade.');
@@ -107,6 +126,19 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
       rejected: promoters.filter(p => p.status === 'rejected').length,
     };
   }, [promoters]);
+
+  const campaignLimit = useMemo(() => {
+    if (adminData.role === 'superadmin' || !organization) return Infinity;
+    if (organization.status === 'trial') return 1;
+    if (organization.planId === 'basic') return 5;
+    if (organization.planId === 'professional') return Infinity;
+    return 0; // Default for expired or other statuses
+  }, [organization, adminData.role]);
+
+  const canCreateCampaign = useMemo(() => {
+    if (adminData.role === 'superadmin') return true;
+    return allOrgCampaigns.length < campaignLimit;
+  }, [adminData.role, allOrgCampaigns, campaignLimit]);
 
   const handleConfigChange = (field: keyof StateConfig, value: string | boolean) => {
     if (stateConfig) {
@@ -162,6 +194,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stateAbbr || !campaignForm.name) return;
+
+    if (!campaignForm.id && !canCreateCampaign) {
+        alert(`Você atingiu o limite de ${campaignLimit} evento(s) para o seu plano. Para criar mais, entre em contato com o suporte.`);
+        return;
+    }
     
     if (adminData.role !== 'superadmin' && !adminData.organizationId) {
       alert('Apenas administradores de uma organização podem criar campanhas.');
@@ -317,37 +354,52 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         ))}
                     </div>
                     {canManage && (
-                      <form onSubmit={handleSaveCampaign} className="space-y-3 border-t border-gray-700 pt-4">
-                          <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
-                          
-                           {adminData.role === 'superadmin' && (
-                              <div>
-                                <label className="block text-sm font-medium text-gray-300">Organização</label>
-                                <select
-                                  name="organizationId"
-                                  value={campaignForm.organizationId || ''}
-                                  onChange={(e) => handleCampaignFormChange('organizationId' as any, e.target.value)}
-                                  required
-                                  className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"
-                                >
-                                  <option value="" disabled>Selecione a organização</option>
-                                  {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                  ))}
-                                </select>
-                              </div>
+                        <div className="border-t border-gray-700 pt-4">
+                            {adminData.role !== 'superadmin' && campaignLimit !== Infinity && organization && (
+                                <div className="p-3 bg-gray-800 rounded-md mb-4 text-sm text-center">
+                                    <p className="font-semibold text-white">{allOrgCampaigns.length} / {campaignLimit} eventos criados</p>
+                                    <p className="text-gray-400">Seu plano "{organization.planId}" permite até {campaignLimit} evento(s).</p>
+                                </div>
                             )}
 
-                          <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                          <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                          <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
-                          <textarea placeholder="Regras do Evento/Gênero" value={campaignForm.rules || ''} onChange={(e) => handleCampaignFormChange('rules', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm min-h-[100px]"/>
-                          <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
-                          <div className="flex gap-2">
-                            <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar Evento'}</button>
-                            {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: '', rules: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
-                          </div>
-                      </form>
+                            {canCreateCampaign || campaignForm.id ? (
+                                <form onSubmit={handleSaveCampaign} className="space-y-3">
+                                    <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
+                                    
+                                    {adminData.role === 'superadmin' && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300">Organização</label>
+                                            <select
+                                            name="organizationId"
+                                            value={campaignForm.organizationId || ''}
+                                            onChange={(e) => handleCampaignFormChange('organizationId' as any, e.target.value)}
+                                            required
+                                            className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"
+                                            >
+                                            <option value="" disabled>Selecione a organização</option>
+                                            {organizations.map(org => (
+                                                <option key={org.id} value={org.id}>{org.name}</option>
+                                            ))}
+                                            </select>
+                                        </div>
+                                        )}
+
+                                    <input type="text" placeholder="Nome" value={campaignForm.name || ''} onChange={(e) => handleCampaignFormChange('name', e.target.value)} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                                    <input type="text" placeholder="Descrição (opcional)" value={campaignForm.description || ''} onChange={(e) => handleCampaignFormChange('description', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                                    <input type="text" placeholder="Link do Grupo WhatsApp" value={campaignForm.whatsappLink || ''} onChange={(e) => handleCampaignFormChange('whatsappLink', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm"/>
+                                    <textarea placeholder="Regras do Evento/Gênero" value={campaignForm.rules || ''} onChange={(e) => handleCampaignFormChange('rules', e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-sm min-h-[100px]"/>
+                                    <label className="flex items-center text-sm"><input type="checkbox" checked={campaignForm.isActive !== false} onChange={e => handleCampaignFormChange('isActive', e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded"/> <span className="ml-2">Ativo</span></label>
+                                    <div className="flex gap-2">
+                                        <button type="submit" disabled={isSaving} className="flex-grow px-4 py-2 bg-primary text-white rounded-md text-sm disabled:opacity-50">{isSaving ? '...' : 'Salvar Evento'}</button>
+                                        {campaignForm.id && <button type="button" onClick={() => setCampaignForm({name: '', description: '', isActive: true, whatsappLink: '', rules: ''})} className="px-3 py-2 bg-gray-600 text-white rounded-md text-sm">Cancelar</button>}
+                                    </div>
+                                </form>
+                             ) : (
+                                <div className="text-center text-gray-400 p-4 bg-gray-800 rounded-md">
+                                    <p>Você atingiu o limite de eventos para o seu plano.</p>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 
