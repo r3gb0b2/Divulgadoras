@@ -25,33 +25,37 @@ const CheckoutPage: React.FC = () => {
     const cardContainerRef = useRef<HTMLDivElement>(null);
     const [sdkReady, setSdkReady] = useState(false);
 
-    // Effect to wait for the PagSeguro SDK to be loaded from index.html
+    // Effect to dynamically load the PagSeguro SDK
     useEffect(() => {
+        // If SDK is already present, no need to load it again
         if (window.PagSeguro) {
             setSdkReady(true);
             return;
         }
+        
+        const script = document.createElement('script');
+        script.src = "https://assets.pagseguro.com.br/checkout-sdk-js/v2/pagseguro.min.js";
+        script.async = true;
 
-        const intervalId = setInterval(() => {
-            if (window.PagSeguro) {
-                setSdkReady(true);
-                clearInterval(intervalId);
-            }
-        }, 100);
-
-        const timeoutId = setTimeout(() => {
-            clearInterval(intervalId);
-            if (!window.PagSeguro) {
-                setError("SDK do PagSeguro não carregou. Verifique sua conexão e tente novamente.");
-                setIsLoading(false);
-            }
-        }, 10000); // 10 second timeout
-
-        return () => {
-            clearInterval(intervalId);
-            clearTimeout(timeoutId);
+        script.onload = () => {
+            setSdkReady(true);
         };
-    }, []);
+
+        script.onerror = () => {
+            setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
+            setIsLoading(false);
+        };
+
+        document.body.appendChild(script);
+
+        // Cleanup function to remove script
+        return () => {
+            const existingScript = document.querySelector(`script[src="${script.src}"]`);
+            if (existingScript) {
+                document.body.removeChild(existingScript);
+            }
+        };
+    }, []); // Empty dependency array ensures this runs only once on mount
 
     // Effect to initialize the card form once the SDK is ready
     useEffect(() => {
