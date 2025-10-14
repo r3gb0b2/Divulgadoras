@@ -150,6 +150,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
+    const stats = useMemo(() => {
+        return {
+          total: promoters.length,
+          pending: promoters.filter(p => p.status === 'pending').length,
+          approved: promoters.filter(p => p.status === 'approved').length,
+          rejected: promoters.filter(p => p.status === 'rejected').length,
+        };
+      }, [promoters]);
+
     const filteredPromoters = useMemo(() => {
         if (filter === 'all') return promoters;
         return promoters.filter(p => p.status === filter);
@@ -233,6 +242,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         Sair
                     </button>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Total de Cadastros</h3><p className="text-2xl font-bold text-white">{stats.total}</p></div>
+                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
+                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Aprovados</h3><p className="text-2xl font-bold text-green-400">{stats.approved}</p></div>
+                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Rejeitados</h3><p className="text-2xl font-bold text-red-400">{stats.rejected}</p></div>
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
