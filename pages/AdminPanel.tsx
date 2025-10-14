@@ -197,7 +197,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             alert(data.message || 'Notificação enviada com sucesso!');
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
-            alert(`Falha ao enviar notificação: ${error.message}`);
+            const errorMessage = error.details?.message || error.message;
+            alert(`Falha ao enviar notificação: ${errorMessage}`);
         } finally {
             setNotifyingId(null);
         }

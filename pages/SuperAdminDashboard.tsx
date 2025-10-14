@@ -29,7 +29,8 @@ const SuperAdminDashboard: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Test email failed", error);
-            setTestEmailStatus({ type: 'error', message: `Falha no envio: ${error.message}` });
+            const errorMessage = error.details?.message || error.message;
+            setTestEmailStatus({ type: 'error', message: `Falha no envio: ${errorMessage}` });
         }
     };
     
