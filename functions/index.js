@@ -1,6 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const { ApiClient, TransactionalEmailsApi, SendSmtpEmail } = require('@getbrevo/brevo');
+const Brevo = require('@getbrevo/brevo');
 
 admin.initializeApp();
 
@@ -23,12 +23,12 @@ exports.sendTestEmail = functions
             throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
         }
 
-        // 3. Configure a new Brevo client instance
-        const apiClient = new ApiClient();
-        apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-        const apiInstance = new TransactionalEmailsApi(apiClient);
+        // 3. Configure Brevo client instance using the official singleton pattern
+        const defaultClient = Brevo.ApiClient.instance;
+        defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
         
-        const sendSmtpEmail = new SendSmtpEmail();
+        const apiInstance = new Brevo.TransactionalEmailsApi();
+        const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
         // 4. Define the email content
         sendSmtpEmail.to = [{ email: userEmail }];
@@ -150,11 +150,11 @@ exports.sendPromoterStatusEmail = functions
             }
 
             // --- 4. Send Email via Brevo ---
-            const apiClient = new ApiClient();
-            apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-            const apiInstance = new TransactionalEmailsApi(apiClient);
-
-            const sendSmtpEmail = new SendSmtpEmail();
+            const defaultClient = Brevo.ApiClient.instance;
+            defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
+            
+            const apiInstance = new Brevo.TransactionalEmailsApi();
+            const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: afterData.email, name: promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
@@ -277,11 +277,11 @@ exports.manuallySendStatusEmail = functions
         
         // --- 6. Send Email with specific error handling ---
         try {
-            const apiClient = new ApiClient();
-            apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-            const apiInstance = new TransactionalEmailsApi(apiClient);
-
-            const sendSmtpEmail = new SendSmtpEmail();
+            const defaultClient = Brevo.ApiClient.instance;
+            defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
+            
+            const apiInstance = new Brevo.TransactionalEmailsApi();
+            const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: promoterData.email, name: promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
