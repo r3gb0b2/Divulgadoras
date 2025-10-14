@@ -53,23 +53,15 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 export const getPromoters = async (organizationId: string | undefined, states?: string[] | null): Promise<Promoter[]> => {
   try {
     let q = query(collection(firestore, "promoters"));
-    let shouldSortManually = false;
-
+    
     // Filter by organization if an ID is provided
     if (organizationId) {
       q = query(q, where("organizationId", "==", organizationId));
-      // When filtering by organization, we will sort manually to avoid composite index requirement
-      shouldSortManually = true; 
     }
 
     if (states && states.length > 0) {
       // Admin with specific state assignments
       q = query(q, where("state", "in", states));
-      shouldSortManually = true; // Manual sort because 'in' query doesn't preserve order anyway
-    } else if (!organizationId) { 
-      // This is a superadmin with no state filter. We can use Firestore ordering.
-      q = query(q, orderBy("createdAt", "desc"));
-      shouldSortManually = false; // Firestore is handling sorting
     }
     
     const querySnapshot = await getDocs(q);
@@ -78,13 +70,12 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
       promoters.push({ id: doc.id, ...doc.data() } as Promoter);
     });
     
-    if (shouldSortManually) {
-        promoters.sort((a, b) => {
-            const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-            const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-            return timeB - timeA;
-        });
-    }
+    // Always sort manually on the client-side for consistency and to include documents without `createdAt`.
+    promoters.sort((a, b) => {
+        const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+        const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+        return timeB - timeA;
+    });
 
     return promoters;
   } catch (error) {

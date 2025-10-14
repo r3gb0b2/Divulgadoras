@@ -221,17 +221,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
                         
                         {canManage && (
-                            <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-x-4 gap-y-2 justify-end text-sm font-medium">
-                                {promoter.status === 'pending' && (
-                                    <>
-                                        <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                        <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                    </>
-                                )}
-                                <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                {isSuperAdmin && (
-                                    <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
-                                )}
+                            <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
+                                <div>
+                                    {promoter.status === 'approved' && (
+                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!promoter.hasJoinedGroup} 
+                                                onChange={(e) => handleUpdatePromoter(promoter.id, { hasJoinedGroup: e.target.checked })}
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                            />
+                                            <span className="text-gray-300">Entrou no grupo</span>
+                                        </label>
+                                    )}
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end">
+                                    {promoter.status === 'pending' && (
+                                        <>
+                                            <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
+                                            <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                        </>
+                                    )}
+                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                    {isSuperAdmin && (
+                                        <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
