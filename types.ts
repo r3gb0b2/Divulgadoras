@@ -18,6 +18,9 @@ export interface Promoter {
   organizationId: string;
   hasJoinedGroup?: boolean;
   rejectionReason?: string;
+  statusChangedAt?: Timestamp | Date;
+  actionTakenByUid?: string;
+  actionTakenByEmail?: string;
 }
 
 export interface PromoterApplicationData {
@@ -75,7 +78,6 @@ export interface AdminApplication {
     uid: string;
     name: string;
     email: string;
-    phone: string;
     message: string;
     status: 'pending';
     createdAt: Timestamp;

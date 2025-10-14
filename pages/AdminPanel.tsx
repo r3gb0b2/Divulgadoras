@@ -12,6 +12,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
+import { serverTimestamp } from 'firebase/firestore';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -29,6 +30,19 @@ const calculateAge = (dateString: string | undefined): string => {
         age--;
     }
     return `${age} anos`;
+};
+
+const formatDate = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Data inválida';
+    return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 };
 
 
@@ -131,7 +145,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
         try {
-            await updatePromoter(id, data);
+            const currentPromoter = promoters.find(p => p.id === id);
+            const updatedData = { ...data };
+
+            // If status is being set and is different from the current promoter's status
+            if (data.status && data.status !== currentPromoter?.status) {
+                updatedData.actionTakenByUid = adminData.uid;
+                updatedData.actionTakenByEmail = adminData.email;
+                updatedData.statusChangedAt = serverTimestamp();
+            }
+            
+            await updatePromoter(id, updatedData);
             await fetchData(); // Refresh data
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
@@ -204,6 +228,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const queryMatch = lowercasedQuery === '' ||
                 p.name.toLowerCase().includes(lowercasedQuery) ||
                 p.email.toLowerCase().includes(lowercasedQuery) ||
+                (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
                 (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
             if (!queryMatch) return false;
 
@@ -250,6 +275,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             </div>
                             <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
+                        </div>
+
+                        <div className="text-xs text-gray-500 mb-3 space-y-1">
+                            <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>
+                            {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
+                                <p><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt)}</p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-4 mb-3">
@@ -358,7 +390,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                      <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
                         <input 
                             type="text"
-                            placeholder="Buscar por nome, e-mail, evento..."
+                            placeholder="Buscar por nome, e-mail, telefone, evento..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"

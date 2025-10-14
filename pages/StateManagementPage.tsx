@@ -8,6 +8,7 @@ import { stateMap } from '../constants/states';
 import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
+import { serverTimestamp } from 'firebase/firestore';
 
 interface StateManagementPageProps {
   adminData: AdminUserData;
@@ -24,6 +25,19 @@ const calculateAge = (dateString: string | undefined): string => {
         age--;
     }
     return `${age} anos`;
+};
+
+const formatDate = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Data inválida';
+    return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
 };
 
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
@@ -163,16 +177,26 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   };
   
   const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
-        if (!canManage) return;
-        try {
-            await updatePromoter(id, data);
-            if (data.status === 'approved') {
-                alert('Divulgadora aprovada! Ela poderá ver o novo status ao consultar o site.');
-            }
-            await fetchData(); // Refresh data
-        } catch (error) {
-            alert("Falha ao atualizar a divulgadora.");
+    if (!canManage) return;
+    try {
+        const currentPromoter = promoters.find(p => p.id === id);
+        const updatedData = { ...data };
+
+        if (data.status && data.status !== currentPromoter?.status) {
+            updatedData.actionTakenByUid = adminData.uid;
+            updatedData.actionTakenByEmail = adminData.email;
+            updatedData.statusChangedAt = serverTimestamp();
         }
+
+        await updatePromoter(id, updatedData);
+
+        if (data.status === 'approved' && data.status !== currentPromoter?.status) {
+            alert('Divulgadora aprovada! Ela poderá ver o novo status ao consultar o site.');
+        }
+        await fetchData(); // Refresh data
+    } catch (error) {
+        alert("Falha ao atualizar a divulgadora.");
+    }
   };
 
   const handleDeletePromoter = async (id: string) => {
@@ -422,6 +446,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                         <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                                     </div>
                                     {getStatusBadge(promoter.status)}
+                                </div>
+
+                                <div className="text-xs text-gray-500 mb-3 space-y-1">
+                                    <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>
+                                    {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
+                                        <p><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt)}</p>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-4 mb-3">
