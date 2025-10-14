@@ -114,7 +114,7 @@ exports.sendTestEmail = functions
                     detailedMessage = error.message;
                 }
             } catch (parsingError) {
-                functions.logger.error(`Could not parse the original error object in sendTestEmail (type: ${testType}).`, { parsingError });
+                functions.logger.error(`CRITICAL: Could not parse the original error object in sendTestEmail (type: ${testType}).`, { parsingError });
                 detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
@@ -215,10 +215,7 @@ exports.sendPromoterStatusEmail = functions
             return { success: true };
         } catch (error) {
              functions.logger.error(`[FATAL ERROR] Failed to send promoter status email for promoterId: ${promoterId}.`, {
-                error,
-                errorMessage: error ? error.message : "No message",
-                errorBody: error ? error.body : "No body",
-                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                rawErrorObject: error,
             });
             return null;
         }
@@ -342,7 +339,7 @@ exports.manuallySendStatusEmail = functions
                     detailedMessage = error.message;
                 }
             } catch (parsingError) {
-                functions.logger.error("Could not parse the original error object in manuallySendStatusEmail.", { parsingError });
+                functions.logger.error("CRITICAL: Could not parse the original error object in manuallySendStatusEmail.", { parsingError });
                 detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
