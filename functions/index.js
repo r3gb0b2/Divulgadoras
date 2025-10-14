@@ -106,14 +106,6 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
         }],
         notification_urls: [notificationUrl],
         redirect_url: redirectUrl,
-        charges: [{
-            reference_id: `CHG_${referenceId}`,
-            description: `Assinatura do ${plan.name}`,
-            amount: {
-                value: plan.price,
-                currency: 'BRL',
-            },
-        }],
     };
 
     try {
