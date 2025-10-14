@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
-import { Promoter, AdminUserData, PromoterStatus, RejectionReason } from '../types';
+import { getOrganizations } from '../services/organizationService';
+import { getAllCampaigns } from '../services/settingsService';
+import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
+import { states } from '../constants/states';
 import { Link } from 'react-router-dom';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
@@ -37,6 +40,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
 
+    // State for super admin filters
+    const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
+    const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+    const [selectedOrg, setSelectedOrg] = useState('all');
+    const [selectedState, setSelectedState] = useState('all');
+    const [selectedCampaign, setSelectedCampaign] = useState('all');
+
+
     // Modals state
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
     const [photoViewerUrls, setPhotoViewerUrls] = useState<string[]>([]);
@@ -64,26 +75,48 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 throw new Error("Administrador não está vinculado a uma organização.");
             }
 
-            const [promotersData, reasonsData] = await Promise.all([
-                getPromoters(orgId, states),
-                orgId ? getRejectionReasons(orgId) : Promise.resolve([])
-            ]);
-            
-            // Further client-side filtering based on assigned campaigns for non-superadmins
-            if (!isSuperAdmin && adminData.assignedCampaigns) {
-                const filtered = promotersData.filter(p => {
-                    const campaignsForState = adminData.assignedCampaigns?.[p.state];
-                    // If no campaigns are assigned for the state, admin can see all for that state.
-                    if (!campaignsForState || campaignsForState.length === 0) return true;
-                    // Otherwise, only show promoters from assigned campaigns.
-                    return p.campaignName && campaignsForState.includes(p.campaignName);
-                });
-                setPromoters(filtered);
-            } else {
+            // Base promises for all roles
+            const promotersPromise = getPromoters(orgId, states);
+            const reasonsPromise = orgId ? getRejectionReasons(orgId) : Promise.resolve([]);
+
+            if (isSuperAdmin) {
+                // Superadmin fetches everything
+                const orgsPromise = getOrganizations();
+                const campaignsPromise = getAllCampaigns();
+    
+                const [promotersData, reasonsData, orgsData, campaignsData] = await Promise.all([
+                    promotersPromise,
+                    reasonsPromise, // This will be an empty array as orgId is undefined
+                    orgsPromise,
+                    campaignsPromise,
+                ]);
+    
                 setPromoters(promotersData);
+                setRejectionReasons(reasonsData); // Empty, which is fine. The button is hidden.
+                setAllOrganizations(orgsData.sort((a,b) => a.name.localeCompare(b.name)));
+                setAllCampaigns(campaignsData);
+
+            } else {
+                 // Regular admin fetches scoped data
+                const [promotersData, reasonsData] = await Promise.all([promotersPromise, reasonsPromise]);
+
+                setRejectionReasons(reasonsData);
+                
+                // Further client-side filtering based on assigned campaigns for non-superadmins
+                if (adminData.assignedCampaigns) {
+                    const filtered = promotersData.filter(p => {
+                        const campaignsForState = adminData.assignedCampaigns?.[p.state];
+                        // If no campaigns are assigned for the state, admin can see all for that state.
+                        if (!campaignsForState || campaignsForState.length === 0) return true;
+                        // Otherwise, only show promoters from assigned campaigns.
+                        return p.campaignName && campaignsForState.includes(p.campaignName);
+                    });
+                    setPromoters(filtered);
+                } else {
+                    setPromoters(promotersData);
+                }
             }
 
-            setRejectionReasons(reasonsData);
         } catch (err: any) {
             setError(err.message || 'Não foi possível carregar as divulgadoras.');
         } finally {
@@ -152,11 +185,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const stats = useMemo(() => {
+        const promoterSource = promoters; // Use all promoters before filtering for stats
         return {
-          total: promoters.length,
-          pending: promoters.filter(p => p.status === 'pending').length,
-          approved: promoters.filter(p => p.status === 'approved').length,
-          rejected: promoters.filter(p => p.status === 'rejected').length,
+          total: promoterSource.length,
+          pending: promoterSource.filter(p => p.status === 'pending').length,
+          approved: promoterSource.filter(p => p.status === 'approved').length,
+          rejected: promoterSource.filter(p => p.status === 'rejected').length,
         };
       }, [promoters]);
 
@@ -171,10 +205,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 p.name.toLowerCase().includes(lowercasedQuery) ||
                 p.email.toLowerCase().includes(lowercasedQuery) ||
                 (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+            if (!queryMatch) return false;
+
+            if (isSuperAdmin) {
+                const orgMatch = selectedOrg === 'all' || p.organizationId === selectedOrg;
+                if (!orgMatch) return false;
+
+                const stateMatch = selectedState === 'all' || p.state === selectedState;
+                if (!stateMatch) return false;
+
+                const campaignMatch = selectedCampaign === 'all' || p.campaignName === selectedCampaign;
+                if (!campaignMatch) return false;
+            }
             
-            return queryMatch;
+            return true;
         });
-    }, [promoters, filter, searchQuery]);
+    }, [promoters, filter, searchQuery, isSuperAdmin, selectedOrg, selectedState, selectedCampaign]);
     
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
@@ -198,6 +244,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
                             <div>
                                 <p className="font-bold text-lg text-white">{promoter.name}</p>
+                                {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
                                 {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
                                 <p className="text-sm text-gray-400">{promoter.email}</p>
                                 <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
@@ -280,7 +327,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                         {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
                             <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
@@ -288,7 +335,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             </button>
                         ))}
                     </div>
-                     <div className="relative flex-grow w-full md:w-auto md:max-w-xs">
+                    
+                    {isSuperAdmin && (
+                        <div className="flex flex-wrap gap-2 flex-grow">
+                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todas Organizações</option>
+                                {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                            </select>
+                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todos Estados</option>
+                                {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
+                            </select>
+                             <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todos Eventos</option>
+                                {[...new Set(allCampaigns.map(c => c.name))].sort().map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                     <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
                         <input 
                             type="text"
                             placeholder="Buscar por nome, e-mail, evento..."
@@ -297,7 +364,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         />
                     </div>
-                     {canManage && (
+                     {canManage && adminData.organizationId && (
                         <button onClick={() => setIsReasonsModalOpen(true)} className="text-sm text-primary hover:underline flex-shrink-0">
                             Gerenciar Motivos
                         </button>

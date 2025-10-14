@@ -80,7 +80,7 @@ export const ClipboardDocumentListIcon: React.FC<React.SVGProps<SVGSVGElement>> 
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg
-        viewBox="0 0 210 40"
+        viewBox="0 0 250 40"
         xmlns="http://www.w3.org/2000/svg"
         {...props}
     >
