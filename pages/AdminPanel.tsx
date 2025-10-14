@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -52,6 +53,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
+    const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
     // State for super admin filters
     const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
@@ -156,24 +158,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const currentPromoter = promoters.find(p => p.id === id);
             const updatedData = { ...data };
-            let statusChanged = false;
 
             // If status is being set and is different from the current promoter's status
             if (data.status && data.status !== currentPromoter?.status) {
-                statusChanged = true;
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
                 updatedData.statusChangedAt = serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);
-
-            if (statusChanged && (data.status === 'approved' || data.status === 'rejected')) {
-                const statusText = data.status === 'approved' ? 'aprovada' : 'rejeitada';
-                alert(`Divulgadora ${statusText}. A notificação por e-mail será enviada automaticamente.`);
-            }
-            
             await fetchData(); // Refresh data
+            alert("Status da divulgadora atualizado com sucesso.");
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
             throw error;
@@ -186,6 +181,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
+    };
+
+    const handleManualNotify = async (promoterId: string) => {
+        if (notifyingId) return;
+        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado/Rejeitado). Deseja continuar?")) {
+            return;
+        }
+        
+        setNotifyingId(promoterId);
+        try {
+            const manuallySendEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+            const result = await manuallySendEmail({ promoterId });
+            const data = result.data as { success: boolean, message: string };
+            alert(data.message || 'Notificação enviada com sucesso!');
+        } catch (error: any) {
+            console.error("Failed to send manual notification:", error);
+            alert(`Falha ao enviar notificação: ${error.message}`);
+        } finally {
+            setNotifyingId(null);
+        }
     };
 
     const handleDeletePromoter = async (id: string) => {
@@ -349,6 +364,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                             <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
                                             <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
                                         </>
+                                    )}
+                                    {(promoter.status === 'approved' || promoter.status === 'rejected') && (
+                                        <button
+                                            onClick={() => handleManualNotify(promoter.id)}
+                                            disabled={notifyingId === promoter.id}
+                                            className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
+                                        >
+                                            {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
+                                        </button>
                                     )}
                                     <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                     {isSuperAdmin && (

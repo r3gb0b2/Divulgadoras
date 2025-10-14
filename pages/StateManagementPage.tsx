@@ -10,6 +10,8 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import { serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase/config';
 
 interface StateManagementPageProps {
   adminData: AdminUserData;
@@ -55,6 +57,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
+  const [notifyingId, setNotifyingId] = useState<string | null>(null);
   
   // State for modals
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -192,23 +195,16 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     try {
         const currentPromoter = promoters.find(p => p.id === id);
         const updatedData = { ...data };
-        let statusChanged = false;
 
         if (data.status && data.status !== currentPromoter?.status) {
-            statusChanged = true;
             updatedData.actionTakenByUid = adminData.uid;
             updatedData.actionTakenByEmail = adminData.email;
             updatedData.statusChangedAt = serverTimestamp();
         }
 
         await updatePromoter(id, updatedData);
-
-        if (statusChanged && (data.status === 'approved' || data.status === 'rejected')) {
-            const statusText = data.status === 'approved' ? 'aprovada' : 'rejeitada';
-            alert(`Divulgadora ${statusText}. A notificação por e-mail será enviada automaticamente.`);
-        }
-        
         await fetchData(); // Refresh data
+        alert("Status da divulgadora atualizado com sucesso.");
     } catch (error) {
         alert("Falha ao atualizar a divulgadora.");
     }
@@ -220,6 +216,26 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     }
     setIsRejectionModalOpen(false);
     setRejectingPromoter(null);
+  };
+
+  const handleManualNotify = async (promoterId: string) => {
+    if (notifyingId) return;
+    if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado/Rejeitado). Deseja continuar?")) {
+        return;
+    }
+    
+    setNotifyingId(promoterId);
+    try {
+        const manuallySendEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+        const result = await manuallySendEmail({ promoterId });
+        const data = result.data as { success: boolean, message: string };
+        alert(data.message || 'Notificação enviada com sucesso!');
+    } catch (error: any) {
+        console.error("Failed to send manual notification:", error);
+        alert(`Falha ao enviar notificação: ${error.message}`);
+    } finally {
+        setNotifyingId(null);
+    }
   };
 
   const handleDeletePromoter = async (id: string) => {
@@ -243,7 +259,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     if (!stateAbbr || !campaignForm.name) return;
 
     if (!campaignForm.id && !canCreateCampaign) {
-        alert(`Você atingiu o limite de ${campaignLimit} evento(s) для o seu plano. Para criar mais, entre em contato com o suporte.`);
+        alert(`Você atingiu o limite de ${campaignLimit} evento(s) para o seu plano. Para criar mais, entre em contato com o suporte.`);
         return;
     }
     
@@ -514,6 +530,15 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                                 <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
                                                 <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
                                             </>
+                                        )}
+                                        {(promoter.status === 'approved' || promoter.status === 'rejected') && (
+                                            <button
+                                                onClick={() => handleManualNotify(promoter.id)}
+                                                disabled={notifyingId === promoter.id}
+                                                className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
+                                            >
+                                                {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
+                                            </button>
                                         )}
                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                         {isSuperAdmin && (
