@@ -73,7 +73,13 @@ exports.createPendingOrganization = onCall({ allow: "unauthenticated" }, async (
         if (error.code === 'auth/email-already-exists') {
             throw new HttpsError('already-exists', 'Este e-mail já está cadastrado.');
         }
-        throw new HttpsError('internal', 'Não foi possível criar a conta. Tente novamente.');
+        if (error.code === 'auth/invalid-email') {
+            throw new HttpsError('invalid-argument', 'O formato do e-mail é inválido.');
+        }
+        if (error.code === 'auth/invalid-password') {
+             throw new HttpsError('invalid-argument', 'A senha é inválida. Deve ter pelo menos 6 caracteres.');
+        }
+        throw new HttpsError('internal', 'Não foi possível criar a conta. Ocorreu um erro inesperado.');
     }
 });
 
@@ -141,7 +147,16 @@ exports.getCheckoutLinkForOrg = onCall(async (request) => {
         return { checkoutUrl: response.init_point };
     } catch (error) {
         logger.error("Erro ao criar preferência no Mercado Pago:", error);
-        throw new HttpsError('internal', 'Falha ao comunicar com o Mercado Pago.');
+        let errorMessage = 'Falha ao comunicar com o Mercado Pago.';
+        // Verifica se é um erro específico da API do Mercado Pago
+        if (error.cause && Array.isArray(error.cause) && error.cause.length > 0) {
+            const cause = error.cause[0];
+            logger.error("Causa do erro do Mercado Pago:", cause);
+            errorMessage = `Erro do Mercado Pago: ${cause.description || 'Por favor, verifique os dados e as credenciais.'}`;
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        throw new HttpsError('internal', errorMessage);
     }
 });
 
@@ -169,7 +184,7 @@ exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, re
         const client = new MercadoPagoConfig({ accessToken: config.accessToken });
         const paymentClient = new Payment(client);
         
-        const payment = await paymentClient.get({ id: Number(paymentId) });
+        const payment = await paymentClient.get({ id: paymentId });
         
         if (payment && payment.status === 'approved' && payment.external_reference) {
             const orgId = payment.external_reference;
