@@ -1,6 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const Brevo = require('@getbrevo/brevo');
+const { ApiClient, TransactionalEmailsApi, SendSmtpEmail } = require('@getbrevo/brevo');
 
 admin.initializeApp();
 
@@ -24,12 +24,11 @@ exports.sendTestEmail = functions
         }
 
         // 3. Configure a new Brevo client instance
-        // This ensures each function invocation is stateless and avoids potential issues with shared singletons in a serverless environment.
-        const apiClient = new Brevo.ApiClient();
+        const apiClient = new ApiClient();
         apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-        const apiInstance = new Brevo.TransactionalEmailsApi(apiClient);
+        const apiInstance = new TransactionalEmailsApi(apiClient);
         
-        const sendSmtpEmail = new Brevo.SendSmtpEmail();
+        const sendSmtpEmail = new SendSmtpEmail();
 
         // 4. Define the email content
         sendSmtpEmail.to = [{ email: userEmail }];
@@ -151,12 +150,11 @@ exports.sendPromoterStatusEmail = functions
             }
 
             // --- 4. Send Email via Brevo ---
-            // Initialize a new API client for each request to ensure statelessness in the serverless environment.
-            const apiClient = new Brevo.ApiClient();
+            const apiClient = new ApiClient();
             apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-            const apiInstance = new Brevo.TransactionalEmailsApi(apiClient);
+            const apiInstance = new TransactionalEmailsApi(apiClient);
 
-            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            const sendSmtpEmail = new SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: afterData.email, name: promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
@@ -279,12 +277,11 @@ exports.manuallySendStatusEmail = functions
         
         // --- 6. Send Email with specific error handling ---
         try {
-            // Initialize a new API client for each request to ensure statelessness in the serverless environment.
-            const apiClient = new Brevo.ApiClient();
+            const apiClient = new ApiClient();
             apiClient.authentications['api-key'].apiKey = brevoConfig.key;
-            const apiInstance = new Brevo.TransactionalEmailsApi(apiClient);
+            const apiInstance = new TransactionalEmailsApi(apiClient);
 
-            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            const sendSmtpEmail = new SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: promoterData.email, name: promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
