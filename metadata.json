@@ -1,5 +1,5 @@
 {
-  "name": "divulgadoras Brasil",
-  "description": "Um formulário de cadastro para novas divulgadoras e um painel administrativo para visualizar os perfis enviados. Os dados são salvos localmente no navegador.",
+  "name": "Equipe Certa",
+  "description": "Plataforma completa para organizadores de eventos gerenciarem suas equipes de divulgação de forma eficiente.",
   "requestFramePermissions": []
 }

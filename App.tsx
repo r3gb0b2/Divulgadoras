@@ -8,6 +8,7 @@ import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
+import { LogoIcon } from './components/Icons';
 
 const App: React.FC = () => {
   return (
@@ -16,7 +17,9 @@ const App: React.FC = () => {
         <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col">
           <header className="bg-secondary shadow-md sticky top-0 z-10">
             <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-              <Link to="/" className="text-2xl font-bold text-primary">DIVULGAÇÕES D&E MUSIC</Link>
+              <Link to="/" className="flex items-center">
+                <LogoIcon className="h-8 w-auto text-white" />
+              </Link>
               <div className='space-x-4'>
                 <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
                 <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
@@ -38,7 +41,7 @@ const App: React.FC = () => {
             </Routes>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">
-              <p>&copy; {new Date().getFullYear()} DIVULGAÇÕES D&E MUSIC. Todos os direitos reservados.</p>
+              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados.</p>
           </footer>
         </div>
       </Router>

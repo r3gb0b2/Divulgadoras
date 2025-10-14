@@ -47,7 +47,7 @@ export const MapPinIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const CogIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.05 2 13.53 2h-4.05c-.52 0-.93.18-1.02.47l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.08-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.09.29.5.47 1.02.47h4.05c.52 0 .93-.18 1.02.47l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.08.49 0 .61.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
+    <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.05 2 13.53 2h-4.05c-.52 0-.93.18-1.02.47l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.08-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.09.29.5.47 1.02.47h4.05c.52 0 .93-.18 1.02.47l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.08.49 0 .61.22l2-3.46c.12-.22.07.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
 );
 
 export const LockClosedIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -76,4 +76,39 @@ export const BuildingOfficeIcon: React.FC<React.SVGProps<SVGSVGElement>> = creat
 
 export const ClipboardDocumentListIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path clipRule="evenodd" d="M15.75 2.25a3 3 0 0 0-3-3h-3.5a3 3 0 0 0-3 3V3H5.25a3 3 0 0 0-3 3v13.5a3 3 0 0 0 3 3h9.5a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3h-1V2.25Zm-2.5 1.5V6H8.25V3.75a1.5 1.5 0 0 1 1.5-1.5h.5a1.5 1.5 0 0 1 1.5 1.5Z" />
+);
+
+export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg
+        viewBox="0 0 210 40"
+        xmlns="http://www.w3.org/2000/svg"
+        {...props}
+    >
+        <defs>
+            <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style={{ stopColor: '#e83a93', stopOpacity: 1 }} />
+                <stop offset="100%" style={{ stopColor: '#c82a7a', stopOpacity: 1 }} />
+            </linearGradient>
+        </defs>
+        {/* Abstract team/network icon */}
+        <g transform="translate(0, 2)">
+            <circle cx="15" cy="20" r="8" fill="url(#logoGradient)" />
+            <circle cx="30" cy="12" r="6" fill="url(#logoGradient)" opacity="0.8" />
+            <circle cx="30" cy="28" r="6" fill="url(#logoGradient)" opacity="0.8" />
+            <line x1="15" y1="20" x2="28" y2="13" stroke="url(#logoGradient)" strokeWidth="2.5" />
+            <line x1="15" y1="20" x2="28" y2="27" stroke="url(#logoGradient)" strokeWidth="2.5" />
+        </g>
+        
+        {/* Text */}
+        <text
+            x="50"
+            y="30"
+            fontFamily="system-ui, sans-serif"
+            fontSize="30"
+            fontWeight="bold"
+            fill="currentColor"
+        >
+            Equipe Certa
+        </text>
+    </svg>
 );
