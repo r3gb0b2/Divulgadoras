@@ -4,6 +4,27 @@ const Brevo = require('@getbrevo/brevo');
 
 admin.initializeApp();
 
+/**
+ * Creates a freshly authenticated Brevo API client instance.
+ * @param {object} brevoConfig - The Brevo configuration from Firebase functions config.
+ * @returns {Brevo.TransactionalEmailsApi} A configured API instance.
+ * @throws {functions.https.HttpsError} If config is missing.
+ */
+const createBrevoClient = (brevoConfig) => {
+    if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email || !brevoConfig.sender_name) {
+        console.error("Brevo config is missing in Firebase environment.", { brevoConfig });
+        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
+    }
+    
+    // Create a new, isolated ApiClient for each function call
+    const apiClient = new Brevo.ApiClient();
+    apiClient.authentications['api-key'].apiKey = brevoConfig.key;
+    
+    // Pass the authenticated client to the API constructor
+    return new Brevo.TransactionalEmailsApi(apiClient);
+};
+
+
 exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
@@ -16,21 +37,13 @@ exports.sendTestEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O usuário autenticado não possui um e-mail.');
         }
 
-        // 2. Get Brevo API config from environment variables
         const brevoConfig = functions.config().brevo;
-        if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email || !brevoConfig.sender_name) {
-            console.error("Brevo config is missing in Firebase environment.", { brevoConfig });
-            throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
-        }
 
-        // 3. Configure Brevo client instance using the official singleton pattern
-        const defaultClient = Brevo.ApiClient.instance;
-        defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
-        
-        const apiInstance = new Brevo.TransactionalEmailsApi();
+        // 2. Get a fresh Brevo client
+        const apiInstance = createBrevoClient(brevoConfig);
         const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-        // 4. Define the email content
+        // 3. Define the email content
         sendSmtpEmail.to = [{ email: userEmail }];
         sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
         sendSmtpEmail.subject = "✅ Teste de Envio de E-mail - Equipe Certa";
@@ -49,7 +62,7 @@ exports.sendTestEmail = functions
             </html>`;
         sendSmtpEmail.textContent = `Olá! Se você está recebendo este e-mail, a integração com o serviço de envio está funcionando corretamente! Remetente: ${brevoConfig.sender_name} <${brevoConfig.sender_email}>. Destinatário: ${userEmail}.`;
 
-        // 5. Send the email
+        // 4. Send the email
         try {
             const brevoResponse = await apiInstance.sendTransacEmail(sendSmtpEmail);
             console.log('Brevo API called successfully. Returned data: ', JSON.stringify(brevoResponse));
@@ -97,7 +110,7 @@ exports.sendPromoterStatusEmail = functions
             }
             
             const brevoConfig = functions.config().brevo;
-            if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
+             if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
                 functions.logger.error("[FATAL EXIT] Brevo API configuration is missing in Firebase environment.", { promoterId });
                 return null;
             }
@@ -150,10 +163,7 @@ exports.sendPromoterStatusEmail = functions
             }
 
             // --- 4. Send Email via Brevo ---
-            const defaultClient = Brevo.ApiClient.instance;
-            defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
-            
-            const apiInstance = new Brevo.TransactionalEmailsApi();
+            const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: afterData.email, name: promoterName }];
@@ -235,14 +245,9 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido para notificação.');
         }
 
-        // --- 4. Get Brevo API Configuration ---
         const brevoConfig = functions.config().brevo;
-        if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
-            functions.logger.error("[FATAL] Brevo API configuration is missing.", { promoterId });
-            throw new functions.https.HttpsError('internal', 'A configuração da API de e-mail não foi encontrada no servidor.');
-        }
 
-        // --- 5. Prepare Email Content ---
+        // --- 4. Prepare Email Content ---
         const promoterName = promoterData.name || 'Candidato(a)';
         const campaignName = promoterData.campaignName || "nossa equipe";
         const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
@@ -275,12 +280,9 @@ exports.manuallySendStatusEmail = functions
             `;
         }
         
-        // --- 6. Send Email with specific error handling ---
+        // --- 5. Send Email with specific error handling ---
         try {
-            const defaultClient = Brevo.ApiClient.instance;
-            defaultClient.authentications['api-key'].apiKey = brevoConfig.key;
-            
-            const apiInstance = new Brevo.TransactionalEmailsApi();
+            const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: promoterData.email, name: promoterName }];
