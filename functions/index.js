@@ -1,4 +1,5 @@
 
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('sib-api-v3-sdk');
@@ -253,15 +254,33 @@ exports.manuallySendStatusEmail = functions
 
         if (promoterData.status === 'approved') {
             subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-            htmlContent = `<p>Olá, ${promoterName}!</p><p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p><p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p><p><a href="${portalLink}">Clique aqui para acessar seu portal</a></p><p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
+            htmlContent = `
+                <p>Olá, ${promoterName}!</p>
+                <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                <p>Estamos muito felizes em ter você em nossa equipe!</p>
+                <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
+                <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
+                <p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p>
+                <br>
+                <p>Atenciosamente,<br/>Equipe Certa</p>
+            `;
         } else { // 'rejected'
             subject = `Resultado da sua candidatura para ${orgName}`;
             const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
-            htmlContent = `<p>Olá, ${promoterName},</p><p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p><p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p><p><strong>Motivo:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p><p>Desejamos sucesso!</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
+            htmlContent = `
+                <p>Olá, ${promoterName},</p>
+                <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.</p>
+                <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
+                <p>Desejamos sucesso em suas futuras oportunidades!</p>
+                <br>
+                <p>Atenciosamente,<br/>Equipe Certa</p>
+            `;
         }
         
         // --- 6. Send Email with specific error handling ---
         try {
+            // FIX: Added missing Brevo client initialization
             const defaultClient = SibApiV3Sdk.ApiClient.instance;
             const apiKey = defaultClient.authentications['api-key'];
             apiKey.apiKey = brevoConfig.key;
