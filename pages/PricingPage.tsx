@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import PaymentModal from '../components/PaymentModal';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 const CheckIcon: React.FC = () => (
     <svg className="w-5 h-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24" stroke="currentColor">
@@ -17,7 +17,6 @@ export interface Plan {
     isPopular: boolean;
 }
 
-// FIX: Export the 'plans' constant so it can be used in other components.
 export const plans: Plan[] = [
     {
         id: 'basic',
@@ -51,14 +50,6 @@ export const plans: Plan[] = [
 ];
 
 const PricingPage: React.FC = () => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-
-    const handleSelectPlan = (plan: Plan) => {
-        setSelectedPlan(plan);
-        setIsModalOpen(true);
-    };
-
     return (
         <>
             <div className="max-w-4xl mx-auto text-center">
@@ -88,12 +79,12 @@ const PricingPage: React.FC = () => {
                                         ))}
                                     </ul>
                                 </div>
-                                <button 
-                                    onClick={() => handleSelectPlan(plan)}
+                                <Link 
+                                    to={`/subscribe/${plan.id}`}
                                     className={`mt-8 block w-full py-3 px-6 text-center rounded-md text-white font-medium ${plan.isPopular ? 'bg-primary hover:bg-primary-dark' : 'bg-gray-600 hover:bg-gray-500'} transition-colors`}
                                 >
                                     Começar agora
-                                </button>
+                                </Link>
                             </div>
                         ))}
                     </div>
@@ -103,12 +94,6 @@ const PricingPage: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            <PaymentModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                plan={selectedPlan}
-            />
         </>
     );
 };

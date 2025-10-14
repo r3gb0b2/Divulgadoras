@@ -6,6 +6,7 @@ import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
+import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import CheckoutCompletePage from './pages/MockCheckoutPage';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
 
@@ -34,6 +35,7 @@ const App: React.FC = () => {
               <Route path="/admin/*" element={<AdminAuth />} />
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/planos" element={<PricingPage />} />
+              <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
               <Route path="/checkout-complete" element={<CheckoutCompletePage />} />
             </Routes>
           </main>
