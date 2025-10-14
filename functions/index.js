@@ -1,27 +1,29 @@
 
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const Brevo = require('@getbrevo/brevo');
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
 
 admin.initializeApp();
 
 /**
- * Creates a new, isolated, and freshly authenticated Brevo API client instance.
- * @param {object} brevoConfig - The Brevo configuration from Firebase functions config.
- * @returns {Brevo.TransactionalEmailsApi} A configured API instance.
+ * Creates a new, isolated, and freshly authenticated Mailgun API client instance.
+ * @param {object} mailgunConfig - The Mailgun configuration from Firebase functions config.
+ * @returns {import('mailgun.js/dist/lib/client').Mailgun} A configured API instance.
  * @throws {functions.https.HttpsError} If config is missing.
  */
-const createBrevoClient = (brevoConfig) => {
-    if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email || !brevoConfig.sender_name) {
-        console.error("Brevo config is missing in Firebase environment.", { brevoConfig });
-        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor.');
+const createMailgunClient = (mailgunConfig) => {
+    if (!mailgunConfig || !mailgunConfig.key || !mailgunConfig.domain || !mailgunConfig.sender_email || !mailgunConfig.sender_name) {
+        console.error("Mailgun config is missing in Firebase environment.", { mailgunConfig });
+        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Mailgun) não foi encontrada no servidor.');
     }
     
-    const apiInstance = new Brevo.TransactionalEmailsApi();
-    const apiKeyAuth = apiInstance.authentications['api-key'];
-    apiKeyAuth.apiKey = brevoConfig.key;
-    
-    return apiInstance;
+    return mailgun.client({
+        username: 'api',
+        key: mailgunConfig.key,
+    });
 };
 
 exports.sendTestEmail = functions
@@ -35,10 +37,9 @@ exports.sendTestEmail = functions
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
-            functions.logger.info(`Initializing Brevo client for ${testType} test email.`);
-            const brevoConfig = functions.config().brevo;
-            const apiInstance = createBrevoClient(brevoConfig);
-            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            functions.logger.info(`Initializing Mailgun client for ${testType} test email.`);
+            const mailgunConfig = functions.config().mailgun;
+            const mg = createMailgunClient(mailgunConfig);
 
             let subject = '';
             let htmlContent = '';
@@ -63,7 +64,7 @@ exports.sendTestEmail = functions
                 htmlContent = `
                     <p>Olá, ${promoterName},</p>
                     <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
-                    <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
+                    <p>Analisamos seu perfil e, neste momento, не poderemos seguir com a sua candidatura.</p>
                     <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
@@ -73,19 +74,21 @@ exports.sendTestEmail = functions
                 htmlContent = `
                     <html><body>
                         <h1>Olá!</h1>
-                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
+                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio (Mailgun) está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
                         <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
                     </body></html>`;
             }
 
             functions.logger.info(`Sending ${testType} test email to ${userEmail}...`);
-            sendSmtpEmail.to = [{ email: userEmail }];
-            sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
-            sendSmtpEmail.subject = subject;
-            sendSmtpEmail.htmlContent = htmlContent;
+            const messageData = {
+                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
+                to: [userEmail],
+                subject: subject,
+                html: htmlContent,
+            };
             
-            await apiInstance.sendTransacEmail(sendSmtpEmail);
-            functions.logger.info(`${testType} test email sent successfully via Brevo.`);
+            await mg.messages.create(mailgunConfig.domain, messageData);
+            functions.logger.info(`${testType} test email sent successfully via Mailgun.`);
 
             return { success: true, message: `E-mail de teste (${testType}) enviado para ${userEmail}.` };
         } catch (error) {
@@ -98,25 +101,7 @@ exports.sendTestEmail = functions
                 throw error;
             }
             
-            let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
-            
-            try {
-                const errorBody = error?.response?.body || error?.body;
-                if (errorBody) {
-                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString('utf-8') : String(errorBody);
-                    try {
-                        const parsed = JSON.parse(bodyStr);
-                        detailedMessage = parsed.message || parsed.code || bodyStr;
-                    } catch (jsonError) {
-                        detailedMessage = bodyStr;
-                    }
-                } else if (error?.message) {
-                    detailedMessage = error.message;
-                }
-            } catch (parsingError) {
-                functions.logger.error(`CRITICAL: Could not parse the original error object in sendTestEmail (type: ${testType}).`, { parsingError });
-                detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
-            }
+            const detailedMessage = error.details || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
 
             throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', {
                 originalError: detailedMessage,
@@ -200,16 +185,17 @@ exports.sendPromoterStatusEmail = functions
                 `;
             }
 
-            const brevoConfig = functions.config().brevo;
-            const apiInstance = createBrevoClient(brevoConfig);
-            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            const mailgunConfig = functions.config().mailgun;
+            const mg = createMailgunClient(mailgunConfig);
 
-            sendSmtpEmail.to = [{ email: finalData.recipientEmail, name: finalData.promoterName }];
-            sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
-            sendSmtpEmail.subject = subject;
-            sendSmtpEmail.htmlContent = htmlContent;
+            const messageData = {
+                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
+                to: [finalData.recipientEmail],
+                subject: subject,
+                html: htmlContent,
+            };
 
-            await apiInstance.sendTransacEmail(sendSmtpEmail);
+            await mg.messages.create(mailgunConfig.domain, messageData);
             
             functions.logger.info(`[SUCCESS] Email dispatched to ${finalData.recipientEmail} for promoter ${promoterId}.`);
             return { success: true };
@@ -299,16 +285,17 @@ exports.manuallySendStatusEmail = functions
                 `;
             }
             
-            const brevoConfig = functions.config().brevo;
-            const apiInstance = createBrevoClient(brevoConfig);
-            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            const mailgunConfig = functions.config().mailgun;
+            const mg = createMailgunClient(mailgunConfig);
+            
+            const messageData = {
+                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
+                to: [finalData.recipientEmail],
+                subject: subject,
+                html: htmlContent,
+            };
 
-            sendSmtpEmail.to = [{ email: finalData.recipientEmail, name: finalData.promoterName }];
-            sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
-            sendSmtpEmail.subject = subject;
-            sendSmtpEmail.htmlContent = htmlContent;
-
-            await apiInstance.sendTransacEmail(sendSmtpEmail);
+            await mg.messages.create(mailgunConfig.domain, messageData);
             functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
 
             return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.` };
@@ -323,25 +310,7 @@ exports.manuallySendStatusEmail = functions
                 throw error;
             }
             
-            let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
-
-            try {
-                const errorBody = error?.response?.body || error?.body;
-                if (errorBody) {
-                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString('utf-8') : String(errorBody);
-                    try {
-                        const parsed = JSON.parse(bodyStr);
-                        detailedMessage = parsed.message || parsed.code || bodyStr;
-                    } catch (jsonError) {
-                        detailedMessage = bodyStr;
-                    }
-                } else if (error?.message) {
-                    detailedMessage = error.message;
-                }
-            } catch (parsingError) {
-                functions.logger.error("CRITICAL: Could not parse the original error object in manuallySendStatusEmail.", { parsingError });
-                detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
-            }
+            const detailedMessage = error.details || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
 
             throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', {
                 originalError: detailedMessage,
