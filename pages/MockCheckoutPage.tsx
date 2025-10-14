@@ -8,6 +8,7 @@ import { getPagSeguroCredentials } from '../services/credentialsService';
 declare global {
     interface Window {
         PagSeguro: any;
+        pagSeguroSdkReady?: boolean; // Our custom flag
     }
 }
 
@@ -18,48 +19,52 @@ const CheckoutPage: React.FC = () => {
     const plan = plans.find(p => p.id === planId);
     const password = passwordB64 ? atob(passwordB64) : '';
 
-    const [isLoading, setIsLoading] = useState(true);
+    const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>(
+        () => (window.PagSeguro && window.pagSeguroSdkReady ? 'ready' : 'loading')
+    );
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState('');
     const [cardInstance, setCardInstance] = useState<any>(null);
     const cardContainerRef = useRef<HTMLDivElement>(null);
-    const [sdkReady, setSdkReady] = useState(false);
 
-    // Effect to dynamically load the PagSeguro SDK
+    // Effect to listen for SDK readiness from the static script tag
     useEffect(() => {
-        // If SDK is already present, no need to load it again
-        if (window.PagSeguro) {
-            setSdkReady(true);
+        if (sdkStatus === 'ready') {
             return;
         }
-        
-        const script = document.createElement('script');
-        script.src = "https://assets.pagseguro.com.br/checkout-sdk-js/v2/pagseguro.min.js";
-        script.async = true;
 
-        script.onload = () => {
-            setSdkReady(true);
+        const handleSdkReady = () => {
+            setSdkStatus('ready');
         };
 
-        script.onerror = () => {
-            setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
-            setIsLoading(false);
-        };
+        // If script is already ready when component mounts
+        if (window.pagSeguroSdkReady) {
+            handleSdkReady();
+            return;
+        }
 
-        document.body.appendChild(script);
+        window.addEventListener('pagSeguroSdkReady', handleSdkReady);
 
-        // Cleanup function to remove script
+        // Fallback timeout in case the script fails to load silently
+        const timer = setTimeout(() => {
+            setSdkStatus(currentStatus => {
+                if (currentStatus === 'loading') {
+                    setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
+                    return 'error';
+                }
+                return currentStatus;
+            });
+        }, 10000); // 10-second timeout
+
         return () => {
-            const existingScript = document.querySelector(`script[src="${script.src}"]`);
-            if (existingScript) {
-                document.body.removeChild(existingScript);
-            }
+            window.removeEventListener('pagSeguroSdkReady', handleSdkReady);
+            clearTimeout(timer);
         };
-    }, []); // Empty dependency array ensures this runs only once on mount
+    }, [sdkStatus]);
 
     // Effect to initialize the card form once the SDK is ready
     useEffect(() => {
-        if (!sdkReady || !plan || cardInstance) { // Prevent re-initialization
+        if (sdkStatus !== 'ready' || cardInstance) {
             return;
         }
 
@@ -93,13 +98,12 @@ const CheckoutPage: React.FC = () => {
 
             } catch (err: any) {
                 setError(err.message || "Falha ao inicializar o pagamento.");
-            } finally {
-                setIsLoading(false);
+                setSdkStatus('error');
             }
         };
 
         initializeForm();
-    }, [sdkReady, plan, cardInstance]);
+    }, [sdkStatus, cardInstance]);
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -155,6 +159,8 @@ const CheckoutPage: React.FC = () => {
             </div>
         );
     }
+
+    const isLoading = sdkStatus === 'loading';
 
     return (
         <div className="max-w-lg mx-auto">
