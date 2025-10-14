@@ -417,8 +417,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         />
                     </div>
-                     {canManage && organizationIdForReasons && (
-                        <button onClick={() => setIsReasonsModalOpen(true)} className="text-sm text-primary hover:underline flex-shrink-0">
+                     {canManage && (
+                        <button
+                            onClick={() => {
+                                if (organizationIdForReasons) {
+                                    setIsReasonsModalOpen(true);
+                                }
+                            }}
+                            disabled={!organizationIdForReasons}
+                            className="text-sm text-primary hover:underline flex-shrink-0 disabled:text-gray-500 disabled:cursor-not-allowed disabled:no-underline"
+                            title={isSuperAdmin && !organizationIdForReasons ? "Selecione uma organização para gerenciar os motivos" : "Gerenciar Motivos de Rejeição"}
+                        >
                             Gerenciar Motivos
                         </button>
                     )}
