@@ -56,29 +56,35 @@ exports.sendTestEmail = functions
 
             return { success: true, message: `E-mail de teste enviado para ${userEmail}.` };
         } catch (error) {
-            functions.logger.error("Caught error in sendTestEmail:", {
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+            functions.logger.error("FATAL ERROR in sendTestEmail", {
                 user: userEmail,
+                error, // Log raw object
+                errorMessage: error ? error.message : "No error message",
+                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
             });
 
             if (error instanceof functions.https.HttpsError) {
                 throw error;
             }
 
-            let detailedMessage = 'Ocorreu um erro inesperado no servidor.';
-            if (error.response && error.response.body) {
-                const bodyStr = Buffer.isBuffer(error.response.body) ? error.response.body.toString() : String(error.response.body);
-                try {
-                    const body = JSON.parse(bodyStr);
-                    detailedMessage = body.message || bodyStr;
-                } catch (e) {
-                    detailedMessage = bodyStr;
+            let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
+            try {
+                const errorBody = error?.response?.body || error?.body;
+                if (errorBody) {
+                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString() : String(errorBody);
+                    const bodyJson = JSON.parse(bodyStr);
+                    detailedMessage = bodyJson.message || bodyJson.code || bodyStr;
+                } else if (error?.message) {
+                    detailedMessage = error.message;
                 }
-            } else {
-                detailedMessage = error instanceof Error ? error.message : String(error);
+            } catch (parseError) {
+                functions.logger.warn("Could not parse error body in sendTestEmail", { parseError });
+                detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
-            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', { originalError: detailedMessage });
+            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', {
+                originalError: detailedMessage,
+            });
         }
     });
 
@@ -159,10 +165,14 @@ exports.sendPromoterStatusEmail = functions
             functions.logger.info(`[SUCCESS] Email dispatched to ${afterData.email} for promoter ${promoterId}.`);
             return { success: true };
         } catch (error) {
-            functions.logger.error(`[FATAL ERROR] Failed to send promoter status email for promoterId: ${promoterId}.`, {
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+             functions.logger.error(`[FATAL ERROR] Failed to send promoter status email for promoterId: ${promoterId}.`, {
+                error, // Log raw object
+                errorMessage: error ? error.message : "No message",
+                errorBody: error ? error.body : "No body",
+                errorResponse: error ? error.response : "No response",
+                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
             });
-            return null;
+            return null; // Gracefully exit, do not retry
         }
     });
 
@@ -244,29 +254,35 @@ exports.manuallySendStatusEmail = functions
 
             return { success: true, message: `E-mail enviado com sucesso para ${promoterData.email}.` };
         } catch (error) {
-            functions.logger.error("Caught error in manuallySendStatusEmail:", {
-                errorObject: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+            functions.logger.error("FATAL ERROR in manuallySendStatusEmail", {
                 promoterId: data.promoterId,
                 user: context.auth.token.email,
+                error, // Log raw object
+                errorMessage: error ? error.message : "No message",
+                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
             });
 
             if (error instanceof functions.https.HttpsError) {
                 throw error;
             }
 
-            let detailedMessage = 'Ocorreu um erro inesperado no servidor.';
-            if (error.response && error.response.body) {
-                const bodyStr = Buffer.isBuffer(error.response.body) ? error.response.body.toString() : String(error.response.body);
-                try {
-                    const body = JSON.parse(bodyStr);
-                    detailedMessage = body.message || bodyStr;
-                } catch (e) {
-                    detailedMessage = bodyStr;
+            let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
+            try {
+                const errorBody = error?.response?.body || error?.body;
+                if (errorBody) {
+                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString() : String(errorBody);
+                    const bodyJson = JSON.parse(bodyStr);
+                    detailedMessage = bodyJson.message || bodyJson.code || bodyStr;
+                } else if (error?.message) {
+                    detailedMessage = error.message;
                 }
-            } else {
-                detailedMessage = error instanceof Error ? error.message : String(error);
+            } catch (parseError) {
+                functions.logger.warn("Could not parse error body in manuallySendStatusEmail", { parseError });
+                detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
-            throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', { originalError: detailedMessage });
+            throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', {
+                originalError: detailedMessage,
+            });
         }
     });
