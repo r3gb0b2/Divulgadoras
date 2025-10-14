@@ -1,7 +1,7 @@
 import { firestore, auth } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, Timestamp, runTransaction } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { AdminUserData, AdminApplication } from '../types';
+import { AdminUserData, AdminApplication, OrganizationStatus, PlanId } from '../types';
 import { createOrganization } from './organizationService';
 
 /**
@@ -180,24 +180,47 @@ export const submitAdminApplication = async (applicationData: Omit<AdminApplicat
  */
 export const acceptAdminApplication = async (application: AdminApplication): Promise<void> => {
     try {
-        // 1. Create the organization (defaults to 'basic' plan on a 3-day trial)
-        const newOrgId = await createOrganization(application.uid, application.email, application.orgName, 'basic');
+        // Use a Firestore transaction to ensure all or no writes are committed.
+        await runTransaction(firestore, async (transaction) => {
+            // 1. Define the new organization document reference and data
+            const newOrgRef = doc(collection(firestore, 'organizations'));
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 3); // 3-day trial
 
-        // 2. Create the admin user document, linking them to the organization
-        const adminData: Omit<AdminUserData, 'uid'> = {
-            email: application.email,
-            role: 'admin',
-            assignedStates: [],
-            assignedCampaigns: {},
-            organizationId: newOrgId,
-        };
-        await setAdminUserData(application.uid, adminData);
+            const newOrgData = {
+                name: application.orgName,
+                ownerUid: application.uid,
+                ownerEmail: application.email,
+                status: 'trial' as OrganizationStatus,
+                planId: 'basic' as PlanId,
+                createdAt: Timestamp.now(), // Use client-side timestamp in transactions
+                planExpiresAt: Timestamp.fromDate(trialEndDate),
+                assignedStates: [],
+                public: true,
+            };
+            
+            // 2. Define the admin user document reference and data
+            const adminDocRef = doc(firestore, 'admins', application.uid);
+            const adminData: Omit<AdminUserData, 'uid'> = {
+                email: application.email,
+                role: 'admin',
+                assignedStates: [],
+                assignedCampaigns: {},
+                organizationId: newOrgRef.id,
+            };
 
-        // 3. Delete the now-processed application
-        await deleteAdminApplication(application.id);
+            // 3. Define the application document reference to be deleted
+            const appDocRef = doc(firestore, 'adminApplications', application.id);
+
+            // 4. Perform all writes within the transaction
+            transaction.set(newOrgRef, newOrgData);
+            transaction.set(adminDocRef, adminData);
+            transaction.delete(appDocRef);
+        });
     } catch (error) {
         console.error("Error accepting admin application:", error);
-        throw new Error("Falha ao aprovar a solicitação. A organização ou o admin podem ter sido criados parcialmente. Verifique manualmente.");
+        // The new error message reflects that the operation is atomic.
+        throw new Error("Falha ao aprovar a solicitação. A operação falhou e foi revertida. Verifique os logs e tente novamente.");
     }
 };
 
