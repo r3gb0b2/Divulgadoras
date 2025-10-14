@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getPagSeguroCredentials, setPagSeguroCredentials } from '../services/credentialsService';
-import { PagSeguroCredentials } from '../types';
+import { getMercadoPagoCredentials, setMercadoPagoCredentials } from '../services/credentialsService';
+import { MercadoPagoCredentials } from '../types';
 
-const PagSeguroSettingsPage: React.FC = () => {
-    const [credentials, setCredentials] = useState<PagSeguroCredentials>({ publicKey: '', accessToken: '' });
+const MercadoPagoSettingsPage: React.FC = () => {
+    const [credentials, setCredentials] = useState<MercadoPagoCredentials>({ publicKey: '', accessToken: '' });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
@@ -15,7 +15,7 @@ const PagSeguroSettingsPage: React.FC = () => {
             setIsLoading(true);
             setError('');
             try {
-                const creds = await getPagSeguroCredentials();
+                const creds = await getMercadoPagoCredentials();
                 setCredentials(creds);
             } catch (err: any) {
                 setError(err.message || 'Falha ao carregar as credenciais.');
@@ -42,7 +42,7 @@ const PagSeguroSettingsPage: React.FC = () => {
             return;
         }
         try {
-            await setPagSeguroCredentials(credentials);
+            await setMercadoPagoCredentials(credentials);
             setSuccess('Credenciais salvas com sucesso!');
         } catch (err: any) {
             setError(err.message || 'Falha ao salvar as credenciais.');
@@ -59,26 +59,26 @@ const PagSeguroSettingsPage: React.FC = () => {
         <div>
             <div className="mb-6">
                 <Link to="/admin" className="text-sm text-primary hover:underline">&larr; Voltar ao Dashboard</Link>
-                <h1 className="text-3xl font-bold mt-1">Credenciais do PagSeguro</h1>
+                <h1 className="text-3xl font-bold mt-1">Credenciais do Mercado Pago</h1>
             </div>
             <div className="max-w-2xl">
                 <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                     <p className="text-sm text-gray-400">
-                        Insira suas credenciais do PagSeguro.
-                        Você pode encontrá-las no <a href="https://pagseguro.uol.com.br/aplicacao/credenciais.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">painel do PagSeguro</a>.
+                        Insira suas credenciais do Mercado Pago.
+                        Você pode encontrá-las no <a href="https://www.mercadopago.com.br/developers/panel/credentials" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">painel de desenvolvedores do Mercado Pago</a>.
                     </p>
                     {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm text-center">{error}</p>}
                     {success && <p className="text-green-300 bg-green-900/50 p-3 rounded-md text-sm text-center">{success}</p>}
                     
                     <div>
-                        <label htmlFor="publicKey" className="block text-sm font-medium text-gray-300">Public Key (Chave Pública)</label>
+                        <label htmlFor="publicKey" className="block text-sm font-medium text-gray-300">Public Key</label>
                         <input
                             type="text"
                             id="publicKey"
                             name="publicKey"
                             value={credentials.publicKey || ''}
                             onChange={handleChange}
-                            placeholder="APPKEY..."
+                            placeholder="APP_USR-..."
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
@@ -86,14 +86,14 @@ const PagSeguroSettingsPage: React.FC = () => {
                     </div>
 
                     <div>
-                        <label htmlFor="accessToken" className="block text-sm font-medium text-gray-300">Access Token (Chave Privada / Bearer Token)</label>
+                        <label htmlFor="accessToken" className="block text-sm font-medium text-gray-300">Access Token</label>
                         <input
                             type="password"
                             id="accessToken"
                             name="accessToken"
                             value={credentials.accessToken || ''}
                             onChange={handleChange}
-                            placeholder="Seu token de acesso..."
+                            placeholder="APP_USR-..."
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
@@ -111,4 +111,4 @@ const PagSeguroSettingsPage: React.FC = () => {
     );
 };
 
-export default PagSeguroSettingsPage;
+export default MercadoPagoSettingsPage;
