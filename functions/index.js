@@ -57,28 +57,31 @@ exports.sendTestEmail = functions
             return { success: true, message: `E-mail de teste enviado para ${userEmail}.` };
         } catch (error) {
             functions.logger.error("FATAL ERROR in sendTestEmail", {
-                user: userEmail,
-                error, // Log raw object
-                errorMessage: error ? error.message : "No error message",
-                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                user: context.auth ? context.auth.token.email : "Unauthenticated",
+                rawErrorObject: error,
             });
 
             if (error instanceof functions.https.HttpsError) {
                 throw error;
             }
-
+            
             let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
+            
             try {
                 const errorBody = error?.response?.body || error?.body;
                 if (errorBody) {
-                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString() : String(errorBody);
-                    const bodyJson = JSON.parse(bodyStr);
-                    detailedMessage = bodyJson.message || bodyJson.code || bodyStr;
+                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString('utf-8') : String(errorBody);
+                    try {
+                        const parsed = JSON.parse(bodyStr);
+                        detailedMessage = parsed.message || parsed.code || bodyStr;
+                    } catch (jsonError) {
+                        detailedMessage = bodyStr;
+                    }
                 } else if (error?.message) {
                     detailedMessage = error.message;
                 }
-            } catch (parseError) {
-                functions.logger.warn("Could not parse error body in sendTestEmail", { parseError });
+            } catch (parsingError) {
+                functions.logger.error("Could not parse the original error object in sendTestEmail.", { parsingError });
                 detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
@@ -257,27 +260,30 @@ exports.manuallySendStatusEmail = functions
             functions.logger.error("FATAL ERROR in manuallySendStatusEmail", {
                 promoterId: data.promoterId,
                 user: context.auth.token.email,
-                error, // Log raw object
-                errorMessage: error ? error.message : "No message",
-                stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                rawErrorObject: error,
             });
 
             if (error instanceof functions.https.HttpsError) {
                 throw error;
             }
-
+            
             let detailedMessage = "Ocorreu um erro desconhecido no servidor de e-mails.";
+
             try {
                 const errorBody = error?.response?.body || error?.body;
                 if (errorBody) {
-                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString() : String(errorBody);
-                    const bodyJson = JSON.parse(bodyStr);
-                    detailedMessage = bodyJson.message || bodyJson.code || bodyStr;
+                    const bodyStr = Buffer.isBuffer(errorBody) ? errorBody.toString('utf-8') : String(errorBody);
+                    try {
+                        const parsed = JSON.parse(bodyStr);
+                        detailedMessage = parsed.message || parsed.code || bodyStr;
+                    } catch (jsonError) {
+                        detailedMessage = bodyStr;
+                    }
                 } else if (error?.message) {
                     detailedMessage = error.message;
                 }
-            } catch (parseError) {
-                functions.logger.warn("Could not parse error body in manuallySendStatusEmail", { parseError });
+            } catch (parsingError) {
+                functions.logger.error("Could not parse the original error object in manuallySendStatusEmail.", { parsingError });
                 detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
