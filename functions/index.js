@@ -51,8 +51,15 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // IMPORTANTE: Configure esta URL no seu painel do PagSeguro para receber as notificações!
-    const notificationUrl = `https://${functions.config().firebase.projectId}.web.app/handlePagSeguroNotification`;
+    // Constrói as URLs de notificação e redirecionamento de forma dinâmica
+    const projectId = process.env.GCLOUD_PROJECT;
+    if (!projectId) {
+        logger.error("GCLOUD_PROJECT environment variable is not set.");
+        throw new HttpsError('internal', 'O ID do Projeto não foi encontrado no ambiente da função.');
+    }
+    const functionRegion = "southamerica-east1"; // Região definida em setGlobalOptions
+    const notificationUrl = `https://${functionRegion}-${projectId}.cloudfunctions.net/handlePagSeguroNotification`;
+    const redirectUrl = `https://${projectId}.web.app/checkout-complete`;
 
     const orderPayload = {
         reference_id: referenceId,
@@ -65,17 +72,18 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
             quantity: 1,
             unit_amount: plan.price,
         }],
-        notification_urls: [functions.config().project.base_url + "/handlePagSeguroNotification"],
+        notification_urls: [notificationUrl],
+        redirect_url: redirectUrl,
         charges: [{
-            reference_id: referenceId,
+            reference_id: `CHG_${referenceId}`,
+            description: `Assinatura do ${plan.name}`,
             amount: {
                 value: plan.price,
                 currency: 'BRL',
             },
-            payment_method: {
-                type: 'CREDIT_CARD',
-                capture: true,
-            },
+            // IMPORTANTE: O objeto payment_method é removido daqui.
+            // Isso permite que o usuário escolha o método de pagamento
+            // (Cartão, PIX, Boleto) na página de checkout do PagSeguro.
         }],
     };
 
@@ -84,20 +92,30 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
             headers: {
                 'Authorization': `Bearer ${config.accessToken}`,
                 'Content-Type': 'application/json',
+                'x-api-version': '4.0', // Adicionar header recomendado
             },
         });
 
-        const paymentLink = response.data.links.find(link => link.rel === 'PAY');
+        // Encontra o link de pagamento na resposta
+        const paymentLink = response.data.links.find((link) => link.rel === 'PAY');
 
         if (!paymentLink) {
+            logger.error("Link de pagamento não encontrado na resposta do PagSeguro", response.data);
             throw new Error('Link de pagamento não encontrado na resposta do PagSeguro.');
         }
 
         return { checkoutUrl: paymentLink.href };
 
     } catch (error) {
-        logger.error("Erro ao criar pedido no PagSeguro:", error.response ? error.response.data : error.message);
-        throw new HttpsError('internal', 'Falha ao comunicar com o PagSeguro para iniciar o pagamento.');
+        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+        logger.error("Erro ao criar pedido no PagSeguro:", errorDetails);
+        
+        let userMessage = 'Falha ao comunicar com o PagSeguro para iniciar o pagamento.';
+        if (error.response && error.response.data && error.response.data.error_messages) {
+            userMessage = error.response.data.error_messages.map((e) => e.description).join('; ');
+        }
+        
+        throw new HttpsError('internal', userMessage);
     }
 });
 
@@ -105,25 +123,29 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
  * Webhook para receber notificações de pagamento do PagSeguro.
  */
 exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res) => {
-    // Apenas requisições POST são esperadas
     if (req.method !== 'POST') {
+        logger.warn("Recebida requisição não-POST no webhook:", { method: req.method });
         return res.status(405).send('Method Not Allowed');
     }
 
-    const notification = req.body;
-    logger.info("Notificação PagSeguro Recebida:", notification);
+    try {
+        const notification = req.body;
+        logger.info("Notificação PagSeguro Recebida:", JSON.stringify(notification));
 
-    const { reference_id, charges } = notification;
+        const { reference_id, charges } = notification;
 
-    if (!reference_id || !charges || charges.length === 0) {
-        logger.warn("Notificação inválida, sem reference_id ou charges.");
-        return res.status(400).send('Invalid Notification');
-    }
+        if (!reference_id || !charges || charges.length === 0) {
+            logger.warn("Notificação inválida, sem reference_id ou charges.", notification);
+            return res.status(400).send('Invalid Notification');
+        }
 
-    // Pega o status do primeiro 'charge' que é o que importa
-    const paymentStatus = charges[0].status;
+        // Verifica se existe algum 'charge' com status PAGO
+        const charge = charges.find(c => c.status === 'PAID');
+        if (!charge) {
+            logger.info(`Nenhum charge PAGO encontrado para reference_id: ${reference_id}. Status: ${charges.map(c => c.status).join(', ')}`);
+            return res.status(200).send('Notification received, but no action taken.');
+        }
 
-    if (paymentStatus === 'PAID') {
         const pendingOrgRef = db.collection('pendingOrganizations').doc(reference_id);
         const pendingOrgDoc = await pendingOrgRef.get();
 
@@ -131,12 +153,13 @@ exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res)
             const { orgName, email, passwordB64, planId } = pendingOrgDoc.data();
             const password = Buffer.from(passwordB64, 'base64').toString('utf-8');
 
-            try {
-                // Cria o usuário e a organização (mesma lógica da função antiga)
+            // Cria o usuário, organização e admin em uma transação para garantir atomicidade
+            await db.runTransaction(async (transaction) => {
                 const userRecord = await admin.auth().createUser({ email, password });
                 const { uid } = userRecord;
 
-                const orgRef = await db.collection('organizations').add({
+                const orgRef = db.collection('organizations').doc(); // Cria uma referência com ID automático
+                transaction.set(orgRef, {
                     ownerUid: uid,
                     ownerEmail: email,
                     name: orgName,
@@ -147,21 +170,25 @@ exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res)
                     assignedStates: [],
                 });
 
-                await db.collection('admins').doc(uid).set({
+                const adminRef = db.collection('admins').doc(uid);
+                transaction.set(adminRef, {
                     uid, email, role: 'admin', organizationId: orgRef.id,
                     assignedStates: [], assignedCampaigns: {},
                 });
 
                 // Atualiza o status para 'completed' para evitar reprocessamento
-                await pendingOrgRef.update({ status: 'completed' });
-                logger.info(`Organização ${orgName} criada com sucesso para o reference_id: ${reference_id}`);
-            } catch (error) {
-                logger.error(`Erro ao criar organização para reference_id ${reference_id}:`, error);
-            }
-        } else {
-             logger.warn(`Organização pendente não encontrada ou já processada para reference_id: ${reference_id}`);
-        }
-    }
+                transaction.update(pendingOrgRef, { status: 'completed' });
+            });
 
-    return res.status(200).send('OK');
+            logger.info(`Organização '${orgName}' criada com sucesso para o reference_id: ${reference_id}`);
+        } else {
+            logger.warn(`Organização pendente não encontrada ou já processada para reference_id: ${reference_id}`);
+        }
+
+        return res.status(200).send('OK');
+
+    } catch (error) {
+        logger.error("Erro fatal no webhook do PagSeguro:", error);
+        return res.status(500).send('Internal Server Error');
+    }
 });
