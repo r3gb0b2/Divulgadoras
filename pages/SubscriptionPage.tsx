@@ -1,35 +1,83 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { getOrganization } from '../services/organizationService';
+import { Organization, OrganizationStatus } from '../types';
+import { plans, Plan } from './PricingPage'; // Import plans array
+import { Timestamp } from 'firebase/firestore';
+import { CreditCardIcon, WhatsAppIcon } from '../components/Icons';
 
 const SubscriptionPage: React.FC = () => {
-    // These would typically come from your backend/payment provider API
-    const subscription = {
-        plan: 'Profissional',
-        price: 'R$ 99/mês',
-        status: 'Ativa',
-        nextBillingDate: '25 de Julho, 2024',
-        paymentMethod: {
-            type: 'Cartão de Crédito',
-            last4: '4242',
-            expiry: '12/2026',
-        }
+    const { adminData } = useAdminAuth();
+    const [organization, setOrganization] = useState<Organization | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchOrgData = async () => {
+            if (adminData?.organizationId) {
+                try {
+                    const orgData = await getOrganization(adminData.organizationId);
+                    if (orgData) {
+                        setOrganization(orgData);
+                    } else {
+                        setError("Não foi possível encontrar os dados da sua organização.");
+                    }
+                } catch (err) {
+                    setError("Erro ao carregar os dados da assinatura.");
+                }
+            } else {
+                setError("Você não está associado a uma organização.");
+            }
+            setIsLoading(false);
+        };
+
+        fetchOrgData();
+    }, [adminData]);
+    
+    const getStatusBadge = (status: OrganizationStatus | undefined) => {
+        if (!status) return null;
+        const styles: Record<OrganizationStatus, string> = {
+            active: "bg-green-900/50 text-green-300",
+            trial: "bg-blue-900/50 text-blue-300",
+            expired: "bg-red-900/50 text-red-300",
+            hidden: "bg-gray-700 text-gray-400",
+        };
+        const text: Record<OrganizationStatus, string> = {
+            active: "Ativa",
+            trial: "Teste",
+            expired: "Expirada",
+            hidden: "Oculta",
+        };
+        return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
-    const billingHistory = [
-        { id: 'inv_1', date: '25 de Junho, 2024', description: 'Mensalidade Plano Profissional', amount: 'R$ 99,00', status: 'Paga' },
-        { id: 'inv_2', date: '25 de Maio, 2024', description: 'Mensalidade Plano Profissional', amount: 'R$ 99,00', status: 'Paga' },
-        { id: 'inv_3', date: '25 de Abril, 2024', description: 'Mensalidade Plano Profissional', amount: 'R$ 99,00', status: 'Paga' },
-    ];
-    
-    const handleUpdatePayment = () => {
-        alert('A integração com o portal de pagamentos ainda não foi implementada. Esta ação levaria o usuário para um checkout seguro para atualizar o cartão.');
+    const formatDate = (timestamp: Timestamp | undefined) => {
+        if (!timestamp) return 'Indefinida';
+        return timestamp.toDate().toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        });
     };
     
-    const handleCancelSubscription = () => {
-        if (window.confirm('Tem certeza que deseja cancelar sua assinatura? Você perderá o acesso aos recursos no final do ciclo de faturamento atual.')) {
-            alert('Sua assinatura foi cancelada. Esta ação seria enviada ao backend para ser processada.');
-        }
-    };
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center py-10">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+    
+    if (error) {
+        return <p className="text-red-400 text-center bg-red-900/50 p-4 rounded-md">{error}</p>;
+    }
+
+    if (!organization) {
+         return <p className="text-gray-400 text-center">Nenhuma informação de assinatura encontrada.</p>;
+    }
+
+    const currentPlan: Plan | undefined = plans.find(p => p.id === organization.planId);
 
     return (
         <div>
@@ -38,66 +86,50 @@ const SubscriptionPage: React.FC = () => {
                 <h1 className="text-3xl font-bold mt-1">Gerenciar Assinatura</h1>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Current Plan & Payment */}
-                <div className="lg:col-span-1 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
                     <div className="bg-secondary p-6 rounded-lg shadow">
                         <h3 className="text-xl font-semibold mb-4 text-white">Seu Plano Atual</h3>
                         <div className="space-y-3 text-gray-300">
-                           <div className="flex justify-between"><span>Plano:</span> <span className="font-semibold text-primary">{subscription.plan}</span></div>
-                           <div className="flex justify-between"><span>Preço:</span> <span className="font-semibold">{subscription.price}</span></div>
+                           <div className="flex justify-between"><span>Plano:</span> <span className="font-semibold text-primary">{currentPlan?.name || 'N/A'}</span></div>
+                           <div className="flex justify-between"><span>Preço:</span> <span className="font-semibold">{currentPlan?.priceFormatted ? `${currentPlan.priceFormatted}/mês` : 'N/A'}</span></div>
                            <div className="flex justify-between items-center">
                                <span>Status:</span> 
-                               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">{subscription.status}</span>
+                               {getStatusBadge(organization.status)}
                            </div>
-                           <div className="flex justify-between"><span>Próxima Cobrança:</span> <span className="font-semibold">{subscription.nextBillingDate}</span></div>
+                           <div className="flex justify-between"><span>Expira em:</span> <span className="font-semibold">{formatDate(organization.planExpiresAt as Timestamp)}</span></div>
                         </div>
-                    </div>
-                    
-                    <div className="bg-secondary p-6 rounded-lg shadow">
-                        <h3 className="text-xl font-semibold mb-4 text-white">Forma de Pagamento</h3>
-                        <p className="text-gray-300">{subscription.paymentMethod.type} terminando em <strong>{subscription.paymentMethod.last4}</strong></p>
-                        <p className="text-sm text-gray-400">Expira em {subscription.paymentMethod.expiry}</p>
-                        <button onClick={handleUpdatePayment} className="w-full mt-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                            Atualizar Forma de Pagamento
-                        </button>
-                    </div>
-
-                    <div className="bg-secondary p-6 rounded-lg shadow border border-red-900/50">
-                        <h3 className="text-xl font-semibold mb-2 text-red-400">Cancelar Assinatura</h3>
-                        <p className="text-sm text-gray-400 mb-4">Esta ação não pode ser desfeita. Sua assinatura permanecerá ativa até o final do ciclo de faturamento atual.</p>
-                        <button onClick={handleCancelSubscription} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
-                            Cancelar Assinatura
-                        </button>
                     </div>
                 </div>
 
-                {/* Right Column: Billing History */}
-                <div className="lg:col-span-2 bg-secondary p-6 rounded-lg shadow">
-                    <h3 className="text-xl font-semibold mb-4 text-white">Histórico de Faturamento</h3>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-700/50">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Data</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Descrição</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Valor</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {billingHistory.map(item => (
-                                    <tr key={item.id}>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">{item.date}</td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">{item.description}</td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">{item.amount}</td>
-                                        <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                            <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">{item.status}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                <div className="space-y-6">
+                     <div className="bg-secondary p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-semibold mb-4 text-white">Pagamento e Renovação</h3>
+                        {organization.planExpiresAt && (organization.planExpiresAt as Timestamp).toDate() < new Date() && (
+                            <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 mb-4 rounded-md text-sm">
+                                <p className="font-bold">Seu plano expirou!</p>
+                                <p>Para reativar sua conta e não perder seus dados, realize o pagamento.</p>
+                            </div>
+                        )}
+                        <p className="text-gray-400 mb-4">
+                           Para renovar ou reativar seu plano, utilize o link de pagamento fornecido pelo nosso suporte.
+                        </p>
+                        
+                        {organization.paymentLink ? (
+                             <a 
+                                href={organization.paymentLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full flex items-center justify-center mt-4 px-4 py-3 bg-primary text-white rounded-md hover:bg-primary-dark text-sm font-semibold"
+                            >
+                                <WhatsAppIcon className="w-5 h-5 mr-2" />
+                                Realizar Pagamento Agora
+                            </a>
+                        ) : (
+                            <div className="text-center p-4 bg-gray-700/50 rounded-md text-gray-400">
+                                Nenhum link de pagamento configurado. Entre em contato com o suporte.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
