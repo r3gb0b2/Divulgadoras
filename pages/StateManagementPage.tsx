@@ -5,7 +5,7 @@ import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCamp
 import { getOrganizations, getOrganization } from '../services/organizationService';
 import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization, RejectionReason } from '../types';
 import { stateMap } from '../constants/states';
-import { WhatsAppIcon, InstagramIcon, TikTokIcon, EnvelopeIcon } from '../components/Icons';
+import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
@@ -39,26 +39,6 @@ const formatDate = (timestamp: any): string => {
         hour: '2-digit',
         minute: '2-digit'
     });
-};
-
-const generateMailtoLink = (promoter: Promoter, organizationName: string | undefined): string => {
-    const recipient = promoter.email;
-    let subject = '';
-    let body = '';
-
-    const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-    const orgName = organizationName || "Nossa Equipe";
-    const campaignName = promoter.campaignName || "nossa equipe";
-
-    if (promoter.status === 'approved') {
-        subject = `Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-        body = `Olá, ${promoter.name}!\n\nTemos uma ótima notícia! Sua candidatura para ${campaignName} foi APROVADA.\n\nEstamos muito felizes em ter você em nossa equipe!\n\nPara continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.\n\nClique aqui: ${portalLink}\n\nLembre-se de usar o e-mail ${promoter.email} para consultar seu status.\n\nAtenciosamente,\nEquipe Certa`;
-    } else if (promoter.status === 'rejected') {
-        subject = `Resultado da sua candidatura para ${orgName}`;
-        body = `Olá, ${promoter.name},\n\nAgradecemos imensamente o seu interesse em fazer parte da nossa equipe de divulgadoras para ${campaignName}.\n\nAnalisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.\n\nMotivo informado:\n${promoter.rejectionReason || 'Não especificado.'}\n\nDesejamos sucesso em suas futuras oportunidades!\n\nAtenciosamente,\nEquipe Certa`;
-    }
-
-    return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 };
 
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
@@ -212,14 +192,22 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     try {
         const currentPromoter = promoters.find(p => p.id === id);
         const updatedData = { ...data };
+        let statusChanged = false;
 
         if (data.status && data.status !== currentPromoter?.status) {
+            statusChanged = true;
             updatedData.actionTakenByUid = adminData.uid;
             updatedData.actionTakenByEmail = adminData.email;
             updatedData.statusChangedAt = serverTimestamp();
         }
 
         await updatePromoter(id, updatedData);
+
+        if (statusChanged && (data.status === 'approved' || data.status === 'rejected')) {
+            const statusText = data.status === 'approved' ? 'aprovada' : 'rejeitada';
+            alert(`Divulgadora ${statusText}. A notificação por e-mail será enviada automaticamente.`);
+        }
+        
         await fetchData(); // Refresh data
     } catch (error) {
         alert("Falha ao atualizar a divulgadora.");
@@ -255,7 +243,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     if (!stateAbbr || !campaignForm.name) return;
 
     if (!campaignForm.id && !canCreateCampaign) {
-        alert(`Você atingiu o limite de ${campaignLimit} evento(s) para o seu plano. Para criar mais, entre em contato com o suporte.`);
+        alert(`Você atingiu o limite de ${campaignLimit} evento(s) для o seu plano. Para criar mais, entre em contato com o suporte.`);
         return;
     }
     
@@ -526,14 +514,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                                 <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
                                                 <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
                                             </>
-                                        )}
-                                        {(promoter.status === 'approved' || promoter.status === 'rejected') && (
-                                            <a
-                                                href={generateMailtoLink(promoter, organization?.name)}
-                                                className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                                            >
-                                               <EnvelopeIcon className="w-4 h-4" /> Notificar
-                                            </a>
                                         )}
                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                         {isSuperAdmin && (
