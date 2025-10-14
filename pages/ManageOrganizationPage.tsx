@@ -5,6 +5,12 @@ import { Organization, OrganizationStatus, PlanId } from '../types';
 import { states } from '../constants/states';
 import { Timestamp } from 'firebase/firestore';
 
+const timestampToInputDate = (ts: Timestamp | undefined): string => {
+    if (!ts) return '';
+    // toDate() converts to local time, toISOString() converts to UTC, split removes time part
+    return ts.toDate().toISOString().split('T')[0];
+};
+
 const ManageOrganizationPage: React.FC = () => {
     const { orgId } = useParams<{ orgId: string }>();
     const navigate = useNavigate();
@@ -44,6 +50,27 @@ const ManageOrganizationPage: React.FC = () => {
         } else {
              setFormData(prev => ({ ...prev, [name]: value }));
         }
+    };
+
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        if (value) {
+            // Create date in local timezone to avoid off-by-one day issues
+            const [year, month, day] = value.split('-').map(Number);
+            const localDate = new Date(year, month - 1, day);
+            setFormData(prev => ({ ...prev, [name]: Timestamp.fromDate(localDate) }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: undefined }));
+        }
+    };
+
+    const addDaysToExpirtation = (days: number) => {
+        const currentExpiry = formData.planExpiresAt ? (formData.planExpiresAt as Timestamp).toDate() : new Date();
+        // If current expiry date is in the past, we should add days from today
+        const baseDate = currentExpiry < new Date() ? new Date() : currentExpiry;
+        
+        baseDate.setDate(baseDate.getDate() + days);
+        setFormData(prev => ({ ...prev, planExpiresAt: Timestamp.fromDate(baseDate) }));
     };
     
     const handleStateToggle = (stateAbbr: string) => {
@@ -139,7 +166,22 @@ const ManageOrganizationPage: React.FC = () => {
                            <option value="hidden">Oculta</option>
                         </select>
                     </div>
-                     <div className="md:col-span-2">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Data de Expiração do Plano</label>
+                        <div className="flex items-center gap-2 mt-1">
+                            <input
+                                type="date"
+                                name="planExpiresAt"
+                                value={timestampToInputDate(formData.planExpiresAt as Timestamp)}
+                                onChange={handleDateChange}
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                                style={{ colorScheme: 'dark' }}
+                            />
+                            <button type="button" onClick={() => addDaysToExpirtation(15)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 15 dias</button>
+                            <button type="button" onClick={() => addDaysToExpirtation(30)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 30 dias</button>
+                        </div>
+                    </div>
+                     <div className="flex items-end">
                         <label className="flex items-center space-x-2">
                            <input type="checkbox" name="public" checked={!!formData.public} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
                            <span className="text-sm font-medium text-gray-300">Visível na página inicial</span>
@@ -157,7 +199,7 @@ const ManageOrganizationPage: React.FC = () => {
                         </div>
                     </div>
                     <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
-                    <div className="text-sm text-gray-400">Teste expira em: {formatDate(organization.trialEndsAt as Timestamp)}</div>
+                    <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
                 <div className="flex justify-between items-center border-t border-gray-700 pt-4 mt-4">

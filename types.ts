@@ -90,7 +90,7 @@ export interface Organization {
     status: OrganizationStatus;
     planId: PlanId;
     createdAt: Timestamp;
-    trialEndsAt?: Timestamp;
+    planExpiresAt?: Timestamp;
     assignedStates: string[];
     public: boolean;
 }

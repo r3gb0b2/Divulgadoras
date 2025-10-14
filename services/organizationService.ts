@@ -36,9 +36,9 @@ export const createOrganization = async (ownerUid: string, ownerEmail: string, o
             status: 'trial' as OrganizationStatus,
             planId,
             createdAt: serverTimestamp(),
-            trialEndsAt: Timestamp.fromDate(trialEndDate),
+            planExpiresAt: Timestamp.fromDate(trialEndDate),
             assignedStates: [], // Admin must configure this later
-            public: true, // Public by default
+            public: true, // Public by default,
         };
         const docRef = await addDoc(collection(firestore, ORGS_COLLECTION), newOrgData);
         return docRef.id;

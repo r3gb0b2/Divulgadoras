@@ -35,6 +35,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Modals state
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -160,9 +161,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
       }, [promoters]);
 
     const filteredPromoters = useMemo(() => {
-        if (filter === 'all') return promoters;
-        return promoters.filter(p => p.status === filter);
-    }, [promoters, filter]);
+        const lowercasedQuery = searchQuery.toLowerCase().trim();
+        
+        return promoters.filter(p => {
+            const statusMatch = filter === 'all' || p.status === filter;
+            if (!statusMatch) return false;
+
+            const queryMatch = lowercasedQuery === '' ||
+                p.name.toLowerCase().includes(lowercasedQuery) ||
+                p.email.toLowerCase().includes(lowercasedQuery) ||
+                (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+            
+            return queryMatch;
+        });
+    }, [promoters, filter, searchQuery]);
     
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
@@ -252,17 +264,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-                    <div className="flex space-x-1 p-1 bg-gray-900 rounded-lg">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                         {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
                             <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                 {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
                             </button>
                         ))}
                     </div>
+                     <div className="relative flex-grow w-full md:w-auto md:max-w-xs">
+                        <input 
+                            type="text"
+                            placeholder="Buscar por nome, e-mail, evento..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                        />
+                    </div>
                      {canManage && (
-                        <button onClick={() => setIsReasonsModalOpen(true)} className="text-sm text-primary hover:underline">
-                            Gerenciar Motivos de Rejeição
+                        <button onClick={() => setIsReasonsModalOpen(true)} className="text-sm text-primary hover:underline flex-shrink-0">
+                            Gerenciar Motivos
                         </button>
                     )}
                 </div>
