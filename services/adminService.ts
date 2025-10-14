@@ -1,5 +1,5 @@
 import { firestore, auth } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { AdminUserData, AdminApplication } from '../types';
 import { createOrganization } from './organizationService';
@@ -166,11 +166,19 @@ export const getAdminApplications = async (): Promise<AdminApplication[]> => {
     try {
         const q = query(
             collection(firestore, "adminApplications"), 
-            where("status", "==", "pending"),
-            orderBy("createdAt", "desc")
+            where("status", "==", "pending")
         );
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+        const applications = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+
+        // Sort client-side to avoid needing a composite index
+        applications.sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Descending
+        });
+
+        return applications;
     } catch (error) {
         console.error("Error getting admin applications:", error);
         throw new Error("Failed to fetch admin applications.");
