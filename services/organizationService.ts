@@ -63,8 +63,11 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
         const orgs: Organization[] = [];
         querySnapshot.forEach(doc => {
             const orgData = doc.data() as Organization;
-            // Client-side filtering for expiration date to avoid composite index
-            if (orgData.planExpiresAt && (orgData.planExpiresAt as Timestamp).toDate() > now) {
+            
+            const expiresAt = orgData.planExpiresAt ? (orgData.planExpiresAt as Timestamp).toDate() : null;
+
+            // Show if it hasn't expired OR if expiration date is not set at all (for legacy orgs)
+            if (!expiresAt || expiresAt > now) {
                 orgs.push({ id: doc.id, ...orgData });
             }
         });
