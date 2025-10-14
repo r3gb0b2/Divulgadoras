@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, MercadoPagoIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
     const handleLogout = async () => {
@@ -47,11 +47,20 @@ const SuperAdminDashboard: React.FC = () => {
                     
                      <Link to="/admin/users" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
-                            <UsersIcon className="w-8 h-8 text-primary" />
+                            <KeyIcon className="w-8 h-8 text-primary" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Usuários Admin</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Gerenciar todos os usuários administradores da plataforma.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
+
+                    <Link to="/admin/applications" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Acesso</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Analisar e aprovar novas solicitações de cadastro de organizadores.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Analisar &rarr;</div>
                     </Link>
 
                     <Link to="/admin/states" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">

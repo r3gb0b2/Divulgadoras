@@ -70,13 +70,15 @@ export interface AdminUserData {
     organizationId?: string;
 }
 
-// Kept for historical reference, but not used in new sign-up flow
 export interface AdminApplication {
+    id: string;
     name: string;
     email: string;
     phone: string;
     orgName: string;
     message: string;
+    status: 'pending';
+    createdAt: Timestamp;
 }
 
 export type OrganizationStatus = 'active' | 'trial' | 'expired' | 'hidden';

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { submitAdminApplication } from '../services/adminService';
 import AdminPanel from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import StatesListPage from './StatesListPage';
@@ -10,17 +11,97 @@ import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
 import ManageUsersPage from './ManageUsersPage';
 import SubscriptionPage from './SubscriptionPage';
-// FIX: Corrected component name to match file and avoid module error.
 import PagSeguroSettingsPage from './PagSeguroSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
-import { MailIcon, LockClosedIcon } from '../components/Icons';
+import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import the new page
+import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
+
+const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
+    const [formData, setFormData] = useState({ name: '', email: '', phone: '', orgName: '', message: '' });
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+        try {
+            await submitAdminApplication(formData);
+            setIsSuccess(true);
+        } catch (err: any) {
+            setError(err.message || 'Ocorreu um erro.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (isSuccess) {
+        return (
+            <div className="w-full max-w-md bg-secondary shadow-2xl rounded-lg p-8 text-center">
+                <h2 className="text-2xl font-bold text-white mb-4">Solicitação Enviada!</h2>
+                <p className="text-gray-300 mb-6">Sua solicitação de acesso foi enviada com sucesso. Nossa equipe entrará em contato em breve.</p>
+                <button onClick={onSwitchToLogin} className="font-medium text-primary hover:text-primary-dark">
+                    &larr; Voltar para o Login
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full max-w-md">
+            <form onSubmit={handleSubmit} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
+                <h1 className="text-2xl font-bold text-white mb-4">Solicitar Acesso</h1>
+                <p className="text-gray-400 mb-6">Preencha os dados abaixo. Entraremos em contato para liberar seu acesso.</p>
+                
+                {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+                
+                <div className="space-y-4 text-left">
+                    <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Seu nome completo" value={formData.name} onChange={handleChange} required />
+                    <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
+                    <InputWithIcon Icon={PhoneIcon} type="tel" name="phone" placeholder="WhatsApp (com DDD)" value={formData.phone} onChange={handleChange} required />
+                    <InputWithIcon Icon={BuildingOfficeIcon} type="text" name="orgName" placeholder="Nome da sua Produtora/Agência" value={formData.orgName} onChange={handleChange} required />
+                    <textarea name="message" value={formData.message} onChange={handleChange} placeholder="Fale um pouco sobre seu evento ou necessidade (opcional)" className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" rows={3}></textarea>
+                </div>
+                
+                <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
+                    {isLoading ? 'Enviando...' : 'Solicitar Acesso'}
+                </button>
+                <p className="text-sm text-gray-400 mt-4">
+                    Já tem uma conta?{' '}
+                    <button type="button" onClick={onSwitchToLogin} className="font-medium text-primary hover:text-primary-dark">
+                        Faça login
+                    </button>
+                </p>
+            </form>
+        </div>
+    );
+};
+
+interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
+    Icon: React.ElementType;
+}
+const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
+    <div className="relative">
+        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+            <Icon className="h-5 w-5 text-gray-400" />
+        </span>
+        <input {...props} className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200" />
+    </div>
+);
+
 
 const AdminLogin: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isRegistering, setIsRegistering] = useState(false);
     const navigate = useNavigate();
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -39,60 +120,39 @@ const AdminLogin: React.FC = () => {
 
     return (
         <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="w-full max-w-md">
-                <form onSubmit={handleLogin} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
-                    <h1 className="text-2xl font-bold text-white mb-4">Login do Organizador</h1>
-                    <p className="text-gray-400 mb-6">Acesse seu painel para gerenciar suas divulgadoras.</p>
-                    
-                    {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-                    
-                    <div className="space-y-4 text-left">
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <MailIcon className="h-5 w-5 text-gray-400" />
-                            </span>
-                             <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="Seu e-mail"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200"
-                                required
-                            />
+            {isRegistering ? (
+                <AdminRegistrationRequestForm onSwitchToLogin={() => setIsRegistering(false)} />
+            ) : (
+                <div className="w-full max-w-md">
+                    <form onSubmit={handleLogin} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
+                        <h1 className="text-2xl font-bold text-white mb-4">Login do Organizador</h1>
+                        <p className="text-gray-400 mb-6">Acesse seu painel para gerenciar suas divulgadoras.</p>
+                        
+                        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+                        
+                        <div className="space-y-4 text-left">
+                           <InputWithIcon Icon={MailIcon} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail" required />
+                           <InputWithIcon Icon={LockClosedIcon} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" required />
                         </div>
-                       <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <LockClosedIcon className="h-5 w-5 text-gray-400" />
-                            </span>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Sua senha"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200"
-                                required
-                            />
-                        </div>
-                    </div>
-                    
-                    <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
-                        {isLoading ? 'Entrando...' : 'Entrar'}
-                    </button>
+                        
+                        <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
+                            {isLoading ? 'Entrando...' : 'Entrar'}
+                        </button>
 
-                    <p className="text-sm text-gray-400 mt-4">
-                        Quer cadastrar sua produtora?{' '}
-                        <Link to="/planos" className="font-medium text-primary hover:text-primary-dark">
-                            Veja nossos planos
-                        </Link>
-                    </p>
-                </form>
-            </div>
+                        <p className="text-sm text-gray-400 mt-4">
+                            Quer cadastrar sua produtora?{' '}
+                            <button type="button" onClick={() => setIsRegistering(true)} className="font-medium text-primary hover:text-primary-dark">
+                                Solicite seu acesso
+                            </button>
+                        </p>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };
 
 
-// FIX: Changed JSX.Element to React.ReactElement to fix "Cannot find namespace 'JSX'" error.
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
     const { user, loading, adminData } = useAdminAuth();
 
@@ -130,7 +190,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
-                    {/* FIX: Using the corrected component for this route. The route path seems to be a typo but is kept to avoid breaking changes. */}
+                    <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
                     <Route path="settings/mercadopago" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
                 </>
             )}

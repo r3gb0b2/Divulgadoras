@@ -19,7 +19,7 @@ export const UserIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const MailIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M2.25 5.25a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3v10.5a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V5.25Zm3.44 1.328a.75.75 0 0 0-1.06 1.06l7.5 7.5a.75.75 0 0 0 1.06 0l7.5-7.5a.75.75 0 0 0-1.06-1.06L12 12.94 5.69 6.578Z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M2.25 5.25a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3v10.5a3 3 0 0 1-3-3H5.25a3 3 0 0 1-3-3V5.25Zm3.44 1.328a.75.75 0 0 0-1.06 1.06l7.5 7.5a.75.75 0 0 0 1.06 0l7.5-7.5a.75.75 0 0 0-1.06-1.06L12 12.94 5.69 6.578Z" clipRule="evenodd" />
 );
 
 export const PhoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -72,4 +72,8 @@ export const MercadoPagoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) 
 
 export const BuildingOfficeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M4 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3v5a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-5H5a1 1 0 0 1-1-1V2zm4 2v1h2V4H8zm0 3v1h2V7H8zm2 3H8v1h2v-1zm2-3h2V7h-2v1zm0 3h2v-1h-2v1zm-2-6h2V4h-2v1z" clipRule="evenodd" />
+);
+
+export const ClipboardDocumentListIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
+    <path clipRule="evenodd" d="M15.75 2.25a3 3 0 0 0-3-3h-3.5a3 3 0 0 0-3 3V3H5.25a3 3 0 0 0-3 3v13.5a3 3 0 0 0 3 3h9.5a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3h-1V2.25Zm-2.5 1.5V6H8.25V3.75a1.5 1.5 0 0 1 1.5-1.5h.5a1.5 1.5 0 0 1 1.5 1.5Z" />
 );

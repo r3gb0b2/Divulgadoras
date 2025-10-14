@@ -1,5 +1,5 @@
 import { firestore, auth } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { AdminUserData, AdminApplication } from '../types';
 import { createOrganization } from './organizationService';
@@ -126,5 +126,66 @@ export const signUpAndCreateOrganization = async (email: string, password: strin
         // Clean up Auth user if org/admin creation fails? (Advanced topic)
         if (error instanceof Error) throw error;
         throw new Error("Não foi possível concluir o cadastro da organização.");
+    }
+};
+
+// --- Admin Application for SuperAdmin Approval ---
+
+/**
+ * Submits an application for a new admin/organization.
+ * @param applicationData The data from the application form.
+ */
+export const submitAdminApplication = async (applicationData: Omit<AdminApplication, 'id' | 'status' | 'createdAt'>): Promise<void> => {
+    try {
+        // Check for existing application with the same email
+        const q = query(collection(firestore, "adminApplications"), where("email", "==", applicationData.email.toLowerCase().trim()));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            throw new Error("Já existe uma solicitação de acesso para este e-mail. Aguarde o contato da nossa equipe.");
+        }
+
+        const dataToSave = {
+            ...applicationData,
+            email: applicationData.email.toLowerCase().trim(),
+            status: 'pending' as const,
+            createdAt: serverTimestamp(),
+        };
+        await addDoc(collection(firestore, 'adminApplications'), dataToSave);
+    } catch (error) {
+        console.error("Error submitting admin application: ", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Não foi possível enviar sua solicitação. Tente novamente.");
+    }
+};
+
+/**
+ * Fetches all pending admin applications. For superadmins only.
+ * @returns An array of AdminApplication objects.
+ */
+export const getAdminApplications = async (): Promise<AdminApplication[]> => {
+    try {
+        const q = query(
+            collection(firestore, "adminApplications"), 
+            where("status", "==", "pending"),
+            orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+    } catch (error) {
+        console.error("Error getting admin applications:", error);
+        throw new Error("Failed to fetch admin applications.");
+    }
+};
+
+/**
+ * Deletes an admin application document from Firestore.
+ * @param id The ID of the application to delete.
+ */
+export const deleteAdminApplication = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "adminApplications", id));
+    } catch (error) {
+        console.error("Error deleting admin application:", error);
+        throw new Error("Failed to delete admin application.");
     }
 };
