@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getStatesConfig } from '../services/settingsService';
+import { getOrganization } from '../services/organizationService';
 import { states as allStatesList } from '../constants/states';
-import { StatesConfig } from '../types';
+import { StatesConfig, Organization } from '../types';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const StatesListPage: React.FC = () => {
+  const { adminData } = useAdminAuth();
   const [statesConfig, setStatesConfig] = useState<StatesConfig>({});
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  const isSuperAdmin = adminData?.role === 'superadmin';
 
   useEffect(() => {
     const fetchConfig = async () => {
       setIsLoading(true);
       setError(null);
       try {
+        if (!isSuperAdmin && adminData?.organizationId) {
+          const orgData = await getOrganization(adminData.organizationId);
+          setOrganization(orgData);
+        }
+        // Superadmin needs this to show global status (active/inactive)
         const config = await getStatesConfig();
         setStatesConfig(config);
       } catch (err: any) {
@@ -24,9 +35,18 @@ const StatesListPage: React.FC = () => {
     };
 
     fetchConfig();
-  }, []);
+  }, [adminData, isSuperAdmin]);
   
-  const sortedStates = [...allStatesList].sort((a,b) => a.name.localeCompare(b.name));
+  const statesToDisplay = useMemo(() => {
+    const sortedList = [...allStatesList].sort((a,b) => a.name.localeCompare(b.name));
+    if (isSuperAdmin) {
+      return sortedList;
+    }
+    if (organization?.assignedStates && organization.assignedStates.length > 0) {
+      return sortedList.filter(s => organization.assignedStates.includes(s.abbr));
+    }
+    return [];
+  }, [isSuperAdmin, organization]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -40,12 +60,24 @@ const StatesListPage: React.FC = () => {
     if (error) {
       return <p className="text-red-400 text-center">{error}</p>;
     }
+    
+    if (statesToDisplay.length === 0) {
+        return (
+            <p className="text-gray-400 text-center">
+                {isSuperAdmin 
+                    ? "Nenhuma localidade encontrada." 
+                    : "Sua organização ainda não possui localidades atribuídas. Peça a um Super Admin para adicioná-las."
+                }
+            </p>
+        );
+    }
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sortedStates.map(state => {
+        {statesToDisplay.map(state => {
           const config = statesConfig[state.abbr];
-          const isActive = config?.isActive ?? true;
+          // For regular admins, always consider the state active if it's assigned to them. The superadmin controls the global toggle.
+          const isActive = isSuperAdmin ? (config?.isActive ?? true) : true;
 
           return (
             <Link
@@ -55,9 +87,11 @@ const StatesListPage: React.FC = () => {
             >
               <div className="flex justify-between items-center">
                 <div className="font-semibold text-gray-100">{state.name} ({state.abbr})</div>
-                <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                  {isActive ? 'ATIVO' : 'INATIVO'}
-                </span>
+                {isSuperAdmin && (
+                   <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${isActive ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                    {isActive ? 'ATIVO' : 'INATIVO'}
+                   </span>
+                )}
               </div>
               <div className="text-sm text-primary mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 Gerenciar &rarr;
@@ -69,17 +103,22 @@ const StatesListPage: React.FC = () => {
     );
   };
 
+  const pageTitle = isSuperAdmin ? "Gerenciar Localidades (Global)" : "Minhas Localidades";
+  const pageDescription = isSuperAdmin 
+    ? "Selecione uma localidade para gerenciar eventos de todas as organizações e editar as configurações globais de inscrição."
+    : "Selecione uma localidade para gerenciar suas divulgadoras e criar seus eventos/gêneros.";
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Gerenciar Localidades</h1>
+        <h1 className="text-3xl font-bold">{pageTitle}</h1>
         <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-          &larr; Voltar ao Painel
+          &larr; Voltar
         </Link>
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Selecione uma localidade para ver estatísticas, gerenciar divulgadoras e editar as configurações de inscrição.
+            {pageDescription}
         </p>
         {renderContent()}
       </div>

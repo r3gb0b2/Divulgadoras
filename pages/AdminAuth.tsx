@@ -141,6 +141,8 @@ const AdminAuth: React.FC = () => {
                     <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
                     <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+                    <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
+                    <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
                 </>
             )}
             

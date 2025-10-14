@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon } from '../components/Icons';
 
 const SettingsPage: React.FC = () => {
   return (
@@ -13,9 +13,26 @@ const SettingsPage: React.FC = () => {
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Gerencie os usuários da sua equipe e sua assinatura na plataforma.
+          Gerencie os usuários, localidades, eventos e sua assinatura na plataforma.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           {/* Gerenciar Localidades e Eventos */}
+          <Link
+            to="/admin/states"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <MapPinIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Localidades e Eventos</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Visualize suas localidades ativas e crie ou edite eventos/gêneros para receber cadastros.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
           {/* Gerenciar Usuários */}
           <Link
             to="/admin/users"
