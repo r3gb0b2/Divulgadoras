@@ -39,13 +39,13 @@ const CheckoutPage: React.FC = () => {
                     throw new Error("SDK do PagSeguro não carregou.");
                 }
 
-                const instance = pagseguro.instance({
+                const instance = pagseguro.connect({
                     publicKey: creds.publicKey,
-                    sandbox: false, // Use true for testing environment
+                    environment: "production",
                 });
                 
                 if (cardContainerRef.current) {
-                     const card = instance.checkout.card({
+                     const card = instance.card({
                         form: {
                             id: 'pagseguro-card-form'
                         },
