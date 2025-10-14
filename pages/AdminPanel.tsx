@@ -191,13 +191,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         
         setNotifyingId(promoterId);
         try {
-            const manuallySendEmail = httpsCallable(functions, 'manuallySendStatusEmail');
-            const result = await manuallySendEmail({ promoterId });
+            const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+            const result = await manuallySendStatusEmail({ promoterId });
             const data = result.data as { success: boolean, message: string };
             alert(data.message || 'Notificação enviada com sucesso!');
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
-            const errorMessage = error.details?.message || error.message;
+            // Prioritize the detailed error message from the 'details' object if it exists.
+            const detailedError = error?.details?.originalError;
+            // Fallback to the main error message, and finally a generic message.
+            const errorMessage = detailedError || error.message || 'Ocorreu um erro desconhecido.';
             alert(`Falha ao enviar notificação: ${errorMessage}`);
         } finally {
             setNotifyingId(null);

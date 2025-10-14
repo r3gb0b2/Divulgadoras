@@ -29,7 +29,8 @@ const SuperAdminDashboard: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Test email failed", error);
-            const errorMessage = error.details?.message || error.message;
+            const detailedError = error?.details?.originalError;
+            const errorMessage = detailedError || error.message || 'Ocorreu um erro desconhecido.';
             setTestEmailStatus({ type: 'error', message: `Falha no envio: ${errorMessage}` });
         }
     };

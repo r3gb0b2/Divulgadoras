@@ -32,49 +32,65 @@ const createBrevoClient = (brevoConfig) => {
 exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        // 1. Check for authentication
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'A função só pode ser chamada por um usuário autenticado.');
-        }
-        const userEmail = context.auth.token.email;
-        if (!userEmail) {
-            throw new functions.https.HttpsError('invalid-argument', 'O usuário autenticado não possui um e-mail.');
-        }
-
-        const brevoConfig = functions.config().brevo;
-
-        // 2. Get a fresh Brevo client
-        const apiInstance = createBrevoClient(brevoConfig);
-        const sendSmtpEmail = new Brevo.SendSmtpEmail();
-
-        // 3. Define the email content
-        sendSmtpEmail.to = [{ email: userEmail }];
-        sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
-        sendSmtpEmail.subject = "✅ Teste de Envio de E-mail - Equipe Certa";
-        sendSmtpEmail.htmlContent = `
-            <html>
-            <body>
-                <h1>Olá!</h1>
-                <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong></p>
-                <p>Configuração utilizada:</p>
-                <ul>
-                    <li>Remetente: ${brevoConfig.sender_name} &lt;${brevoConfig.sender_email}&gt;</li>
-                    <li>Destinatário: ${userEmail}</li>
-                </ul>
-                <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
-            </body>
-            </html>`;
-        sendSmtpEmail.textContent = `Olá! Se você está recebendo este e-mail, a integração com o serviço de envio está funcionando corretamente! Remetente: ${brevoConfig.sender_name} <${brevoConfig.sender_email}>. Destinatário: ${userEmail}.`;
-
-        // 4. Send the email
         try {
+            // 1. Check for authentication
+            if (!context.auth) {
+                throw new functions.https.HttpsError('unauthenticated', 'A função só pode ser chamada por um usuário autenticado.');
+            }
+            const userEmail = context.auth.token.email;
+            if (!userEmail) {
+                throw new functions.https.HttpsError('invalid-argument', 'O usuário autenticado não possui um e-mail.');
+            }
+
+            const brevoConfig = functions.config().brevo;
+
+            // 2. Get a fresh Brevo client
+            const apiInstance = createBrevoClient(brevoConfig);
+            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+
+            // 3. Define the email content
+            sendSmtpEmail.to = [{ email: userEmail }];
+            sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
+            sendSmtpEmail.subject = "✅ Teste de Envio de E-mail - Equipe Certa";
+            sendSmtpEmail.htmlContent = `
+                <html>
+                <body>
+                    <h1>Olá!</h1>
+                    <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong></p>
+                    <p>Configuração utilizada:</p>
+                    <ul>
+                        <li>Remetente: ${brevoConfig.sender_name} &lt;${brevoConfig.sender_email}&gt;</li>
+                        <li>Destinatário: ${userEmail}</li>
+                    </ul>
+                    <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
+                </body>
+                </html>`;
+            sendSmtpEmail.textContent = `Olá! Se você está recebendo este e-mail, a integração com o serviço de envio está funcionando corretamente! Remetente: ${brevoConfig.sender_name} <${brevoConfig.sender_email}>. Destinatário: ${userEmail}.`;
+
+            // 4. Send the email
             const brevoResponse = await apiInstance.sendTransacEmail(sendSmtpEmail);
             console.log('Brevo API called successfully. Returned data: ', JSON.stringify(brevoResponse));
             return { success: true, message: `E-mail de teste enviado para ${userEmail}.` };
         } catch (error) {
-            console.error("Error sending email via Brevo API: ", error.response ? error.response.body : error);
-            const errorMessage = error.response?.body?.message || error.message || 'Erro desconhecido da API.';
-            throw new functions.https.HttpsError('internal', `Falha ao enviar e-mail via Brevo. Detalhes: ${errorMessage}`);
+            console.error("Error sending test email: ", error.response ? error.response.body : error);
+            let detailedMessage = 'Erro desconhecido da API.';
+            if (error instanceof functions.https.HttpsError) {
+                // If it's already an HttpsError, just re-throw it.
+                throw error;
+            }
+            if (error.response && error.response.body) {
+                const bodyStr = Buffer.isBuffer(error.response.body) ? error.response.body.toString() : String(error.response.body);
+                try {
+                    const body = JSON.parse(bodyStr);
+                    detailedMessage = body.message || bodyStr;
+                } catch (e) {
+                    detailedMessage = bodyStr;
+                }
+            } else if (error.message) {
+                detailedMessage = error.message;
+            }
+            
+            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', { originalError: detailedMessage });
         }
     });
 
@@ -200,22 +216,22 @@ exports.sendPromoterStatusEmail = functions
 exports.manuallySendStatusEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        // --- 1. Authenticate & Validate Input ---
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'A função só pode ser chamada por um usuário autenticado.');
-        }
-        const { promoterId } = data;
-        if (!promoterId) {
-            throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
-        }
-
-        functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email}`);
-
-        let promoterData;
-        let orgName = 'Nossa Equipe';
-
-        // --- 2. Fetch all required data from Firestore ---
         try {
+            // --- 1. Authenticate & Validate Input ---
+            if (!context.auth) {
+                throw new functions.https.HttpsError('unauthenticated', 'A função só pode ser chamada por um usuário autenticado.');
+            }
+            const { promoterId } = data;
+            if (!promoterId) {
+                throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
+            }
+
+            functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email}`);
+
+            let promoterData;
+            let orgName = 'Nossa Equipe';
+
+            // --- 2. Fetch all required data from Firestore ---
             const promoterDoc = await admin.firestore().collection('promoters').doc(promoterId).get();
             if (!promoterDoc.exists) {
                 throw new functions.https.HttpsError('not-found', 'Divulgadora não encontrada no banco de dados.');
@@ -233,66 +249,54 @@ exports.manuallySendStatusEmail = functions
                     functions.logger.warn(`Organization document not found for ID: ${promoterData.organizationId}. Using default name.`, { promoterId });
                 }
             }
-        } catch (error) {
-            functions.logger.error(`[FATAL ERROR] Firestore data fetching failed in manual trigger.`, { 
-                promoterId: promoterId,
-                errorMessage: error.message,
-                errorStack: error.stack,
-            });
-            if (error instanceof functions.https.HttpsError) {
-                throw error;
+
+            // --- 3. Guard Clauses for business logic ---
+            if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
+                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
             }
-            throw new functions.https.HttpsError('internal', `Erro no servidor ao buscar dados: ${error.message}`);
-        }
+            if (!promoterData.email || typeof promoterData.email !== 'string') {
+                throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido para notificação.');
+            }
 
-        // --- 3. Guard Clauses for business logic ---
-        if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
-            throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
-        }
-        if (!promoterData.email || typeof promoterData.email !== 'string') {
-            throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido para notificação.');
-        }
+            const brevoConfig = functions.config().brevo;
 
-        const brevoConfig = functions.config().brevo;
+            // --- 4. Prepare Email Content ---
+            const promoterName = promoterData.name || 'Candidato(a)';
+            const campaignName = promoterData.campaignName || "nossa equipe";
+            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+            let subject = '';
+            let htmlContent = '';
+            let textContent = '';
 
-        // --- 4. Prepare Email Content ---
-        const promoterName = promoterData.name || 'Candidato(a)';
-        const campaignName = promoterData.campaignName || "nossa equipe";
-        const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-        let subject = '';
-        let htmlContent = '';
-        let textContent = '';
-
-        if (promoterData.status === 'approved') {
-            subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-            htmlContent = `
-                <p>Olá, ${promoterName}!</p>
-                <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
-                <p>Estamos muito felizes em ter você em nossa equipe!</p>
-                <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
-                <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                <p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p>
-                <br>
-                <p>Atenciosamente,<br/>Equipe Certa</p>
-            `;
-            textContent = `Olá, ${promoterName}! Temos uma ótima notícia! Sua candidatura para ${campaignName} da organização ${orgName} foi APROVADA. Acesse seu portal para continuar: ${portalLink}`;
-        } else { // 'rejected'
-            subject = `Resultado da sua candidatura para ${orgName}`;
-            const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
-            htmlContent = `
-                <p>Olá, ${promoterName},</p>
-                <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
-                <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
-                <p>Desejamos sucesso em suas futuras oportunidades!</p>
-                <br>
-                <p>Atenciosamente,<br/>Equipe Certa</p>
-            `;
-            textContent = `Olá, ${promoterName}. Agradecemos o seu interesse em fazer parte da nossa equipe para ${campaignName} da organização ${orgName}. Neste momento, não poderemos seguir com a sua candidatura. Motivo: ${reason}`;
-        }
-        
-        // --- 5. Send Email with specific error handling ---
-        try {
+            if (promoterData.status === 'approved') {
+                subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                htmlContent = `
+                    <p>Olá, ${promoterName}!</p>
+                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                    <p>Estamos muito felizes em ter você em nossa equipe!</p>
+                    <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
+                    <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
+                    <p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p>
+                    <br>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+                textContent = `Olá, ${promoterName}! Temos uma ótima notícia! Sua candidatura para ${campaignName} da organização ${orgName} foi APROVADA. Acesse seu portal para continuar: ${portalLink}`;
+            } else { // 'rejected'
+                subject = `Resultado da sua candidatura para ${orgName}`;
+                const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
+                htmlContent = `
+                    <p>Olá, ${promoterName},</p>
+                    <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                    <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.</p>
+                    <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
+                    <p>Desejamos sucesso em suas futuras oportunidades!</p>
+                    <br>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+                textContent = `Olá, ${promoterName}. Agradecemos o seu interesse em fazer parte da nossa equipe para ${campaignName} da organização ${orgName}. Neste momento, não poderemos seguir com a sua candidatura. Motivo: ${reason}`;
+            }
+            
+            // --- 5. Send Email ---
             const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
@@ -306,8 +310,24 @@ exports.manuallySendStatusEmail = functions
 
             return { success: true, message: `E-mail enviado com sucesso para ${promoterData.email}.` };
         } catch (error) {
-            functions.logger.error("Error sending email via Brevo API in manual trigger: ", error.response ? error.response.body : error);
-            const errorMessage = error.response?.body?.message || error.message || 'Erro desconhecido da API.';
-            throw new functions.https.HttpsError('internal', `Falha na API de envio: ${errorMessage}`);
+            functions.logger.error("Error in manuallySendStatusEmail: ", error.response ? error.response.body : error);
+            
+            let detailedMessage = 'Erro desconhecido da API.';
+            if (error instanceof functions.https.HttpsError) {
+                throw error;
+            }
+            if (error.response && error.response.body) {
+                const bodyStr = Buffer.isBuffer(error.response.body) ? error.response.body.toString() : String(error.response.body);
+                try {
+                    const body = JSON.parse(bodyStr);
+                    detailedMessage = body.message || bodyStr;
+                } catch (e) {
+                    detailedMessage = bodyStr;
+                }
+            } else if (error.message) {
+                detailedMessage = error.message;
+            }
+
+            throw new functions.https.HttpsError('internal', 'Falha na API de envio.', { originalError: detailedMessage });
         }
     });
