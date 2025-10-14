@@ -59,16 +59,22 @@ exports.createTrialOrganization = onCall({ allow: "unauthenticated" }, async (re
         return { success: true, organizationId: orgRef.id };
 
     } catch (error) {
-        logger.error("Erro ao criar organização em trial:", error);
+        logger.error("Erro detalhado ao criar organização em trial:", error);
+
+        // Provide specific feedback for known Auth errors
         if (error.code === 'auth/email-already-exists') {
             throw new HttpsError('already-exists', 'Este e-mail já está cadastrado.');
         }
         if (error.code === 'auth/invalid-email') {
             throw new HttpsError('invalid-argument', 'O formato do e-mail é inválido.');
         }
-        if (error.code === 'auth/invalid-password') {
+        if (error.code === 'auth/weak-password') {
              throw new HttpsError('invalid-argument', 'A senha é inválida. Deve ter pelo menos 6 caracteres.');
         }
-        throw new HttpsError('internal', 'Não foi possível criar a conta. Ocorreu um erro inesperado.');
+
+        // For any other error, return the actual error message for better debugging.
+        // This will reveal issues like disabled APIs or misconfigurations.
+        const detailedErrorMessage = error.message || 'Ocorreu um erro inesperado no servidor. Verifique os logs da função para mais detalhes.';
+        throw new HttpsError('internal', detailedErrorMessage);
     }
 });
