@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -5,8 +6,14 @@ import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon } from '../components/Icons';
 
+type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
+
 const SuperAdminDashboard: React.FC = () => {
-    const [testEmailStatus, setTestEmailStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error', message: string }>({ type: 'idle', message: '' });
+    const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
+        generic: { type: 'idle', message: '' },
+        approved: { type: 'idle', message: '' },
+        rejected: { type: 'idle', message: '' },
+    });
 
     const handleLogout = async () => {
         try {
@@ -16,14 +23,14 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
-    const handleSendTestEmail = async () => {
-        setTestEmailStatus({ type: 'loading', message: 'Enviando e-mail de teste...' });
+    const handleSendTestEmail = async (testType: 'generic' | 'approved' | 'rejected') => {
+        setTestStatuses(prev => ({ ...prev, [testType]: { type: 'loading', message: 'Enviando e-mail de teste...' } }));
         try {
             const sendTestEmail = httpsCallable(functions, 'sendTestEmail');
-            const result = await sendTestEmail();
+            const result = await sendTestEmail({ testType });
             const data = result.data as { success: boolean; message: string };
             if (data.success) {
-                setTestEmailStatus({ type: 'success', message: data.message });
+                setTestStatuses(prev => ({ ...prev, [testType]: { type: 'success', message: data.message } }));
             } else {
                  throw new Error('A função retornou sucesso falso.');
             }
@@ -31,7 +38,7 @@ const SuperAdminDashboard: React.FC = () => {
             console.error("Test email failed", error);
             const detailedError = error?.details?.originalError;
             const errorMessage = detailedError || error.message || 'Ocorreu um erro desconhecido.';
-            setTestEmailStatus({ type: 'error', message: `Falha no envio: ${errorMessage}` });
+            setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${errorMessage}` } }));
         }
     };
     
@@ -98,27 +105,76 @@ const SuperAdminDashboard: React.FC = () => {
 
             <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
                 <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
-                <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h3 className="font-semibold text-gray-100">Teste de Envio de E-mails</h3>
-                        <p className="text-sm text-gray-400 mt-1">
-                            Clique no botão para enviar um e-mail de teste para sua própria conta de Super Admin ({auth.currentUser?.email}). Isso verifica se a integração com a API (Brevo) está funcionando corretamente.
-                        </p>
+                <div className="space-y-4">
+                    {/* Teste Genérico */}
+                    <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold text-gray-100">Teste de Conexão (Genérico)</h3>
+                            <p className="text-sm text-gray-400 mt-1">
+                                Envia um e-mail simples para <span className="font-medium text-gray-300">{auth.currentUser?.email}</span> para verificar a conexão com a API de e-mails (Brevo).
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => handleSendTestEmail('generic')}
+                            disabled={testStatuses.generic.type === 'loading'}
+                            className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm"
+                        >
+                           <EnvelopeIcon className="w-5 h-5"/>
+                           {testStatuses.generic.type === 'loading' ? 'Enviando...' : 'Testar Conexão'}
+                        </button>
                     </div>
-                    <button 
-                        onClick={handleSendTestEmail}
-                        disabled={testEmailStatus.type === 'loading'}
-                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50"
-                    >
-                       <EnvelopeIcon className="w-5 h-5"/>
-                       {testEmailStatus.type === 'loading' ? 'Enviando...' : 'Testar Envio'}
-                    </button>
+                     {testStatuses.generic.type !== 'idle' && testStatuses.generic.type !== 'loading' && (
+                        <div className={`p-3 rounded-md text-sm ${testStatuses.generic.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                            <p><span className="font-bold">{testStatuses.generic.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testStatuses.generic.message}</p>
+                        </div>
+                     )}
+
+                     {/* Teste de Aprovação */}
+                    <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold text-gray-100">Teste de E-mail de Aprovação</h3>
+                            <p className="text-sm text-gray-400 mt-1">
+                                Simula e envia um e-mail de <strong>aprovação</strong> para você, usando o template real.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => handleSendTestEmail('approved')}
+                            disabled={testStatuses.approved.type === 'loading'}
+                            className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold disabled:opacity-50 text-sm"
+                        >
+                           <EnvelopeIcon className="w-5 h-5"/>
+                           {testStatuses.approved.type === 'loading' ? 'Enviando...' : 'Testar Aprovação'}
+                        </button>
+                    </div>
+                     {testStatuses.approved.type !== 'idle' && testStatuses.approved.type !== 'loading' && (
+                        <div className={`p-3 rounded-md text-sm ${testStatuses.approved.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                            <p><span className="font-bold">{testStatuses.approved.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testStatuses.approved.message}</p>
+                        </div>
+                     )}
+
+                     {/* Teste de Rejeição */}
+                    <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold text-gray-100">Teste de E-mail de Rejeição</h3>
+                            <p className="text-sm text-gray-400 mt-1">
+                                Simula e envia um e-mail de <strong>rejeição</strong> para você, usando o template real.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => handleSendTestEmail('rejected')}
+                            disabled={testStatuses.rejected.type === 'loading'}
+                            className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold disabled:opacity-50 text-sm"
+                        >
+                           <EnvelopeIcon className="w-5 h-5"/>
+                           {testStatuses.rejected.type === 'loading' ? 'Enviando...' : 'Testar Rejeição'}
+                        </button>
+                    </div>
+                     {testStatuses.rejected.type !== 'idle' && testStatuses.rejected.type !== 'loading' && (
+                        <div className={`p-3 rounded-md text-sm ${testStatuses.rejected.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                            <p><span className="font-bold">{testStatuses.rejected.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testStatuses.rejected.message}</p>
+                        </div>
+                     )}
                 </div>
-                 {testEmailStatus.type !== 'idle' && testEmailStatus.type !== 'loading' && (
-                    <div className={`mt-4 p-3 rounded-md text-sm ${testEmailStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                        <p><span className="font-bold">{testEmailStatus.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testEmailStatus.message}</p>
-                    </div>
-                 )}
             </div>
         </div>
     );

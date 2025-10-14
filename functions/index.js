@@ -31,32 +31,65 @@ exports.sendTestEmail = functions
             throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado com um e-mail.');
         }
         const userEmail = context.auth.token.email;
-        functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}`);
+        const testType = data.testType || 'generic'; // Can be 'generic', 'approved', or 'rejected'
+        functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
-            functions.logger.info("Initializing Brevo client for test email.");
+            functions.logger.info(`Initializing Brevo client for ${testType} test email.`);
             const brevoConfig = functions.config().brevo;
             const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-            functions.logger.info("Preparing test email content.");
+            let subject = '';
+            let htmlContent = '';
+            const orgName = "Organização de Teste";
+            const promoterName = "Divulgadora de Teste";
+            const campaignName = "Evento de Teste";
+            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+
+            if (testType === 'approved') {
+                subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                htmlContent = `
+                    <p>Olá, ${promoterName}!</p>
+                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                    <p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p>
+                    <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
+                    <p>Lembre-se de usar o e-mail <strong>teste@exemplo.com</strong> para consultar seu status.</p>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+            } else if (testType === 'rejected') {
+                subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
+                const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
+                htmlContent = `
+                    <p>Olá, ${promoterName},</p>
+                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                    <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
+                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
+                    <p>Desejamos sucesso em suas futuras oportunidades!</p>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+            } else { // 'generic'
+                subject = "✅ Teste de Envio de E-mail - Equipe Certa";
+                htmlContent = `
+                    <html><body>
+                        <h1>Olá!</h1>
+                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
+                        <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
+                    </body></html>`;
+            }
+
+            functions.logger.info(`Sending ${testType} test email to ${userEmail}...`);
             sendSmtpEmail.to = [{ email: userEmail }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
-            sendSmtpEmail.subject = "✅ Teste de Envio de E-mail - Equipe Certa";
-            sendSmtpEmail.htmlContent = `
-                <html><body>
-                    <h1>Olá!</h1>
-                    <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong></p>
-                    <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
-                </body></html>`;
+            sendSmtpEmail.subject = subject;
+            sendSmtpEmail.htmlContent = htmlContent;
             
-            functions.logger.info(`Sending test email to ${userEmail}...`);
             await apiInstance.sendTransacEmail(sendSmtpEmail);
-            functions.logger.info("Test email sent successfully via Brevo.");
+            functions.logger.info(`${testType} test email sent successfully via Brevo.`);
 
-            return { success: true, message: `E-mail de teste enviado para ${userEmail}.` };
+            return { success: true, message: `E-mail de teste (${testType}) enviado para ${userEmail}.` };
         } catch (error) {
-            functions.logger.error("FATAL ERROR in sendTestEmail", {
+            functions.logger.error(`FATAL ERROR in sendTestEmail (type: ${testType})`, {
                 user: context.auth ? context.auth.token.email : "Unauthenticated",
                 rawErrorObject: error,
             });
@@ -81,7 +114,7 @@ exports.sendTestEmail = functions
                     detailedMessage = error.message;
                 }
             } catch (parsingError) {
-                functions.logger.error("Could not parse the original error object in sendTestEmail.", { parsingError });
+                functions.logger.error(`Could not parse the original error object in sendTestEmail (type: ${testType}).`, { parsingError });
                 detailedMessage = error?.message || "Erro ao processar a resposta da API de e-mail.";
             }
 
@@ -143,12 +176,12 @@ exports.sendPromoterStatusEmail = functions
                 `;
             } else {
                 subject = `Resultado da sua candidatura para ${orgName}`;
-                const reason = afterData.rejectionReason || 'Não foi fornecido um motivo específico.';
+                const reasonText = String(afterData.rejectionReason || 'Não foi fornecido um motivo específico.');
                 htmlContent = `
                     <p>Olá, ${promoterName},</p>
                     <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
                     <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
+                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
@@ -232,12 +265,12 @@ exports.manuallySendStatusEmail = functions
                 `;
             } else {
                 subject = `Resultado da sua candidatura para ${orgName}`;
-                const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
+                const reasonText = String(promoterData.rejectionReason || 'Não foi fornecido um motivo específico.');
                 htmlContent = `
                     <p>Olá, ${promoterName},</p>
                     <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
                     <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
+                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
