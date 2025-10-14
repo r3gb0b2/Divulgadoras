@@ -25,48 +25,41 @@ const CheckoutPage: React.FC = () => {
     const cardContainerRef = useRef<HTMLDivElement>(null);
     const [sdkReady, setSdkReady] = useState(false);
 
-    // Effect to load the PagSeguro SDK script
+    // Effect to wait for the PagSeguro SDK to be loaded from index.html
     useEffect(() => {
-        const scriptId = 'pagseguro-sdk';
-        // Prevent adding the script multiple times
-        if (document.getElementById(scriptId)) {
-            if (window.PagSeguro) setSdkReady(true);
+        if (window.PagSeguro) {
+            setSdkReady(true);
             return;
         }
 
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = "https://assets.pagseguro.com.br/checkout-sdk-js/v2/pagseguro.min.js";
-        script.async = true;
-        
-        script.onload = () => {
-            setSdkReady(true);
-        };
-        
-        script.onerror = () => {
-            setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
-            setIsLoading(false);
-        };
-
-        document.body.appendChild(script);
-
-        // Cleanup function to remove script if component unmounts
-        return () => {
-            const scriptElement = document.getElementById(scriptId);
-            if (scriptElement && scriptElement.parentNode) {
-                scriptElement.parentNode.removeChild(scriptElement);
+        const intervalId = setInterval(() => {
+            if (window.PagSeguro) {
+                setSdkReady(true);
+                clearInterval(intervalId);
             }
+        }, 100);
+
+        const timeoutId = setTimeout(() => {
+            clearInterval(intervalId);
+            if (!window.PagSeguro) {
+                setError("SDK do PagSeguro não carregou. Verifique sua conexão e tente novamente.");
+                setIsLoading(false);
+            }
+        }, 10000); // 10 second timeout
+
+        return () => {
+            clearInterval(intervalId);
+            clearTimeout(timeoutId);
         };
     }, []);
 
     // Effect to initialize the card form once the SDK is ready
     useEffect(() => {
-        if (!sdkReady || !plan) {
+        if (!sdkReady || !plan || cardInstance) { // Prevent re-initialization
             return;
         }
 
         const initializeForm = async () => {
-            setIsLoading(true);
             try {
                 const creds = await getPagSeguroCredentials();
                 if (!creds.publicKey) {
@@ -102,7 +95,7 @@ const CheckoutPage: React.FC = () => {
         };
 
         initializeForm();
-    }, [sdkReady, plan]);
+    }, [sdkReady, plan, cardInstance]);
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
