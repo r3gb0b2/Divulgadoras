@@ -1,7 +1,9 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const functions = require("firebase-functions");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
+const SibApiV3Sdk = require("sib-api-v3-sdk");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -56,12 +58,11 @@ const createRejectedEmailHtml = (promoter) => {
 
 /**
  * Listens for updates on any document in the 'promoters' collection.
- * If a promoter's status changes, it triggers an email notification.
- * This is a v2 Cloud Function.
+ * If a promoter's status changes, it triggers an email notification via the Brevo API.
  */
 exports.onPromoterStatusChange = onDocumentUpdated("promoters/{promoterId}", async (event) => {
     const { promoterId } = event.params;
-    const logPrefix = `[Func: onPromoterStatusChange v2][ID: ${promoterId}]`;
+    const logPrefix = `[Func: onPromoterStatusChange][ID: ${promoterId}]`;
     logger.info(`${logPrefix} Execution started.`);
 
     const beforeData = event.data.before.data();
@@ -83,7 +84,7 @@ exports.onPromoterStatusChange = onDocumentUpdated("promoters/{promoterId}", asy
     }
 
     // 3. Validate essential promoter data
-    if (!afterData.email || !afterData.name) {
+    if (!afterData.email || typeof afterData.email !== "string" || !afterData.name) {
       logger.error(`${logPrefix} Promoter document is missing required fields 'email' or 'name'. Cannot send notification. Data:`, afterData);
       return;
     }
@@ -129,22 +130,38 @@ exports.onPromoterStatusChange = onDocumentUpdated("promoters/{promoterId}", asy
         logger.info(`${logPrefix} Prepared 'rejected' email content for ${promoterData.email}.`);
     }
 
-    // 7. Create the final mail document object to be sent to the extension
-    const mailDocument = {
-        to: [promoterData.email],
-        message: {
-            subject,
-            html,
-        },
-    };
-    
-    logger.info(`${logPrefix} Final mail document to be created:`, JSON.stringify(mailDocument));
-
-    // 8. Write the document to the 'mail' collection for the extension to pick up
+    // 7. Send email using Brevo (Sendinblue) API
     try {
-        const mailResult = await db.collection("mail").add(mailDocument);
-        logger.info(`${logPrefix} SUCCESS! Created mail document with ID: ${mailResult.id}. The 'Trigger Email' extension should now process it.`);
+        const brevoApiKey = functions.config().brevo?.key;
+        const senderEmail = functions.config().brevo?.sender_email;
+        const senderName = functions.config().brevo?.sender_name;
+
+        if (!brevoApiKey || !senderEmail || !senderName) {
+            logger.error(`${logPrefix} CRITICAL: Brevo API key or sender info not configured in Firebase environment. Run 'firebase functions:config:set brevo.key=... brevo.sender_email=... brevo.sender_name=...' and redeploy.`);
+            return;
+        }
+
+        const defaultClient = SibApiV3Sdk.ApiClient.instance;
+        const apiKey = defaultClient.authentications["api-key"];
+        apiKey.apiKey = brevoApiKey;
+
+        const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+        const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+
+        sendSmtpEmail.subject = subject;
+        sendSmtpEmail.htmlContent = html;
+        sendSmtpEmail.sender = { name: senderName, email: senderEmail };
+        sendSmtpEmail.to = [{ email: promoterData.email, name: promoterData.name }];
+
+        logger.info(`${logPrefix} Sending transactional email via Brevo to ${promoterData.email}...`);
+        
+        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+        
+        logger.info(`${logPrefix} SUCCESS! Brevo API responded successfully. Message ID:`, data.body.messageId);
+
     } catch (error) {
-        logger.error(`${logPrefix} CRITICAL ERROR! Failed to write mail document to Firestore collection 'mail'. The email was NOT sent.`, error);
+        // Brevo API errors often have a useful response body
+        const errorBody = error.response ? JSON.stringify(error.response.body, null, 2) : error;
+        logger.error(`${logPrefix} CRITICAL ERROR! Failed to send email via Brevo. Details:`, errorBody);
     }
   });
