@@ -1,93 +1,61 @@
 import { firestore } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, addDoc, serverTimestamp, setDoc, query, where, writeBatch, deleteDoc, Timestamp } from 'firebase/firestore';
-import { Organization } from '../types';
+import {
+    collection,
+    doc,
+    addDoc,
+    getDoc,
+    getDocs,
+    updateDoc,
+    deleteDoc,
+    query,
+    where,
+    serverTimestamp,
+    Timestamp
+} from 'firebase/firestore';
+import { Organization, OrganizationStatus, PlanId } from '../types';
+
+const ORGS_COLLECTION = 'organizations';
 
 /**
  * Creates a new organization document in Firestore.
- * @param ownerUid UID of the user who owns this organization.
- * @param ownerEmail Email of the user.
- * @param orgName The name of the organization.
- * @param planId The subscription plan ID.
+ * @param ownerUid - The Firebase Auth UID of the organization's owner.
+ * @param ownerEmail - The email of the organization's owner.
+ * @param orgName - The name of the new organization.
+ * @param planId - The ID of the subscription plan ('basic' or 'professional').
  * @returns The ID of the newly created organization document.
  */
-export const createOrganization = async (ownerUid: string, ownerEmail: string, orgName: string, planId: 'basic' | 'professional'): Promise<string> => {
+export const createOrganization = async (ownerUid: string, ownerEmail: string, orgName: string, planId: PlanId): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'organizations'), {
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + 3); // 3-day trial
+
+        const newOrgData = {
+            name: orgName,
             ownerUid,
             ownerEmail,
-            name: orgName,
+            status: 'trial' as OrganizationStatus,
             planId,
             createdAt: serverTimestamp(),
-            status: 'active',
-            isPublic: true,
-            assignedStates: [],
-        });
+            trialEndsAt: Timestamp.fromDate(trialEndDate),
+            assignedStates: [], // Admin must configure this later
+            public: true, // Public by default
+        };
+        const docRef = await addDoc(collection(firestore, ORGS_COLLECTION), newOrgData);
         return docRef.id;
     } catch (error) {
         console.error("Error creating organization: ", error);
-        throw new Error("Failed to create organization.");
+        throw new Error("Não foi possível criar a organização.");
     }
 };
 
 /**
- * Fetches all organization documents from Firestore for the admin panel.
- * @returns An array of Organization objects.
- */
-export const getOrganizations = async (): Promise<Organization[]> => {
-    try {
-        const querySnapshot = await getDocs(collection(firestore, 'organizations'));
-        const orgs: Organization[] = [];
-        querySnapshot.forEach(doc => {
-            orgs.push({ id: doc.id, ...doc.data() } as Organization);
-        });
-        return orgs.sort((a,b) => a.name.localeCompare(b.name));
-    } catch (error) {
-        console.error("Error getting organizations: ", error);
-        throw new Error("Failed to fetch organizations.");
-    }
-};
-
-/**
- * Fetches only active and public organizations for the public home page.
- * @returns An array of Organization objects.
- */
-export const getPublicOrganizations = async (): Promise<Organization[]> => {
-    try {
-        const now = new Date();
-        const q = query(
-            collection(firestore, "organizations"),
-            where('isPublic', '==', true)
-        );
-
-        const querySnapshot = await getDocs(q);
-        const orgs: Organization[] = [];
-        querySnapshot.forEach(doc => {
-            const orgData = doc.data() as Organization;
-            
-            const expiresAt = orgData.planExpiresAt ? (orgData.planExpiresAt as Timestamp).toDate() : null;
-
-            // Show if it hasn't expired OR if expiration date is not set at all (for legacy orgs)
-            if (!expiresAt || expiresAt > now) {
-                orgs.push({ id: doc.id, ...orgData });
-            }
-        });
-        
-        return orgs.sort((a, b) => a.name.localeCompare(b.name));
-    } catch (error) {
-        console.error("Error getting public organizations: ", error);
-        throw new Error("Failed to fetch public organizations.");
-    }
-};
-
-
-/**
- * Fetches a single organization by its ID.
- * @param organizationId The ID of the organization to fetch.
+ * Fetches a single organization's data from Firestore.
+ * @param id - The document ID of the organization.
  * @returns The Organization object or null if not found.
  */
-export const getOrganization = async (organizationId: string): Promise<Organization | null> => {
+export const getOrganization = async (id: string): Promise<Organization | null> => {
     try {
-        const docRef = doc(firestore, 'organizations', organizationId);
+        const docRef = doc(firestore, ORGS_COLLECTION, id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             return { id: docSnap.id, ...docSnap.data() } as Organization;
@@ -95,49 +63,74 @@ export const getOrganization = async (organizationId: string): Promise<Organizat
         return null;
     } catch (error) {
         console.error("Error getting organization: ", error);
-        throw new Error("Failed to fetch organization details.");
+        throw new Error("Não foi possível buscar os dados da organização.");
     }
 };
 
 /**
- * Updates an organization's data.
- * @param id The organization document ID.
- * @param data The partial data to update.
+ * Fetches all organizations from Firestore.
+ * @returns An array of all Organization objects.
+ */
+export const getOrganizations = async (): Promise<Organization[]> => {
+    try {
+        const querySnapshot = await getDocs(collection(firestore, ORGS_COLLECTION));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+    } catch (error) {
+        console.error("Error getting all organizations: ", error);
+        throw new Error("Não foi possível buscar a lista de organizações.");
+    }
+};
+
+
+/**
+ * Fetches all organizations that are marked as public and not expired.
+ * @returns An array of Organization objects for public display.
+ */
+export const getPublicOrganizations = async (): Promise<Organization[]> => {
+    try {
+        const q = query(
+            collection(firestore, ORGS_COLLECTION),
+            where("public", "==", true),
+            where("status", "in", ["active", "trial"])
+        );
+        const querySnapshot = await getDocs(q);
+        const orgs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        
+        // Sort alphabetically
+        orgs.sort((a, b) => a.name.localeCompare(b.name));
+
+        return orgs;
+    } catch (error) {
+        console.error("Error getting public organizations: ", error);
+        throw new Error("Não foi possível buscar as organizações públicas.");
+    }
+};
+
+
+/**
+ * Updates an existing organization document in Firestore.
+ * @param id - The ID of the organization to update.
+ * @param data - An object containing the fields to update.
  */
 export const updateOrganization = async (id: string, data: Partial<Omit<Organization, 'id'>>): Promise<void> => {
     try {
-        await setDoc(doc(firestore, 'organizations', id), data, { merge: true });
+        const orgDoc = doc(firestore, ORGS_COLLECTION, id);
+        await updateDoc(orgDoc, data);
     } catch (error) {
         console.error("Error updating organization: ", error);
-        throw new Error("Failed to update organization details.");
+        throw new Error("Não foi possível atualizar a organização.");
     }
 };
 
 /**
- * Deletes an organization and all associated admin permission documents.
- * NOTE: This does not delete Firebase Auth users, promoters, or campaigns, which become orphaned.
- * @param orgId The ID of the organization to delete.
+ * Deletes an organization document from Firestore.
+ * @param id - The ID of the organization to delete.
  */
-export const deleteOrganizationAndRelatedAdmins = async (orgId: string): Promise<void> => {
+export const deleteOrganization = async (id: string): Promise<void> => {
     try {
-        const batch = writeBatch(firestore);
-
-        // 1. Find and mark for deletion all admins associated with the organization
-        const adminsQuery = query(collection(firestore, 'admins'), where('organizationId', '==', orgId));
-        const adminsSnapshot = await getDocs(adminsQuery);
-        adminsSnapshot.forEach(adminDoc => {
-            batch.delete(adminDoc.ref);
-        });
-
-        // 2. Mark the organization document for deletion
-        const orgDocRef = doc(firestore, 'organizations', orgId);
-        batch.delete(orgDocRef);
-        
-        // 3. Commit the batch
-        await batch.commit();
-        
+        await deleteDoc(doc(firestore, ORGS_COLLECTION, id));
     } catch (error) {
-        console.error("Error deleting organization and related admins: ", error);
-        throw new Error("Failed to delete organization. Please try again.");
+        console.error("Error deleting organization: ", error);
+        throw new Error("Não foi possível deletar a organização.");
     }
 };
