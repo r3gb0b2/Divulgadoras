@@ -95,12 +95,25 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
         const querySnapshot = await getDocs(q);
         const allPublicOrgs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
 
-        // Client-side filter for backward compatibility with older organizations without a status field.
+        const now = new Date();
+        
+        // Client-side filter to ensure expired orgs are hidden
         const visibleOrgs = allPublicOrgs.filter(org => {
-            // An org is visible if:
-            // 1. It has no status (old data, assume it's active)
-            // 2. Its status is explicitly 'active' or 'trial'
-            return !org.status || org.status === 'active' || org.status === 'trial';
+            // Condition 1: Check if the plan is expired based on the date.
+            const hasExpired = org.planExpiresAt ? (org.planExpiresAt as Timestamp).toDate() < now : false;
+            if (hasExpired) {
+                return false;
+            }
+
+            // Condition 2: Check for explicit "hidden" or "expired" status.
+            const isHiddenByStatus = org.status === 'expired' || org.status === 'hidden';
+            if (isHiddenByStatus) {
+                return false;
+            }
+
+            // If it passes both checks, it should be visible.
+            // This includes orgs with status 'active', 'trial', or no status (for backward compatibility).
+            return true;
         });
         
         // Sort alphabetically
