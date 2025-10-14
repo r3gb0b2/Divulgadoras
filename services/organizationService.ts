@@ -10,7 +10,8 @@ import {
     query,
     where,
     serverTimestamp,
-    Timestamp
+    Timestamp,
+    writeBatch
 } from 'firebase/firestore';
 import { Organization, OrganizationStatus, PlanId } from '../types';
 
@@ -40,10 +41,35 @@ export const createOrganization = async (ownerUid: string, ownerEmail: string, o
             assignedStates: [], // Admin must configure this later
             public: true, // Public by default,
         };
-        const docRef = await addDoc(collection(firestore, ORGS_COLLECTION), newOrgData);
-        return docRef.id;
+
+        const batch = writeBatch(firestore);
+
+        // Create a reference for the new organization document
+        const orgDocRef = doc(collection(firestore, ORGS_COLLECTION));
+        batch.set(orgDocRef, newOrgData);
+
+        // Add default rejection reasons for this new organization
+        const defaultReasons = [
+            "Perfil inadequado para a vaga.",
+            "Fotos de baixa qualidade ou inadequadas.",
+            "Informações de contato inválidas.",
+            "Não cumpre os pré-requisitos da vaga.",
+            "Vagas preenchidas no momento, tente novamente no futuro."
+        ];
+
+        const reasonsCollection = collection(firestore, 'rejectionReasons');
+        defaultReasons.forEach(reasonText => {
+            const reasonDocRef = doc(reasonsCollection);
+            batch.set(reasonDocRef, { text: reasonText, organizationId: orgDocRef.id });
+        });
+
+        // Commit all writes atomically
+        await batch.commit();
+
+        return orgDocRef.id;
+
     } catch (error) {
-        console.error("Error creating organization: ", error);
+        console.error("Error creating organization with default reasons: ", error);
         throw new Error("Não foi possível criar a organização.");
     }
 };

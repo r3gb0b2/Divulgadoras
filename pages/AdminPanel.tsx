@@ -78,6 +78,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const isSuperAdmin = adminData.role === 'superadmin';
     const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
+    const organizationIdForReasons = useMemo(() => {
+        if (isSuperAdmin) {
+            // For superadmin, only enable if a specific organization is selected
+            return selectedOrg !== 'all' ? selectedOrg : null;
+        }
+        // For regular admin, use their own organizationId
+        return adminData.organizationId || null;
+    }, [isSuperAdmin, selectedOrg, adminData.organizationId]);
+
+
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
@@ -194,7 +204,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsEditModalOpen(true);
     };
 
-    const openRejectionModal = (promoter: Promoter) => {
+    const openRejectionModal = async (promoter: Promoter) => {
+        // If superadmin, fetch reasons for the specific promoter's org
+        if (isSuperAdmin && promoter.organizationId) {
+            try {
+                const reasons = await getRejectionReasons(promoter.organizationId);
+                setRejectionReasons(reasons);
+            } catch (e) {
+                console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
+                // Set to empty array to not show stale reasons from another org
+                setRejectionReasons([]);
+            }
+        }
         setRejectingPromoter(promoter);
         setIsRejectionModalOpen(true);
     }
@@ -396,7 +417,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         />
                     </div>
-                     {canManage && adminData.organizationId && (
+                     {canManage && organizationIdForReasons && (
                         <button onClick={() => setIsReasonsModalOpen(true)} className="text-sm text-primary hover:underline flex-shrink-0">
                             Gerenciar Motivos
                         </button>
@@ -426,11 +447,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 />
             )}
             
-            {canManage && adminData.organizationId && (
+            {canManage && organizationIdForReasons && (
                 <ManageReasonsModal
                     isOpen={isReasonsModalOpen}
                     onClose={() => setIsReasonsModalOpen(false)}
-                    organizationId={adminData.organizationId}
+                    organizationId={organizationIdForReasons}
                     onReasonsUpdated={fetchData}
                 />
             )}
