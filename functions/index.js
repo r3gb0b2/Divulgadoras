@@ -1,6 +1,5 @@
-const functions = require("firebase-functions");
-const { onCall, HttpsError } = require("firebase-functions/v2/onCall");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
 
@@ -9,23 +8,6 @@ const db = admin.firestore();
 
 // Set the region for all functions in this file
 setGlobalOptions({ region: "southamerica-east1" });
-
-/**
- * Creates and sends an email document to the `mail` collection
- * which is then picked up by the 'Trigger Email' Firebase Extension.
- * @param {string} email The recipient's email address.
- * @param {string} subject The subject of the email.
- * @param {string} html The HTML content of the email.
- */
-const sendEmail = (email, subject, html) => {
-  return db.collection("mail").add({
-    to: [email],
-    message: {
-      subject,
-      html,
-    },
-  });
-};
 
 /**
  * Email template for approved promoters.
@@ -75,21 +57,20 @@ const createRejectedEmailHtml = (promoter) => {
 /**
  * Listens for updates on any document in the 'promoters' collection.
  * If a promoter's status changes, it triggers an email notification.
+ * This is a v2 Cloud Function.
  */
-exports.onPromoterStatusChange = functions.firestore
-  .document("promoters/{promoterId}")
-  .onUpdate(async (change, context) => {
-    const { promoterId } = context.params;
-    const logPrefix = `[Func: onPromoterStatusChange][ID: ${promoterId}]`;
+exports.onPromoterStatusChange = onDocumentUpdated("promoters/{promoterId}", async (event) => {
+    const { promoterId } = event.params;
+    const logPrefix = `[Func: onPromoterStatusChange v2][ID: ${promoterId}]`;
     logger.info(`${logPrefix} Execution started.`);
 
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
 
     // 1. Exit if status has not changed
     if (beforeData.status === afterData.status) {
       logger.info(`${logPrefix} Status unchanged ('${afterData.status}'). Exiting.`);
-      return null;
+      return;
     }
 
     logger.info(`${logPrefix} Status changed from '${beforeData.status}' to '${afterData.status}'.`);
@@ -98,13 +79,13 @@ exports.onPromoterStatusChange = functions.firestore
     const shouldSendEmail = afterData.status === 'approved' || afterData.status === 'rejected';
     if (!shouldSendEmail) {
         logger.info(`${logPrefix} New status '${afterData.status}' does not trigger an email. Exiting.`);
-        return null;
+        return;
     }
 
     // 3. Validate essential promoter data
     if (!afterData.email || !afterData.name) {
       logger.error(`${logPrefix} Promoter document is missing required fields 'email' or 'name'. Cannot send notification. Data:`, afterData);
-      return null;
+      return;
     }
     
     // 4. Prepare promoter data with defaults for templates
@@ -166,6 +147,4 @@ exports.onPromoterStatusChange = functions.firestore
     } catch (error) {
         logger.error(`${logPrefix} CRITICAL ERROR! Failed to write mail document to Firestore collection 'mail'. The email was NOT sent.`, error);
     }
-    
-    return null;
   });
