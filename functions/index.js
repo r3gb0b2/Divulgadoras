@@ -68,110 +68,129 @@ exports.sendPromoterStatusEmail = functions
     .firestore.document('promoters/{promoterId}')
     .onUpdate(async (change, context) => {
         const promoterId = context.params.promoterId;
-        console.log(`[START] Function triggered for promoterId: ${promoterId}`);
+        functions.logger.info(`[START] Promoter update triggered for ID: ${promoterId}`);
 
-        const beforeData = change.before.data();
-        const afterData = change.after.data();
-        
-        // Defensively check for status fields
-        const beforeStatus = beforeData?.status;
-        const afterStatus = afterData?.status;
-        
-        console.log(`[CHECK] Status change detected: From '${beforeStatus}' to '${afterStatus}'.`);
-
-        // Condition: Only trigger on the first decision (pending -> approved/rejected).
-        const shouldSendEmail = beforeStatus === 'pending' && (afterStatus === 'approved' || afterStatus === 'rejected');
-
-        if (!shouldSendEmail) {
-            console.log(`[END] Condition not met. No email will be sent.`);
-            return null;
-        }
-
-        console.log(`[PASS] Condition met. Proceeding to send '${afterStatus}' email.`);
-
-        // Validation: Ensure there's an email address to send to.
-        if (!afterData.email) {
-            console.error(`[FAIL] Promoter ${promoterId} has no email address in 'afterData'. Cannot send email.`);
-            return null;
-        }
-
-        // Get Brevo API config
-        const brevoConfig = functions.config().brevo;
-        if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
-            console.error(`[FAIL] Brevo config is missing or incomplete in Firebase environment.`, { hasKey: !!brevoConfig?.key });
-            return null;
-        }
-        
-        // Fetch organization name
-        let orgName = 'Nossa Equipe';
-        if (afterData.organizationId) {
-            try {
-                const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
-                if (orgDoc.exists) {
-                    orgName = orgDoc.data().name;
-                    console.log(`[INFO] Fetched organization name: ${orgName}`);
-                } else {
-                    console.warn(`[WARN] Organization document with ID '${afterData.organizationId}' not found.`);
-                }
-            } catch (error) {
-                console.error(`[ERROR] Failed to fetch organization '${afterData.organizationId}'. Error:`, error);
-            }
-        }
-        
-        // Prepare email content
-        const promoter = afterData;
-        let subject = '';
-        let htmlContent = '';
-
-        const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-        const campaignName = promoter.campaignName || "nossa equipe";
-
-        if (promoter.status === 'approved') {
-            subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-            htmlContent = `
-                <p>Olá, ${promoter.name}!</p>
-                <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
-                <p>Estamos muito felizes em ter você em nossa equipe!</p>
-                <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
-                <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                <p>Lembre-se de usar o e-mail <strong>${promoter.email}</strong> para consultar seu status.</p>
-                <br>
-                <p>Atenciosamente,<br/>Equipe Certa</p>
-            `;
-        } else if (promoter.status === 'rejected') {
-            subject = `Resultado da sua candidatura para ${orgName}`;
-            const reason = promoter.rejectionReason || 'Não foi fornecido um motivo específico.';
-            htmlContent = `
-                <p>Olá, ${promoter.name},</p>
-                <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe de divulgadoras para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
-                <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
-                <p>Desejamos sucesso em suas futuras oportunidades!</p>
-                <br>
-                <p>Atenciosamente,<br/>Equipe Certa</p>
-            `;
-        } 
-        
-        // Configure and send email
         try {
-            console.log(`[SEND] Attempting to send email to ${promoter.email}...`);
+            const beforeData = change.before.data();
+            const afterData = change.after.data();
+
+            // Log the complete data objects for deep debugging
+            functions.logger.debug("Data before change:", { promoterId, data: beforeData });
+            functions.logger.debug("Data after change:", { promoterId, data: afterData });
+
+            const beforeStatus = beforeData?.status;
+            const afterStatus = afterData?.status;
+
+            functions.logger.info(`Status change check: from '${beforeStatus}' to '${afterStatus}'.`, { promoterId });
+
+            // Core condition: Email should only be sent on the first decision.
+            const shouldSendEmail = beforeStatus === 'pending' && (afterStatus === 'approved' || afterStatus === 'rejected');
+
+            if (!shouldSendEmail) {
+                functions.logger.info(`[END] Condition not met for email dispatch. No action taken.`, { promoterId, beforeStatus, afterStatus });
+                return null;
+            }
+
+            functions.logger.info(`[PASS] Condition met. Preparing to send '${afterStatus}' notification.`, { promoterId });
+
+            // --- Data Validation ---
+            if (!afterData.email || typeof afterData.email !== 'string') {
+                functions.logger.error(`[FAIL] Promoter has missing or invalid email. Cannot send notification.`, { promoterId, email: afterData.email });
+                return null;
+            }
+            if (!afterData.name) {
+                functions.logger.warn(`Promoter name is missing, using a generic greeting.`, { promoterId });
+            }
+
+            // --- Brevo API Configuration ---
+            const brevoConfig = functions.config().brevo;
+            if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
+                functions.logger.error("[FAIL] Brevo API configuration is missing in Firebase environment. Cannot send email.", { promoterId });
+                return null;
+            }
+
+            // --- Fetch Organization Name ---
+            let orgName = 'Nossa Equipe'; // Default name
+            if (afterData.organizationId) {
+                try {
+                    const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
+                    if (orgDoc.exists) {
+                        orgName = orgDoc.data().name || orgName;
+                        functions.logger.info(`Successfully fetched organization name: '${orgName}'`, { promoterId, orgId: afterData.organizationId });
+                    } else {
+                        functions.logger.warn(`Organization document not found for ID: ${afterData.organizationId}. Using default name.`, { promoterId });
+                    }
+                } catch (error) {
+                    functions.logger.error(`Error fetching organization. Using default name.`, { promoterId, orgId: afterData.organizationId, error });
+                }
+            } else {
+                 functions.logger.warn(`Promoter is not associated with an organizationId. Using default name.`, { promoterId });
+            }
+
+            // --- Email Content Preparation ---
+            const promoter = afterData;
+            const promoterName = promoter.name || 'Candidato(a)';
+            const campaignName = promoter.campaignName || "nossa equipe";
+            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+
+            let subject = '';
+            let htmlContent = '';
+
+            if (afterStatus === 'approved') {
+                subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                htmlContent = `
+                    <p>Olá, ${promoterName}!</p>
+                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                    <p>Estamos muito felizes em ter você em nossa equipe!</p>
+                    <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
+                    <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
+                    <p>Lembre-se de usar o e-mail <strong>${promoter.email}</strong> para consultar seu status.</p>
+                    <br>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+            } else { // 'rejected'
+                subject = `Resultado da sua candidatura para ${orgName}`;
+                const reason = promoter.rejectionReason || 'Não foi fornecido um motivo específico.';
+                htmlContent = `
+                    <p>Olá, ${promoterName},</p>
+                    <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe de divulgadoras para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                    <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura.</p>
+                    <p><strong>Motivo informado:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p>
+                    <p>Desejamos sucesso em suas futuras oportunidades!</p>
+                    <br>
+                    <p>Atenciosamente,<br/>Equipe Certa</p>
+                `;
+            }
+
+            // --- Send Email via Brevo ---
             const defaultClient = SibApiV3Sdk.ApiClient.instance;
             const apiKey = defaultClient.authentications['api-key'];
             apiKey.apiKey = brevoConfig.key;
-
             const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
             const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
-            sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
+            sendSmtpEmail.to = [{ email: promoter.email, name: promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
 
+            functions.logger.info(`Attempting to send email...`, {
+                promoterId,
+                to: promoter.email,
+                from: brevoConfig.sender_email,
+                subject: subject,
+            });
+
             await apiInstance.sendTransacEmail(sendSmtpEmail);
-            console.log(`[SUCCESS] Email sent successfully to ${promoter.email}.`);
+            functions.logger.info(`[SUCCESS] Email dispatched successfully to ${promoter.email}.`, { promoterId });
             return { success: true };
+
         } catch (error) {
-            console.error(`[FAIL] CRITICAL: Error sending email via Brevo API for promoter ${promoterId}.`, JSON.stringify(error, null, 2));
+            functions.logger.error(`[FATAL] An unexpected error occurred in the function.`, {
+                promoterId: promoterId,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             return null;
         }
     });
