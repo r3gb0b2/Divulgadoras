@@ -23,10 +23,49 @@ const CheckoutPage: React.FC = () => {
     const [error, setError] = useState('');
     const [cardInstance, setCardInstance] = useState<any>(null);
     const cardContainerRef = useRef<HTMLDivElement>(null);
+    const [sdkReady, setSdkReady] = useState(false);
 
+    // Effect to load the PagSeguro SDK script
     useEffect(() => {
-        const initializePagSeguro = async () => {
-            if (!plan) return;
+        const scriptId = 'pagseguro-sdk';
+        // Prevent adding the script multiple times
+        if (document.getElementById(scriptId)) {
+            if (window.PagSeguro) setSdkReady(true);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.src = "https://assets.pagseguro.com.br/checkout-sdk-js/v2/pagseguro.min.js";
+        script.async = true;
+        
+        script.onload = () => {
+            setSdkReady(true);
+        };
+        
+        script.onerror = () => {
+            setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
+            setIsLoading(false);
+        };
+
+        document.body.appendChild(script);
+
+        // Cleanup function to remove script if component unmounts
+        return () => {
+            const scriptElement = document.getElementById(scriptId);
+            if (scriptElement && scriptElement.parentNode) {
+                scriptElement.parentNode.removeChild(scriptElement);
+            }
+        };
+    }, []);
+
+    // Effect to initialize the card form once the SDK is ready
+    useEffect(() => {
+        if (!sdkReady || !plan) {
+            return;
+        }
+
+        const initializeForm = async () => {
             setIsLoading(true);
             try {
                 const creds = await getPagSeguroCredentials();
@@ -34,12 +73,11 @@ const CheckoutPage: React.FC = () => {
                     throw new Error("Chave pública do PagSeguro não configurada.");
                 }
 
-                const pagseguro = window.PagSeguro;
-                if (!pagseguro) {
-                    throw new Error("SDK do PagSeguro não carregou.");
+                if (!window.PagSeguro) {
+                    throw new Error("SDK do PagSeguro não está disponível no objeto window.");
                 }
-
-                const instance = pagseguro.connect({
+                
+                const instance = window.PagSeguro.connect({
                     publicKey: creds.publicKey,
                     environment: "production",
                 });
@@ -63,8 +101,8 @@ const CheckoutPage: React.FC = () => {
             }
         };
 
-        initializePagSeguro();
-    }, [plan]);
+        initializeForm();
+    }, [sdkReady, plan]);
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -82,7 +120,10 @@ const CheckoutPage: React.FC = () => {
             });
             
             if (response.error) {
-                throw new Error(response.error.message || 'Dados do cartão inválidos.');
+                const errorMessage = Array.isArray(response.error) && response.error.length > 0
+                    ? response.error.map((err: any) => err.message).join('; ')
+                    : response.error.message || 'Dados do cartão inválidos.';
+                throw new Error(errorMessage);
             }
 
             // At this point, PagSeguro has validated and tokenized the card.
