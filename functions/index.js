@@ -1,5 +1,3 @@
-
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('sib-api-v3-sdk');
@@ -25,12 +23,12 @@ exports.sendTestEmail = functions
             throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
         }
 
-        // 3. Configure the Brevo client
-        const defaultClient = SibApiV3Sdk.ApiClient.instance;
-        const apiKey = defaultClient.authentications['api-key'];
-        apiKey.apiKey = brevoConfig.key;
-
-        const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+        // 3. Configure a new Brevo client instance
+        // This ensures each function invocation is stateless and avoids potential issues with shared singletons in a serverless environment.
+        const apiClient = new SibApiV3Sdk.ApiClient();
+        apiClient.authentications['api-key'].apiKey = brevoConfig.key;
+        const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi(apiClient);
+        
         const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
         // 4. Define the email content
@@ -153,10 +151,11 @@ exports.sendPromoterStatusEmail = functions
             }
 
             // --- 4. Send Email via Brevo ---
-            const defaultClient = SibApiV3Sdk.ApiClient.instance;
-            const apiKey = defaultClient.authentications['api-key'];
-            apiKey.apiKey = brevoConfig.key;
-            const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+            // Initialize a new API client for each request to ensure statelessness in the serverless environment.
+            const apiClient = new SibApiV3Sdk.ApiClient();
+            apiClient.authentications['api-key'].apiKey = brevoConfig.key;
+            const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi(apiClient);
+
             const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: afterData.email, name: promoterName }];
@@ -280,10 +279,11 @@ exports.manuallySendStatusEmail = functions
         
         // --- 6. Send Email with specific error handling ---
         try {
-            const defaultClient = SibApiV3Sdk.ApiClient.instance;
-            const apiKey = defaultClient.authentications['api-key'];
-            apiKey.apiKey = brevoConfig.key;
-            const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+            // Initialize a new API client for each request to ensure statelessness in the serverless environment.
+            const apiClient = new SibApiV3Sdk.ApiClient();
+            apiClient.authentications['api-key'].apiKey = brevoConfig.key;
+            const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi(apiClient);
+
             const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
             sendSmtpEmail.to = [{ email: promoterData.email, name: promoterName }];
