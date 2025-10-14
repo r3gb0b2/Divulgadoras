@@ -3,7 +3,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/onCall");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
-const mercadopago = require("mercadopago");
+const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -37,7 +37,8 @@ exports.initiateMercadoPagoCheckout = onCall(async (request) => {
     }
     
     const config = await getMercadoPagoConfig();
-    mercadopago.configure({ access_token: config.accessToken });
+    const client = new MercadoPagoConfig({ accessToken: config.accessToken });
+    const preferenceClient = new Preference(client);
 
     const referenceId = `ORG_${Date.now()}_${orgName.replace(/\s+/g, '_')}`;
 
@@ -61,7 +62,7 @@ exports.initiateMercadoPagoCheckout = onCall(async (request) => {
     const notificationUrl = `https://${functionRegion}-${projectId}.cloudfunctions.net/handleMercadoPagoNotification`;
     const redirectBaseUrl = `https://${projectId}.web.app`;
 
-    const preference = {
+    const preferencePayload = {
         items: [
             {
                 title: plan.name,
@@ -83,11 +84,17 @@ exports.initiateMercadoPagoCheckout = onCall(async (request) => {
     };
 
     try {
-        const response = await mercadopago.preferences.create(preference);
-        return { checkoutUrl: response.body.init_point };
+        const response = await preferenceClient.create({ body: preferencePayload });
+        return { checkoutUrl: response.init_point };
     } catch (error) {
-        logger.error("Erro ao criar preferência no Mercado Pago:", error);
-        throw new HttpsError('internal', 'Falha ao comunicar com o Mercado Pago para iniciar o pagamento.');
+        logger.error("Erro ao criar preferência no Mercado Pago:", JSON.stringify(error));
+        let userMessage = 'Falha ao comunicar com o Mercado Pago para iniciar o pagamento.';
+        if (error.cause && Array.isArray(error.cause) && error.cause.length > 0) {
+            const firstError = error.cause[0];
+            logger.error("Causa do erro MP:", firstError);
+            userMessage = `Erro do Mercado Pago: ${firstError.description || 'Não foi possível criar a preferência.'}`;
+        }
+        throw new HttpsError('internal', userMessage);
     }
 });
 
@@ -96,15 +103,14 @@ exports.initiateMercadoPagoCheckout = onCall(async (request) => {
  * Webhook para receber notificações de pagamento do Mercado Pago.
  */
 exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, res) => {
-    logger.info("Notificação Mercado Pago Recebida, query:", req.query);
+    logger.info("Notificação Mercado Pago Recebida, query:", req.query, "body:", req.body);
 
     const { topic, id } = req.query;
 
-    // A partir da V2, o MP envia um POST com body. Por segurança, checamos ambos.
     const paymentId = id || (req.body.type === 'payment' && req.body.data && req.body.data.id);
-    const notificationTopic = topic || (req.body.topic);
+    const notificationTopic = topic || (req.body.action);
 
-    if (notificationTopic !== 'payment' && req.body.action !== 'payment.updated') {
+    if (notificationTopic !== 'payment.created' && notificationTopic !== 'payment.updated' && req.body.type !== 'payment') {
         logger.log("Notificação não é sobre pagamento, ignorando.", req.body);
         return res.status(200).send('OK');
     }
@@ -116,12 +122,13 @@ exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, re
 
     try {
         const config = await getMercadoPagoConfig();
-        mercadopago.configure({ access_token: config.accessToken });
+        const client = new MercadoPagoConfig({ accessToken: config.accessToken });
+        const paymentClient = new Payment(client);
 
-        const payment = await mercadopago.payment.findById(Number(paymentId));
+        const payment = await paymentClient.get({ id: Number(paymentId) });
         
-        if (payment && payment.body && payment.body.status === 'approved' && payment.body.external_reference) {
-            const referenceId = payment.body.external_reference;
+        if (payment && payment.status === 'approved' && payment.external_reference) {
+            const referenceId = payment.external_reference;
             
             const pendingOrgRef = db.collection('pendingOrganizations').doc(referenceId);
             const pendingOrgDoc = await pendingOrgRef.get();
@@ -131,7 +138,6 @@ exports.handleMercadoPagoNotification = functions.https.onRequest(async (req, re
                 const password = Buffer.from(passwordB64, 'base64').toString('utf-8');
 
                 await db.runTransaction(async (transaction) => {
-                    // Previne re-processamento em caso de múltiplas notificações
                     const freshDoc = await transaction.get(pendingOrgRef);
                     if (freshDoc.data().status !== 'pending') return;
 
