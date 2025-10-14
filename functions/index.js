@@ -5,9 +5,9 @@ const Brevo = require('@getbrevo/brevo');
 admin.initializeApp();
 
 /**
- * Creates a freshly authenticated Brevo API client instance.
- * This function uses the official singleton pattern but re-authenticates on every call,
- * making it robust for serverless environments where instances can be reused.
+ * Creates a new, isolated, and freshly authenticated Brevo API client instance.
+ * This stateless approach is the most robust pattern for serverless environments like
+ * Firebase Functions, as it prevents issues from reused instances with stale state.
  * @param {object} brevoConfig - The Brevo configuration from Firebase functions config.
  * @returns {Brevo.TransactionalEmailsApi} A configured API instance.
  * @throws {functions.https.HttpsError} If config is missing.
@@ -18,16 +18,14 @@ const createBrevoClient = (brevoConfig) => {
         throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Brevo) não foi encontrada no servidor. Verifique as variáveis de ambiente.');
     }
     
-    // Use the official singleton pattern for the API client.
-    const defaultClient = Brevo.ApiClient.instance;
+    // Create a new, completely isolated API instance for each function call.
+    const apiInstance = new Brevo.TransactionalEmailsApi();
 
-    // Re-authenticate the singleton instance for every function call. This is crucial for serverless environments
-    // to prevent state issues from reused function instances.
-    const apiKeyAuth = defaultClient.authentications['api-key'];
+    // Authenticate this specific instance directly.
+    const apiKeyAuth = apiInstance.authentications['api-key'];
     apiKeyAuth.apiKey = brevoConfig.key;
     
-    // Return a new TransactionalEmailsApi instance which will use the globally configured client.
-    return new Brevo.TransactionalEmailsApi();
+    return apiInstance;
 };
 
 
