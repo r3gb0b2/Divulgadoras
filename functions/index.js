@@ -38,7 +38,7 @@ const createApprovedEmailHtml = (promoter) => {
     <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
         <h1 style="color: #e83a93; text-align: center;">Parabéns, ${promoter.name}!</h1>
-        <p>Temos uma ótima notícia! Sua candidatura para <strong>${promoter.campaignName || 'divulgadora'}</strong> na organização <strong>${promoter.organizationName || ''}</strong> foi <strong>APROVADA</strong>.</p>
+        <p>Temos uma ótima notícia! Sua candidatura para <strong>${promoter.campaignName}</strong> na organização <strong>${promoter.organizationName}</strong> foi <strong>APROVADA</strong>.</p>
         <p>Estamos muito felizes em ter você em nossa equipe!</p>
         <p>Para continuar, você precisa acessar seu portal para ler as regras e obter o link de acesso ao grupo oficial de divulgadoras.</p>
         <div style="text-align: center; margin: 30px 0;">
@@ -62,7 +62,7 @@ const createRejectedEmailHtml = (promoter) => {
       <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
         <h1 style="color: #333; text-align: center;">Resultado da sua candidatura</h1>
         <p>Olá, ${promoter.name},</p>
-        <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe de divulgadoras para <strong>${promoter.campaignName || ''}</strong> na organização <strong>${promoter.organizationName || ''}</strong>.</p>
+        <p>Agradecemos imensamente o seu interesse em fazer parte da nossa equipe de divulgadoras para <strong>${promoter.campaignName}</strong> na organização <strong>${promoter.organizationName}</strong>.</p>
         <p>Analisamos cuidadosamente todos os perfis e, neste momento, não poderemos seguir com a sua candidatura. O processo seletivo é bastante concorrido e diversos fatores são levados em consideração.</p>
         <p>Desejamos sucesso em suas futuras oportunidades!</p>
         <p>Atenciosamente,<br/>Equipe Certa</p>
@@ -80,69 +80,92 @@ exports.onPromoterStatusChange = functions.firestore
   .document("promoters/{promoterId}")
   .onUpdate(async (change, context) => {
     const { promoterId } = context.params;
-    logger.info(`[${promoterId}] Function triggered for update.`);
+    const logPrefix = `[Func: onPromoterStatusChange][ID: ${promoterId}]`;
+    logger.info(`${logPrefix} Execution started.`);
 
     const beforeData = change.before.data();
     const afterData = change.after.data();
 
-    // Exit if status has not changed
+    // 1. Exit if status has not changed
     if (beforeData.status === afterData.status) {
-      logger.info(`[${promoterId}] Status unchanged (${afterData.status}). Exiting.`);
+      logger.info(`${logPrefix} Status unchanged ('${afterData.status}'). Exiting.`);
       return null;
     }
 
-    logger.info(`[${promoterId}] Status changed from '${beforeData.status}' to '${afterData.status}'.`);
-
-    // Ensure email exists
-    if (!afterData.email) {
-      logger.error(`[${promoterId}] Promoter document is missing 'email' field. Cannot send notification.`);
-      return null;
+    logger.info(`${logPrefix} Status changed from '${beforeData.status}' to '${afterData.status}'.`);
+    
+    // 2. Exit if the new status should not trigger an email
+    const shouldSendEmail = afterData.status === 'approved' || afterData.status === 'rejected';
+    if (!shouldSendEmail) {
+        logger.info(`${logPrefix} New status '${afterData.status}' does not trigger an email. Exiting.`);
+        return null;
     }
 
-    try {
-      let organizationName = "Nossa Equipe";
-      if (afterData.organizationId) {
+    // 3. Validate essential promoter data
+    if (!afterData.email || !afterData.name) {
+      logger.error(`${logPrefix} Promoter document is missing required fields 'email' or 'name'. Cannot send notification. Data:`, afterData);
+      return null;
+    }
+    
+    // 4. Prepare promoter data with defaults for templates
+    const promoterData = {
+        name: afterData.name,
+        email: afterData.email,
+        campaignName: afterData.campaignName || "nossa equipe",
+        organizationId: afterData.organizationId,
+        organizationName: "Nossa Equipe", // Default name
+    };
+
+    // 5. Fetch the organization name for a more personalized email
+    if (promoterData.organizationId) {
         try {
-          const orgDoc = await db.collection('organizations').doc(afterData.organizationId).get();
-          if (orgDoc.exists) {
-            organizationName = orgDoc.data().name;
-            logger.info(`[${promoterId}] Found organization name: '${organizationName}'.`);
-          } else {
-            logger.warn(`[${promoterId}] Organization document with ID '${afterData.organizationId}' not found.`);
-          }
+            const orgDocRef = db.collection('organizations').doc(promoterData.organizationId);
+            const orgDoc = await orgDocRef.get();
+            if (orgDoc.exists) {
+                promoterData.organizationName = orgDoc.data().name || "Nossa Equipe";
+                logger.info(`${logPrefix} Fetched organization name: '${promoterData.organizationName}'.`);
+            } else {
+                logger.warn(`${logPrefix} Organization document with ID '${promoterData.organizationId}' not found.`);
+            }
         } catch (orgError) {
-          logger.error(`[${promoterId}] Error fetching organization '${afterData.organizationId}'.`, orgError);
-          // Continue with default name
+            logger.error(`${logPrefix} Error fetching organization '${promoterData.organizationId}'. Will use default name.`, orgError);
         }
-      } else {
-         logger.warn(`[${promoterId}] Promoter document has no 'organizationId'. Using default name.`);
-      }
+    } else {
+         logger.warn(`${logPrefix} Promoter document has no 'organizationId'. Using default name.`);
+    }
 
-      const promoterData = { ...afterData, organizationName };
-
-      let subject = "";
-      let html = "";
-
-      if (afterData.status === 'approved') {
+    // 6. Prepare email content based on new status
+    let subject = "";
+    let html = "";
+    
+    if (afterData.status === 'approved') {
         subject = `Parabéns! Sua candidatura para ${promoterData.organizationName} foi aprovada!`;
         html = createApprovedEmailHtml(promoterData);
-        logger.info(`[${promoterId}] Preparing 'approved' email for ${promoterData.email}.`);
-      } else if (afterData.status === 'rejected') {
+        logger.info(`${logPrefix} Prepared 'approved' email content for ${promoterData.email}.`);
+    } else { // status === 'rejected'
         subject = `Resultado da sua candidatura para ${promoterData.organizationName}`;
         html = createRejectedEmailHtml(promoterData);
-        logger.info(`[${promoterId}] Preparing 'rejected' email for ${promoterData.email}.`);
-      } else {
-        logger.info(`[${promoterId}] New status '${afterData.status}' does not trigger an email. Exiting.`);
-        return null; // Don't send email for other status changes
-      }
-
-      logger.info(`[${promoterId}] Adding email document to 'mail' collection for ${promoterData.email}.`);
-      const mailResult = await sendEmail(promoterData.email, subject, html);
-      logger.info(`[${promoterId}] Successfully created mail document with ID: ${mailResult.id}. The 'Trigger Email' extension will now process it.`);
-      
-    } catch (error) {
-      logger.error(`[${promoterId}] An unexpected error occurred while processing the email notification.`, error);
+        logger.info(`${logPrefix} Prepared 'rejected' email content for ${promoterData.email}.`);
     }
 
+    // 7. Create the final mail document object to be sent to the extension
+    const mailDocument = {
+        to: [promoterData.email],
+        message: {
+            subject,
+            html,
+        },
+    };
+    
+    logger.info(`${logPrefix} Final mail document to be created:`, JSON.stringify(mailDocument));
+
+    // 8. Write the document to the 'mail' collection for the extension to pick up
+    try {
+        const mailResult = await db.collection("mail").add(mailDocument);
+        logger.info(`${logPrefix} SUCCESS! Created mail document with ID: ${mailResult.id}. The 'Trigger Email' extension should now process it.`);
+    } catch (error) {
+        logger.error(`${logPrefix} CRITICAL ERROR! Failed to write mail document to Firestore collection 'mail'. The email was NOT sent.`, error);
+    }
+    
     return null;
   });
