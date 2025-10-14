@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { RejectionReason } from '../types';
 
 interface RejectionModalProps {
@@ -8,9 +8,39 @@ interface RejectionModalProps {
   reasons: RejectionReason[];
 }
 
+const defaultRejectionReasons: Omit<RejectionReason, 'organizationId'>[] = [
+    { id: 'default-1', text: "Perfil inadequado para a vaga." },
+    { id: 'default-2', text: "Fotos de baixa qualidade ou inadequadas." },
+    { id: 'default-3', text: "Informações de contato inválidas." },
+    { id: 'default-4', text: "Não cumpre os pré-requisitos da vaga." },
+    { id: 'default-5', text: "Vagas preenchidas no momento, tente novamente no futuro." }
+];
+
+
 const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConfirm, reasons }) => {
   const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
   const [customReason, setCustomReason] = useState('');
+
+  const combinedReasons = useMemo(() => {
+    const reasonMap = new Map<string, RejectionReason>();
+    
+    // Add custom (DB) reasons first to prioritize them and their IDs
+    reasons.forEach(reason => {
+        reasonMap.set(reason.text.trim().toLowerCase(), reason);
+    });
+
+    // Add default reasons only if a reason with the same text doesn't already exist
+    defaultRejectionReasons.forEach(defaultReason => {
+        const key = defaultReason.text.trim().toLowerCase();
+        if (!reasonMap.has(key)) {
+            // Add it with a placeholder orgId to satisfy the type
+            reasonMap.set(key, { ...defaultReason, organizationId: 'default' });
+        }
+    });
+
+    return Array.from(reasonMap.values());
+  }, [reasons]);
+
 
   if (!isOpen) return null;
 
@@ -53,7 +83,7 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
         <div className="flex-grow overflow-y-auto space-y-4">
             <h3 className="text-lg font-semibold text-gray-200">Selecione um ou mais motivos:</h3>
             <div className="space-y-2">
-                {reasons.map(reason => (
+                {combinedReasons.map(reason => (
                     <label key={reason.id} className="flex items-center p-2 bg-gray-700/50 rounded-md cursor-pointer hover:bg-gray-700">
                         <input
                             type="checkbox"

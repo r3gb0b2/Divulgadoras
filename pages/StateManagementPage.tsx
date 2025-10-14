@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getPromoters, updatePromoter, deletePromoter } from '../services/promoterService';
+import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign, getAllCampaigns } from '../services/settingsService';
 import { getOrganizations, getOrganization } from '../services/organizationService';
-import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization } from '../types';
+import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization, RejectionReason } from '../types';
 import { stateMap } from '../constants/states';
 import { WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
+import RejectionModal from '../components/RejectionModal';
 import { serverTimestamp } from 'firebase/firestore';
 
 interface StateManagementPageProps {
@@ -53,6 +54,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
   
   // State for modals
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -60,16 +62,20 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+  const [rejectingPromoter, setRejectingPromoter] = useState<Promoter | null>(null);
+
 
   // State for campaign form
   const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' });
   
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
+  const isSuperAdmin = adminData.role === 'superadmin';
 
   const fetchData = useCallback(async () => {
     if (!stateAbbr) return;
     
-    if (adminData.role !== 'superadmin' && !adminData.organizationId) {
+    if (!isSuperAdmin && !adminData.organizationId) {
          setError("Organização não encontrada para este administrador.");
          setIsLoading(false);
          return;
@@ -79,13 +85,15 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     setError(null);
     try {
       const orgId = adminData.organizationId;
+      const reasonsPromise = !isSuperAdmin && orgId ? getRejectionReasons(orgId) : Promise.resolve([]);
 
       const promises = [
         getPromoters(orgId, [stateAbbr]),
         getStateConfig(stateAbbr),
         getCampaigns(stateAbbr, orgId),
-        adminData.role === 'superadmin' ? getOrganizations() : getOrganization(orgId!),
-        adminData.role === 'superadmin' ? Promise.resolve([]) : getAllCampaigns(orgId!),
+        isSuperAdmin ? getOrganizations() : getOrganization(orgId!),
+        isSuperAdmin ? Promise.resolve([]) : getAllCampaigns(orgId!),
+        reasonsPromise,
       ];
 
       const [
@@ -93,10 +101,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         configData,
         campaignsData,
         orgsOrOrgData,
-        allCampaignsForOrgData
+        allCampaignsForOrgData,
+        reasonsData
       ] = await Promise.all(promises);
       
-      if (adminData.role === 'superadmin') {
+      setRejectionReasons(reasonsData as RejectionReason[]);
+      
+      if (isSuperAdmin) {
         setOrganizations(orgsOrOrgData as Organization[]);
         setOrganization(null);
         setAllOrgCampaigns([]);
@@ -107,7 +118,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
       }
 
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
-      const hasSpecificCampaigns = adminData.role !== 'superadmin' && assignedCampaignsForState && assignedCampaignsForState.length > 0;
+      const hasSpecificCampaigns = !isSuperAdmin && assignedCampaignsForState && assignedCampaignsForState.length > 0;
       
       const filteredPromoters = hasSpecificCampaigns
         ? (promotersData as Promoter[]).filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
@@ -126,7 +137,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     } finally {
       setIsLoading(false);
     }
-  }, [stateAbbr, adminData]);
+  }, [stateAbbr, adminData, isSuperAdmin]);
 
   useEffect(() => {
     fetchData();
@@ -142,17 +153,17 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   }, [promoters]);
 
   const campaignLimit = useMemo(() => {
-    if (adminData.role === 'superadmin' || !organization) return Infinity;
+    if (isSuperAdmin || !organization) return Infinity;
     if (organization.status === 'trial') return 1;
     if (organization.planId === 'basic') return 5;
     if (organization.planId === 'professional') return Infinity;
     return 0; // Default for expired or other statuses
-  }, [organization, adminData.role]);
+  }, [organization, isSuperAdmin]);
 
   const canCreateCampaign = useMemo(() => {
-    if (adminData.role === 'superadmin') return true;
+    if (isSuperAdmin) return true;
     return allOrgCampaigns.length < campaignLimit;
-  }, [adminData.role, allOrgCampaigns, campaignLimit]);
+  }, [isSuperAdmin, allOrgCampaigns, campaignLimit]);
 
   const handleConfigChange = (field: keyof StateConfig, value: string | boolean) => {
     if (stateConfig) {
@@ -198,9 +209,17 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         alert("Falha ao atualizar a divulgadora.");
     }
   };
+  
+  const handleConfirmReject = async (reason: string) => {
+    if (rejectingPromoter && canManage) {
+        await handleUpdatePromoter(rejectingPromoter.id, { status: 'rejected', rejectionReason: reason });
+    }
+    setIsRejectionModalOpen(false);
+    setRejectingPromoter(null);
+  };
 
   const handleDeletePromoter = async (id: string) => {
-    if (adminData.role !== 'superadmin') return;
+    if (!isSuperAdmin) return;
     if (window.confirm("Tem certeza que deseja excluir esta inscrição?")) {
          try {
             await deletePromoter(id);
@@ -224,19 +243,19 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         return;
     }
     
-    if (adminData.role !== 'superadmin' && !adminData.organizationId) {
+    if (!isSuperAdmin && !adminData.organizationId) {
       alert('Apenas administradores de uma organização podem criar campanhas.');
       return;
     }
     
-    if (adminData.role === 'superadmin' && !campaignForm.organizationId) {
+    if (isSuperAdmin && !campaignForm.organizationId) {
        alert('Como Super Admin, você deve selecionar uma organização para criar um novo evento/gênero.');
        return;
     }
 
     setIsSaving(true);
     try {
-      const orgId = adminData.role === 'superadmin' 
+      const orgId = isSuperAdmin 
         ? campaignForm.organizationId 
         : adminData.organizationId;
         
@@ -288,6 +307,20 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     setIsEditModalOpen(true);
   };
 
+  const openRejectionModal = async (promoter: Promoter) => {
+    if (isSuperAdmin && promoter.organizationId) {
+        try {
+            const reasons = await getRejectionReasons(promoter.organizationId);
+            setRejectionReasons(reasons);
+        } catch (e) {
+            console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
+            setRejectionReasons([]);
+        }
+    }
+    setRejectingPromoter(promoter);
+    setIsRejectionModalOpen(true);
+  };
+
   const getStatusBadge = (status: PromoterStatus) => {
     const styles = {
         pending: "bg-yellow-900/50 text-yellow-300",
@@ -327,7 +360,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                     </div>
                 </div>
 
-                {adminData.role === 'superadmin' && (
+                {isSuperAdmin && (
                   <div className="bg-secondary p-5 rounded-lg shadow">
                       <h3 className="text-xl font-semibold mb-4 text-white">Configurações Gerais da Localidade</h3>
                       {stateConfig && (
@@ -372,14 +405,14 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 {c.whatsappLink && <p className="text-gray-400 text-xs truncate">Link: {c.whatsappLink}</p>}
                                 <div className="flex gap-2 justify-end mt-1">
                                     <button onClick={() => setCampaignForm(c)} className="text-indigo-400 hover:underline text-xs">Editar</button>
-                                    {adminData.role === 'superadmin' && <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>}
+                                    {isSuperAdmin && <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:underline text-xs">Excluir</button>}
                                 </div>
                             </div>
                         ))}
                     </div>
                     {canManage && (
                         <div className="border-t border-gray-700 pt-4">
-                            {adminData.role !== 'superadmin' && campaignLimit !== Infinity && organization && (
+                            {!isSuperAdmin && campaignLimit !== Infinity && organization && (
                                 <div className="p-3 bg-gray-800 rounded-md mb-4 text-sm text-center">
                                     <p className="font-semibold text-white">{allOrgCampaigns.length} / {campaignLimit} eventos criados</p>
                                     <p className="text-gray-400">Seu plano "{organization.planId}" permite até {campaignLimit} evento(s).</p>
@@ -390,7 +423,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 <form onSubmit={handleSaveCampaign} className="space-y-3">
                                     <h4 className="font-semibold text-gray-200">{campaignForm.id ? 'Editar Evento/Gênero' : 'Adicionar Novo'}</h4>
                                     
-                                    {adminData.role === 'superadmin' && (
+                                    {isSuperAdmin && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-300">Organização</label>
                                             <select
@@ -475,11 +508,11 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                         {promoter.status === 'pending' && (
                                             <>
                                                 <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                                <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'rejected'})} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                                <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
                                             </>
                                         )}
                                         <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                        {adminData.role === 'superadmin' && (
+                                        {isSuperAdmin && (
                                             <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
                                         )}
                                     </div>
@@ -499,6 +532,14 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 onClose={() => setIsEditModalOpen(false)}
                 onSave={handleUpdatePromoter}
                 promoter={editingPromoter}
+            />
+        )}
+        {canManage && rejectingPromoter && (
+            <RejectionModal
+                isOpen={isRejectionModalOpen}
+                onClose={() => setIsRejectionModalOpen(false)}
+                onConfirm={handleConfirmReject}
+                reasons={rejectionReasons}
             />
         )}
     </div>
