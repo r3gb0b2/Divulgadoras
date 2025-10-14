@@ -70,62 +70,52 @@ exports.sendPromoterStatusEmail = functions
         const promoterId = context.params.promoterId;
         
         try {
-            // --- 1. Get before and after data ---
+            // --- 1. Get before and after data & Guard Clauses ---
             const beforeData = change.before.data();
             const afterData = change.after.data();
 
             if (!beforeData || !afterData) {
-                functions.logger.error("Data missing from change object. Exiting.", { promoterId });
+                functions.logger.info(`Data missing from change object. Exiting.`, { promoterId });
                 return null;
             }
             
             const beforeStatus = beforeData.status;
             const afterStatus = afterData.status;
 
+            if (beforeStatus === afterStatus) {
+                return null; // Status didn't change, no email needed.
+            }
+            
             functions.logger.info(`[TRIGGER] Function triggered for promoterId: ${promoterId}. Status change: from '${beforeStatus}' to '${afterStatus}'.`);
 
-            // --- 2. Guard Clause: Check if the status has actually changed ---
-            if (beforeStatus === afterStatus) {
-                functions.logger.info(`[EXIT] Status has not changed. No email needed.`, { promoterId });
-                return null;
-            }
-
-            // --- 3. Guard Clause: Check if the change is from 'pending' to a final state ---
             if (beforeStatus !== 'pending' || (afterStatus !== 'approved' && afterStatus !== 'rejected')) {
                 functions.logger.info(`[EXIT] Change is not a final decision from 'pending' state. No email needed.`, { promoterId, beforeStatus, afterStatus });
                 return null;
             }
-
-            functions.logger.info(`[PASS] Condition met. Proceeding to send '${afterStatus}' email.`, { promoterId });
-
-            // --- 4. Guard Clause: Validate essential data for the email ---
+            
             if (!afterData.email || typeof afterData.email !== 'string') {
                 functions.logger.error(`[FATAL EXIT] Promoter has missing or invalid email. Cannot send notification.`, { promoterId, email: afterData.email });
                 return null;
             }
-
-            // --- 5. Get Brevo API Configuration ---
+            
             const brevoConfig = functions.config().brevo;
             if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
-                functions.logger.error("[FATAL EXIT] Brevo API configuration is missing in Firebase environment. Cannot send email.", { promoterId });
+                functions.logger.error("[FATAL EXIT] Brevo API configuration is missing in Firebase environment.", { promoterId });
                 return null;
             }
 
-            // --- 6. Fetch Organization Name ---
+            // --- 2. Fetch Organization Name ---
             let orgName = 'Nossa Equipe'; // Default name
             if (afterData.organizationId) {
                 const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
                 if (orgDoc.exists) {
                     orgName = orgDoc.data().name || orgName;
-                    functions.logger.info(`Successfully fetched organization name: '${orgName}'`, { promoterId, orgId: afterData.organizationId });
                 } else {
-                    functions.logger.warn(`Organization document not found for ID: ${afterData.organizationId}. Using default name.`, { promoterId });
+                    functions.logger.warn(`Organization document not found for ID: ${afterData.organizationId}.`, { promoterId });
                 }
-            } else {
-                 functions.logger.warn(`Promoter is not associated with an organizationId. Using default name.`, { promoterId });
             }
 
-            // --- 7. Prepare Email Content ---
+            // --- 3. Prepare Email Content ---
             const promoterName = afterData.name || 'Candidato(a)';
             const campaignName = afterData.campaignName || "nossa equipe";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
@@ -158,7 +148,7 @@ exports.sendPromoterStatusEmail = functions
                 `;
             }
 
-            // --- 8. Send Email via Brevo ---
+            // --- 4. Send Email via Brevo ---
             const defaultClient = SibApiV3Sdk.ApiClient.instance;
             const apiKey = defaultClient.authentications['api-key'];
             apiKey.apiKey = brevoConfig.key;
@@ -170,19 +160,18 @@ exports.sendPromoterStatusEmail = functions
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
 
-            functions.logger.info(`Attempting to send email to ${afterData.email}`, { promoterId });
-
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             
             functions.logger.info(`[SUCCESS] Email dispatched successfully to ${afterData.email}.`, { promoterId });
             return { success: true };
 
         } catch (error) {
-            functions.logger.error(`[FATAL ERROR] An unexpected error occurred in the function.`, {
+            const isBrevoError = !!error.response?.body;
+            functions.logger.error(`[FATAL ERROR] Failed to send promoter status email.`, {
                 promoterId: promoterId,
+                errorSource: isBrevoError ? 'Brevo API' : 'Internal Logic/Firestore',
                 errorMessage: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : undefined,
-                brevoError: error.response?.body
+                brevoErrorBody: error.response?.body,
             });
             return null;
         }
@@ -202,54 +191,60 @@ exports.manuallySendStatusEmail = functions
 
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email}`);
 
+        let promoterData;
+        let orgName = 'Nossa Equipe';
+
+        // --- 2. Fetch all required data from Firestore ---
         try {
-            // --- 2. Fetch Promoter Data ---
             const promoterDoc = await admin.firestore().collection('promoters').doc(promoterId).get();
             if (!promoterDoc.exists) {
                 throw new functions.https.HttpsError('not-found', 'Divulgadora não encontrada.');
             }
-            const promoterData = promoterDoc.data();
+            promoterData = promoterDoc.data();
 
-            // --- 3. Guard Clauses ---
-            if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
-                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
-            }
-            if (!promoterData.email || typeof promoterData.email !== 'string') {
-                functions.logger.error(`[FATAL EXIT] Promoter has missing or invalid email.`, { promoterId });
-                throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido para notificação.');
-            }
-
-            // --- 4. Get Brevo API Configuration ---
-            const brevoConfig = functions.config().brevo;
-            if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
-                functions.logger.error("[FATAL] Brevo API configuration is missing.", { promoterId });
-                throw new functions.https.HttpsError('internal', 'A configuração da API de e-mail não foi encontrada no servidor.');
-            }
-
-            // --- 5. Fetch Organization Name ---
-            let orgName = 'Nossa Equipe';
             if (promoterData.organizationId) {
                 const orgDoc = await admin.firestore().collection('organizations').doc(promoterData.organizationId).get();
                 if (orgDoc.exists) orgName = orgDoc.data().name || orgName;
             }
+        } catch (error) {
+            functions.logger.error(`[FATAL ERROR] Firestore read failed in manual trigger.`, { promoterId, error });
+            if (error instanceof functions.https.HttpsError) throw error;
+            throw new functions.https.HttpsError('internal', 'Falha ao ler os dados da divulgadora no banco de dados.');
+        }
 
-            // --- 6. Prepare Email Content ---
-            const promoterName = promoterData.name || 'Candidato(a)';
-            const campaignName = promoterData.campaignName || "nossa equipe";
-            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            let subject = '';
-            let htmlContent = '';
+        // --- 3. Guard Clauses for business logic ---
+        if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
+            throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
+        }
+        if (!promoterData.email || typeof promoterData.email !== 'string') {
+            throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido para notificação.');
+        }
 
-            if (promoterData.status === 'approved') {
-                subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                htmlContent = `<p>Olá, ${promoterName}!</p><p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p><p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p><p><a href="${portalLink}">Clique aqui para acessar seu portal</a></p><p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
-            } else { // 'rejected'
-                subject = `Resultado da sua candidatura para ${orgName}`;
-                const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
-                htmlContent = `<p>Olá, ${promoterName},</p><p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p><p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p><p><strong>Motivo:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p><p>Desejamos sucesso!</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
-            }
-            
-            // --- 7. Send Email ---
+        // --- 4. Get Brevo API Configuration ---
+        const brevoConfig = functions.config().brevo;
+        if (!brevoConfig?.key || !brevoConfig?.sender_email || !brevoConfig?.sender_name) {
+            functions.logger.error("[FATAL] Brevo API configuration is missing.", { promoterId });
+            throw new functions.https.HttpsError('internal', 'A configuração da API de e-mail não foi encontrada no servidor.');
+        }
+
+        // --- 5. Prepare Email Content ---
+        const promoterName = promoterData.name || 'Candidato(a)';
+        const campaignName = promoterData.campaignName || "nossa equipe";
+        const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+        let subject = '';
+        let htmlContent = '';
+
+        if (promoterData.status === 'approved') {
+            subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+            htmlContent = `<p>Olá, ${promoterName}!</p><p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p><p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p><p><a href="${portalLink}">Clique aqui para acessar seu portal</a></p><p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
+        } else { // 'rejected'
+            subject = `Resultado da sua candidatura para ${orgName}`;
+            const reason = promoterData.rejectionReason || 'Não foi fornecido um motivo específico.';
+            htmlContent = `<p>Olá, ${promoterName},</p><p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p><p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p><p><strong>Motivo:</strong><br/>${reason.replace(/\n/g, '<br/>')}</p><p>Desejamos sucesso!</p><br><p>Atenciosamente,<br/>Equipe Certa</p>`;
+        }
+        
+        // --- 6. Send Email with specific error handling ---
+        try {
             const defaultClient = SibApiV3Sdk.ApiClient.instance;
             const apiKey = defaultClient.authentications['api-key'];
             apiKey.apiKey = brevoConfig.key;
@@ -264,17 +259,9 @@ exports.manuallySendStatusEmail = functions
             await apiInstance.sendTransacEmail(sendSmtpEmail);
 
             return { success: true, message: `E-mail enviado com sucesso para ${promoterData.email}.` };
-
         } catch (error) {
-            functions.logger.error(`[FATAL ERROR] Manual email trigger failed.`, {
-                promoterId: promoterId,
-                errorMessage: error instanceof Error ? error.message : String(error),
-                isHttpsError: error instanceof functions.https.HttpsError,
-            });
-            // Re-throw HttpsError to be caught by the client, otherwise throw a generic one
-            if (error instanceof functions.https.HttpsError) {
-                throw error;
-            }
-            throw new functions.https.HttpsError('internal', 'Ocorreu um erro inesperado ao tentar enviar o e-mail.');
+            functions.logger.error("Error sending email via Brevo API in manual trigger: ", error.response ? error.response.body : error);
+            const errorMessage = error.response?.body?.message || error.message || 'Erro desconhecido da API.';
+            throw new functions.https.HttpsError('internal', `Falha na API de envio: ${errorMessage}`);
         }
     });
