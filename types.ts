@@ -93,4 +93,5 @@ export interface Organization {
     planExpiresAt?: Timestamp;
     assignedStates: string[];
     public: boolean;
+    paymentLink?: string;
 }

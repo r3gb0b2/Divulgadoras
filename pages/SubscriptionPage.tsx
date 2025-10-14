@@ -122,7 +122,7 @@ const SubscriptionPage: React.FC = () => {
                                 rel="noopener noreferrer"
                                 className="w-full flex items-center justify-center mt-4 px-4 py-3 bg-primary text-white rounded-md hover:bg-primary-dark text-sm font-semibold"
                             >
-                                <WhatsAppIcon className="w-5 h-5 mr-2" />
+                                <CreditCardIcon className="w-5 h-5 mr-2" />
                                 Realizar Pagamento Agora
                             </a>
                         ) : (
