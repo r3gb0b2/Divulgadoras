@@ -37,13 +37,17 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
     if (!plan || !orgName || !email || !passwordB64 || !taxId || !phone) {
         throw new HttpsError('invalid-argument', 'Todos os campos do formulário são obrigatórios.');
     }
+    
+    if (orgName.length > 50) {
+        throw new HttpsError('invalid-argument', 'O nome da empresa deve ter no máximo 50 caracteres.');
+    }
 
     // --- Data Cleaning and Validation ---
     const cleanedTaxId = taxId.replace(/\D/g, '');
     const cleanedPhone = phone.replace(/\D/g, '');
 
-    if (cleanedTaxId.length < 11 || cleanedTaxId.length > 14) {
-        throw new HttpsError('invalid-argument', 'O CPF/CNPJ informado parece ser inválido.');
+    if (cleanedTaxId.length !== 11 && cleanedTaxId.length !== 14) {
+        throw new HttpsError('invalid-argument', 'O CPF/CNPJ informado é inválido. Verifique o número de dígitos.');
     }
     if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
          throw new HttpsError('invalid-argument', 'Telefone inválido. Por favor, inclua o DDD (ex: 11987654321).');
@@ -51,6 +55,11 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
 
     const phoneArea = cleanedPhone.substring(0, 2);
     const phoneNumber = cleanedPhone.substring(2);
+
+    if (phoneNumber.length < 8 || phoneNumber.length > 9) {
+        throw new HttpsError('invalid-argument', 'O número de telefone (sem DDD) parece inválido.');
+    }
+
 
     const config = await getPagSeguroConfig();
     const referenceId = `ORG_${Date.now()}_${orgName.replace(/\s+/g, '_')}`;
@@ -80,7 +89,7 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
     const orderPayload = {
         reference_id: referenceId,
         customer: {
-            name: orgName,
+            name: orgName.substring(0, 50),
             email: email,
             tax_id: cleanedTaxId,
             phones: [{
