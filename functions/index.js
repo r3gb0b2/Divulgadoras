@@ -280,7 +280,6 @@ exports.manuallySendStatusEmail = functions
         
         // --- 6. Send Email with specific error handling ---
         try {
-            // FIX: Added missing Brevo client initialization
             const defaultClient = SibApiV3Sdk.ApiClient.instance;
             const apiKey = defaultClient.authentications['api-key'];
             apiKey.apiKey = brevoConfig.key;
