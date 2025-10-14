@@ -6,7 +6,7 @@ import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
-import CheckoutPage from './pages/MockCheckoutPage';
+import CheckoutCompletePage from './pages/MockCheckoutPage';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
 
 const App: React.FC = () => {
@@ -34,7 +34,7 @@ const App: React.FC = () => {
               <Route path="/admin/*" element={<AdminAuth />} />
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/planos" element={<PricingPage />} />
-              <Route path="/checkout/:planId/:orgName/:email/:passwordB64" element={<CheckoutPage />} />
+              <Route path="/checkout-complete" element={<CheckoutCompletePage />} />
             </Routes>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">

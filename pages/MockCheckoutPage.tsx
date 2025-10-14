@@ -1,206 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
-import { Plan, plans } from './PricingPage';
-import { getPagSeguroCredentials } from '../services/credentialsService';
+import React from 'react';
+import { Link } from 'react-router-dom';
 
-declare global {
-    interface Window {
-        PagSeguro: any;
-        pagSeguroSdkReady?: boolean; // Our custom flag
-    }
-}
-
-const CheckoutPage: React.FC = () => {
-    const { planId, orgName, email, passwordB64 } = useParams();
-    const navigate = useNavigate();
-
-    const plan = plans.find(p => p.id === planId);
-    const password = passwordB64 ? atob(passwordB64) : '';
-
-    const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>(
-        () => (window.PagSeguro && window.pagSeguroSdkReady ? 'ready' : 'loading')
-    );
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [error, setError] = useState('');
-    const [cardInstance, setCardInstance] = useState<any>(null);
-    const cardContainerRef = useRef<HTMLDivElement>(null);
-
-    // Effect to listen for SDK readiness from the static script tag
-    useEffect(() => {
-        if (sdkStatus === 'ready') {
-            return;
-        }
-
-        const handleSdkReady = () => {
-            setSdkStatus('ready');
-        };
-
-        // If script is already ready when component mounts
-        if (window.pagSeguroSdkReady) {
-            handleSdkReady();
-            return;
-        }
-
-        window.addEventListener('pagSeguroSdkReady', handleSdkReady);
-
-        // Fallback timeout in case the script fails to load silently
-        const timer = setTimeout(() => {
-            setSdkStatus(currentStatus => {
-                if (currentStatus === 'loading') {
-                    setError("Falha ao carregar o SDK do PagSeguro. Verifique sua conexão e tente novamente.");
-                    return 'error';
-                }
-                return currentStatus;
-            });
-        }, 10000); // 10-second timeout
-
-        return () => {
-            window.removeEventListener('pagSeguroSdkReady', handleSdkReady);
-            clearTimeout(timer);
-        };
-    }, [sdkStatus]);
-
-    // Effect to initialize the card form once the SDK is ready
-    useEffect(() => {
-        if (sdkStatus !== 'ready' || cardInstance) {
-            return;
-        }
-
-        const initializeForm = async () => {
-            try {
-                const creds = await getPagSeguroCredentials();
-                if (!creds.publicKey) {
-                    throw new Error("Chave pública do PagSeguro não configurada.");
-                }
-
-                if (!window.PagSeguro) {
-                    throw new Error("SDK do PagSeguro não está disponível no objeto window.");
-                }
-                
-                const instance = window.PagSeguro.connect({
-                    publicKey: creds.publicKey,
-                    environment: "production",
-                });
-                
-                if (cardContainerRef.current) {
-                     const card = instance.card({
-                        form: {
-                            id: 'pagseguro-card-form'
-                        },
-                        card: {
-                            id: 'pagseguro-card-container'
-                        }
-                    });
-                    setCardInstance(card);
-                }
-
-            } catch (err: any) {
-                setError(err.message || "Falha ao inicializar o pagamento.");
-                setSdkStatus('error');
-            }
-        };
-
-        initializeForm();
-    }, [sdkStatus, cardInstance]);
-
-    const handlePaymentSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!cardInstance) {
-            setError("O formulário de pagamento não está pronto.");
-            return;
-        }
-
-        setIsProcessing(true);
-        setError('');
-
-        try {
-            const response = await cardInstance.createToken({
-                useForm: true
-            });
-            
-            if (response.error) {
-                const errorMessage = Array.isArray(response.error) && response.error.length > 0
-                    ? response.error.map((err: any) => err.message).join('; ')
-                    : response.error.message || 'Dados do cartão inválidos.';
-                throw new Error(errorMessage);
-            }
-
-            // At this point, PagSeguro has validated and tokenized the card.
-            // We now create the user and organization in our system.
-            const createOrgAndUser = httpsCallable(functions, 'createOrganizationAndUser');
-            await createOrgAndUser({
-                orgName: decodeURIComponent(orgName || ''),
-                email: decodeURIComponent(email || ''),
-                password,
-                planId,
-            });
-
-            // If the cloud function is successful, redirect to admin login
-            alert('Pagamento aprovado e conta criada com sucesso! Você já pode fazer o login.');
-            navigate('/admin/login');
-
-        } catch (err: any) {
-            console.error("Payment/Creation error:", err);
-            setError(err.message || 'Ocorreu um erro. Verifique os dados ou tente novamente.');
-            setIsProcessing(false);
-        }
-    };
-    
-     if (!plan || !orgName || !email || !password) {
-        return (
-            <div className="max-w-md mx-auto text-center bg-secondary p-8 rounded-lg">
-                <h1 className="text-2xl font-bold text-red-400">Erro</h1>
-                <p className="text-gray-300 mt-4">Informações da assinatura ausentes. Por favor, inicie o processo pela página de planos.</p>
-                <Link to="/planos" className="inline-block mt-6 px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
-                    Voltar aos Planos
-                </Link>
-            </div>
-        );
-    }
-
-    const isLoading = sdkStatus === 'loading';
-
+const CheckoutCompletePage: React.FC = () => {
     return (
-        <div className="max-w-lg mx-auto">
-            <div className="bg-secondary shadow-2xl rounded-lg p-8 relative">
-                 {(isLoading || isProcessing) && (
-                    <div className="absolute inset-0 bg-secondary bg-opacity-90 flex flex-col justify-center items-center rounded-lg z-10">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                        <p className="mt-4 text-gray-300">{isLoading ? 'Carregando checkout...' : 'Processando pagamento...'}</p>
-                    </div>
-                )}
-                <h1 className="text-3xl font-bold text-center text-white mb-2">Finalizar Assinatura</h1>
-                <p className="text-center text-gray-400 mb-6">Plano {plan.name} - {plan.priceFormatted}/mês</p>
-
-                {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm mb-4 text-center">{error}</p>}
-                
-                <form id="pagseguro-card-form" onSubmit={handlePaymentSubmit} className="space-y-4">
-                    <div className="p-4 rounded-md bg-gray-800/50 text-gray-300">
-                        <p><strong>Empresa:</strong> {decodeURIComponent(orgName)}</p>
-                        <p><strong>E-mail:</strong> {decodeURIComponent(email)}</p>
-                    </div>
-
-                    <div id="pagseguro-card-container" ref={cardContainerRef}></div>
-
-                    <button 
-                        type="submit" 
-                        disabled={isLoading || isProcessing || !cardInstance}
-                        className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50"
-                    >
-                        Pagar com Cartão
-                    </button>
-                </form>
-
-                <div className="text-center mt-4">
-                     <Link to="/planos" className="inline-block text-sm text-gray-400 hover:text-white">
-                        Cancelar e voltar
-                    </Link>
+        <div className="max-w-2xl mx-auto text-center">
+            <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                <div className="w-16 h-16 bg-green-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-10 h-10 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
                 </div>
+                <h1 className="text-3xl font-bold text-white mb-2">Pedido Recebido!</h1>
+                <p className="text-gray-400 mb-6">
+                    Seu pagamento está sendo processado pelo PagSeguro. Assim que for confirmado, sua conta será criada automaticamente.
+                </p>
+                <p className="text-sm text-gray-500 mb-8">
+                    Isso geralmente leva apenas alguns instantes. Você pode fechar esta página e tentar fazer login em breve.
+                </p>
+                <Link 
+                    to="/admin/login" 
+                    className="inline-block w-full max-w-xs py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                >
+                    Ir para a Tela de Login
+                </Link>
             </div>
         </div>
     );
 };
 
-export default CheckoutPage;
+// To maintain file structure, we're exporting this as the default.
+// In App.tsx, this file is imported as CheckoutCompletePage.
+export default CheckoutCompletePage;

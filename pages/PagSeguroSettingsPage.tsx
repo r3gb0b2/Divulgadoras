@@ -4,7 +4,7 @@ import { getPagSeguroCredentials, setPagSeguroCredentials } from '../services/cr
 import { PagSeguroCredentials } from '../types';
 
 const PagSeguroSettingsPage: React.FC = () => {
-    const [credentials, setCredentials] = useState<PagSeguroCredentials>({ publicKey: '' });
+    const [credentials, setCredentials] = useState<PagSeguroCredentials>({ publicKey: '', accessToken: '' });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
@@ -36,8 +36,8 @@ const PagSeguroSettingsPage: React.FC = () => {
         setIsSaving(true);
         setError('');
         setSuccess('');
-        if (!credentials.publicKey) {
-            setError('O campo Chave Pública é obrigatório.');
+        if (!credentials.publicKey || !credentials.accessToken) {
+            setError('Todos os campos são obrigatórios.');
             setIsSaving(false);
             return;
         }
@@ -64,8 +64,8 @@ const PagSeguroSettingsPage: React.FC = () => {
             <div className="max-w-2xl">
                 <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                     <p className="text-sm text-gray-400">
-                        Insira a sua Chave Pública do PagSeguro para habilitar o Checkout Transparente (Brick).
-                        Você pode encontrar suas credenciais no <a href="https://pagseguro.uol.com.br/aplicacao/credenciais.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">painel do PagSeguro</a>.
+                        Insira suas credenciais do PagSeguro.
+                        Você pode encontrá-las no <a href="https://pagseguro.uol.com.br/aplicacao/credenciais.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">painel do PagSeguro</a>.
                     </p>
                     {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md text-sm text-center">{error}</p>}
                     {success && <p className="text-green-300 bg-green-900/50 p-3 rounded-md text-sm text-center">{success}</p>}
@@ -82,7 +82,22 @@ const PagSeguroSettingsPage: React.FC = () => {
                             className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                             required
                         />
-                        <p className="text-xs text-gray-500 mt-1">Esta chave é usada no site para renderizar o formulário de cartão de forma segura.</p>
+                        <p className="text-xs text-gray-500 mt-1">Usada no frontend para segurança (se necessário no futuro).</p>
+                    </div>
+
+                    <div>
+                        <label htmlFor="accessToken" className="block text-sm font-medium text-gray-300">Access Token (Chave Privada / Bearer Token)</label>
+                        <input
+                            type="password"
+                            id="accessToken"
+                            name="accessToken"
+                            value={credentials.accessToken || ''}
+                            onChange={handleChange}
+                            placeholder="Seu token de acesso..."
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Usada no backend para criar os pagamentos. Mantenha em segredo.</p>
                     </div>
 
                      <div className="flex justify-end pt-4">

@@ -58,7 +58,7 @@ export const getPagSeguroCredentials = async (): Promise<PagSeguroCredentials> =
             return docSnap.data() as PagSeguroCredentials;
         }
         
-        return { publicKey: '' };
+        return { publicKey: '', accessToken: '' };
 
     } catch (error) {
         console.error("Error getting PagSeguro credentials: ", error);

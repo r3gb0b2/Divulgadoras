@@ -89,4 +89,5 @@ export interface MercadoPagoCredentials {
 
 export interface PagSeguroCredentials {
   publicKey?: string;
+  accessToken?: string;
 }
