@@ -28,7 +28,7 @@ const getMercadoPagoConfig = async () => {
 /**
  * Inicia o processo de checkout, criando uma preferência no Mercado Pago e retornando o link de pagamento.
  */
-exports.initiateMercadoPagoCheckout = onCall(async (request) => {
+exports.initiateMercadoPagoCheckout = onCall({ allow: "unauthenticated" }, async (request) => {
     const { planId, orgName, email, passwordB64 } = request.data;
     const plan = plans[planId];
 
