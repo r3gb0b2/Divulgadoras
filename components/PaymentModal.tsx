@@ -15,6 +15,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [phone, setPhone] = useState('');
   
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,6 +27,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
       setEmail('');
       setPassword('');
       setConfirmPassword('');
+      setTaxId('');
+      setPhone('');
       setError('');
       setIsProcessing(false);
     }
@@ -54,7 +58,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
             planId: plan.id,
             orgName,
             email,
-            passwordB64
+            passwordB64,
+            taxId,
+            phone
         });
         
         if (result.data.checkoutUrl) {
@@ -96,6 +102,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, plan }) =>
              <div>
                 <label className="text-sm font-medium text-gray-400">Seu E-mail de Acesso</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+            </div>
+            <div>
+                <label className="text-sm font-medium text-gray-400">CPF ou CNPJ</label>
+                <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} required placeholder="Apenas números" className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+            </div>
+            <div>
+                <label className="text-sm font-medium text-gray-400">Telefone com DDD</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="Ex: 11987654321" className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
             </div>
              <div>
                 <label className="text-sm font-medium text-gray-400">Crie uma Senha</label>

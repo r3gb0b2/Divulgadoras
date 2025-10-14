@@ -1,5 +1,5 @@
 const functions = require("firebase-functions");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/onCall");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -31,12 +31,26 @@ const PAGSEGURO_API_URL = "https://api.pagseguro.com";
  * Inicia o processo de checkout, criando um pedido no PagSeguro e retornando o link de pagamento.
  */
 exports.initiatePagSeguroCheckout = onCall(async (request) => {
-    const { planId, orgName, email, passwordB64 } = request.data;
+    const { planId, orgName, email, passwordB64, taxId, phone } = request.data;
     const plan = plans[planId];
 
-    if (!plan || !orgName || !email || !passwordB64) {
-        throw new HttpsError('invalid-argument', 'Faltam parâmetros obrigatórios (planId, orgName, email, passwordB64).');
+    if (!plan || !orgName || !email || !passwordB64 || !taxId || !phone) {
+        throw new HttpsError('invalid-argument', 'Todos os campos do formulário são obrigatórios.');
     }
+
+    // --- Data Cleaning and Validation ---
+    const cleanedTaxId = taxId.replace(/\D/g, '');
+    const cleanedPhone = phone.replace(/\D/g, '');
+
+    if (cleanedTaxId.length < 11 || cleanedTaxId.length > 14) {
+        throw new HttpsError('invalid-argument', 'O CPF/CNPJ informado parece ser inválido.');
+    }
+    if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+         throw new HttpsError('invalid-argument', 'Telefone inválido. Por favor, inclua o DDD (ex: 11987654321).');
+    }
+
+    const phoneArea = cleanedPhone.substring(0, 2);
+    const phoneNumber = cleanedPhone.substring(2);
 
     const config = await getPagSeguroConfig();
     const referenceId = `ORG_${Date.now()}_${orgName.replace(/\s+/g, '_')}`;
@@ -47,6 +61,8 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
         email,
         passwordB64,
         planId,
+        taxId: cleanedTaxId,
+        phone: cleanedPhone,
         status: 'pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -57,15 +73,22 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
         logger.error("GCLOUD_PROJECT environment variable is not set.");
         throw new HttpsError('internal', 'O ID do Projeto não foi encontrado no ambiente da função.');
     }
-    const functionRegion = "southamerica-east1"; // Região definida em setGlobalOptions
+    const functionRegion = "southamerica-east1";
     const notificationUrl = `https://${functionRegion}-${projectId}.cloudfunctions.net/handlePagSeguroNotification`;
-    const redirectUrl = `https://${projectId}.web.app/checkout-complete`;
+    const redirectUrl = `https://${projectId}.web.app/#/checkout-complete`;
 
     const orderPayload = {
         reference_id: referenceId,
         customer: {
             name: orgName,
             email: email,
+            tax_id: cleanedTaxId,
+            phones: [{
+                country: "55",
+                area: phoneArea,
+                number: phoneNumber,
+                type: "MOBILE",
+            }],
         },
         items: [{
             name: plan.name,
@@ -81,9 +104,6 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
                 value: plan.price,
                 currency: 'BRL',
             },
-            // IMPORTANTE: O objeto payment_method é removido daqui.
-            // Isso permite que o usuário escolha o método de pagamento
-            // (Cartão, PIX, Boleto) na página de checkout do PagSeguro.
         }],
     };
 
@@ -92,11 +112,10 @@ exports.initiatePagSeguroCheckout = onCall(async (request) => {
             headers: {
                 'Authorization': `Bearer ${config.accessToken}`,
                 'Content-Type': 'application/json',
-                'x-api-version': '4.0', // Adicionar header recomendado
+                'x-api-version': '4.0',
             },
         });
 
-        // Encontra o link de pagamento na resposta
         const paymentLink = response.data.links.find((link) => link.rel === 'PAY');
 
         if (!paymentLink) {
@@ -139,7 +158,6 @@ exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res)
             return res.status(400).send('Invalid Notification');
         }
 
-        // Verifica se existe algum 'charge' com status PAGO
         const charge = charges.find(c => c.status === 'PAID');
         if (!charge) {
             logger.info(`Nenhum charge PAGO encontrado para reference_id: ${reference_id}. Status: ${charges.map(c => c.status).join(', ')}`);
@@ -153,12 +171,11 @@ exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res)
             const { orgName, email, passwordB64, planId } = pendingOrgDoc.data();
             const password = Buffer.from(passwordB64, 'base64').toString('utf-8');
 
-            // Cria o usuário, organização e admin em uma transação para garantir atomicidade
             await db.runTransaction(async (transaction) => {
                 const userRecord = await admin.auth().createUser({ email, password });
                 const { uid } = userRecord;
 
-                const orgRef = db.collection('organizations').doc(); // Cria uma referência com ID automático
+                const orgRef = db.collection('organizations').doc();
                 transaction.set(orgRef, {
                     ownerUid: uid,
                     ownerEmail: email,
@@ -176,7 +193,6 @@ exports.handlePagSeguroNotification = functions.https.onRequest(async (req, res)
                     assignedStates: [], assignedCampaigns: {},
                 });
 
-                // Atualiza o status para 'completed' para evitar reprocessamento
                 transaction.update(pendingOrgRef, { status: 'completed' });
             });
 
