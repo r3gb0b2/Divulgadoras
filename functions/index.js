@@ -145,43 +145,56 @@ exports.sendPromoterStatusEmail = functions
                 return null;
             }
             
-            if (!afterData.email) {
-                functions.logger.error(`[FATAL EXIT] Promoter ${promoterId} has no email.`);
+            // --- Hyper-Defensive Data Sanitization ---
+            const finalData = {
+                promoterName: String(afterData.name || 'Candidato(a)'),
+                campaignName: String(afterData.campaignName || "nossa equipe"),
+                recipientEmail: String(afterData.email || ''),
+                rejectionReason: String(afterData.rejectionReason || 'Não foi fornecido um motivo específico.'),
+                orgName: 'Nossa Equipe',
+            };
+
+            if (!finalData.recipientEmail) {
+                functions.logger.error(`[FATAL EXIT] Promoter ${promoterId} has no valid email.`);
                 return null;
             }
             
-            let orgName = 'Nossa Equipe';
             if (afterData.organizationId) {
-                const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
-                if (orgDoc.exists && orgDoc.data().name) {
-                   orgName = orgDoc.data().name;
+                try {
+                    const orgDoc = await admin.firestore().collection('organizations').doc(String(afterData.organizationId)).get();
+                    if (orgDoc.exists) {
+                        const orgData = orgDoc.data();
+                        if (orgData && orgData.name) {
+                            finalData.orgName = String(orgData.name);
+                        }
+                    }
+                } catch (orgError) {
+                    functions.logger.warn(`Could not fetch organization name for orgId ${afterData.organizationId}`, orgError);
                 }
             }
+            // --- End Sanitization ---
 
-            const promoterName = afterData.name || 'Candidato(a)';
-            const campaignName = afterData.campaignName || "nossa equipe";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
 
             if (afterData.status === 'approved') {
-                subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
                 htmlContent = `
-                    <p>Olá, ${promoterName}!</p>
-                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                    <p>Olá, ${finalData.promoterName}!</p>
+                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong> foi APROVADA.</p>
                     <p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p>
                     <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                    <p>Lembre-se de usar o e-mail <strong>${afterData.email}</strong> para consultar seu status.</p>
+                    <p>Lembre-se de usar o e-mail <strong>${finalData.recipientEmail}</strong> para consultar seu status.</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
-            } else {
-                subject = `Resultado da sua candidatura para ${orgName}`;
-                const reasonText = String(afterData.rejectionReason || 'Não foi fornecido um motivo específico.');
+            } else { // status is 'rejected'
+                subject = `Resultado da sua candidatura para ${finalData.orgName}`;
                 htmlContent = `
-                    <p>Olá, ${promoterName},</p>
-                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                    <p>Olá, ${finalData.promoterName},</p>
+                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong>.</p>
                     <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
+                    <p><strong>Motivo informado:</strong><br/>${finalData.rejectionReason.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
@@ -191,24 +204,23 @@ exports.sendPromoterStatusEmail = functions
             const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-            sendSmtpEmail.to = [{ email: afterData.email, name: promoterName }];
+            sendSmtpEmail.to = [{ email: finalData.recipientEmail, name: finalData.promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
 
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             
-            functions.logger.info(`[SUCCESS] Email dispatched to ${afterData.email} for promoter ${promoterId}.`);
+            functions.logger.info(`[SUCCESS] Email dispatched to ${finalData.recipientEmail} for promoter ${promoterId}.`);
             return { success: true };
         } catch (error) {
              functions.logger.error(`[FATAL ERROR] Failed to send promoter status email for promoterId: ${promoterId}.`, {
-                error, // Log raw object
+                error,
                 errorMessage: error ? error.message : "No message",
                 errorBody: error ? error.body : "No body",
-                errorResponse: error ? error.response : "No response",
                 stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
             });
-            return null; // Gracefully exit, do not retry
+            return null;
         }
     });
 
@@ -232,45 +244,59 @@ exports.manuallySendStatusEmail = functions
             }
             const promoterData = promoterDoc.data();
 
-            let orgName = 'Nossa Equipe';
-            if (promoterData.organizationId) {
-                const orgDoc = await admin.firestore().collection('organizations').doc(promoterData.organizationId).get();
-                if (orgDoc.exists && orgDoc.data().name) {
-                    orgName = orgDoc.data().name;
-                }
-            }
-
             if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
                 throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
             }
-            if (!promoterData.email) {
-                throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido.');
-            }
 
-            const promoterName = promoterData.name || 'Candidato(a)';
-            const campaignName = promoterData.campaignName || "nossa equipe";
+            // --- Hyper-Defensive Data Sanitization ---
+            const finalData = {
+                promoterName: String(promoterData.name || 'Candidato(a)'),
+                campaignName: String(promoterData.campaignName || "nossa equipe"),
+                recipientEmail: String(promoterData.email || ''),
+                rejectionReason: String(promoterData.rejectionReason || 'Não foi fornecido um motivo específico.'),
+                orgName: 'Nossa Equipe',
+            };
+            
+            if (!finalData.recipientEmail) {
+                 throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido.');
+            }
+            
+            if (promoterData.organizationId) {
+                try {
+                    const orgDoc = await admin.firestore().collection('organizations').doc(String(promoterData.organizationId)).get();
+                    if (orgDoc.exists) {
+                        const orgData = orgDoc.data();
+                        if (orgData && orgData.name) {
+                            finalData.orgName = String(orgData.name);
+                        }
+                    }
+                } catch (orgError) {
+                    functions.logger.warn(`Could not fetch organization name for orgId ${promoterData.organizationId}`, orgError);
+                }
+            }
+            // --- End Sanitization ---
+
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
 
             if (promoterData.status === 'approved') {
-                subject = `✅ Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
                 htmlContent = `
-                    <p>Olá, ${promoterName}!</p>
-                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
+                    <p>Olá, ${finalData.promoterName}!</p>
+                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong> foi APROVADA.</p>
                     <p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p>
                     <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                    <p>Lembre-se de usar o e-mail <strong>${promoterData.email}</strong> para consultar seu status.</p>
+                    <p>Lembre-se de usar o e-mail <strong>${finalData.recipientEmail}</strong> para consultar seu status.</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
-            } else {
-                subject = `Resultado da sua candidatura para ${orgName}`;
-                const reasonText = String(promoterData.rejectionReason || 'Não foi fornecido um motivo específico.');
+            } else { // status is 'rejected'
+                subject = `Resultado da sua candidatura para ${finalData.orgName}`;
                 htmlContent = `
-                    <p>Olá, ${promoterName},</p>
-                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
+                    <p>Olá, ${finalData.promoterName},</p>
+                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong>.</p>
                     <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
+                    <p><strong>Motivo informado:</strong><br/>${finalData.rejectionReason.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
                 `;
@@ -280,15 +306,15 @@ exports.manuallySendStatusEmail = functions
             const apiInstance = createBrevoClient(brevoConfig);
             const sendSmtpEmail = new Brevo.SendSmtpEmail();
 
-            sendSmtpEmail.to = [{ email: promoterData.email, name: promoterName }];
+            sendSmtpEmail.to = [{ email: finalData.recipientEmail, name: finalData.promoterName }];
             sendSmtpEmail.sender = { email: brevoConfig.sender_email, name: brevoConfig.sender_name };
             sendSmtpEmail.subject = subject;
             sendSmtpEmail.htmlContent = htmlContent;
 
             await apiInstance.sendTransacEmail(sendSmtpEmail);
-            functions.logger.info(`[SUCCESS] Manual email sent to ${promoterData.email} for promoter ${promoterId}.`);
+            functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
 
-            return { success: true, message: `E-mail enviado com sucesso para ${promoterData.email}.` };
+            return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.` };
         } catch (error) {
             functions.logger.error("FATAL ERROR in manuallySendStatusEmail", {
                 promoterId: data.promoterId,
