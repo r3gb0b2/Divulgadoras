@@ -50,6 +50,7 @@ exports.getSystemStatus = functions
 
         const moosendConfig = functions.config().moosend;
         const status = {
+            functionVersion: "2.0-moosend", // Version identifier
             emailProvider: "Moosend",
             configured: false,
             message: "Configuração da API Moosend incompleta ou ausente.",

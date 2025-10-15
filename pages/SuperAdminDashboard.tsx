@@ -7,6 +7,7 @@ import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentLi
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatus = {
+    functionVersion?: string;
     emailProvider: string;
     configured: boolean;
     message: string;
@@ -99,6 +100,7 @@ const SuperAdminDashboard: React.FC = () => {
                         Sistema de E-mail Operacional
                     </h3>
                     <p className="mt-2 text-sm">O provedor <strong>{systemStatus.emailProvider}</strong> está configurado e pronto para enviar e-mails.</p>
+                    <p className="text-sm">Versão da Função no Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
                  </div>
              );
         }
@@ -108,6 +110,7 @@ const SuperAdminDashboard: React.FC = () => {
             <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 p-6 rounded-lg">
                 <h3 className="font-bold text-xl mb-3">⚠️ Ação Necessária: Configurar Envio de E-mail</h3>
                 <p className="mb-4">O sistema detectou que o serviço de e-mail <strong>({systemStatus.emailProvider})</strong> não está configurado no servidor. Os e-mails não funcionarão até que você complete os passos abaixo.</p>
+                <p className="text-sm mb-4">Versão da Função no Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível (deploy necessário)'}</strong></p>
                 
                 <div className="space-y-4 text-sm">
                     <div>
