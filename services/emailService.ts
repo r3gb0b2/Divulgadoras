@@ -1,5 +1,25 @@
+
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+
+/**
+ * Handles errors from Firebase Callable Functions, providing more specific user-facing messages.
+ * @param {any} error - The error object caught from the `httpsCallable` promise.
+ * @param {string} defaultMessage - The default message to show for generic errors.
+ * @returns {Error} A new Error object with a more descriptive message.
+ */
+const handleCallableError = (error: any, defaultMessage: string): Error => {
+    console.error("Error calling Firebase function:", error);
+    if (error.code === 'permission-denied') {
+        return new Error("Acesso negado. Apenas Super Admins podem realizar esta ação.");
+    }
+    if (error.code === 'unauthenticated') {
+        return new Error("Sessão expirada. Por favor, faça login novamente.");
+    }
+    const details = error.details?.originalError || error.message || 'Erro desconhecido';
+    return new Error(`${defaultMessage}. Detalhes: ${details}`);
+};
+
 
 /**
  * Fetches the currently active email template for approved promoters.
@@ -13,8 +33,7 @@ export const getEmailTemplate = async (): Promise<string> => {
         const data = result.data as { htmlContent: string };
         return data.htmlContent;
     } catch (error) {
-        console.error("Error fetching email template:", error);
-        throw new Error("Não foi possível carregar o template de e-mail.");
+        throw handleCallableError(error, "Não foi possível carregar o template de e-mail");
     }
 };
 
@@ -27,8 +46,7 @@ export const setEmailTemplate = async (htmlContent: string): Promise<void> => {
         const setTemplate = httpsCallable(functions, 'setEmailTemplate');
         await setTemplate({ htmlContent });
     } catch (error) {
-        console.error("Error setting email template:", error);
-        throw new Error("Não foi possível salvar o template de e-mail.");
+        throw handleCallableError(error, "Não foi possível salvar o template de e-mail");
     }
 };
 
@@ -40,8 +58,7 @@ export const resetEmailTemplate = async (): Promise<void> => {
         const resetTemplate = httpsCallable(functions, 'resetEmailTemplate');
         await resetTemplate();
     } catch (error) {
-        console.error("Error resetting email template:", error);
-        throw new Error("Não foi possível redefinir o template de e-mail.");
+        throw handleCallableError(error, "Não foi possível redefinir o template de e-mail");
     }
 };
 
@@ -55,9 +72,7 @@ export const sendCustomTestEmail = async (htmlContent: string): Promise<{ succes
         const sendTest = httpsCallable(functions, 'sendTestEmail');
         const result = await sendTest({ testType: 'custom_approved', customHtmlContent: htmlContent });
         return result.data as { success: boolean; message: string };
-    } catch (error: any) {
-        console.error("Error sending custom test email:", error);
-        const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
-        throw new Error(`Falha no envio do teste: ${detailedError}`);
+    } catch (error) {
+        throw handleCallableError(error, "Falha no envio do teste");
     }
 };

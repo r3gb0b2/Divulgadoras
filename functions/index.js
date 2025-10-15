@@ -115,8 +115,10 @@ const getRawApprovedEmailTemplate = async () => {
     try {
         const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
         if (templateDoc.exists) {
-            const customHtml = templateDoc.data().approvedPromoterHtml;
-            // Ensure we return a string, even if the stored data is not a string
+            // Safer access to document data to prevent rare crashes.
+            const docData = templateDoc.data();
+            const customHtml = docData ? docData.approvedPromoterHtml : undefined;
+            
             if (typeof customHtml === 'string' && customHtml.length > 0) {
                 functions.logger.info("Using custom email template.");
                 return customHtml;
