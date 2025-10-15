@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
@@ -231,41 +231,14 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
 };
 
 const StatusCheck: React.FC = () => {
-    const location = useLocation();
-    const navigate = useNavigate();
-
     const [email, setEmail] = useState('');
     const [promoters, setPromoters] = useState<Promoter[] | null>(null);
     const [orgMap, setOrgMap] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+    const navigate = useNavigate();
     
-    const performSearch = async (searchEmail: string) => {
-        if (!searchEmail) return;
-        setIsLoading(true);
-        setError(null);
-        setPromoters(null);
-        setSearched(true);
-        try {
-            const result = await checkPromoterStatus(searchEmail);
-            setPromoters(result);
-        } catch (err: any) {
-            setError(err.message || 'Ocorreu um erro.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        const queryParams = new URLSearchParams(location.search);
-        const emailFromQuery = queryParams.get('email');
-        if (emailFromQuery) {
-            setEmail(emailFromQuery);
-            performSearch(emailFromQuery);
-        }
-    }, [location.search]);
-
     useEffect(() => {
         // Fetch all organizations to map IDs to names
         const fetchOrgs = async () => {
@@ -286,19 +259,26 @@ const StatusCheck: React.FC = () => {
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        performSearch(email);
+        setIsLoading(true);
+        setError(null);
+        setPromoters(null);
+        setSearched(true);
+        try {
+            // Global check, without organizationId
+            const result = await checkPromoterStatus(email);
+            setPromoters(result);
+        } catch (err: any) {
+            setError(err.message || 'Ocorreu um erro.');
+        } finally {
+            setIsLoading(false);
+        }
     };
     
     const renderStatusResult = () => {
-        if (!searched) return null;
-        if (isLoading) {
-            return (
-                <div className="flex justify-center items-center h-24">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                </div>
-            );
+        if (!searched || isLoading || error) {
+            return null;
         }
-        if (error) return <p className="text-red-500 mt-4 text-center">{error}</p>;
+
         if (!promoters) {
             return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail.</p>;
         }
@@ -337,6 +317,8 @@ const StatusCheck: React.FC = () => {
                         {isLoading ? 'Verificando...' : 'Verificar'}
                     </button>
                 </form>
+
+                {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
                 
                 <div className="mt-8">
                     {renderStatusResult()}
