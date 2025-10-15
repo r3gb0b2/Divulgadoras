@@ -51,7 +51,7 @@ exports.getSystemStatus = functions
 
         const moosendConfig = functions.config().moosend;
         const status = {
-            functionVersion: "v2.0-moosend",
+            functionVersion: "v3.0-MOOSEND-FINAL",
             emailProvider: "Moosend",
             configured: false,
             message: "Configuração da API Moosend incompleta ou ausente.",
@@ -255,7 +255,7 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        const provider = "Moosend";
+        const provider = "Moosend (v3.0)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
