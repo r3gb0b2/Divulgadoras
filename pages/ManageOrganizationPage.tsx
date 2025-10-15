@@ -192,17 +192,6 @@ const ManageOrganizationPage: React.FC = () => {
                         </label>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-300">Link de Pagamento (Opcional)</label>
-                        <input 
-                            type="url" 
-                            name="paymentLink" 
-                            value={formData.paymentLink || ''} 
-                            onChange={handleChange} 
-                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
-                            placeholder="Ex: https://pag.ae/..."
-                        />
-                    </div>
-                    <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-300 mb-2">Estados Atribuídos</label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2 border border-gray-600 rounded-md max-h-48 overflow-y-auto">
                            {states.map(s => (

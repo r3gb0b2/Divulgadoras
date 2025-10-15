@@ -3,8 +3,14 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
 const { GoogleGenAI } = require("@google/genai");
+const mercadopago = require("mercadopago");
 
 admin.initializeApp();
+
+const PLANS = {
+    basic: { id: 'basic', name: 'Plano Básico', price: 49.00 },
+    professional: { id: 'professional', name: 'Plano Profissional', price: 99.00 },
+};
 
 /**
  * Checks if the calling user is a superadmin.
@@ -472,4 +478,149 @@ exports.askGemini = functions
             const userMessage = error.message.includes('API key not valid') ? 'A chave da API Gemini é inválida.' : 'Erro ao comunicar com o assistente de IA.';
             throw new functions.https.HttpsError('internal', userMessage, { originalError: error.toString() });
         }
+    });
+
+// --- Mercado Pago Integration ---
+const configureMercadoPago = () => {
+    const mpConfig = functions.config().mercadopago;
+    if (!mpConfig || !mpConfig.token) {
+        throw new Error("Mercado Pago access token is not configured.");
+    }
+    mercadopago.configure({ access_token: mpConfig.token });
+};
+
+exports.getMercadoPagoStatus = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const mpConfig = functions.config().mercadopago;
+        const status = {
+            configured: false,
+            publicKey: false,
+            token: false,
+            webhookSecret: false,
+        };
+        if (mpConfig) {
+            if (mpConfig.public_key) status.publicKey = true;
+            if (mpConfig.token) status.token = true;
+            if (mpConfig.webhook_secret) status.webhookSecret = true;
+        }
+        status.configured = status.publicKey && status.token && status.webhookSecret;
+        return status;
+    });
+
+exports.getMercadoPagoConfig = functions
+    .region("southamerica-east1")
+    .https.onCall((data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
+        }
+        const mpConfig = functions.config().mercadopago;
+        if (!mpConfig || !mpConfig.public_key) {
+            throw new functions.https.HttpsError('failed-precondition', 'A chave pública do Mercado Pago não está configurada.');
+        }
+        return { publicKey: mpConfig.public_key };
+    });
+
+exports.createMercadoPagoPreference = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
+        }
+
+        const { orgId, planId } = data;
+        if (!orgId || !planId) {
+            throw new functions.https.HttpsError('invalid-argument', 'IDs da organização e do plano são obrigatórios.');
+        }
+
+        configureMercadoPago();
+
+        const plan = PLANS[planId];
+        if (!plan) {
+            throw new functions.https.HttpsError('not-found', 'Plano não encontrado.');
+        }
+
+        const orgRef = admin.firestore().collection('organizations').doc(orgId);
+        const orgDoc = await orgRef.get();
+        if (!orgDoc.exists) {
+            throw new functions.https.HttpsError('not-found', 'Organização não encontrada.');
+        }
+
+        const preference = {
+            items: [
+                {
+                    title: `Assinatura Equipe Certa - ${plan.name}`,
+                    quantity: 1,
+                    currency_id: 'BRL',
+                    unit_price: plan.price,
+                },
+            ],
+            payer: {
+                email: orgDoc.data().ownerEmail,
+            },
+            back_urls: {
+                success: `https://divulgadoras.vercel.app/#/admin/settings/subscription`,
+            },
+            auto_return: 'approved',
+            external_reference: `${orgId}|${planId}`,
+            notification_url: `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/mercadoPagoWebhook`,
+        };
+
+        try {
+            const response = await mercadopago.preferences.create(preference);
+            return { preferenceId: response.body.id };
+        } catch (error) {
+            console.error("Mercado Pago preference creation failed:", error);
+            throw new functions.https.HttpsError('internal', 'Falha ao criar preferência de pagamento.');
+        }
+    });
+
+exports.mercadoPagoWebhook = functions
+    .region("southamerica-east1")
+    .https.onRequest(async (req, res) => {
+        if (req.method !== 'POST') {
+            return res.status(405).send('Method Not Allowed');
+        }
+        
+        functions.logger.info("Mercado Pago Webhook received:", { body: req.body });
+        
+        const { type, data } = req.body;
+        
+        if (type === 'payment') {
+            try {
+                configureMercadoPago();
+                const payment = await mercadopago.payment.get(data.id);
+                
+                if (payment.body.status === 'approved') {
+                    const [orgId, planId] = payment.body.external_reference.split('|');
+                    
+                    if (!orgId || !planId) {
+                        functions.logger.error("Invalid external_reference in payment", payment.body.external_reference);
+                        return res.status(200).send('OK');
+                    }
+
+                    const orgRef = admin.firestore().collection('organizations').doc(orgId);
+                    const orgDoc = await orgRef.get();
+
+                    if (orgDoc.exists) {
+                        const orgData = orgDoc.data();
+                        const currentExpiry = orgData.planExpiresAt ? orgData.planExpiresAt.toDate() : new Date();
+                        const baseDate = currentExpiry < new Date() ? new Date() : currentExpiry;
+                        baseDate.setDate(baseDate.getDate() + 30);
+                        
+                        await orgRef.update({
+                            status: 'active',
+                            planExpiresAt: admin.firestore.Timestamp.fromDate(baseDate),
+                            planId: planId
+                        });
+                        functions.logger.info(`Organization ${orgId} subscription updated successfully.`);
+                    }
+                }
+            } catch (error) {
+                functions.logger.error("Error processing Mercado Pago webhook:", error);
+            }
+        }
+        
+        return res.status(200).send('OK');
     });
