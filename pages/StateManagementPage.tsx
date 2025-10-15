@@ -229,15 +229,15 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     try {
         const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
         const result = await manuallySendStatusEmail({ promoterId });
-        const data = result.data as { success: boolean, message: string };
-        alert(data.message || 'Notificação enviada com sucesso!');
+        const data = result.data as { success: boolean, message: string, provider?: string };
+        const providerName = data.provider || 'Sistema Antigo';
+        alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
     } catch (error: any) {
         console.error("Failed to send manual notification:", error);
-        // Prioritize the detailed error message from the 'details' object if it exists.
         const detailedError = error?.details?.originalError;
-        // Fallback to the main error message, and finally a generic message.
         const errorMessage = detailedError || error.message || 'Ocorreu um erro desconhecido.';
-        alert(`Falha ao enviar notificação: ${errorMessage}`);
+        const providerName = error?.details?.provider || 'Sistema Antigo';
+        alert(`Falha ao enviar notificação: ${errorMessage} (Tentativa via: ${providerName})`);
     } finally {
         setNotifyingId(null);
     }

@@ -255,7 +255,8 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email}`);
+        const provider = "Moosend";
+        functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
             const promoterDoc = await admin.firestore().collection('promoters').doc(promoterId).get();
@@ -327,7 +328,7 @@ exports.manuallySendStatusEmail = functions
             await sendMoosendEmail(finalData.recipientEmail, subject, htmlContent);
             functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
 
-            return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.` };
+            return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.`, provider };
         } catch (error) {
             functions.logger.error("FATAL ERROR in manuallySendStatusEmail", {
                 promoterId: data.promoterId,
@@ -336,6 +337,12 @@ exports.manuallySendStatusEmail = functions
             });
 
             if (error instanceof functions.https.HttpsError) {
+                // Add provider to the error details if it's our custom HttpsError
+                if (error.details) {
+                    error.details.provider = provider;
+                } else {
+                    error.details = { provider };
+                }
                 throw error;
             }
             
@@ -343,6 +350,7 @@ exports.manuallySendStatusEmail = functions
 
             throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', {
                 originalError: detailedMessage,
+                provider,
             });
         }
     });
