@@ -60,6 +60,8 @@ exports.sendTestEmail = functions
             const promoterName = "Divulgadora de Teste";
             const campaignName = "Evento de Teste";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Moosend.</p>`;
+
 
             if (testType === 'approved') {
                 subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
@@ -70,6 +72,7 @@ exports.sendTestEmail = functions
                     <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
                     <p>Lembre-se de usar o e-mail <strong>teste@exemplo.com</strong> para consultar seu status.</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             } else if (testType === 'rejected') {
                 subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
@@ -81,14 +84,16 @@ exports.sendTestEmail = functions
                     <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             } else { // 'generic'
                 subject = "✅ Teste de Envio de E-mail - Equipe Certa";
                 htmlContent = `
                     <html><body>
                         <h1>Olá!</h1>
-                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio (Moosend) está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
+                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
                         <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
+                        ${footer.replace('Este é um e-mail de teste enviado', 'E-mail enviado')}
                     </body></html>`;
             }
 
@@ -166,6 +171,8 @@ exports.sendPromoterStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Moosend.</p>`;
+
 
             if (afterData.status === 'approved') {
                 subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
@@ -176,6 +183,7 @@ exports.sendPromoterStatusEmail = functions
                     <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
                     <p>Lembre-se de usar o e-mail <strong>${finalData.recipientEmail}</strong> para consultar seu status.</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             } else { // status is 'rejected'
                 subject = `Resultado da sua candidatura para ${finalData.orgName}`;
@@ -186,6 +194,7 @@ exports.sendPromoterStatusEmail = functions
                     <p><strong>Motivo informado:</strong><br/>${finalData.rejectionReason.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             }
 
@@ -254,6 +263,8 @@ exports.manuallySendStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Moosend.</p>`;
+
 
             if (promoterData.status === 'approved') {
                 subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
@@ -264,6 +275,7 @@ exports.manuallySendStatusEmail = functions
                     <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
                     <p>Lembre-se de usar o e-mail <strong>${finalData.recipientEmail}</strong> para consultar seu status.</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             } else { // status is 'rejected'
                 subject = `Resultado da sua candidatura para ${finalData.orgName}`;
@@ -274,6 +286,7 @@ exports.manuallySendStatusEmail = functions
                     <p><strong>Motivo informado:</strong><br/>${finalData.rejectionReason.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
+                    ${footer}
                 `;
             }
             
