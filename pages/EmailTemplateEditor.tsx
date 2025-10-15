@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail } from '../services/emailService';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
+import { functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 
 const EmailTemplateEditor: React.FC = () => {
     const navigate = useNavigate();
@@ -11,6 +13,10 @@ const EmailTemplateEditor: React.FC = () => {
     const [isTesting, setIsTesting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // AI State
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const placeholders = [
         { variable: '{{promoterName}}', description: 'O nome completo da divulgadora.' },
@@ -83,6 +89,50 @@ const EmailTemplateEditor: React.FC = () => {
         }
     };
 
+    const handleAiGenerate = async () => {
+        if (!aiPrompt.trim()) {
+            setError('Por favor, digite um comando para a IA.');
+            return;
+        }
+        setIsGenerating(true);
+        setError(null);
+        try {
+            const fullPrompt = `
+                Você é um desenvolvedor expert em HTML para e-mails. Sua tarefa é gerar ou modificar um template de e-mail HTML com base na solicitação do usuário.
+                O HTML deve ter estilos inline para máxima compatibilidade com clientes de e-mail.
+                A resposta DEVE ser apenas o código HTML bruto, sem explicações, comentários ou markdown (como \`\`\`html).
+
+                Solicitação do Usuário: "${aiPrompt}"
+
+                Template HTML atual (modifique a partir dele, se existir. Se a solicitação for para criar um novo, ignore este):
+                \`\`\`html
+                ${htmlContent}
+                \`\`\`
+            `;
+
+            const askGemini = httpsCallable(functions, 'askGemini');
+            const result = await askGemini({ prompt: fullPrompt });
+            const data = result.data as { text: string };
+
+            let newHtml = data.text.trim();
+            if (newHtml.startsWith('```html')) {
+                newHtml = newHtml.substring(7);
+            }
+            if (newHtml.endsWith('```')) {
+                newHtml = newHtml.substring(0, newHtml.length - 3);
+            }
+
+            setHtmlContent(newHtml.trim());
+            showSuccessMessage('HTML gerado com sucesso pela IA!');
+        } catch (err: any) {
+            console.error("Gemini function call failed:", err);
+            const errorMessage = err.details?.originalError || err.message || 'Ocorreu um erro desconhecido.';
+            setError(`Falha na geração com IA: ${errorMessage}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
 
     return (
         <div>
@@ -117,28 +167,56 @@ const EmailTemplateEditor: React.FC = () => {
                             />
                         )}
                     </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-white mb-2">Variáveis Disponíveis</h3>
-                        <p className="text-sm text-gray-400 mb-4">Use estas variáveis no seu HTML. Elas serão substituídas pelos dados reais da divulgadora.</p>
-                        <div className="space-y-3">
-                            {placeholders.map(p => (
-                                <div key={p.variable} className="p-3 bg-gray-700/50 rounded-md">
-                                    <code className="font-semibold text-primary">{p.variable}</code>
-                                    <p className="text-xs text-gray-300 mt-1">{p.description}</p>
-                                </div>
-                            ))}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div>
+                            <h3 className="text-lg font-semibold text-white mb-2">Variáveis Disponíveis</h3>
+                            <p className="text-sm text-gray-400 mb-4">Use estas variáveis no seu HTML. Elas serão substituídas pelos dados reais da divulgadora.</p>
+                            <div className="space-y-3">
+                                {placeholders.map(p => (
+                                    <div key={p.variable} className="p-3 bg-gray-700/50 rounded-md">
+                                        <code className="font-semibold text-primary">{p.variable}</code>
+                                        <p className="text-xs text-gray-300 mt-1">{p.description}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="border-t border-gray-700 pt-6">
+                            <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                <SparklesIcon className="w-6 h-6 text-primary" />
+                                Opção de Desenvolvedor (IA)
+                            </h3>
+                            <p className="text-sm text-gray-400 mb-4">
+                                Peça para a IA criar um novo template ou melhorar o atual.
+                            </p>
+                            <textarea
+                                value={aiPrompt}
+                                onChange={(e) => setAiPrompt(e.target.value)}
+                                placeholder="Ex: Crie um template moderno e elegante para um festival de música eletrônica..."
+                                rows={4}
+                                className="w-full p-2 font-sans text-sm border border-gray-600 rounded-md bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAiGenerate}
+                                disabled={isGenerating || isLoading || isSaving || isTesting}
+                                className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:bg-indigo-600/50 disabled:cursor-wait"
+                            >
+                                {isGenerating ? 'Gerando...' : 'Gerar com IA'}
+                                {isGenerating && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <div className="mt-6 border-t border-gray-700 pt-4 flex flex-wrap gap-4 justify-end">
-                    <button onClick={handleReset} disabled={isSaving || isTesting} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleReset} disabled={isSaving || isTesting || isGenerating} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm">
                         Redefinir para Padrão
                     </button>
-                    <button onClick={handleSendTest} disabled={isSaving || isTesting} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleSendTest} disabled={isSaving || isTesting || isGenerating} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold disabled:opacity-50 text-sm">
                         {isTesting ? 'Enviando...' : 'Enviar Teste'}
                     </button>
-                    <button onClick={handleSave} disabled={isSaving || isTesting} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleSave} disabled={isSaving || isTesting || isGenerating} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50 text-sm">
                          {isSaving ? 'Salvando...' : 'Salvar Template'}
                     </button>
                 </div>
