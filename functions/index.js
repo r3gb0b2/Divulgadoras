@@ -6,9 +6,6 @@ const { GoogleGenAI } = require("@google/genai");
 
 admin.initializeApp();
 
-const projectId = admin.app().options.projectId;
-const baseUrl = `https://${projectId}.web.app`;
-
 /**
  * Checks if the calling user is a superadmin.
  * @param {object} auth - The context.auth object from the callable function.
@@ -153,7 +150,8 @@ const getRawApprovedEmailTemplate = async () => {
  * @returns {string} The populated HTML string.
  */
 const populateTemplate = (htmlContent, data) => {
-    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(data.recipientEmail)}`;
+    // FIX: Hardcoded the application URL to ensure the link in the email is always correct, pointing to the Vercel deployment.
+    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(data.recipientEmail)}`;
     let populatedHtml = String(htmlContent); // Ensure it's a string
     populatedHtml = populatedHtml.replace(/{{promoterName}}/g, data.promoterName || '');
     populatedHtml = populatedHtml.replace(/{{campaignName}}/g, data.campaignName || '');
