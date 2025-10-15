@@ -21,24 +21,30 @@ const requireSuperAdmin = async (auth) => {
     const adminDocRef = admin.firestore().collection('admins').doc(auth.uid);
     const adminDoc = await adminDocRef.get();
 
-    if (adminDoc.exists && adminDoc.data().role === 'superadmin') {
-        functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
-        return;
+    if (adminDoc.exists) {
+        const adminData = adminDoc.data();
+        if (adminData && adminData.role === 'superadmin') {
+            functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
+            return;
+        }
+    } else {
+        // Doc doesn't exist, check for hardcoded superadmin email for first-time setup.
+        if (auth.token && auth.token.email === 'r3gb0b@gmail.com') {
+            functions.logger.warn(`Admin doc for superadmin email ${auth.token.email} not found. Creating it now.`);
+            const superAdminPayload = {
+                email: auth.token.email,
+                role: 'superadmin',
+                assignedStates: [],
+            };
+            await adminDocRef.set(superAdminPayload);
+            functions.logger.info(`Superadmin doc created for UID: ${auth.uid}. Granting access.`);
+            return;
+        }
     }
 
-    if (!adminDoc.exists && auth.token && auth.token.email === 'r3gb0b@gmail.com') {
-        functions.logger.warn(`Admin doc for superadmin email ${auth.token.email} not found. Creating it now.`);
-        const superAdminPayload = {
-            email: auth.token.email,
-            role: 'superadmin',
-            assignedStates: [],
-        };
-        await adminDocRef.set(superAdminPayload);
-        functions.logger.info(`Superadmin doc created for UID: ${auth.uid}. Granting access.`);
-        return;
-    }
-
-    const role = adminDoc.exists ? adminDoc.data().role : 'documento não encontrado';
+    // If we reach this point, access is denied. Log the reason for debugging.
+    const adminDataIfPresent = adminDoc.exists ? adminDoc.data() : null;
+    const role = adminDataIfPresent ? adminDataIfPresent.role : 'documento não encontrado';
     functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is '${role}'.`);
     throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
 };
@@ -213,7 +219,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v9.2-REFACTOR-2";
+        const FUNCTION_VERSION = "v9.2-REFACTOR-3";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
