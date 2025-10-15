@@ -105,25 +105,29 @@ const generateDefaultApprovedEmailHtml = () => {
 </html>`;
 };
 
-
 /**
- * Central function to get the raw HTML template for the 'approved' email.
- * It fetches the custom template from Firestore or falls back to the default.
+ * [ROBUST] Fetches the raw HTML template for approved emails.
+ * This function is designed to be fault-tolerant and will always return a valid string.
  * @returns {Promise<string>} The raw HTML template string with placeholders.
  */
 const getRawApprovedEmailTemplate = async () => {
+    const defaultHtml = generateDefaultApprovedEmailHtml();
     try {
         const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
-        if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
-            functions.logger.info("Using custom email template.");
-            return templateDoc.data().approvedPromoterHtml;
+        if (templateDoc.exists) {
+            const customHtml = templateDoc.data().approvedPromoterHtml;
+            // Ensure we return a string, even if the stored data is not a string
+            if (typeof customHtml === 'string' && customHtml.length > 0) {
+                functions.logger.info("Using custom email template.");
+                return customHtml;
+            }
         }
+        functions.logger.info("No valid custom template found, using default.");
+        return defaultHtml;
     } catch (error) {
-        functions.logger.error("Error fetching custom email template from Firestore, falling back to default.", error);
+        functions.logger.error("Error fetching custom email template. Falling back to default.", error);
+        return defaultHtml;
     }
-    
-    functions.logger.info("Using default email template.");
-    return generateDefaultApprovedEmailHtml();
 };
 
 /**
@@ -134,7 +138,7 @@ const getRawApprovedEmailTemplate = async () => {
  */
 const populateTemplate = (htmlContent, data) => {
     const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(data.recipientEmail)}`;
-    let populatedHtml = htmlContent;
+    let populatedHtml = String(htmlContent); // Ensure it's a string
     populatedHtml = populatedHtml.replace(/{{promoterName}}/g, data.promoterName || '');
     populatedHtml = populatedHtml.replace(/{{campaignName}}/g, data.campaignName || '');
     populatedHtml = populatedHtml.replace(/{{orgName}}/g, data.orgName || '');
@@ -143,6 +147,17 @@ const populateTemplate = (htmlContent, data) => {
     return populatedHtml;
 };
 
+/**
+ * [CENTRALIZED] Gets the raw template and populates it with data.
+ * @param {object} promoterData - Data object for populating the template.
+ * @returns {Promise<{htmlContent: string, subject: string}>} The final email content and subject.
+ */
+const getPopulatedApprovedEmail = async (promoterData) => {
+    const rawHtml = await getRawApprovedEmailTemplate();
+    const htmlContent = populateTemplate(rawHtml, promoterData);
+    const subject = `✅ Parabéns! Sua candidatura para ${promoterData.orgName} foi aprovada!`;
+    return { htmlContent, subject };
+};
 
 /**
  * Sends an email using the Brevo (Sendinblue) API.
@@ -196,7 +211,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v9.2-REFACTOR-1";
+        const FUNCTION_VERSION = "v9.2-REFACTOR-2";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -267,23 +282,27 @@ exports.sendTestEmail = functions
             let htmlContent = '';
 
             switch (testType) {
-                case 'approved':
-                    subject = `✅ (TESTE) Parabéns! Sua candidatura para ${testData.orgName} foi aprovada!`;
-                    const rawTemplate = await getRawApprovedEmailTemplate();
-                    htmlContent = populateTemplate(rawTemplate, testData);
+                case 'approved': {
+                    const populated = await getPopulatedApprovedEmail(testData);
+                    subject = `✅ (TESTE) ${populated.subject}`;
+                    htmlContent = populated.htmlContent;
                     break;
-                case 'custom_approved':
+                }
+                case 'custom_approved': {
                     subject = `✅ (TESTE DO EDITOR) Parabéns! Sua candidatura para ${testData.orgName} foi aprovada!`;
                     if (!customHtmlContent) throw new Error("Conteúdo HTML customizado não fornecido.");
                     htmlContent = populateTemplate(customHtmlContent, testData);
                     break;
-                case 'rejected':
+                }
+                case 'rejected': {
                     subject = `(TESTE) Resultado da sua candidatura para ${testData.orgName}`;
                     htmlContent = `<p>Olá, ${testData.promoterName},</p><p>Este é um teste do e-mail de rejeição.</p><p>Atenciosamente,<br/>Equipe Certa</p>${footer}`;
                     break;
-                default: // generic
+                }
+                default: { // generic
                     subject = "✅ Teste de Conexão - Equipe Certa (Brevo)";
                     htmlContent = `<h1>Olá!</h1><p>Se você recebeu este e-mail, a conexão com o <strong>Brevo</strong> está <strong>funcionando!</strong></p>${footer}`;
+                }
             }
 
             await sendBrevoEmail(userEmail, subject, htmlContent);
@@ -319,9 +338,7 @@ exports.sendPromoterStatusEmail = functions
             };
             if (!promoterData.recipientEmail) throw new Error(`Promoter ${promoterId} has no email.`);
 
-            const subject = `✅ Parabéns! Sua candidatura para ${promoterData.orgName} foi aprovada!`;
-            const rawHtml = await getRawApprovedEmailTemplate();
-            const htmlContent = populateTemplate(rawHtml, promoterData);
+            const { htmlContent, subject } = await getPopulatedApprovedEmail(promoterData);
             
             await sendBrevoEmail(promoterData.recipientEmail, subject, htmlContent);
             functions.logger.info(`[SUCCESS] Approval email sent to ${promoterData.recipientEmail}.`);
@@ -360,9 +377,7 @@ exports.manuallySendStatusEmail = functions
                 orgName: orgDoc.exists ? orgDoc.data().name : 'Nossa Equipe',
             };
 
-            const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-            const rawHtml = await getRawApprovedEmailTemplate();
-            const htmlContent = populateTemplate(rawHtml, finalData);
+            const { htmlContent, subject } = await getPopulatedApprovedEmail(finalData);
             
             await sendBrevoEmail(finalData.recipientEmail, subject, htmlContent);
             return { success: true, message: `E-mail enviado para ${finalData.recipientEmail}.`, provider };
@@ -409,6 +424,7 @@ exports.askGemini = functions
 
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
+    // This now uses the new robust function, ensuring it always returns a valid string.
     const htmlContent = await getRawApprovedEmailTemplate();
     return { htmlContent };
 });
