@@ -108,14 +108,24 @@ const generateDefaultApprovedEmailHtml = () => {
 
 /**
  * [ROBUST] Fetches the raw HTML template for approved emails.
- * This function now ALWAYS returns the default template, ignoring Firestore.
+ * It first tries to fetch a custom template from Firestore. If it fails or the template is empty,
+ * it returns the hardcoded default template.
  * @returns {Promise<string>} The raw HTML template string with placeholders.
  */
 const getRawApprovedEmailTemplate = async () => {
-    functions.logger.info("Using default email template.");
+    try {
+        const docRef = admin.firestore().collection('settings').doc('emailTemplate');
+        const doc = await docRef.get();
+        if (doc.exists && doc.data()?.htmlContent) {
+            functions.logger.info("Custom email template found and used.");
+            return doc.data().htmlContent;
+        }
+    } catch (error) {
+        functions.logger.error("Error fetching custom email template, falling back to default.", error);
+    }
+    functions.logger.info("Using default email template as no valid custom template was found.");
     return generateDefaultApprovedEmailHtml();
 };
-
 
 /**
  * Replaces placeholders in an HTML string with actual data.
@@ -206,6 +216,51 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     }
 };
 
+// --- Email Template Management Functions ---
+
+exports.getEmailTemplate = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const htmlContent = await getRawApprovedEmailTemplate();
+        return { htmlContent };
+    });
+
+exports.getDefaultEmailTemplate = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const htmlContent = generateDefaultApprovedEmailHtml();
+        return { htmlContent };
+    });
+
+exports.setEmailTemplate = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const { htmlContent } = data;
+        if (typeof htmlContent !== 'string') {
+            throw new functions.https.HttpsError('invalid-argument', 'O conteúdo HTML deve ser uma string.');
+        }
+        const docRef = admin.firestore().collection('settings').doc('emailTemplate');
+        await docRef.set({ htmlContent });
+        return { success: true };
+    });
+
+exports.resetEmailTemplate = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const docRef = admin.firestore().collection('settings').doc('emailTemplate');
+        // Check if doc exists before trying to delete for robustness
+        const doc = await docRef.get();
+        if (doc.exists) {
+            await docRef.delete();
+        }
+        return { success: true };
+    });
+
+
 // --- System & Diagnostic Functions ---
 
 exports.getSystemStatus = functions
@@ -267,7 +322,7 @@ exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
         const userEmail = 'r3gb0b@gmail.com';
-        const { testType } = data;
+        const { testType, customHtmlContent } = data; // Receive custom HTML
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
@@ -286,6 +341,11 @@ exports.sendTestEmail = functions
                     const populated = await getPopulatedApprovedEmail(testData);
                     subject = `✅ (TESTE) ${populated.subject}`;
                     htmlContent = populated.htmlContent;
+                    break;
+                }
+                case 'custom_approved': { // New case for editor test
+                    subject = "✅ (TESTE DO EDITOR) Sua candidatura foi aprovada!";
+                    htmlContent = populateTemplate(customHtmlContent || '<body>Template Vazio</body>', testData);
                     break;
                 }
                 case 'rejected': {

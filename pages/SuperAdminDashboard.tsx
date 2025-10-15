@@ -255,6 +255,15 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="mt-2 text-gray-400">Ativar, desativar e definir regras gerais para as localidades de inscrição.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
+
+                    <Link to="/admin/settings/email" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <EnvelopeIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Template de E-mail</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Personalizar o e-mail de aprovação enviado para as divulgadoras.</p>
+                        <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Editar &rarr;</div>
+                    </Link>
                     
                     <Link to="/admin/gemini" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
