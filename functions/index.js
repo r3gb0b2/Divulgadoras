@@ -453,18 +453,18 @@ exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(a
 
 exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
-    
-    // FIX: Check if the document exists before trying to update it.
-    // This prevents an internal error if a custom template has never been saved.
+
     const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
     const templateDoc = await templateDocRef.get();
 
-    if (templateDoc.exists) {
+    // FIX: Only attempt to delete the field if the document exists AND the field itself exists.
+    // This prevents an error when resetting a template that was never customized.
+    if (templateDoc.exists && templateDoc.data().hasOwnProperty('approvedPromoterHtml')) {
         await templateDocRef.update({
             approvedPromoterHtml: admin.firestore.FieldValue.delete()
         });
     }
-    // If the doc doesn't exist, the template is already effectively "reset" to default, so we succeed silently.
-
+    // If the doc or field doesn't exist, it's already "reset" to default. Succeed silently.
+    
     return { success: true, message: "Template de e-mail redefinido para o padrão." };
 });
