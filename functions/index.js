@@ -20,7 +20,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     }
 
     const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-    const apiKey = apiInstance.authentications['apiKey'];
+    const apiKey = apiInstance.authentications['api-key'];
     apiKey.apiKey = brevoConfig.key;
 
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
@@ -54,7 +54,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v9.0-BREVO";
+        const FUNCTION_VERSION = "v9.1-BREVO-FIX";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -72,7 +72,7 @@ exports.getSystemStatus = functions
             if (brevoConfig && brevoConfig.key && brevoConfig.sender_email) {
                 try {
                     const accountApi = new SibApiV3Sdk.AccountApi();
-                    const apiKey = accountApi.authentications['apiKey'];
+                    const apiKey = accountApi.authentications['api-key'];
                     apiKey.apiKey = brevoConfig.key;
                     await accountApi.getAccount();
                     status.configured = true;
@@ -124,7 +124,7 @@ exports.sendTestEmail = functions
             const promoterName = "Divulgadora de Teste";
             const campaignName = "Evento de Teste";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Brevo (v9.0).</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Brevo (v9.1).</p>`;
 
 
             if (testType === 'approved') {
@@ -221,7 +221,7 @@ exports.sendPromoterStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.0).</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.1).</p>`;
 
             if (afterData.status === 'approved') {
                 subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
@@ -250,7 +250,7 @@ exports.manuallySendStatusEmail = functions
         const { promoterId } = data;
         if (!promoterId) throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
 
-        const provider = "Brevo (v9.0)";
+        const provider = "Brevo (v9.1)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
@@ -280,7 +280,7 @@ exports.manuallySendStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.0).</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.1).</p>`;
 
             if (promoterData.status === 'approved') {
                 subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
