@@ -1,4 +1,5 @@
 
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
@@ -51,15 +52,10 @@ const requireSuperAdmin = async (auth) => {
 
 
 /**
- * Generates the HTML content for an approval email.
- * @param {string} promoterName - The name of the promoter.
- * @param {string} campaignName - The name of the campaign/event.
- * @param {string} orgName - The name of the organization.
- * @param {string} recipientEmail - The promoter's email address.
- * @returns {string} The full HTML email content.
+ * Generates the default HTML content for an approval email with placeholders.
+ * @returns {string} The full default HTML email content with placeholders.
  */
-const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipientEmail) => {
-    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(recipientEmail)}`;
+const generateDefaultApprovedEmailHtml = () => {
     const currentYear = new Date().getFullYear();
     return `
 <!DOCTYPE html>
@@ -78,9 +74,9 @@ const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipien
         </tr>
         <tr>
             <td bgcolor="#1a1a2e" style="padding: 40px 30px; border-radius: 8px;">
-                <h2 style="color: #ffffff; font-size: 24px; margin: 0 0 20px 0;">Parabéns, ${promoterName}!</h2>
+                <h2 style="color: #ffffff; font-size: 24px; margin: 0 0 20px 0;">Parabéns, {{promoterName}}!</h2>
                 <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
-                    Temos uma ótima notícia! Sua candidatura para o evento/gênero <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi <strong>APROVADA</strong>.
+                    Temos uma ótima notícia! Sua candidatura para o evento/gênero <strong>{{campaignName}}</strong> da organização <strong>{{orgName}}</strong> foi <strong>APROVADA</strong>.
                 </p>
                 <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
                     Estamos muito felizes em ter você em nossa equipe! Para continuar e ter acesso ao grupo oficial, siga os próximos passos no seu portal.
@@ -88,18 +84,18 @@ const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipien
                 <table border="0" cellpadding="0" cellspacing="0" width="100%">
                     <tr>
                         <td align="center" style="padding: 20px 0;">
-                            <a href="${portalLink}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
+                            <a href="{{portalLink}}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
                                 Acessar Portal da Divulgadora
                             </a>
                         </td>
                     </tr>
                 </table>
                 <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
-                    Para verificar seu status a qualquer momento, use o e-mail: <strong>${recipientEmail}</strong>.
+                    Para verificar seu status a qualquer momento, use o e-mail: <strong>{{recipientEmail}}</strong>.
                 </p>
                 <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
                     Atenciosamente,<br>
-                    Equipe ${orgName}
+                    Equipe {{orgName}}
                 </p>
             </td>
         </tr>
@@ -114,31 +110,46 @@ const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipien
 </html>`;
 };
 
+
 /**
- * Fetches custom template or returns default, then replaces placeholders.
+ * Fetches the raw HTML for the approval email, either custom or default.
+ * The returned template will contain placeholders like {{promoterName}}.
+ * @returns {Promise<string>} The raw HTML template string.
+ */
+const getRawApprovedEmailTemplate = async () => {
+    try {
+        const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
+        if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
+            functions.logger.info("Using custom email template.");
+            return templateDoc.data().approvedPromoterHtml;
+        }
+    } catch (error) {
+        functions.logger.error("Error fetching custom email template from Firestore, falling back to default.", error);
+    }
+    
+    functions.logger.info("Using default email template.");
+    return generateDefaultApprovedEmailHtml();
+};
+
+
+/**
+ * Fetches and populates the approved email template with specific data.
  * @param {string} promoterName - The name of the promoter.
  * @param {string} campaignName - The name of the campaign/event.
  * @param {string} orgName - The name of the organization.
  * @param {string} recipientEmail - The promoter's email address.
- * @returns {Promise<string>} The full HTML email content.
+ * @returns {Promise<string>} The full, populated HTML email content.
  */
 const getApprovedEmailContent = async (promoterName, campaignName, orgName, recipientEmail) => {
-    const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
-    let htmlContent = '';
+    let htmlContent = await getRawApprovedEmailTemplate();
     const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(recipientEmail)}`;
 
-    if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
-        functions.logger.info("Using custom email template.");
-        htmlContent = templateDoc.data().approvedPromoterHtml;
-        // Replace all placeholders
-        htmlContent = htmlContent.replace(/{{promoterName}}/g, promoterName)
-                                 .replace(/{{campaignName}}/g, campaignName)
-                                 .replace(/{{orgName}}/g, orgName)
-                                 .replace(/{{portalLink}}/g, portalLink);
-    } else {
-        functions.logger.info("Using default email template.");
-        htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, recipientEmail);
-    }
+    // Replace all placeholders
+    htmlContent = htmlContent.replace(/{{promoterName}}/g, promoterName)
+                             .replace(/{{campaignName}}/g, campaignName)
+                             .replace(/{{orgName}}/g, orgName)
+                             .replace(/{{portalLink}}/g, portalLink)
+                             .replace(/{{recipientEmail}}/g, recipientEmail);
     return htmlContent;
 };
 
@@ -279,7 +290,8 @@ exports.sendTestEmail = functions
                  htmlContent = customHtmlContent.replace(/{{promoterName}}/g, promoterName)
                                                 .replace(/{{campaignName}}/g, campaignName)
                                                 .replace(/{{orgName}}/g, orgName)
-                                                .replace(/{{portalLink}}/g, portalLink);
+                                                .replace(/{{portalLink}}/g, portalLink)
+                                                .replace(/{{recipientEmail}}/g, userEmail);
             } else if (testType === 'rejected') {
                 subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
                 const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
@@ -503,14 +515,8 @@ exports.askGemini = functions
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
 
-    const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
-    if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
-        return { htmlContent: templateDoc.data().approvedPromoterHtml };
-    }
-    
-    // Return default template if no custom one is found
-    const defaultHtml = generateApprovedEmailHtml('{{promoterName}}', '{{campaignName}}', '{{orgName}}', '{{recipientEmail}}');
-    return { htmlContent: defaultHtml };
+    const htmlContent = await getRawApprovedEmailTemplate();
+    return { htmlContent };
 });
 
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
