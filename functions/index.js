@@ -1,3 +1,4 @@
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
@@ -9,8 +10,9 @@ const projectId = admin.app().options.projectId;
 const baseUrl = `https://${projectId}.web.app`;
 
 /**
- * Checks if the calling user is a superadmin by reading their role from Firestore.
- * This is necessary because custom claims are not being used in this project's auth flow.
+ * Checks if the calling user is a superadmin.
+ * This is a resilient check that verifies against Firestore and has a fallback to create
+ * the superadmin document if it's missing for the designated superadmin email.
  * @param {object} auth - The context.auth object from the callable function.
  * @throws {functions.https.HttpsError} If the user is not authenticated or not a superadmin.
  */
@@ -18,12 +20,33 @@ const requireSuperAdmin = async (auth) => {
     if (!auth || !auth.uid) {
         throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
     }
-    const adminDoc = await admin.firestore().collection('admins').doc(auth.uid).get();
-    if (!adminDoc.exists || adminDoc.data().role !== 'superadmin') {
-        functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is not superadmin.`);
-        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
+    const adminDocRef = admin.firestore().collection('admins').doc(auth.uid);
+    const adminDoc = await adminDocRef.get();
+
+    // Standard check: Document exists and has the correct role.
+    if (adminDoc.exists && adminDoc.data().role === 'superadmin') {
+        functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
+        return; // Success
     }
-    functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
+
+    // Fallback/resilience check: If the doc doesn't exist but the email is the hardcoded superadmin,
+    // create the doc and allow access. This handles cases where client-side creation might have failed or is delayed.
+    if (!adminDoc.exists && auth.token && auth.token.email === 'r3gb0b@gmail.com') {
+        functions.logger.warn(`Admin doc for superadmin email ${auth.token.email} not found. Creating it now.`);
+        const superAdminPayload = {
+            email: auth.token.email,
+            role: 'superadmin',
+            assignedStates: [],
+        };
+        await adminDocRef.set(superAdminPayload);
+        functions.logger.info(`Superadmin doc created for UID: ${auth.uid}. Granting access.`);
+        return; // Success after creation
+    }
+
+    // If we reach here, permission is denied for any other reason.
+    const role = adminDoc.exists ? adminDoc.data().role : 'documento não encontrado';
+    functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is '${role}'.`);
+    throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
 };
 
 
