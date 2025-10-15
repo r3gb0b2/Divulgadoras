@@ -1,3 +1,4 @@
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const mailchimp = require("@mailchimp/mailchimp_transactional");
@@ -39,16 +40,27 @@ const sendMailchimpEmail = async (recipientEmail, subject, htmlContent) => {
         }
     } catch (error) {
         console.error("Failed to send email via Mailchimp:", error.message || error);
-        throw new functions.https.HttpsError('internal', 'Falha na comunicação com a API de e-mail (Mailchimp).', {
-             originalError: error.message || "Erro desconhecido",
+        let detailedMessage = error.message || "Erro desconhecido";
+        
+        // Check for specific error messages to provide better feedback.
+        if (typeof detailedMessage === 'string') {
+            if (detailedMessage.toLowerCase().includes('unverified sending domain')) {
+                detailedMessage = `O e-mail remetente '${mailchimpConfig.sender_email}' ou seu domínio não foi verificado na sua conta Mailchimp/Mandrill.`;
+            } else if (detailedMessage.toLowerCase().includes('invalid api key')) {
+                detailedMessage = `A chave da API Mailchimp configurada é inválida.`;
+            }
+        }
+
+        throw new functions.https.HttpsError('internal', `Falha na comunicação com a API de e-mail (Mailchimp).`, {
+             originalError: detailedMessage,
         });
     }
 };
 
 exports.getSystemStatus = functions
     .region("southamerica-east1")
-    .https.onCall((data, context) => {
-        const FUNCTION_VERSION = "v6.0-MAILCHIMP-DIAGNOSTIC";
+    .https.onCall(async (data, context) => {
+        const FUNCTION_VERSION = "v7.0-MAILCHIMP-VALIDATION";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -63,30 +75,42 @@ exports.getSystemStatus = functions
                 details: []
             };
 
-            if (mailchimpConfig) {
-                if (!mailchimpConfig.key) status.details.push("A variável 'mailchimp.key' está faltando.");
-                if (!mailchimpConfig.sender_email) status.details.push("A variável 'mailchimp.sender_email' está faltando.");
-
-                if (status.details.length === 0) {
+            if (mailchimpConfig && mailchimpConfig.key && mailchimpConfig.sender_email) {
+                try {
+                    const mailchimpClient = mailchimp(mailchimpConfig.key);
+                    // Ping the API to validate the key
+                    await mailchimpClient.users.ping();
                     status.configured = true;
-                    status.message = "API da Mailchimp configurada corretamente.";
-                } else {
-                    status.message = "Configuração da Mailchimp incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
+                    status.message = "API da Mailchimp configurada e chave VÁLIDA.";
+                } catch (validationError) {
+                    console.error("Mailchimp API key validation failed:", validationError.message);
+                    status.configured = false;
+                    if (validationError.message && validationError.message.toLowerCase().includes("invalid api key")) {
+                        status.message = "A chave da API Mailchimp configurada parece ser INVÁLIDA.";
+                    } else {
+                        status.message = "Falha ao validar a chave da API Mailchimp. Verifique a chave e a conexão.";
+                    }
+                    status.details.push(validationError.message);
                 }
             } else {
-                 status.details.push("O grupo de configuração 'mailchimp' está ausente. Execute 'firebase functions:config:set mailchimp.key=...' para começar.");
+                if (!mailchimpConfig) {
+                    status.details.push("O grupo de configuração 'mailchimp' está ausente.");
+                } else {
+                    if (!mailchimpConfig.key) status.details.push("A variável 'mailchimp.key' está faltando.");
+                    if (!mailchimpConfig.sender_email) status.details.push("A variável 'mailchimp.sender_email' está faltando.");
+                }
+                status.message = "Configuração da Mailchimp incompleta. Verifique as variáveis: " + (status.details.join(' ') || 'N/A');
             }
 
             return status;
         } catch (error) {
             console.error(`CRITICAL ERROR in getSystemStatus (v${FUNCTION_VERSION})`, error);
-            // Return a structured error object instead of crashing, so the frontend can display it.
             return {
                 functionVersion: FUNCTION_VERSION,
                 emailProvider: "Erro no Servidor",
                 configured: false,
                 message: "A função de verificação do sistema falhou no servidor.",
-                details: [error.message, `Stack: ${error.stack}`] // Send back the real error message and stack
+                details: [error.message, `Stack: ${error.stack}`]
             };
         }
     });
@@ -270,7 +294,7 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        const provider = "Mailchimp (v6.0)";
+        const provider = "Mailchimp (v7.0)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {

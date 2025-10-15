@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -14,7 +15,7 @@ type SystemStatus = {
     details?: string[];
 } | null;
 
-const FRONTEND_VERSION = "6.0"; // Must match version in AdminAuth.tsx
+const FRONTEND_VERSION = "7.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
@@ -85,9 +86,8 @@ const SuperAdminDashboard: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Test email failed", error);
-            const detailedError = error?.details?.originalError;
-            const errorMessage = detailedError || error.message || 'Ocorreu um erro desconhecido.';
-            setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${errorMessage}` } }));
+            const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
+            setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${detailedError}` } }));
         }
     };
 
@@ -152,26 +152,34 @@ const SuperAdminDashboard: React.FC = () => {
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         Sistema de E-mail Operacional
                     </h3>
-                    <p className="mt-2 text-sm">O provedor <strong>{systemStatus.emailProvider}</strong> está configurado e pronto para enviar e-mails.</p>
+                    <p className="mt-2 text-sm">{systemStatus.message}</p>
                     <p className="text-sm">Frontend: <strong className="font-mono">v{FRONTEND_VERSION}</strong> | Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
                  </div>
              );
         }
     
-        // If not configured, show the guide.
+        // If not configured, show the specific guide for the error.
+        let guideTitle = "⚠️ Ação Necessária: Configurar Envio de E-mail";
+        let guideMessage = `O sistema detectou que o serviço de e-mail (${systemStatus.emailProvider}) não está configurado corretamente.`;
+        if (systemStatus.message.includes("INVÁLIDA")) {
+            guideTitle = "⚠️ Erro de Configuração: Chave de API Inválida";
+            guideMessage = "A verificação com a Mailchimp falhou. A chave da API configurada parece estar incorreta ou não ter as permissões necessárias. Por favor, gere uma nova chave e reconfigure."
+        }
+        
         return (
             <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 p-6 rounded-lg">
-                <h3 className="font-bold text-xl mb-3">⚠️ Ação Necessária: Configurar Envio de E-mail</h3>
-                <p className="mb-4">O sistema detectou que o serviço de e-mail <strong>({systemStatus.emailProvider})</strong> não está configurado. Siga os passos para ativar o envio de e-mails.</p>
+                <h3 className="font-bold text-xl mb-3">{guideTitle}</h3>
+                <p className="mb-4">{guideMessage}</p>
                 <div className="space-y-4 text-sm">
                     <div>
                         <strong>Passo 1: Configure as variáveis no Firebase</strong>
                         <p className="text-gray-300">Execute o comando abaixo no terminal, substituindo os valores de exemplo.</p>
                         <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
                             <code>
-                                {`firebase functions:config:set mailchimp.key="SUA_API_KEY" mailchimp.sender_email="seu@email.com"`}
+                                {`firebase functions:config:set mailchimp.key="SUA_API_KEY" mailchimp.sender_email="seu@emailverificado.com"`}
                             </code>
                         </pre>
+                        <p className="text-xs text-yellow-200/80 mt-1"><strong>Atenção:</strong> O e-mail remetente precisa ser de um domínio verificado na sua conta Mailchimp/Mandrill.</p>
                     </div>
                     <div>
                         <strong>Passo 2: Faça o deploy das alterações</strong>

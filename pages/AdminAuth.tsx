@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -162,7 +163,7 @@ const AdminLogin: React.FC = () => {
                                 Solicite seu acesso
                             </button>
                         </p>
-                        <p className="text-xs text-gray-600 mt-4 text-center">Frontend v6.0</p>
+                        <p className="text-xs text-gray-600 mt-4 text-center">Frontend v7.0</p>
                     </form>
                 </div>
             )}
