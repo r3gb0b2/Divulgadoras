@@ -9,6 +9,7 @@ import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider } from './contexts/AdminAuthContext';
 import { LogoIcon } from './components/Icons';
+import GeminiPage from './pages/Gemini';
 
 const App: React.FC = () => {
   return (

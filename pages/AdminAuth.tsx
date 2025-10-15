@@ -16,6 +16,7 @@ import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
 import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import the new page
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
+import GeminiPage from './Gemini';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -208,6 +209,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
                     <Route path="settings/mercadopago" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
+                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -219,6 +221,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
                     <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
                     <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
+                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                 </>
             )}
             

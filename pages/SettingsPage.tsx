@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon } from '../components/Icons';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -63,6 +63,23 @@ const SettingsPage: React.FC = () => {
             </div>
             <p className="mt-2 text-gray-400">
               Visualize seu plano atual, histórico de faturas e gerencie sua forma de pagamento.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Assistente Gemini */}
+          <Link
+            to="/admin/gemini"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 md:col-span-2"
+          >
+            <div className="flex items-center">
+              <SparklesIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Use a inteligência artificial do Google para gerar textos criativos, ideias para redes sociais, regras de eventos e muito mais.
             </p>
             <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
               Acessar &rarr;

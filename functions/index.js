@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const { GoogleGenAI } = require("@google/genai");
 
 admin.initializeApp();
 
@@ -50,7 +51,7 @@ exports.getSystemStatus = functions
 
         const moosendConfig = functions.config().moosend;
         const status = {
-            functionVersion: "2.0-moosend", // Version identifier
+            functionVersion: "v2.0-moosend",
             emailProvider: "Moosend",
             configured: false,
             message: "Configuração da API Moosend incompleta ou ausente.",
@@ -342,6 +343,48 @@ exports.manuallySendStatusEmail = functions
 
             throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', {
                 originalError: detailedMessage,
+            });
+        }
+    });
+
+exports.askGemini = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+        }
+
+        const prompt = data.prompt;
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+            throw new functions.https.HttpsError('invalid-argument', 'O comando (prompt) não pode estar vazio.');
+        }
+
+        const geminiConfig = functions.config().gemini;
+        if (!geminiConfig || !geminiConfig.key) {
+            console.error("Gemini API key is missing in Firebase environment.", { geminiConfig });
+            throw new functions.https.HttpsError('failed-precondition', 'A chave da API Gemini não foi configurada no servidor.');
+        }
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: geminiConfig.key });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            
+            const text = response.text;
+            
+            if (!text) {
+                console.warn("Gemini API returned a response without text.", { response });
+                throw new functions.https.HttpsError('internal', 'A API retornou uma resposta vazia.');
+            }
+
+            return { text: text };
+        } catch (error) {
+            console.error("Error calling Gemini API:", error);
+            const message = error.message || 'Ocorreu um erro ao se comunicar com a API Gemini.';
+            throw new functions.https.HttpsError('internal', message, {
+                originalError: error.toString(),
             });
         }
     });

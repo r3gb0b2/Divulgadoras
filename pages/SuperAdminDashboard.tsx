@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatus = {
@@ -203,6 +203,15 @@ const SuperAdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Localidades</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Ativar, desativar e definir regras gerais para as localidades de inscrição.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
+                    
+                    <Link to="/admin/gemini" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <SparklesIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Gerar textos criativos, ideias, e auxiliar em tarefas administrativas.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                 </div>
