@@ -187,7 +187,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleManualNotify = async (promoterId: string) => {
         if (notifyingId) return;
-        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado/Rejeitado). Deseja continuar?")) {
+        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado). Deseja continuar?")) {
             return;
         }
         
@@ -370,7 +370,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                             <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
                                         </>
                                     )}
-                                    {(promoter.status === 'approved' || promoter.status === 'rejected') && (
+                                    {promoter.status === 'approved' && (
                                         <button
                                             onClick={() => handleManualNotify(promoter.id)}
                                             disabled={notifyingId === promoter.id}

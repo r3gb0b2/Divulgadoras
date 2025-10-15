@@ -6,6 +6,71 @@ const { GoogleGenAI } = require("@google/genai");
 admin.initializeApp();
 
 /**
+ * Generates the HTML content for an approval email.
+ * @param {string} promoterName - The name of the promoter.
+ * @param {string} campaignName - The name of the campaign/event.
+ * @param {string} orgName - The name of the organization.
+ * @param {string} portalLink - The URL to the promoter portal.
+ * @param {string} recipientEmail - The promoter's email address.
+ * @returns {string} The full HTML email content.
+ */
+const generateApprovedEmailHtml = (promoterName, campaignName, orgName, portalLink, recipientEmail) => {
+    const currentYear = new Date().getFullYear();
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sua candidatura foi aprovada!</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #16213e; color: #f0f0f0;">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto;">
+        <tr>
+            <td align="center" style="padding: 20px 0;">
+                <h1 style="color: #e83a93; font-size: 28px; margin: 0;">Equipe Certa</h1>
+            </td>
+        </tr>
+        <tr>
+            <td bgcolor="#1a1a2e" style="padding: 40px 30px; border-radius: 8px;">
+                <h2 style="color: #ffffff; font-size: 24px; margin: 0 0 20px 0;">Parabéns, ${promoterName}!</h2>
+                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
+                    Temos uma ótima notícia! Sua candidatura para o evento/gênero <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi <strong>APROVADA</strong>.
+                </p>
+                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
+                    Estamos muito felizes em ter você em nossa equipe! Para continuar e ter acesso ao grupo oficial, siga os próximos passos no seu portal.
+                </p>
+                <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                    <tr>
+                        <td align="center" style="padding: 20px 0;">
+                            <a href="${portalLink}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
+                                Acessar Portal da Divulgadora
+                            </a>
+                        </td>
+                    </tr>
+                </table>
+                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
+                    Para verificar seu status a qualquer momento, use o e-mail: <strong>${recipientEmail}</strong>.
+                </p>
+                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
+                    Atenciosamente,<br>
+                    Equipe ${orgName}
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <td align="center" style="padding: 20px 0; font-size: 12px; color: #888;">
+                <p>&copy; ${currentYear} Equipe Certa. Todos os direitos reservados.</p>
+                <p>E-mail enviado via Brevo (v9.2).</p>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+};
+
+
+/**
  * Sends an email using the Brevo (Sendinblue) API.
  * @param {string} recipientEmail - The email address of the recipient.
  * @param {string} subject - The subject of the email.
@@ -134,15 +199,7 @@ exports.sendTestEmail = functions
 
             if (testType === 'approved') {
                 subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                htmlContent = `
-                    <p>Olá, ${promoterName}!</p>
-                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong> foi APROVADA.</p>
-                    <p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p>
-                    <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                    <p>Lembre-se de usar o e-mail <strong>teste@exemplo.com</strong> para consultar seu status.</p>
-                    <p>Atenciosamente,<br/>Equipe Certa</p>
-                    ${footer}
-                `;
+                htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, portalLink, "teste@exemplo.com");
             } else if (testType === 'rejected') {
                 subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
                 const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
@@ -197,11 +254,14 @@ exports.sendPromoterStatusEmail = functions
             const beforeData = change.before.data();
             const afterData = change.after.data();
 
+            // Exit if status hasn't changed
             if (!beforeData || !afterData || beforeData.status === afterData.status) {
                 return null;
             }
             
-            if (beforeData.status !== 'pending' || (afterData.status !== 'approved' && afterData.status !== 'rejected')) {
+            // Only send email when status changes from 'pending' to 'approved'
+            if (beforeData.status !== 'pending' || afterData.status !== 'approved') {
+                functions.logger.info(`Not sending email for status change from ${beforeData.status} to ${afterData.status} for promoter ${promoterId}.`);
                 return null;
             }
             
@@ -209,7 +269,6 @@ exports.sendPromoterStatusEmail = functions
                 promoterName: String(afterData.name || 'Candidato(a)'),
                 campaignName: String(afterData.campaignName || "nossa equipe"),
                 recipientEmail: String(afterData.email || ''),
-                rejectionReason: String(afterData.rejectionReason || 'Não foi fornecido um motivo específico.'),
                 orgName: 'Nossa Equipe',
             };
 
@@ -224,17 +283,14 @@ exports.sendPromoterStatusEmail = functions
             }
 
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            let subject = '';
-            let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.2).</p>`;
-
-            if (afterData.status === 'approved') {
-                subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-                htmlContent = `...`; // Same content as before
-            } else {
-                subject = `Resultado da sua candidatura para ${finalData.orgName}`;
-                htmlContent = `...`; // Same content as before
-            }
+            const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
+            const htmlContent = generateApprovedEmailHtml(
+                finalData.promoterName,
+                finalData.campaignName,
+                finalData.orgName,
+                portalLink,
+                finalData.recipientEmail
+            );
 
             await sendBrevoEmail(finalData.recipientEmail, subject, htmlContent);
             
@@ -263,15 +319,14 @@ exports.manuallySendStatusEmail = functions
             if (!promoterDoc.exists) throw new functions.https.HttpsError('not-found', 'Divulgadora não encontrada.');
             
             const promoterData = promoterDoc.data();
-            if (promoterData.status !== 'approved' && promoterData.status !== 'rejected') {
-                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
+            if (promoterData.status !== 'approved') {
+                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado".');
             }
 
             const finalData = {
                 promoterName: String(promoterData.name || 'Candidato(a)'),
                 campaignName: String(promoterData.campaignName || "nossa equipe"),
                 recipientEmail: String(promoterData.email || ''),
-                rejectionReason: String(promoterData.rejectionReason || 'Não foi fornecido um motivo específico.'),
                 orgName: 'Nossa Equipe',
             };
             
@@ -283,33 +338,14 @@ exports.manuallySendStatusEmail = functions
             }
 
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            let subject = '';
-            let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Brevo (v9.2).</p>`;
-
-            if (promoterData.status === 'approved') {
-                subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-                htmlContent = `
-                    <p>Olá, ${finalData.promoterName}!</p>
-                    <p>Temos uma ótima notícia! Sua candidatura para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong> foi APROVADA.</p>
-                    <p>Para continuar, acesse seu portal para ler as regras e obter o link do grupo oficial.</p>
-                    <p><a href="${portalLink}" style="font-weight: bold; color: #e83a93;">Clique aqui para acessar seu portal</a></p>
-                    <p>Lembre-se de usar o e-mail <strong>${finalData.recipientEmail}</strong> para consultar seu status.</p>
-                    <p>Atenciosamente,<br/>Equipe Certa</p>
-                    ${footer}
-                `;
-            } else {
-                subject = `Resultado da sua candidatura para ${finalData.orgName}`;
-                htmlContent = `
-                    <p>Olá, ${finalData.promoterName},</p>
-                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${finalData.campaignName}</strong> da organização <strong>${finalData.orgName}</strong>.</p>
-                    <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${finalData.rejectionReason.replace(/\n/g, '<br/>')}</p>
-                    <p>Desejamos sucesso em suas futuras oportunidades!</p>
-                    <p>Atenciosamente,<br/>Equipe Certa</p>
-                    ${footer}
-                `;
-            }
+            const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
+            const htmlContent = generateApprovedEmailHtml(
+                finalData.promoterName,
+                finalData.campaignName,
+                finalData.orgName,
+                portalLink,
+                finalData.recipientEmail
+            );
             
             await sendBrevoEmail(finalData.recipientEmail, subject, htmlContent);
             functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
