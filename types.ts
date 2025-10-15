@@ -78,6 +78,8 @@ export interface AdminApplication {
     uid: string;
     name: string;
     email: string;
+    // FIX: Added missing phone property to align with the data submitted by the admin registration form.
+    phone: string;
     message: string;
     status: 'pending';
     createdAt: Timestamp;

@@ -17,7 +17,7 @@ const baseUrl = `https://${projectId}.web.app`;
  * @returns {string} The full HTML email content.
  */
 const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipientEmail) => {
-    const portalLink = `${baseUrl}/status?email=${encodeURIComponent(recipientEmail)}`;
+    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(recipientEmail)}`;
     const currentYear = new Date().getFullYear();
     return `
 <!DOCTYPE html>
