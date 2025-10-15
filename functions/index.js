@@ -9,6 +9,25 @@ const projectId = admin.app().options.projectId;
 const baseUrl = `https://${projectId}.web.app`;
 
 /**
+ * Checks if the calling user is a superadmin by reading their role from Firestore.
+ * This is necessary because custom claims are not being used in this project's auth flow.
+ * @param {object} auth - The context.auth object from the callable function.
+ * @throws {functions.https.HttpsError} If the user is not authenticated or not a superadmin.
+ */
+const requireSuperAdmin = async (auth) => {
+    if (!auth || !auth.uid) {
+        throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
+    }
+    const adminDoc = await admin.firestore().collection('admins').doc(auth.uid).get();
+    if (!adminDoc.exists || adminDoc.data().role !== 'superadmin') {
+        functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is not superadmin.`);
+        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
+    }
+    functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
+};
+
+
+/**
  * Generates the HTML content for an approval email.
  * @param {string} promoterName - The name of the promoter.
  * @param {string} campaignName - The name of the campaign/event.
@@ -459,9 +478,7 @@ exports.askGemini = functions
 // === EMAIL TEMPLATE FUNCTIONS ===
 
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (context.auth?.token?.role !== 'superadmin') {
-        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
-    }
+    await requireSuperAdmin(context.auth);
 
     const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
     if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
@@ -474,9 +491,8 @@ exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (context.auth?.token?.role !== 'superadmin') {
-        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
-    }
+    await requireSuperAdmin(context.auth);
+
     const { htmlContent } = data;
     if (typeof htmlContent !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'O conteúdo do template é inválido.');
@@ -492,9 +508,7 @@ exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (context.auth?.token?.role !== 'superadmin') {
-        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
-    }
+    await requireSuperAdmin(context.auth);
     
     // Deletes the field, making the system fall back to the default template.
     await admin.firestore().collection('settings').doc('emailTemplates').update({
