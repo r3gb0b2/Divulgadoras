@@ -1,19 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GeminiPage: React.FC = () => {
     const navigate = useNavigate();
+    const { adminData } = useAdminAuth();
     const [prompt, setPrompt] = useState('');
     const [response, setResponse] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [history, setHistory] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (adminData?.uid) {
+            try {
+                const storedHistory = localStorage.getItem(`geminiHistory_${adminData.uid}`);
+                if (storedHistory) {
+                    setHistory(JSON.parse(storedHistory));
+                }
+            } catch (e) {
+                console.error("Failed to parse Gemini history from localStorage", e);
+                // Clear corrupted data
+                localStorage.removeItem(`geminiHistory_${adminData.uid}`);
+            }
+        }
+    }, [adminData]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!prompt.trim()) return;
+        const trimmedPrompt = prompt.trim();
+        if (!trimmedPrompt) return;
 
         setIsLoading(true);
         setError(null);
@@ -21,9 +40,16 @@ const GeminiPage: React.FC = () => {
 
         try {
             const askGemini = httpsCallable(functions, 'askGemini');
-            const result = await askGemini({ prompt });
+            const result = await askGemini({ prompt: trimmedPrompt });
             const data = result.data as { text: string };
             setResponse(data.text);
+
+            // Update history on success
+            if (adminData?.uid) {
+                const newHistory = [trimmedPrompt, ...history.filter(p => p.toLowerCase() !== trimmedPrompt.toLowerCase())].slice(0, 5);
+                setHistory(newHistory);
+                localStorage.setItem(`geminiHistory_${adminData.uid}`, JSON.stringify(newHistory));
+            }
         } catch (err: any) {
             console.error("Gemini function call failed:", err);
             const errorMessage = err.details?.originalError || err.message || 'Ocorreu um erro desconhecido.';
@@ -93,6 +119,24 @@ const GeminiPage: React.FC = () => {
                                  </pre>
                              </div>
                          </div>
+                    )}
+                    {history.length > 0 && !isLoading && (
+                        <div className="mt-8 border-t border-gray-700 pt-6">
+                            <h3 className="text-xl font-semibold text-white mb-4">Consultas Recentes</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {history.map((item, index) => (
+                                    <button
+                                        key={index}
+                                        type="button"
+                                        onClick={() => setPrompt(item)}
+                                        title={item}
+                                        className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm hover:bg-gray-600 transition-colors truncate max-w-xs"
+                                    >
+                                        {item}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
