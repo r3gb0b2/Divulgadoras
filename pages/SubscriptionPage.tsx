@@ -63,13 +63,26 @@ const SubscriptionPage: React.FC = () => {
         e.preventDefault();
         if (!organization) return;
         
+        setError(''); // Clear previous errors
+
         if (ownerName.trim().split(/\s+/).length < 2) {
             setError("Por favor, insira seu nome completo (nome e sobrenome).");
             return;
         }
 
+        const cleanedPhone = phone.replace(/\D/g, '');
+        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+            setError("O telefone deve ter 10 ou 11 dígitos (DDD + número).");
+            return;
+        }
+    
+        const cleanedTaxId = taxId.replace(/\D/g, '');
+        if (cleanedTaxId.length !== 11 && cleanedTaxId.length !== 14) {
+            setError("O CPF deve ter 11 dígitos e o CNPJ 14 dígitos.");
+            return;
+        }
+
         setIsSavingInfo(true);
-        setError('');
         try {
             await updateOrganization(organization.id, { ownerName, ownerPhone: phone, ownerTaxId: taxId });
             // Refresh organization data to show the payment button

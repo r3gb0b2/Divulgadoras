@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { plans, Plan } from './PricingPage'; // Assuming plans are exported from PricingPage
@@ -7,7 +6,7 @@ import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 // FIX: Import signInWithEmailAndPassword from firebase/auth for Firebase v9 modular SDK.
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon } from '../components/Icons';
+import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 
 const SubscriptionFlowPage: React.FC = () => {
     const { planId } = useParams<{ planId: string }>();
@@ -17,6 +16,8 @@ const SubscriptionFlowPage: React.FC = () => {
     const [formData, setFormData] = useState({
         orgName: '',
         ownerName: '',
+        phone: '',
+        taxId: '',
         email: '',
         password: ''
     });
@@ -43,6 +44,21 @@ const SubscriptionFlowPage: React.FC = () => {
             setIsLoading(false);
             return;
         }
+
+        const cleanedPhone = formData.phone.replace(/\D/g, '');
+        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+            setError("O telefone deve ter 10 ou 11 dígitos (DDD + número).");
+            setIsLoading(false);
+            return;
+        }
+
+        const cleanedTaxId = formData.taxId.replace(/\D/g, '');
+        if (cleanedTaxId.length !== 11 && cleanedTaxId.length !== 14) {
+            setError("O CPF deve ter 11 dígitos e o CNPJ 14 dígitos.");
+            setIsLoading(false);
+            return;
+        }
+
 
         try {
             const createOrganizationAndUser = httpsCallable(functions, 'createOrganizationAndUser');
@@ -93,6 +109,8 @@ const SubscriptionFlowPage: React.FC = () => {
                         <h2 className="text-lg font-semibold text-gray-200">2. Crie sua conta de Admin</h2>
                         <div className="mt-2 space-y-4">
                             <InputWithIcon Icon={UserIcon} type="text" name="ownerName" placeholder="Seu nome completo (responsável)" value={formData.ownerName} onChange={handleChange} required />
+                            <InputWithIcon Icon={PhoneIcon} type="tel" name="phone" placeholder="Telefone com DDD" value={formData.phone} onChange={handleChange} required />
+                            <InputWithIcon Icon={UserIcon} type="text" name="taxId" placeholder="CPF ou CNPJ" value={formData.taxId} onChange={handleChange} required />
                             <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail (será seu login)" value={formData.email} onChange={handleChange} required />
                             <InputWithIcon Icon={LockClosedIcon} type="password" name="password" placeholder="Crie uma senha de acesso (mín. 6 chars)" value={formData.password} onChange={handleChange} required />
                         </div>

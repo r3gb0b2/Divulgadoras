@@ -46,21 +46,46 @@ const plans = {
 
 /**
  * Creates a new user, organization, and admin record in a single transaction.
+ * Includes improved error handling, logging, and auth rollback on DB failure.
  */
 exports.createOrganizationAndUser = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const { orgName, email, password, planId, ownerName } = data;
+        functions.logger.info("createOrganizationAndUser called with data:", { email: data.email, orgName: data.orgName });
 
-        if (!orgName || !email || !password || !planId || !ownerName) {
+        const { orgName, email, password, planId, ownerName, phone, taxId } = data;
+
+        if (!orgName || !email || !password || !planId || !ownerName || !phone || !taxId) {
+            functions.logger.error("Validation failed: Missing required fields.", data);
             throw new HttpsError("invalid-argument", "Todos os campos são obrigatórios.");
         }
 
         if (ownerName.trim().split(/\s+/).length < 2) {
+            functions.logger.error("Validation failed: Owner name is not a full name.", { ownerName });
             throw new HttpsError("invalid-argument", "Por favor, insira seu nome completo (nome e sobrenome).");
         }
+        
+        const cleanedPhone = phone.replace(/\D/g, '');
+        if (cleanedPhone.length < 10 || cleanedPhone.length > 11) {
+            throw new HttpsError("invalid-argument", "O telefone deve ter 10 ou 11 dígitos (DDD + número).");
+        }
+        
+        const cleanedTaxId = taxId.replace(/\D/g, '');
+        if (cleanedTaxId.length !== 11 && cleanedTaxId.length !== 14) {
+            throw new HttpsError("invalid-argument", "O CPF deve ter 11 dígitos e o CNPJ 14 dígitos.");
+        }
 
-        const userRecord = await admin.auth().createUser({ email, password });
+        let userRecord;
+        try {
+            userRecord = await admin.auth().createUser({ email, password });
+            functions.logger.info("Successfully created auth user:", { uid: userRecord.uid, email: userRecord.email });
+        } catch (error) {
+            functions.logger.error("Error creating auth user:", error);
+            if (error.code === 'auth/email-already-exists') {
+                 throw new HttpsError("already-exists", "Este e-mail já está cadastrado. Tente fazer login.");
+            }
+            throw new HttpsError("internal", "Falha ao criar o usuário de autenticação.", error);
+        }
         
         const trialEndDate = new Date();
         trialEndDate.setDate(trialEndDate.getDate() + 3);
@@ -73,6 +98,8 @@ exports.createOrganizationAndUser = functions
             ownerName: ownerName,
             ownerEmail: email,
             ownerUid: userRecord.uid,
+            ownerPhone: phone,
+            ownerTaxId: taxId,
             status: "trial",
             planId,
             planExpiresAt: Timestamp.fromDate(trialEndDate),
@@ -89,8 +116,18 @@ exports.createOrganizationAndUser = functions
             assignedStates: [],
         });
 
-        await batch.commit();
+        try {
+            await batch.commit();
+            functions.logger.info("Batch commit successful for new organization.", { orgId: orgRef.id });
+        } catch (error) {
+            functions.logger.error("Error committing batch for new organization:", error);
+            // IMPORTANT: Rollback user creation if DB write fails
+            await admin.auth().deleteUser(userRecord.uid);
+            functions.logger.warn("Rolled back auth user creation due to batch failure.", { uid: userRecord.uid });
+            throw new HttpsError("internal", "Falha ao salvar os dados no banco de dados. O usuário não foi criado. Tente novamente.", error);
+        }
 
+        functions.logger.info("Function finished successfully.", { orgId: orgRef.id });
         return { success: true, orgId: orgRef.id };
     });
 
@@ -157,10 +194,22 @@ exports.createPagSeguroOrder = functions
             throw new HttpsError("failed-precondition", "Credenciais do PagSeguro não configuradas no servidor.");
         }
         
-        const taxId = organization.ownerTaxId.replace(/\D/g, "");
-        const phone = organization.ownerPhone.replace(/\D/g, "");
+        const taxId = (organization.ownerTaxId || "").replace(/\D/g, "");
+        if (taxId.length !== 11 && taxId.length !== 14) {
+            throw new HttpsError("invalid-argument", `O CPF/CNPJ cadastrado (${organization.ownerTaxId}) é inválido. Verifique o número de dígitos e tente novamente.`);
+        }
+
+        const phone = (organization.ownerPhone || "").replace(/\D/g, "");
+        if (phone.length < 10 || phone.length > 11) { // DDD (2) + number (8 or 9)
+            throw new HttpsError("invalid-argument", `O número de telefone cadastrado (${organization.ownerPhone}) é inválido. Deve incluir o DDD e ter 8 ou 9 dígitos.`);
+        }
         const areaCode = phone.substring(0, 2);
         const phoneNumber = phone.substring(2);
+
+        if (phoneNumber.length !== 8 && phoneNumber.length !== 9) {
+            throw new HttpsError("invalid-argument", `O formato do telefone (${organization.ownerPhone}) é inválido após extrair o DDD. Verifique o número.`);
+        }
+
 
         const body = {
             "reference_id": `ORG_${orgId}_${Date.now()}`,
