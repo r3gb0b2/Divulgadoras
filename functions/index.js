@@ -5,7 +5,6 @@ const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
 const { GoogleGenAI } = require("@google/genai");
 const xml2js = require("xml2js");
-const { fetch } = require("undici");
 
 admin.initializeApp();
 
