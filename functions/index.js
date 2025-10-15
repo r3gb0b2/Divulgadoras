@@ -6,7 +6,7 @@ const { GoogleGenAI } = require("@google/genai");
 admin.initializeApp();
 
 const projectId = admin.app().options.projectId;
-const baseUrl = `https://${projectId}.web.app`;
+const baseUrl = `https://divulgadoras.vercel.app ;
 
 /**
  * Generates the HTML content for an approval email.
