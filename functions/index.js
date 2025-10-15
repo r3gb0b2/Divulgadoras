@@ -82,9 +82,7 @@ const generateDefaultApprovedEmailHtml = () => {
                 <table border="0" cellpadding="0" cellspacing="0" width="100%">
                     <tr>
                         <td align="center" style="padding: 20px 0;">
-                            <a href="{{portalLink}}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
-                                Acessar Portal da Divulgadora
-                            </a>
+                            <!-- PORTAL_BUTTON -->
                         </td>
                     </tr>
                 </table>
@@ -150,14 +148,26 @@ const getRawApprovedEmailTemplate = async () => {
  * @returns {string} The populated HTML string.
  */
 const populateTemplate = (htmlContent, data) => {
-    // FIX: Hardcoded the application URL to ensure the link in the email is always correct, pointing to the Vercel deployment.
-    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(data.recipientEmail)}`;
-    let populatedHtml = String(htmlContent); // Ensure it's a string
+    // Construct the correct portal link with the encoded recipient email.
+    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(data.recipientEmail || '')}`;
+    
+    // Define the full HTML for the button. This will replace the comment placeholder in the default template.
+    const portalButtonHtml = `<a href="${portalLink}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">Acessar Portal da Divulgadora</a>`;
+    
+    let populatedHtml = String(htmlContent);
+    
+    // Replace standard placeholders
     populatedHtml = populatedHtml.replace(/{{promoterName}}/g, data.promoterName || '');
     populatedHtml = populatedHtml.replace(/{{campaignName}}/g, data.campaignName || '');
     populatedHtml = populatedHtml.replace(/{{orgName}}/g, data.orgName || '');
-    populatedHtml = populatedHtml.replace(/{{portalLink}}/g, portalLink);
     populatedHtml = populatedHtml.replace(/{{recipientEmail}}/g, data.recipientEmail || '');
+    
+    // New replacement for the default template's placeholder comment.
+    populatedHtml = populatedHtml.replace('<!-- PORTAL_BUTTON -->', portalButtonHtml);
+    
+    // For backward compatibility with custom templates that might still use {{portalLink}}, we replace it with just the URL.
+    populatedHtml = populatedHtml.replace(/{{portalLink}}/g, portalLink);
+    
     return populatedHtml;
 };
 
