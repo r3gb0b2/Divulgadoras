@@ -15,10 +15,11 @@ const PLANS = {
 
 /**
  * Checks if the calling user is a superadmin.
- * @param {object} auth - The context.auth object from the callable function.
+ * @param {object} context - The context object from the callable function.
  * @throws {functions.https.HttpsError} If the user is not authenticated or not a superadmin.
  */
-const requireSuperAdmin = async (auth) => {
+const requireSuperAdmin = async (context) => {
+    const auth = context.auth;
     if (!auth || !auth.uid) {
         throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
     }
