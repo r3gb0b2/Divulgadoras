@@ -2,28 +2,45 @@
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const formData = require('form-data');
-const Mailgun = require('mailgun.js');
-const mailgun = new Mailgun(formData);
+const axios = require("axios");
 
 admin.initializeApp();
 
 /**
- * Creates a new, isolated, and freshly authenticated Mailgun API client instance.
- * @param {object} mailgunConfig - The Mailgun configuration from Firebase functions config.
- * @returns {import('mailgun.js/dist/lib/client').Mailgun} A configured API instance.
- * @throws {functions.https.HttpsError} If config is missing.
+ * Sends an email using the Moosend transactional API.
+ * @param {string} recipientEmail - The email address of the recipient.
+ * @param {string} subject - The subject of the email.
+ * @param {string} htmlContent - The HTML body of the email.
+ * @throws {functions.https.HttpsError} If config is missing or API call fails.
  */
-const createMailgunClient = (mailgunConfig) => {
-    if (!mailgunConfig || !mailgunConfig.key || !mailgunConfig.domain || !mailgunConfig.sender_email || !mailgunConfig.sender_name) {
-        console.error("Mailgun config is missing in Firebase environment.", { mailgunConfig });
-        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Mailgun) não foi encontrada no servidor.');
+const sendMoosendEmail = async (recipientEmail, subject, htmlContent) => {
+    const moosendConfig = functions.config().moosend;
+    if (!moosendConfig || !moosendConfig.key || !moosendConfig.sender_email || !moosendConfig.sender_name) {
+        console.error("Moosend config is missing in Firebase environment.", { moosendConfig });
+        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Moosend) não foi encontrada no servidor.');
     }
-    
-    return mailgun.client({
-        username: 'api',
-        key: mailgunConfig.key,
-    });
+
+    const apiUrl = `https://api.moosend.com/v3/transactional/send.json?apiKey=${moosendConfig.key}`;
+    const payload = {
+        From: `${moosendConfig.sender_name} <${moosendConfig.sender_email}>`,
+        To: recipientEmail,
+        Subject: subject,
+        HtmlBody: htmlContent,
+    };
+
+    try {
+        const response = await axios.post(apiUrl, payload);
+        if (response.status !== 200 || response.data.Error) {
+             console.error("Moosend API returned an error:", response.data);
+             throw new Error(response.data.Error || "Moosend API error");
+        }
+        functions.logger.info(`Email sent successfully to ${recipientEmail} via Moosend.`);
+    } catch (error) {
+        console.error("Failed to send email via Moosend:", error.response ? error.response.data : error.message);
+        throw new functions.https.HttpsError('internal', 'Falha na comunicação com a API de e-mail (Moosend).', {
+             originalError: error.response ? error.response.data : error.message,
+        });
+    }
 };
 
 exports.sendTestEmail = functions
@@ -37,10 +54,6 @@ exports.sendTestEmail = functions
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
-            functions.logger.info(`Initializing Mailgun client for ${testType} test email.`);
-            const mailgunConfig = functions.config().mailgun;
-            const mg = createMailgunClient(mailgunConfig);
-
             let subject = '';
             let htmlContent = '';
             const orgName = "Organização de Teste";
@@ -74,21 +87,14 @@ exports.sendTestEmail = functions
                 htmlContent = `
                     <html><body>
                         <h1>Olá!</h1>
-                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio (Mailgun) está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
+                        <p>Se você está recebendo este e-mail, a integração com o serviço de envio (Moosend) está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
                         <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
                     </body></html>`;
             }
 
             functions.logger.info(`Sending ${testType} test email to ${userEmail}...`);
-            const messageData = {
-                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
-                to: [userEmail],
-                subject: subject,
-                html: htmlContent,
-            };
-            
-            await mg.messages.create(mailgunConfig.domain, messageData);
-            functions.logger.info(`${testType} test email sent successfully via Mailgun.`);
+            await sendMoosendEmail(userEmail, subject, htmlContent);
+            functions.logger.info(`${testType} test email sent successfully via Moosend.`);
 
             return { success: true, message: `E-mail de teste (${testType}) enviado para ${userEmail}.` };
         } catch (error) {
@@ -101,7 +107,7 @@ exports.sendTestEmail = functions
                 throw error;
             }
             
-            const detailedMessage = error.details || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
+            const detailedMessage = error.details?.originalError || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
 
             throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', {
                 originalError: detailedMessage,
@@ -130,7 +136,6 @@ exports.sendPromoterStatusEmail = functions
                 return null;
             }
             
-            // --- Hyper-Defensive Data Sanitization ---
             const finalData = {
                 promoterName: String(afterData.name || 'Candidato(a)'),
                 campaignName: String(afterData.campaignName || "nossa equipe"),
@@ -157,7 +162,6 @@ exports.sendPromoterStatusEmail = functions
                     functions.logger.warn(`Could not fetch organization name for orgId ${afterData.organizationId}`, orgError);
                 }
             }
-            // --- End Sanitization ---
 
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
@@ -185,17 +189,7 @@ exports.sendPromoterStatusEmail = functions
                 `;
             }
 
-            const mailgunConfig = functions.config().mailgun;
-            const mg = createMailgunClient(mailgunConfig);
-
-            const messageData = {
-                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
-                to: [finalData.recipientEmail],
-                subject: subject,
-                html: htmlContent,
-            };
-
-            await mg.messages.create(mailgunConfig.domain, messageData);
+            await sendMoosendEmail(finalData.recipientEmail, subject, htmlContent);
             
             functions.logger.info(`[SUCCESS] Email dispatched to ${finalData.recipientEmail} for promoter ${promoterId}.`);
             return { success: true };
@@ -231,7 +225,6 @@ exports.manuallySendStatusEmail = functions
                 throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado" ou "Rejeitado".');
             }
 
-            // --- Hyper-Defensive Data Sanitization ---
             const finalData = {
                 promoterName: String(promoterData.name || 'Candidato(a)'),
                 campaignName: String(promoterData.campaignName || "nossa equipe"),
@@ -257,7 +250,6 @@ exports.manuallySendStatusEmail = functions
                     functions.logger.warn(`Could not fetch organization name for orgId ${promoterData.organizationId}`, orgError);
                 }
             }
-            // --- End Sanitization ---
 
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
@@ -285,17 +277,7 @@ exports.manuallySendStatusEmail = functions
                 `;
             }
             
-            const mailgunConfig = functions.config().mailgun;
-            const mg = createMailgunClient(mailgunConfig);
-            
-            const messageData = {
-                from: `${mailgunConfig.sender_name} <${mailgunConfig.sender_email}>`,
-                to: [finalData.recipientEmail],
-                subject: subject,
-                html: htmlContent,
-            };
-
-            await mg.messages.create(mailgunConfig.domain, messageData);
+            await sendMoosendEmail(finalData.recipientEmail, subject, htmlContent);
             functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
 
             return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.` };
@@ -310,7 +292,7 @@ exports.manuallySendStatusEmail = functions
                 throw error;
             }
             
-            const detailedMessage = error.details || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
+            const detailedMessage = error.details?.originalError || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
 
             throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', {
                 originalError: detailedMessage,
