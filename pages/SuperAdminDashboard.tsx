@@ -106,13 +106,19 @@ const SuperAdminDashboard: React.FC = () => {
 
             <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
                 <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
+                <div className="bg-blue-900/50 border-l-4 border-blue-500 text-blue-300 p-4 mb-6 rounded-md" role="status">
+                    <p className="font-bold">Atualização do Sistema de E-mail</p>
+                    <p className="mt-1">
+                        O sistema de e-mail foi atualizado para <strong>Moosend</strong>. Todas as notificações e testes agora são enviados através da API da Moosend.
+                    </p>
+                </div>
                 <div className="space-y-4">
                     {/* Teste Genérico */}
                     <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <h3 className="font-semibold text-gray-100">Teste de Conexão (Genérico)</h3>
+                            <h3 className="font-semibold text-gray-100">Teste de Conexão Moosend</h3>
                             <p className="text-sm text-gray-400 mt-1">
-                                Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API de e-mails (Moosend).
+                                Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Moosend</strong>.
                             </p>
                         </div>
                         <button 
