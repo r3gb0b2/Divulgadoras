@@ -30,7 +30,7 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                     // If no admin data is found, check if it's the default superadmin email.
                     // If so, create their admin record on the fly for the first login.
                     // This superadmin has no organizationId and can see everything.
-                    if (!data && firebaseUser.email === 'rafael@agenciavitrine.com') {
+                    if (!data && firebaseUser.email === 'r3gb0b@gmail.com') {
                         const superAdminPayload: Omit<AdminUserData, 'uid'> = {
                             email: firebaseUser.email,
                             role: 'superadmin',
