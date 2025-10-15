@@ -456,22 +456,21 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
     const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
 
     try {
-        // Optimistically attempt the update. This is more robust than a read-then-write.
+        // This is a more robust approach.
+        // First, we ensure the document exists using set() with merge:true. This is idempotent
+        // and creates an empty document if it doesn't exist, preventing the subsequent update from failing.
+        await templateDocRef.set({}, { merge: true });
+
+        // Now that the document is guaranteed to exist, we can safely update it to delete the field.
+        // If the field doesn't exist, this operation succeeds without error.
         await templateDocRef.update({
             approvedPromoterHtml: admin.firestore.FieldValue.delete(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+
         return { success: true, message: "Template de e-mail redefinido com sucesso." };
     } catch (error) {
-        // The gRPC error code for 'NOT_FOUND' is 5. If the update fails because the document
-        // doesn't exist, we can treat it as a success for a "reset" operation.
-        if (error.code === 5) {
-            functions.logger.info("resetEmailTemplate: Document 'emailTemplates' did not exist, which is a successful reset.");
-            return { success: true, message: "Template redefinido (nenhum template customizado existia)." };
-        }
-        
-        // For any other error, it's a genuine failure.
-        functions.logger.error("Error in resetEmailTemplate function", {
+        functions.logger.error("FATAL Error in resetEmailTemplate function", {
             errorMessage: error.message,
             errorCode: error.code,
             uid: context.auth.uid,
