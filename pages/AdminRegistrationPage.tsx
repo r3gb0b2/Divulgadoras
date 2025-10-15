@@ -5,6 +5,8 @@ import { plans, Plan } from './PricingPage'; // Assuming plans are exported from
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+// FIX: Import signInWithEmailAndPassword from firebase/auth for Firebase v9 modular SDK.
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon } from '../components/Icons';
 
 const SubscriptionFlowPage: React.FC = () => {
@@ -45,7 +47,8 @@ const SubscriptionFlowPage: React.FC = () => {
 
             if (data.success) {
                 // Automatically log the user in, then redirect to their new panel
-                await auth.signInWithEmailAndPassword(formData.email, formData.password);
+                // FIX: Called signInWithEmailAndPassword as a function, passing the auth instance as an argument, which is the correct syntax for Firebase v9+.
+                await signInWithEmailAndPassword(auth, formData.email, formData.password);
                 navigate('/admin');
             } else {
                 throw new Error(data.message || 'Ocorreu um erro desconhecido.');

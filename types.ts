@@ -1,4 +1,3 @@
-
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected';
@@ -80,6 +79,8 @@ export interface Organization {
   createdAt?: Timestamp | FieldValue;
   public: boolean;
   assignedStates: string[];
+  ownerPhone?: string;
+  ownerTaxId?: string;
 }
 
 export interface StateConfig {
