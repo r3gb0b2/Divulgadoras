@@ -80,21 +80,21 @@ const generateDefaultApprovedEmailHtml = () => {
                     Temos uma ótima notícia! Sua candidatura para o evento/gênero <strong>{{campaignName}}</strong> da organização <strong>{{orgName}}</strong> foi <strong>APROVADA</strong>.
                 </p>
                 <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
-                    Estamos muito felizes em ter você em nossa equipe! Para continuar e ter acesso ao grupo oficial, siga os próximos passos no seu portal.
+                    Estamos muito felizes em ter você em nossa equipe! Clique no botão abaixo para acessar seu portal, ver os próximos passos e entrar no grupo oficial.
                 </p>
                 <table border="0" cellpadding="0" cellspacing="0" width="100%">
                     <tr>
                         <td align="center" style="padding: 20px 0;">
-                            <a href="https://divulgadoras.vercel.app/#/status" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
+                            <a href="{{portalLink}}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
                                 Acessar Portal da Divulgadora
                             </a>
                         </td>
                     </tr>
                 </table>
-                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
-                    Para verificar seu status a qualquer momento, use o e-mail: <strong>{{recipientEmail}}</strong>.
+                <p style="color: #b3b3b3; font-size: 14px; line-height: 1.5; text-align: center;">
+                    O link já está configurado com seu e-mail de acesso.
                 </p>
-                <p style="color: #cccccc; font-size: 16px; line-height: 1.5;">
+                <p style="color: #cccccc; font-size: 16px; line-height: 1.5; margin-top: 20px;">
                     Atenciosamente,<br>
                     Equipe {{orgName}}
                 </p>
