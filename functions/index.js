@@ -5,16 +5,19 @@ const { GoogleGenAI } = require("@google/genai");
 
 admin.initializeApp();
 
+const projectId = admin.app().options.projectId;
+const baseUrl = `https://${projectId}.web.app`;
+
 /**
  * Generates the HTML content for an approval email.
  * @param {string} promoterName - The name of the promoter.
  * @param {string} campaignName - The name of the campaign/event.
  * @param {string} orgName - The name of the organization.
- * @param {string} portalLink - The URL to the promoter portal.
  * @param {string} recipientEmail - The promoter's email address.
  * @returns {string} The full HTML email content.
  */
-const generateApprovedEmailHtml = (promoterName, campaignName, orgName, portalLink, recipientEmail) => {
+const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipientEmail) => {
+    const portalLink = `${baseUrl}/status?email=${encodeURIComponent(recipientEmail)}`;
     const currentYear = new Date().getFullYear();
     return `
 <!DOCTYPE html>
@@ -193,13 +196,12 @@ exports.sendTestEmail = functions
             const orgName = "Organização de Teste";
             const promoterName = "Divulgadora de Teste";
             const campaignName = "Evento de Teste";
-            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Brevo (v9.2).</p>`;
 
 
             if (testType === 'approved') {
                 subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, portalLink, "teste@exemplo.com");
+                htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, userEmail);
             } else if (testType === 'rejected') {
                 subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
                 const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
@@ -282,13 +284,11 @@ exports.sendPromoterStatusEmail = functions
                 if (orgDoc.exists) finalData.orgName = String(orgDoc.data().name);
             }
 
-            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
             const htmlContent = generateApprovedEmailHtml(
                 finalData.promoterName,
                 finalData.campaignName,
                 finalData.orgName,
-                portalLink,
                 finalData.recipientEmail
             );
 
@@ -336,14 +336,12 @@ exports.manuallySendStatusEmail = functions
                 const orgDoc = await admin.firestore().collection('organizations').doc(String(promoterData.organizationId)).get();
                 if (orgDoc.exists) finalData.orgName = String(orgDoc.data().name);
             }
-
-            const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
+            
             const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
             const htmlContent = generateApprovedEmailHtml(
                 finalData.promoterName,
                 finalData.campaignName,
                 finalData.orgName,
-                portalLink,
                 finalData.recipientEmail
             );
             
