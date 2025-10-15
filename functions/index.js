@@ -1,43 +1,46 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const axios = require("axios");
+const mailchimp = require("@mailchimp/mailchimp_transactional");
 const { GoogleGenAI } = require("@google/genai");
 
 admin.initializeApp();
 
 /**
- * Sends an email using the Moosend transactional API.
+ * Sends an email using the Mailchimp Transactional API.
  * @param {string} recipientEmail - The email address of the recipient.
  * @param {string} subject - The subject of the email.
  * @param {string} htmlContent - The HTML body of the email.
  * @throws {functions.https.HttpsError} If config is missing or API call fails.
  */
-const sendMoosendEmail = async (recipientEmail, subject, htmlContent) => {
-    const moosendConfig = functions.config().moosend;
-    if (!moosendConfig || !moosendConfig.key || !moosendConfig.sender_email || !moosendConfig.sender_name) {
-        console.error("Moosend config is missing in Firebase environment.", { moosendConfig });
-        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Moosend) não foi encontrada no servidor.');
+const sendMailchimpEmail = async (recipientEmail, subject, htmlContent) => {
+    const mailchimpConfig = functions.config().mailchimp;
+    if (!mailchimpConfig || !mailchimpConfig.key || !mailchimpConfig.sender_email) {
+        console.error("Mailchimp config is missing in Firebase environment.", { mailchimpConfig });
+        throw new functions.https.HttpsError('failed-precondition', 'A configuração da API de e-mail (Mailchimp) não foi encontrada no servidor.');
     }
 
-    const apiUrl = `https://api.moosend.com/v3/transactional/send.json?apiKey=${moosendConfig.key}`;
-    const payload = {
-        From: `${moosendConfig.sender_name} <${moosendConfig.sender_email}>`,
-        To: recipientEmail,
-        Subject: subject,
-        HtmlBody: htmlContent,
+    const mailchimpClient = mailchimp(mailchimpConfig.key);
+
+    const message = {
+        from_email: mailchimpConfig.sender_email,
+        subject: subject,
+        html: htmlContent,
+        to: [{ email: recipientEmail, type: "to" }],
     };
 
     try {
-        const response = await axios.post(apiUrl, payload);
-        if (response.status !== 200 || response.data.Error) {
-             console.error("Moosend API returned an error:", response.data);
-             throw new Error(response.data.Error || "Moosend API error");
+        const response = await mailchimpClient.messages.send({ message });
+        if (response && response.length > 0 && ['sent', 'queued', 'scheduled'].includes(response[0].status)) {
+             functions.logger.info(`Email sent successfully to ${recipientEmail} via Mailchimp. Status: ${response[0].status}`);
+        } else {
+             console.error("Mailchimp API returned a non-successful status:", response);
+             const rejectReason = response && response.length > 0 ? response[0].reject_reason : "Unknown reason";
+             throw new Error(`Mailchimp API Error: ${rejectReason}`);
         }
-        functions.logger.info(`Email sent successfully to ${recipientEmail} via Moosend.`);
     } catch (error) {
-        console.error("Failed to send email via Moosend:", error.response ? error.response.data : error.message);
-        throw new functions.https.HttpsError('internal', 'Falha na comunicação com a API de e-mail (Moosend).', {
-             originalError: error.response ? error.response.data : error.message,
+        console.error("Failed to send email via Mailchimp:", error.message || error);
+        throw new functions.https.HttpsError('internal', 'Falha na comunicação com a API de e-mail (Mailchimp).', {
+             originalError: error.message || "Erro desconhecido",
         });
     }
 };
@@ -49,28 +52,27 @@ exports.getSystemStatus = functions
             throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
         }
 
-        const moosendConfig = functions.config().moosend;
+        const mailchimpConfig = functions.config().mailchimp;
         const status = {
-            functionVersion: "v3.0-MOOSEND-FINAL",
-            emailProvider: "Moosend",
+            functionVersion: "v5.0-MAILCHIMP-FINAL",
+            emailProvider: "Mailchimp",
             configured: false,
-            message: "Configuração da API Moosend incompleta ou ausente.",
+            message: "Configuração da API Mailchimp incompleta ou ausente.",
             details: []
         };
 
-        if (moosendConfig) {
-            if (!moosendConfig.key) status.details.push("A variável 'moosend.key' está faltando.");
-            if (!moosendConfig.sender_email) status.details.push("A variável 'moosend.sender_email' está faltando.");
-            if (!moosendConfig.sender_name) status.details.push("A variável 'moosend.sender_name' está faltando.");
+        if (mailchimpConfig) {
+            if (!mailchimpConfig.key) status.details.push("A variável 'mailchimp.key' está faltando.");
+            if (!mailchimpConfig.sender_email) status.details.push("A variável 'mailchimp.sender_email' está faltando.");
 
             if (status.details.length === 0) {
                 status.configured = true;
-                status.message = "API da Moosend configurada corretamente.";
+                status.message = "API da Mailchimp configurada corretamente.";
             } else {
-                status.message = "Configuração da Moosend incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
+                status.message = "Configuração da Mailchimp incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
             }
         } else {
-             status.details.push("O grupo de configuração 'moosend' está ausente. Execute 'firebase functions:config:set moosend.key=...' para começar.");
+             status.details.push("O grupo de configuração 'mailchimp' está ausente. Execute 'firebase functions:config:set mailchimp.key=...' para começar.");
         }
 
         return status;
@@ -94,7 +96,7 @@ exports.sendTestEmail = functions
             const promoterName = "Divulgadora de Teste";
             const campaignName = "Evento de Teste";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Moosend.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Mailchimp.</p>`;
 
 
             if (testType === 'approved') {
@@ -127,13 +129,13 @@ exports.sendTestEmail = functions
                         <h1>Olá!</h1>
                         <p>Se você está recebendo este e-mail, a integração com o serviço de envio está <strong>funcionando corretamente!</strong> (Teste Genérico)</p>
                         <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
-                        ${footer.replace('Este é um e-mail de teste enviado', 'E-mail enviado')}
+                        ${footer.replace('Este é um e-mail de teste enviado', 'E--mail enviado')}
                     </body></html>`;
             }
 
             functions.logger.info(`Sending ${testType} test email to ${userEmail}...`);
-            await sendMoosendEmail(userEmail, subject, htmlContent);
-            functions.logger.info(`${testType} test email sent successfully via Moosend.`);
+            await sendMailchimpEmail(userEmail, subject, htmlContent);
+            functions.logger.info(`${testType} test email sent successfully via Mailchimp.`);
 
             return { success: true, message: `E-mail de teste (${testType}) enviado para ${userEmail}.` };
         } catch (error) {
@@ -205,7 +207,7 @@ exports.sendPromoterStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Moosend.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp.</p>`;
 
 
             if (afterData.status === 'approved') {
@@ -232,7 +234,7 @@ exports.sendPromoterStatusEmail = functions
                 `;
             }
 
-            await sendMoosendEmail(finalData.recipientEmail, subject, htmlContent);
+            await sendMailchimpEmail(finalData.recipientEmail, subject, htmlContent);
             
             functions.logger.info(`[SUCCESS] Email dispatched to ${finalData.recipientEmail} for promoter ${promoterId}.`);
             return { success: true };
@@ -255,7 +257,7 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        const provider = "Moosend (v3.0)";
+        const provider = "Mailchimp (v5.0)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
@@ -298,7 +300,7 @@ exports.manuallySendStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Moosend.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp.</p>`;
 
 
             if (promoterData.status === 'approved') {
@@ -325,7 +327,7 @@ exports.manuallySendStatusEmail = functions
                 `;
             }
             
-            await sendMoosendEmail(finalData.recipientEmail, subject, htmlContent);
+            await sendMailchimpEmail(finalData.recipientEmail, subject, htmlContent);
             functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
 
             return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.`, provider };

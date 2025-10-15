@@ -13,6 +13,7 @@ type SystemStatus = {
     message: string;
 } | null;
 
+const FRONTEND_VERSION = "5.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
@@ -22,6 +23,7 @@ const SuperAdminDashboard: React.FC = () => {
     });
     const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+    const [isVersionMismatch, setIsVersionMismatch] = useState(false);
 
     useEffect(() => {
         const checkSystemStatus = async () => {
@@ -29,7 +31,20 @@ const SuperAdminDashboard: React.FC = () => {
             try {
                 const getStatus = httpsCallable(functions, 'getSystemStatus');
                 const result = await getStatus();
-                setSystemStatus(result.data as SystemStatus);
+                const statusData = result.data as SystemStatus;
+                setSystemStatus(statusData);
+
+                // Compare versions
+                const backendVersion = statusData?.functionVersion?.split('-')[0] || '';
+                const frontendVersionMajor = FRONTEND_VERSION.split('.')[0];
+                const backendVersionMajor = backendVersion.replace('v','').split('.')[0];
+                
+                if (backendVersion && frontendVersionMajor !== backendVersionMajor) {
+                    setIsVersionMismatch(true);
+                } else {
+                    setIsVersionMismatch(false);
+                }
+
             } catch (error) {
                 console.error("Failed to get system status:", error);
                 setSystemStatus({
@@ -37,6 +52,7 @@ const SuperAdminDashboard: React.FC = () => {
                     configured: false,
                     message: 'Não foi possível verificar o status do sistema de e-mail. Verifique os logs da função.'
                 });
+                setIsVersionMismatch(true); // Assume mismatch on error
             } finally {
                 setIsCheckingStatus(false);
             }
@@ -73,12 +89,35 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
+    const renderVersionMismatchWarning = () => (
+        <div className="bg-red-900/50 border-2 border-red-600 text-red-200 p-6 rounded-lg mb-6">
+            <h3 className="font-extrabold text-2xl mb-3 flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.636-1.21 2.37-1.21 3.006 0l4.312 8.225c.606 1.157-.23 2.625-1.503 2.625H5.448c-1.273 0-2.109-1.468-1.503-2.625L8.257 3.099zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                ALERTA DE SINCRONIZAÇÃO
+            </h3>
+            <p className="mb-2">Seu painel (<strong>Frontend v{FRONTEND_VERSION}</strong>) está mais novo que o seu servidor (<strong>Backend {systemStatus?.functionVersion || 'indisponível'}</strong>).</p>
+            <p className="mb-4">Isso significa que o último deploy das suas 'Cloud Functions' falhou ou não foi completado. Siga os passos abaixo para resolver:</p>
+            
+            <div className="space-y-3 text-sm bg-black/30 p-4 rounded-md">
+                <p><strong>Passo 1: Verifique o projeto Firebase</strong><br/>
+                No terminal, execute `firebase projects:list` e garanta que o projeto correto está como "(current)".</p>
+                
+                <p><strong>Passo 2: Force um novo deploy</strong><br/>
+                Execute o comando abaixo para enviar a versão mais recente do código do servidor:</p>
+                <pre className="bg-gray-800 p-2 rounded text-white overflow-x-auto"><code>firebase deploy --only functions</code></pre>
+
+                <p><strong>Passo 3: Verifique o resultado</strong><br/>
+                Após o deploy ser concluído, atualize esta página. Este alerta deverá desaparecer.</p>
+            </div>
+        </div>
+    );
+
     const renderConfigurationGuide = () => {
         if (isCheckingStatus) {
             return (
                  <div className="bg-gray-700/50 p-4 rounded-lg flex items-center gap-4">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-                    <p className="font-semibold text-gray-300">Verificando configuração do sistema de e-mail...</p>
+                    <p className="font-semibold text-gray-300">Verificando configuração do sistema...</p>
                  </div>
             );
         }
@@ -100,7 +139,7 @@ const SuperAdminDashboard: React.FC = () => {
                         Sistema de E-mail Operacional
                     </h3>
                     <p className="mt-2 text-sm">O provedor <strong>{systemStatus.emailProvider}</strong> está configurado e pronto para enviar e-mails.</p>
-                    <p className="text-sm">Versão da Função no Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
+                    <p className="text-sm">Frontend: <strong className="font-mono">v{FRONTEND_VERSION}</strong> | Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
                  </div>
              );
         }
@@ -109,38 +148,28 @@ const SuperAdminDashboard: React.FC = () => {
         return (
             <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 p-6 rounded-lg">
                 <h3 className="font-bold text-xl mb-3">⚠️ Ação Necessária: Configurar Envio de E-mail</h3>
-                <p className="mb-4">O sistema detectou que o serviço de e-mail <strong>({systemStatus.emailProvider})</strong> não está configurado no servidor. Os e-mails não funcionarão até que você complete os passos abaixo.</p>
-                <p className="text-sm mb-4">Versão da Função no Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível (deploy necessário)'}</strong></p>
-                
+                <p className="mb-4">O sistema detectou que o serviço de e-mail <strong>({systemStatus.emailProvider})</strong> não está configurado. Siga os passos para ativar o envio de e-mails.</p>
                 <div className="space-y-4 text-sm">
                     <div>
-                        <strong className="text-base">Passo 1: Obtenha suas credenciais Moosend</strong>
-                        <p className="text-gray-300">Acesse sua conta Moosend e encontre sua <strong>API Key</strong>. Você também precisará de um <strong>e-mail de remetente verificado</strong>.</p>
-                    </div>
-    
-                    <div>
-                        <strong className="text-base">Passo 2: Configure as variáveis no Firebase</strong>
-                        <p className="text-gray-300">Abra o terminal na pasta do seu projeto Firebase e execute o comando abaixo, substituindo os valores de exemplo.</p>
+                        <strong>Passo 1: Configure as variáveis no Firebase</strong>
+                        <p className="text-gray-300">Execute o comando abaixo no terminal, substituindo os valores de exemplo.</p>
                         <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
                             <code>
-                                {`firebase functions:config:set moosend.key="SUA_API_KEY_DA_MOOSEND" moosend.sender_email="seu@emailverificado.com" moosend.sender_name="Nome da Sua Produtora"`}
+                                {`firebase functions:config:set mailchimp.key="SUA_API_KEY" mailchimp.sender_email="seu@email.com"`}
                             </code>
                         </pre>
                     </div>
-                    
                     <div>
-                        <strong className="text-base">Passo 3: Faça o deploy das alterações</strong>
-                         <p className="text-gray-300">Após executar o comando acima, você precisa enviar a nova configuração para o servidor:</p>
+                        <strong>Passo 2: Faça o deploy das alterações</strong>
                          <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
                             <code>
                                 firebase deploy --only functions
                             </code>
                         </pre>
                     </div>
-    
                     <div>
-                         <strong className="text-base">Passo 4: Verifique novamente</strong>
-                         <p className="text-gray-300">Após o deploy, atualize esta página. Esta mensagem de aviso deve ser substituída por uma de sucesso.</p>
+                         <strong>Passo 3: Verifique novamente</strong>
+                         <p className="text-gray-300">Após o deploy, atualize esta página. Esta mensagem deve ser substituída por uma de sucesso.</p>
                     </div>
                 </div>
             </div>
@@ -149,6 +178,8 @@ const SuperAdminDashboard: React.FC = () => {
     
     return (
         <div>
+            {isVersionMismatch && renderVersionMismatchWarning()}
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
                  <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
@@ -222,15 +253,20 @@ const SuperAdminDashboard: React.FC = () => {
                 <div className="mb-6">
                    {renderConfigurationGuide()}
                 </div>
-
-                {systemStatus?.configured && (
+                
+                {isVersionMismatch ? (
+                     <div className="text-center p-6 bg-gray-700/50 rounded-lg">
+                        <p className="font-bold text-yellow-400">Ferramentas de diagnóstico desativadas.</p>
+                        <p className="text-gray-400 text-sm">Resolva o problema de sincronização de versão para habilitá-las.</p>
+                    </div>
+                ) : systemStatus?.configured ? (
                     <div className="space-y-4 border-t border-gray-700 pt-6 mt-6">
                         {/* Teste Genérico */}
                         <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
-                                <h3 className="font-semibold text-gray-100">Teste de Conexão Moosend</h3>
+                                <h3 className="font-semibold text-gray-100">Teste de Conexão Mailchimp</h3>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Moosend</strong>.
+                                    Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Mailchimp</strong>.
                                 </p>
                             </div>
                             <button 
@@ -294,7 +330,7 @@ const SuperAdminDashboard: React.FC = () => {
                             </div>
                         )}
                     </div>
-                )}
+                ) : null}
             </div>
         </div>
     );
