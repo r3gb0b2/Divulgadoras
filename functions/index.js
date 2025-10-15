@@ -1,5 +1,4 @@
 
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
@@ -12,8 +11,6 @@ const baseUrl = `https://${projectId}.web.app`;
 
 /**
  * Checks if the calling user is a superadmin.
- * This is a resilient check that verifies against Firestore and has a fallback to create
- * the superadmin document if it's missing for the designated superadmin email.
  * @param {object} auth - The context.auth object from the callable function.
  * @throws {functions.https.HttpsError} If the user is not authenticated or not a superadmin.
  */
@@ -24,14 +21,11 @@ const requireSuperAdmin = async (auth) => {
     const adminDocRef = admin.firestore().collection('admins').doc(auth.uid);
     const adminDoc = await adminDocRef.get();
 
-    // Standard check: Document exists and has the correct role.
     if (adminDoc.exists && adminDoc.data().role === 'superadmin') {
         functions.logger.info(`Superadmin access granted for UID: ${auth.uid}.`);
-        return; // Success
+        return;
     }
 
-    // Fallback/resilience check: If the doc doesn't exist but the email is the hardcoded superadmin,
-    // create the doc and allow access. This handles cases where client-side creation might have failed or is delayed.
     if (!adminDoc.exists && auth.token && auth.token.email === 'r3gb0b@gmail.com') {
         functions.logger.warn(`Admin doc for superadmin email ${auth.token.email} not found. Creating it now.`);
         const superAdminPayload = {
@@ -41,18 +35,19 @@ const requireSuperAdmin = async (auth) => {
         };
         await adminDocRef.set(superAdminPayload);
         functions.logger.info(`Superadmin doc created for UID: ${auth.uid}. Granting access.`);
-        return; // Success after creation
+        return;
     }
 
-    // If we reach here, permission is denied for any other reason.
     const role = adminDoc.exists ? adminDoc.data().role : 'documento não encontrado';
     functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is '${role}'.`);
     throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
 };
 
+// --- Centralized Email Logic ---
 
 /**
- * Generates the default HTML content for an approval email with placeholders.
+ * Creates the default HTML for an 'approved' status email.
+ * This is the fallback if no custom template is set.
  * @returns {string} The full default HTML email content with placeholders.
  */
 const generateDefaultApprovedEmailHtml = () => {
@@ -112,9 +107,9 @@ const generateDefaultApprovedEmailHtml = () => {
 
 
 /**
- * Fetches the raw HTML for the approval email, either custom or default.
- * The returned template will contain placeholders like {{promoterName}}.
- * @returns {Promise<string>} The raw HTML template string.
+ * Central function to get the raw HTML template for the 'approved' email.
+ * It fetches the custom template from Firestore or falls back to the default.
+ * @returns {Promise<string>} The raw HTML template string with placeholders.
  */
 const getRawApprovedEmailTemplate = async () => {
     try {
@@ -131,26 +126,21 @@ const getRawApprovedEmailTemplate = async () => {
     return generateDefaultApprovedEmailHtml();
 };
 
-
 /**
- * Fetches and populates the approved email template with specific data.
- * @param {string} promoterName - The name of the promoter.
- * @param {string} campaignName - The name of the campaign/event.
- * @param {string} orgName - The name of the organization.
- * @param {string} recipientEmail - The promoter's email address.
- * @returns {Promise<string>} The full, populated HTML email content.
+ * Replaces placeholders in an HTML string with actual data.
+ * @param {string} htmlContent - The raw HTML with placeholders.
+ * @param {object} data - An object containing data like promoterName, etc.
+ * @returns {string} The populated HTML string.
  */
-const getApprovedEmailContent = async (promoterName, campaignName, orgName, recipientEmail) => {
-    let htmlContent = await getRawApprovedEmailTemplate();
-    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(recipientEmail)}`;
-
-    // Replace all placeholders
-    htmlContent = htmlContent.replace(/{{promoterName}}/g, promoterName)
-                             .replace(/{{campaignName}}/g, campaignName)
-                             .replace(/{{orgName}}/g, orgName)
-                             .replace(/{{portalLink}}/g, portalLink)
-                             .replace(/{{recipientEmail}}/g, recipientEmail);
-    return htmlContent;
+const populateTemplate = (htmlContent, data) => {
+    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(data.recipientEmail)}`;
+    let populatedHtml = htmlContent;
+    populatedHtml = populatedHtml.replace(/{{promoterName}}/g, data.promoterName || '');
+    populatedHtml = populatedHtml.replace(/{{campaignName}}/g, data.campaignName || '');
+    populatedHtml = populatedHtml.replace(/{{orgName}}/g, data.orgName || '');
+    populatedHtml = populatedHtml.replace(/{{portalLink}}/g, portalLink);
+    populatedHtml = populatedHtml.replace(/{{recipientEmail}}/g, data.recipientEmail || '');
+    return populatedHtml;
 };
 
 
@@ -173,7 +163,6 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     apiKey.apiKey = brevoConfig.key;
 
     const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
@@ -192,7 +181,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
             detailedMessage = "A chave da API Brevo configurada é inválida.";
         } else if (errorMessage.includes("Sender not authorized")) {
             detailedMessage = `O e-mail remetente '${brevoConfig.sender_email}' não foi validado na sua conta Brevo.`;
-        } else if (errorMessage) {
+        } else {
             detailedMessage = errorMessage;
         }
 
@@ -202,10 +191,12 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     }
 };
 
+// --- System & Diagnostic Functions ---
+
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v9.2-BREVO-FIX-2";
+        const FUNCTION_VERSION = "v9.2-REFACTOR-1";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -238,15 +229,12 @@ exports.getSystemStatus = functions
                     status.details.push(validationError.body ? JSON.stringify(validationError.body) : validationError.message);
                 }
             } else {
-                if (!brevoConfig) {
-                    status.details.push("O grupo de configuração 'brevo' está ausente.");
-                } else {
+                if (!brevoConfig) status.details.push("O grupo 'brevo' está ausente.");
+                else {
                     if (!brevoConfig.key) status.details.push("A variável 'brevo.key' está faltando.");
                     if (!brevoConfig.sender_email) status.details.push("A variável 'brevo.sender_email' está faltando.");
                 }
-                status.message = "Configuração do Brevo incompleta. Verifique as variáveis: " + (status.details.join(' ') || 'N/A');
             }
-
             return status;
         } catch (error) {
             console.error(`CRITICAL ERROR in getSystemStatus (v${FUNCTION_VERSION})`, error);
@@ -260,136 +248,86 @@ exports.getSystemStatus = functions
         }
     });
 
-
 exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        if (!context.auth || !context.auth.token.email) {
-            throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado com um e-mail.');
-        }
         const userEmail = 'r3gb0b@gmail.com';
-        const testType = data.testType || 'generic';
-        const customHtmlContent = data.customHtmlContent; // For template editor testing
+        const { testType, customHtmlContent } = data;
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
+            const testData = {
+                promoterName: "Divulgadora de Teste",
+                campaignName: "Evento de Teste",
+                orgName: "Organização de Teste",
+                recipientEmail: userEmail,
+            };
+            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Brevo (v9.2).</p>`;
             let subject = '';
             let htmlContent = '';
-            const orgName = "Organização de Teste";
-            const promoterName = "Divulgadora de Teste";
-            const campaignName = "Evento de Teste";
-            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Brevo (v9.2).</p>`;
 
-
-            if (testType === 'approved') {
-                subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                htmlContent = await getApprovedEmailContent(promoterName, campaignName, orgName, userEmail);
-            } else if (testType === 'custom_approved' && customHtmlContent) {
-                 subject = `✅ (TESTE DO EDITOR) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                 const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(userEmail)}`;
-                 htmlContent = customHtmlContent.replace(/{{promoterName}}/g, promoterName)
-                                                .replace(/{{campaignName}}/g, campaignName)
-                                                .replace(/{{orgName}}/g, orgName)
-                                                .replace(/{{portalLink}}/g, portalLink)
-                                                .replace(/{{recipientEmail}}/g, userEmail);
-            } else if (testType === 'rejected') {
-                subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
-                const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
-                htmlContent = `
-                    <p>Olá, ${promoterName},</p>
-                    <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
-                    <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
-                    <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
-                    <p>Desejamos sucesso em suas futuras oportunidades!</p>
-                    <p>Atenciosamente,<br/>Equipe Certa</p>
-                    ${footer}
-                `;
-            } else { // 'generic'
-                subject = "✅ Teste de Envio de E-mail - Equipe Certa (Brevo)";
-                htmlContent = `
-                    <html><body>
-                        <h1>Olá!</h1>
-                        <p>Se você está recebendo este e-mail, a integração com o <strong>Brevo</strong> está <strong>funcionando corretamente!</strong></p>
-                        <p>Atenciosamente,<br/>Plataforma Equipe Certa</p>
-                        ${footer.replace('Este é um e-mail de teste enviado', 'E--mail enviado')}
-                    </body></html>`;
+            switch (testType) {
+                case 'approved':
+                    subject = `✅ (TESTE) Parabéns! Sua candidatura para ${testData.orgName} foi aprovada!`;
+                    const rawTemplate = await getRawApprovedEmailTemplate();
+                    htmlContent = populateTemplate(rawTemplate, testData);
+                    break;
+                case 'custom_approved':
+                    subject = `✅ (TESTE DO EDITOR) Parabéns! Sua candidatura para ${testData.orgName} foi aprovada!`;
+                    if (!customHtmlContent) throw new Error("Conteúdo HTML customizado não fornecido.");
+                    htmlContent = populateTemplate(customHtmlContent, testData);
+                    break;
+                case 'rejected':
+                    subject = `(TESTE) Resultado da sua candidatura para ${testData.orgName}`;
+                    htmlContent = `<p>Olá, ${testData.promoterName},</p><p>Este é um teste do e-mail de rejeição.</p><p>Atenciosamente,<br/>Equipe Certa</p>${footer}`;
+                    break;
+                default: // generic
+                    subject = "✅ Teste de Conexão - Equipe Certa (Brevo)";
+                    htmlContent = `<h1>Olá!</h1><p>Se você recebeu este e-mail, a conexão com o <strong>Brevo</strong> está <strong>funcionando!</strong></p>${footer}`;
             }
 
-            functions.logger.info(`Sending ${testType} test email to ${userEmail}...`);
             await sendBrevoEmail(userEmail, subject, htmlContent);
-            functions.logger.info(`${testType} test email sent successfully via Brevo.`);
-
             return { success: true, message: `E-mail de teste (${testType}) enviado para ${userEmail}.` };
         } catch (error) {
-            functions.logger.error(`FATAL ERROR in sendTestEmail (type: ${testType})`, {
-                user: context.auth ? context.auth.token.email : "Unauthenticated",
-                rawErrorObject: error,
-            });
-
+            functions.logger.error(`FATAL ERROR in sendTestEmail (type: ${testType})`, { error });
             if (error instanceof functions.https.HttpsError) throw error;
-            
-            const detailedMessage = error.details?.originalError || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
-
-            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', {
-                originalError: detailedMessage,
-            });
+            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', { originalError: error.message });
         }
     });
+
+// --- Main Email Automation Functions ---
 
 exports.sendPromoterStatusEmail = functions
     .region("southamerica-east1")
     .firestore.document('promoters/{promoterId}')
     .onUpdate(async (change, context) => {
         const promoterId = context.params.promoterId;
-        
+        const beforeData = change.before.data();
+        const afterData = change.after.data();
+
+        if (beforeData?.status !== 'pending' || afterData?.status !== 'approved') {
+            return null;
+        }
+
         try {
-            const beforeData = change.before.data();
-            const afterData = change.after.data();
-
-            // Exit if status hasn't changed
-            if (!beforeData || !afterData || beforeData.status === afterData.status) {
-                return null;
-            }
-            
-            // Only send email when status changes from 'pending' to 'approved'
-            if (beforeData.status !== 'pending' || afterData.status !== 'approved') {
-                functions.logger.info(`Not sending email for status change from ${beforeData.status} to ${afterData.status} for promoter ${promoterId}.`);
-                return null;
-            }
-            
-            const finalData = {
-                promoterName: String(afterData.name || 'Candidato(a)'),
-                campaignName: String(afterData.campaignName || "nossa equipe"),
-                recipientEmail: String(afterData.email || ''),
-                orgName: 'Nossa Equipe',
+            const orgDoc = await admin.firestore().collection('organizations').doc(afterData.organizationId).get();
+            const promoterData = {
+                promoterName: afterData.name || 'Candidato(a)',
+                campaignName: afterData.campaignName || "nossa equipe",
+                recipientEmail: afterData.email,
+                orgName: orgDoc.exists ? orgDoc.data().name : 'Nossa Equipe',
             };
+            if (!promoterData.recipientEmail) throw new Error(`Promoter ${promoterId} has no email.`);
 
-            if (!finalData.recipientEmail) {
-                functions.logger.error(`[FATAL EXIT] Promoter ${promoterId} has no valid email.`);
-                return null;
-            }
+            const subject = `✅ Parabéns! Sua candidatura para ${promoterData.orgName} foi aprovada!`;
+            const rawHtml = await getRawApprovedEmailTemplate();
+            const htmlContent = populateTemplate(rawHtml, promoterData);
             
-            if (afterData.organizationId) {
-                const orgDoc = await admin.firestore().collection('organizations').doc(String(afterData.organizationId)).get();
-                if (orgDoc.exists) finalData.orgName = String(orgDoc.data().name);
-            }
-
-            const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-            const htmlContent = await getApprovedEmailContent(
-                finalData.promoterName,
-                finalData.campaignName,
-                finalData.orgName,
-                finalData.recipientEmail
-            );
-
-            await sendBrevoEmail(finalData.recipientEmail, subject, htmlContent);
-            
-            functions.logger.info(`[SUCCESS] Email dispatched to ${finalData.recipientEmail} for promoter ${promoterId}.`);
+            await sendBrevoEmail(promoterData.recipientEmail, subject, htmlContent);
+            functions.logger.info(`[SUCCESS] Approval email sent to ${promoterData.recipientEmail}.`);
             return { success: true };
         } catch (error) {
-             functions.logger.error(`[FATAL ERROR] Failed to send promoter status email for promoterId: ${promoterId}.`, {
-                rawErrorObject: error,
-            });
+             functions.logger.error(`[FATAL ERROR] sendPromoterStatusEmail for ${promoterId}.`, { error });
             return null;
         }
     });
@@ -397,12 +335,12 @@ exports.sendPromoterStatusEmail = functions
 exports.manuallySendStatusEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'A função só pode ser chamada por um usuário autenticado.');
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
         const { promoterId } = data;
         if (!promoterId) throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
 
         const provider = "Brevo (v9.2)";
-        functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
+        functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by ${context.auth.token.email}`);
 
         try {
             const promoterDoc = await admin.firestore().collection('promoters').doc(promoterId).get();
@@ -410,139 +348,89 @@ exports.manuallySendStatusEmail = functions
             
             const promoterData = promoterDoc.data();
             if (promoterData.status !== 'approved') {
-                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar uma candidatura com status "Aprovado".');
+                throw new functions.https.HttpsError('failed-precondition', 'Só é possível notificar candidaturas aprovadas.');
             }
+            if (!promoterData.email) throw new functions.https.HttpsError('failed-precondition', 'Divulgadora sem e-mail válido.');
 
+            const orgDoc = await admin.firestore().collection('organizations').doc(promoterData.organizationId).get();
             const finalData = {
-                promoterName: String(promoterData.name || 'Candidato(a)'),
-                campaignName: String(promoterData.campaignName || "nossa equipe"),
-                recipientEmail: String(promoterData.email || ''),
-                orgName: 'Nossa Equipe',
+                promoterName: promoterData.name,
+                campaignName: promoterData.campaignName,
+                recipientEmail: promoterData.email,
+                orgName: orgDoc.exists ? orgDoc.data().name : 'Nossa Equipe',
             };
-            
-            if (!finalData.recipientEmail) throw new functions.https.HttpsError('failed-precondition', 'A divulgadora não possui um e-mail válido.');
-            
-            if (promoterData.organizationId) {
-                const orgDoc = await admin.firestore().collection('organizations').doc(String(promoterData.organizationId)).get();
-                if (orgDoc.exists) finalData.orgName = String(orgDoc.data().name);
-            }
-            
+
             const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-            const htmlContent = await getApprovedEmailContent(
-                finalData.promoterName,
-                finalData.campaignName,
-                finalData.orgName,
-                finalData.recipientEmail
-            );
+            const rawHtml = await getRawApprovedEmailTemplate();
+            const htmlContent = populateTemplate(rawHtml, finalData);
             
             await sendBrevoEmail(finalData.recipientEmail, subject, htmlContent);
-            functions.logger.info(`[SUCCESS] Manual email sent to ${finalData.recipientEmail} for promoter ${promoterId}.`);
-
-            return { success: true, message: `E-mail enviado com sucesso para ${finalData.recipientEmail}.`, provider };
+            return { success: true, message: `E-mail enviado para ${finalData.recipientEmail}.`, provider };
         } catch (error) {
-            functions.logger.error("FATAL ERROR in manuallySendStatusEmail", { promoterId: data.promoterId, user: context.auth.token.email, rawErrorObject: error });
-            if (error instanceof functions.https.HttpsError) {
-                error.details = { ...error.details, provider };
-                throw error;
-            }
-            const detailedMessage = error.details?.originalError || error.message || "Ocorreu um erro desconhecido no servidor de e-mails.";
-            throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', { originalError: detailedMessage, provider });
+            functions.logger.error("FATAL ERROR in manuallySendStatusEmail", { promoterId, error });
+            if (error instanceof functions.https.HttpsError) throw error;
+            throw new functions.https.HttpsError('internal', 'Falha na API de envio de e-mail.', { originalError: error.message, provider });
         }
     });
+
+// --- Gemini AI Function ---
 
 exports.askGemini = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-        }
-
-        const prompt = data.prompt;
-        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-            throw new functions.https.HttpsError('invalid-argument', 'O comando (prompt) não pode estar vazio.');
-        }
+        if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
+        const { prompt } = data;
+        if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'O comando (prompt) não pode estar vazio.');
 
         const geminiConfig = functions.config().gemini;
         if (!geminiConfig || !geminiConfig.key) {
-            console.error("Gemini API key is missing in Firebase environment.", { geminiConfig });
             throw new functions.https.HttpsError('failed-precondition', 'A chave da API Gemini não foi configurada no servidor.');
         }
 
         try {
             const ai = new GoogleGenAI({ apiKey: geminiConfig.key });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
-
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+            
             if (response.promptFeedback?.blockReason) {
-                const blockReason = response.promptFeedback.blockReason;
-                throw new functions.https.HttpsError('invalid-argument', `Sua solicitação foi bloqueada por motivos de segurança: ${blockReason}.`);
+                throw new functions.https.HttpsError('invalid-argument', `Sua solicitação foi bloqueada: ${response.promptFeedback.blockReason}.`);
             }
-            
-            const text = response.text;
-            
-            if (text === undefined || text === null || text.trim() === '') {
-                 const finishReason = response.candidates?.[0]?.finishReason;
-                 if (finishReason && finishReason !== 'STOP') {
-                     throw new functions.https.HttpsError('internal', `A API finalizou a geração por um motivo inesperado: ${finishReason}.`);
-                 }
+            if (!response.text || response.text.trim() === '') {
+                 throw new functions.https.HttpsError('internal', `A API finalizou por um motivo inesperado: ${response.candidates?.[0]?.finishReason}.`);
             }
-
-            return { text: text || '' };
-
+            return { text: response.text };
         } catch (error) {
             console.error("Error calling Gemini API:", error);
-            let userMessage = 'Ocorreu um erro ao se comunicar com o assistente de IA.';
-            const originalMessage = error.message || '';
-
-            if (originalMessage.toLowerCase().includes('api key not valid')) {
-                userMessage = 'A chave da API Gemini configurada no servidor é inválida.';
-            } else if (originalMessage.includes('billing')) {
-                userMessage = 'O projeto do Google Cloud associado não tem faturamento ativo.';
-            } else if (error.code === 'invalid-argument') {
-                userMessage = originalMessage;
-            }
-            
-            throw new functions.https.HttpsError('internal', userMessage, {
-                originalError: error.toString(),
-            });
+            const userMessage = error.message.includes('API key not valid') ? 'A chave da API Gemini é inválida.' : 'Erro ao comunicar com o assistente de IA.';
+            throw new functions.https.HttpsError('internal', userMessage, { originalError: error.toString() });
         }
     });
 
-// === EMAIL TEMPLATE FUNCTIONS ===
+// === Email Template Editor Functions ===
 
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
-
     const htmlContent = await getRawApprovedEmailTemplate();
     return { htmlContent };
 });
 
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
-
     const { htmlContent } = data;
     if (typeof htmlContent !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'O conteúdo do template é inválido.');
     }
-
     await admin.firestore().collection('settings').doc('emailTemplates').set({
         approvedPromoterHtml: htmlContent,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedBy: context.auth.uid,
     }, { merge: true });
-
     return { success: true, message: "Template de e-mail salvo com sucesso." };
 });
 
 exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
-    
-    // Deletes the field, making the system fall back to the default template.
     await admin.firestore().collection('settings').doc('emailTemplates').update({
         approvedPromoterHtml: admin.firestore.FieldValue.delete()
     });
-    
     return { success: true, message: "Template de e-mail redefinido para o padrão." };
 });
