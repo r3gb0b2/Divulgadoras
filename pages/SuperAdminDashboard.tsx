@@ -112,7 +112,7 @@ const SuperAdminDashboard: React.FC = () => {
                         <div>
                             <h3 className="font-semibold text-gray-100">Teste de Conexão (Genérico)</h3>
                             <p className="text-sm text-gray-400 mt-1">
-                                Envia um e-mail simples para <span className="font-medium text-gray-300">{auth.currentUser?.email}</span> para verificar a conexão com a API de e-mails (Mailgun).
+                                Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API de e-mails (Mailgun).
                             </p>
                         </div>
                         <button 

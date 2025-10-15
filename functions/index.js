@@ -32,7 +32,7 @@ exports.sendTestEmail = functions
         if (!context.auth || !context.auth.token.email) {
             throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado com um e-mail.');
         }
-        const userEmail = context.auth.token.email;
+        const userEmail = 'r3gb0b@gmail.com';
         const testType = data.testType || 'generic'; // Can be 'generic', 'approved', or 'rejected'
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
@@ -64,7 +64,7 @@ exports.sendTestEmail = functions
                 htmlContent = `
                     <p>Olá, ${promoterName},</p>
                     <p>Agradecemos o seu interesse em fazer parte da equipe para <strong>${campaignName}</strong> da organização <strong>${orgName}</strong>.</p>
-                    <p>Analisamos seu perfil e, neste momento, не poderemos seguir com a sua candidatura.</p>
+                    <p>Analisamos seu perfil e, neste momento, não poderemos seguir com a sua candidatura.</p>
                     <p><strong>Motivo informado:</strong><br/>${reasonText.replace(/\n/g, '<br/>')}</p>
                     <p>Desejamos sucesso em suas futuras oportunidades!</p>
                     <p>Atenciosamente,<br/>Equipe Certa</p>
