@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
@@ -231,12 +232,12 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
         const result = await manuallySendStatusEmail({ promoterId });
         const data = result.data as { success: boolean, message: string, provider?: string };
-        const providerName = data.provider || 'Mailchimp (v7.0)';
+        const providerName = data.provider || 'Mailchimp (v8.0)';
         alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
     } catch (error: any) {
         console.error("Failed to send manual notification:", error);
         const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
-        const providerName = error?.details?.provider || 'Mailchimp (v7.0)';
+        const providerName = error?.details?.provider || 'Mailchimp (v8.0)';
         alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
     } finally {
         setNotifyingId(null);

@@ -1,4 +1,3 @@
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const mailchimp = require("@mailchimp/mailchimp_transactional");
@@ -31,18 +30,26 @@ const sendMailchimpEmail = async (recipientEmail, subject, htmlContent) => {
 
     try {
         const response = await mailchimpClient.messages.send({ message });
-        if (response && response.length > 0 && ['sent', 'queued', 'scheduled'].includes(response[0].status)) {
-             functions.logger.info(`Email sent successfully to ${recipientEmail} via Mailchimp. Status: ${response[0].status}`);
+        const result = response && response.length > 0 ? response[0] : null;
+
+        if (result && ['sent', 'queued', 'scheduled'].includes(result.status)) {
+            functions.logger.info(`Email sent successfully to ${recipientEmail} via Mailchimp. Status: ${result.status}`);
         } else {
-             console.error("Mailchimp API returned a non-successful status:", response);
-             const rejectReason = response && response.length > 0 ? response[0].reject_reason : "Unknown reason";
-             throw new Error(`Mailchimp API Error: ${rejectReason}`);
+            functions.logger.error("Mailchimp API returned a non-successful status:", response);
+            let rejectReason = "Unknown reason";
+            if (result && result.reject_reason) {
+                rejectReason = result.reject_reason;
+            } else if (result) {
+                rejectReason = `Status: ${result.status}. Full response: ${JSON.stringify(result)}`;
+            } else {
+                rejectReason = `Empty or unexpected response from API. Full response: ${JSON.stringify(response)}`;
+            }
+            throw new Error(`Mailchimp API Error: ${rejectReason}`);
         }
     } catch (error) {
         console.error("Failed to send email via Mailchimp:", error.message || error);
         let detailedMessage = error.message || "Erro desconhecido";
         
-        // Check for specific error messages to provide better feedback.
         if (typeof detailedMessage === 'string') {
             if (detailedMessage.toLowerCase().includes('unverified sending domain')) {
                 detailedMessage = `O e-mail remetente '${mailchimpConfig.sender_email}' ou seu domínio não foi verificado na sua conta Mailchimp/Mandrill.`;
@@ -60,7 +67,7 @@ const sendMailchimpEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v7.0-MAILCHIMP-VALIDATION";
+        const FUNCTION_VERSION = "v8.0-MAILCHIMP-DETAIL-ERR";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -133,7 +140,7 @@ exports.sendTestEmail = functions
             const promoterName = "Divulgadora de Teste";
             const campaignName = "Evento de Teste";
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
-            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Mailchimp.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">Este é um e-mail de teste enviado via Mailchimp (v8.0).</p>`;
 
 
             if (testType === 'approved') {
@@ -244,7 +251,7 @@ exports.sendPromoterStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp (v8.0).</p>`;
 
 
             if (afterData.status === 'approved') {
@@ -294,7 +301,7 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        const provider = "Mailchimp (v7.0)";
+        const provider = "Mailchimp (v8.0)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
@@ -337,7 +344,7 @@ exports.manuallySendStatusEmail = functions
             const portalLink = `https://stingressos-e0a5f.web.app/#/status`;
             let subject = '';
             let htmlContent = '';
-            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp.</p>`;
+            const footer = `<hr><p style="font-size: 10px; color: #888;">E-mail enviado via Mailchimp (v8.0).</p>`;
 
 
             if (promoterData.status === 'approved') {
