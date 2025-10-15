@@ -85,7 +85,7 @@ const generateDefaultApprovedEmailHtml = () => {
                 <table border="0" cellpadding="0" cellspacing="0" width="100%">
                     <tr>
                         <td align="center" style="padding: 20px 0;">
-                            <a href="{{portalLink}}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
+                            <a href="https://divulgadoras.vercel.app/#/status" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">
                                 Acessar Portal da Divulgadora
                             </a>
                         </td>
