@@ -1,6 +1,3 @@
-
-
-
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -18,7 +15,6 @@ import PagSeguroSettingsPage from './PagSeguroSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
 import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import the new page
-import EmailTemplateEditor from './EmailTemplateEditor'; // Import the new page
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 import GeminiPage from './Gemini';
 
@@ -214,7 +210,6 @@ const AdminAuth: React.FC = () => {
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
                     <Route path="settings/mercadopago" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
-                    <Route path="settings/email-template" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                 </>
             )}

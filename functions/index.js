@@ -108,36 +108,12 @@ const generateDefaultApprovedEmailHtml = () => {
 
 /**
  * [ROBUST] Fetches the raw HTML template for approved emails.
- * This function is designed to be fault-tolerant and will always return a valid string.
+ * This function now ALWAYS returns the default template, ignoring Firestore.
  * @returns {Promise<string>} The raw HTML template string with placeholders.
  */
 const getRawApprovedEmailTemplate = async () => {
-    const defaultHtml = generateDefaultApprovedEmailHtml();
-    try {
-        const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
-        if (templateDoc.exists) {
-            let docData;
-            try {
-                docData = templateDoc.data();
-            } catch (parseError) {
-                functions.logger.error("Could not parse Firestore document data for 'emailTemplates'. Document might be corrupt.", { error: parseError });
-                // If parsing fails, we definitely want to use the default.
-                return defaultHtml;
-            }
-
-            const customHtml = docData ? docData.approvedPromoterHtml : undefined;
-            
-            if (typeof customHtml === 'string' && customHtml.length > 0) {
-                functions.logger.info("Using custom email template.");
-                return customHtml;
-            }
-        }
-        functions.logger.info("No valid custom template found, using default.");
-        return defaultHtml;
-    } catch (error) {
-        functions.logger.error("Error fetching custom email template. Falling back to default.", error);
-        return defaultHtml;
-    }
+    functions.logger.info("Using default email template.");
+    return generateDefaultApprovedEmailHtml();
 };
 
 
@@ -235,7 +211,7 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const FUNCTION_VERSION = "v9.2-REFACTOR-3";
+        const FUNCTION_VERSION = "9.2-REFACTOR-3";
         try {
             if (!context.auth) {
                 throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -291,7 +267,7 @@ exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
         const userEmail = 'r3gb0b@gmail.com';
-        const { testType, customHtmlContent } = data;
+        const { testType } = data;
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
@@ -310,12 +286,6 @@ exports.sendTestEmail = functions
                     const populated = await getPopulatedApprovedEmail(testData);
                     subject = `✅ (TESTE) ${populated.subject}`;
                     htmlContent = populated.htmlContent;
-                    break;
-                }
-                case 'custom_approved': {
-                    subject = `✅ (TESTE DO EDITOR) Parabéns! Sua candidatura para ${testData.orgName} foi aprovada!`;
-                    if (!customHtmlContent) throw new Error("Conteúdo HTML customizado não fornecido.");
-                    htmlContent = populateTemplate(customHtmlContent, testData);
                     break;
                 }
                 case 'rejected': {
@@ -443,60 +413,3 @@ exports.askGemini = functions
             throw new functions.https.HttpsError('internal', userMessage, { originalError: error.toString() });
         }
     });
-
-// === Email Template Editor Functions ===
-
-exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    await requireSuperAdmin(context.auth);
-    // This now uses the new robust function, ensuring it always returns a valid string.
-    const htmlContent = await getRawApprovedEmailTemplate();
-    return { htmlContent };
-});
-
-exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    await requireSuperAdmin(context.auth);
-    // This function explicitly returns the hardcoded default template, ignoring any custom one.
-    const defaultHtmlContent = generateDefaultApprovedEmailHtml();
-    return { htmlContent: defaultHtmlContent };
-});
-
-exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    await requireSuperAdmin(context.auth);
-    const { htmlContent } = data;
-    if (typeof htmlContent !== 'string') {
-        throw new functions.https.HttpsError('invalid-argument', 'O conteúdo do template é inválido.');
-    }
-    await admin.firestore().collection('settings').doc('emailTemplates').set({
-        approvedPromoterHtml: htmlContent,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: context.auth.uid,
-    }, { merge: true });
-    return { success: true, message: "Template de e-mail salvo com sucesso." };
-});
-
-exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    await requireSuperAdmin(context.auth);
-    const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
-
-    try {
-        const doc = await templateDocRef.get();
-        // Only update the document if it actually exists.
-        // If it doesn't exist, the system will correctly use the default template anyway,
-        // so no action is needed. This is the desired "reset" state.
-        if (doc.exists) {
-            await templateDocRef.update({
-                approvedPromoterHtml: admin.firestore.FieldValue.delete(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-        }
-
-        return { success: true, message: "Template de e-mail redefinido com sucesso." };
-    } catch (error) {
-        functions.logger.error("FATAL Error in resetEmailTemplate function", {
-            errorMessage: error.message,
-            errorCode: error.code,
-            uid: context.auth.uid,
-        });
-        throw new functions.https.HttpsError('internal', 'Ocorreu uma falha no servidor ao tentar redefinir. Verifique os logs da função.');
-    }
-});
