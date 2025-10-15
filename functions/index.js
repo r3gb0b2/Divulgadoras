@@ -72,6 +72,34 @@ const generateApprovedEmailHtml = (promoterName, campaignName, orgName, recipien
 </html>`;
 };
 
+/**
+ * Fetches custom template or returns default, then replaces placeholders.
+ * @param {string} promoterName - The name of the promoter.
+ * @param {string} campaignName - The name of the campaign/event.
+ * @param {string} orgName - The name of the organization.
+ * @param {string} recipientEmail - The promoter's email address.
+ * @returns {Promise<string>} The full HTML email content.
+ */
+const getApprovedEmailContent = async (promoterName, campaignName, orgName, recipientEmail) => {
+    const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
+    let htmlContent = '';
+    const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(recipientEmail)}`;
+
+    if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
+        functions.logger.info("Using custom email template.");
+        htmlContent = templateDoc.data().approvedPromoterHtml;
+        // Replace all placeholders
+        htmlContent = htmlContent.replace(/{{promoterName}}/g, promoterName)
+                                 .replace(/{{campaignName}}/g, campaignName)
+                                 .replace(/{{orgName}}/g, orgName)
+                                 .replace(/{{portalLink}}/g, portalLink);
+    } else {
+        functions.logger.info("Using default email template.");
+        htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, recipientEmail);
+    }
+    return htmlContent;
+};
+
 
 /**
  * Sends an email using the Brevo (Sendinblue) API.
@@ -188,6 +216,7 @@ exports.sendTestEmail = functions
         }
         const userEmail = 'r3gb0b@gmail.com';
         const testType = data.testType || 'generic';
+        const customHtmlContent = data.customHtmlContent; // For template editor testing
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
@@ -201,7 +230,14 @@ exports.sendTestEmail = functions
 
             if (testType === 'approved') {
                 subject = `✅ (TESTE) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
-                htmlContent = generateApprovedEmailHtml(promoterName, campaignName, orgName, userEmail);
+                htmlContent = await getApprovedEmailContent(promoterName, campaignName, orgName, userEmail);
+            } else if (testType === 'custom_approved' && customHtmlContent) {
+                 subject = `✅ (TESTE DO EDITOR) Parabéns! Sua candidatura para ${orgName} foi aprovada!`;
+                 const portalLink = `${baseUrl}/#/status?email=${encodeURIComponent(userEmail)}`;
+                 htmlContent = customHtmlContent.replace(/{{promoterName}}/g, promoterName)
+                                                .replace(/{{campaignName}}/g, campaignName)
+                                                .replace(/{{orgName}}/g, orgName)
+                                                .replace(/{{portalLink}}/g, portalLink);
             } else if (testType === 'rejected') {
                 subject = `(TESTE) Resultado da sua candidatura para ${orgName}`;
                 const reasonText = String("Este é um motivo de rejeição de teste.\nEle pode ter múltiplas linhas.");
@@ -285,7 +321,7 @@ exports.sendPromoterStatusEmail = functions
             }
 
             const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-            const htmlContent = generateApprovedEmailHtml(
+            const htmlContent = await getApprovedEmailContent(
                 finalData.promoterName,
                 finalData.campaignName,
                 finalData.orgName,
@@ -338,7 +374,7 @@ exports.manuallySendStatusEmail = functions
             }
             
             const subject = `✅ Parabéns! Sua candidatura para ${finalData.orgName} foi aprovada!`;
-            const htmlContent = generateApprovedEmailHtml(
+            const htmlContent = await getApprovedEmailContent(
                 finalData.promoterName,
                 finalData.campaignName,
                 finalData.orgName,
@@ -419,3 +455,51 @@ exports.askGemini = functions
             });
         }
     });
+
+// === EMAIL TEMPLATE FUNCTIONS ===
+
+exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (context.auth?.token?.role !== 'superadmin') {
+        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
+    }
+
+    const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
+    if (templateDoc.exists && templateDoc.data().approvedPromoterHtml) {
+        return { htmlContent: templateDoc.data().approvedPromoterHtml };
+    }
+    
+    // Return default template if no custom one is found
+    const defaultHtml = generateApprovedEmailHtml('{{promoterName}}', '{{campaignName}}', '{{orgName}}', '{{recipientEmail}}');
+    return { htmlContent: defaultHtml };
+});
+
+exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (context.auth?.token?.role !== 'superadmin') {
+        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
+    }
+    const { htmlContent } = data;
+    if (typeof htmlContent !== 'string') {
+        throw new functions.https.HttpsError('invalid-argument', 'O conteúdo do template é inválido.');
+    }
+
+    await admin.firestore().collection('settings').doc('emailTemplates').set({
+        approvedPromoterHtml: htmlContent,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: context.auth.uid,
+    }, { merge: true });
+
+    return { success: true, message: "Template de e-mail salvo com sucesso." };
+});
+
+exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (context.auth?.token?.role !== 'superadmin') {
+        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para acessar esta função.');
+    }
+    
+    // Deletes the field, making the system fall back to the default template.
+    await admin.firestore().collection('settings').doc('emailTemplates').update({
+        approvedPromoterHtml: admin.firestore.FieldValue.delete()
+    });
+    
+    return { success: true, message: "Template de e-mail redefinido para o padrão." };
+});
