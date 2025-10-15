@@ -28,6 +28,7 @@ const SubscriptionPage: React.FC = () => {
     const [error, setError] = useState('');
     
     // State for missing info form
+    const [ownerName, setOwnerName] = useState('');
     const [phone, setPhone] = useState('');
     const [taxId, setTaxId] = useState('');
 
@@ -37,9 +38,12 @@ const SubscriptionPage: React.FC = () => {
             try {
                 const orgData = await getOrganization(adminData.organizationId);
                 setOrganization(orgData);
-                // Pre-fill form if data exists
-                if (orgData?.ownerPhone) setPhone(orgData.ownerPhone);
-                if (orgData?.ownerTaxId) setTaxId(orgData.ownerTaxId);
+                if (orgData) {
+                    // Pre-fill form if data exists
+                    if (orgData.ownerName) setOwnerName(orgData.ownerName);
+                    if (orgData.ownerPhone) setPhone(orgData.ownerPhone);
+                    if (orgData.ownerTaxId) setTaxId(orgData.ownerTaxId);
+                }
             } catch (err: any) {
                 setError(err.message || 'Falha ao carregar dados da organização.');
             } finally {
@@ -58,10 +62,16 @@ const SubscriptionPage: React.FC = () => {
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!organization) return;
+        
+        if (ownerName.trim().split(/\s+/).length < 2) {
+            setError("Por favor, insira seu nome completo (nome e sobrenome).");
+            return;
+        }
+
         setIsSavingInfo(true);
         setError('');
         try {
-            await updateOrganization(organization.id, { ownerPhone: phone, ownerTaxId: taxId });
+            await updateOrganization(organization.id, { ownerName, ownerPhone: phone, ownerTaxId: taxId });
             // Refresh organization data to show the payment button
             await fetchOrg();
         } catch (err: any) {
@@ -93,7 +103,7 @@ const SubscriptionPage: React.FC = () => {
     const planDetails = organization ? plans.find(p => p.id === organization.planId) : null;
     const isExpired = organization?.planExpiresAt && organization.planExpiresAt.toDate() < new Date();
     const needsRenewal = organization?.status === 'trial' || isExpired;
-    const hasRequiredInfo = organization?.ownerPhone && organization.ownerTaxId;
+    const hasRequiredInfo = organization?.ownerName && organization?.ownerPhone && organization.ownerTaxId;
 
     const renderRenewalSection = () => {
         if (!needsRenewal || !organization) return null;
@@ -102,8 +112,9 @@ const SubscriptionPage: React.FC = () => {
             return (
                 <div className="mt-8 border-t border-gray-600 pt-6">
                     <h3 className="text-lg font-semibold text-white mb-2">Complete seus Dados para Pagar</h3>
-                    <p className="text-gray-400 text-sm mb-4">O PagSeguro exige seu telefone e CPF/CNPJ para processar a assinatura. Por favor, preencha abaixo.</p>
+                    <p className="text-gray-400 text-sm mb-4">O PagSeguro exige seu nome completo, telefone e CPF/CNPJ para processar a assinatura. Por favor, preencha abaixo.</p>
                     <form onSubmit={handleUpdateInfo} className="space-y-4">
+                        <InputWithIcon Icon={UserIcon} type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Seu Nome Completo (Responsável)" required />
                         <InputWithIcon Icon={PhoneIcon} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefone (com DDD)" required />
                         <InputWithIcon Icon={UserIcon} type="text" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="CPF ou CNPJ" required />
                         <button type="submit" disabled={isSavingInfo} className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">

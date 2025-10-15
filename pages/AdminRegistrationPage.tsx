@@ -7,7 +7,7 @@ import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 // FIX: Import signInWithEmailAndPassword from firebase/auth for Firebase v9 modular SDK.
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { MailIcon, LockClosedIcon, BuildingOfficeIcon } from '../components/Icons';
+import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon } from '../components/Icons';
 
 const SubscriptionFlowPage: React.FC = () => {
     const { planId } = useParams<{ planId: string }>();
@@ -16,6 +16,7 @@ const SubscriptionFlowPage: React.FC = () => {
 
     const [formData, setFormData] = useState({
         orgName: '',
+        ownerName: '',
         email: '',
         password: ''
     });
@@ -33,6 +34,12 @@ const SubscriptionFlowPage: React.FC = () => {
 
         if (!plan) {
             setError("Plano inválido selecionado.");
+            setIsLoading(false);
+            return;
+        }
+
+        if (formData.ownerName.trim().split(/\s+/).length < 2) {
+            setError("Por favor, insira seu nome completo (nome e sobrenome).");
             setIsLoading(false);
             return;
         }
@@ -85,6 +92,7 @@ const SubscriptionFlowPage: React.FC = () => {
                     <div>
                         <h2 className="text-lg font-semibold text-gray-200">2. Crie sua conta de Admin</h2>
                         <div className="mt-2 space-y-4">
+                            <InputWithIcon Icon={UserIcon} type="text" name="ownerName" placeholder="Seu nome completo (responsável)" value={formData.ownerName} onChange={handleChange} required />
                             <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail (será seu login)" value={formData.email} onChange={handleChange} required />
                             <InputWithIcon Icon={LockClosedIcon} type="password" name="password" placeholder="Crie uma senha de acesso (mín. 6 chars)" value={formData.password} onChange={handleChange} required />
                         </div>

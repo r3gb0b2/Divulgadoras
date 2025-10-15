@@ -50,10 +50,14 @@ const plans = {
 exports.createOrganizationAndUser = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        const { orgName, email, password, planId } = data;
+        const { orgName, email, password, planId, ownerName } = data;
 
-        if (!orgName || !email || !password || !planId) {
+        if (!orgName || !email || !password || !planId || !ownerName) {
             throw new HttpsError("invalid-argument", "Todos os campos são obrigatórios.");
+        }
+
+        if (ownerName.trim().split(/\s+/).length < 2) {
+            throw new HttpsError("invalid-argument", "Por favor, insira seu nome completo (nome e sobrenome).");
         }
 
         const userRecord = await admin.auth().createUser({ email, password });
@@ -66,6 +70,7 @@ exports.createOrganizationAndUser = functions
         const orgRef = db.collection("organizations").doc();
         batch.set(orgRef, {
             name: orgName,
+            ownerName: ownerName,
             ownerEmail: email,
             ownerUid: userRecord.uid,
             status: "trial",
@@ -134,8 +139,12 @@ exports.createPagSeguroOrder = functions
         if (!orgDoc.exists) throw new HttpsError("not-found", "Organização não encontrada.");
         
         const organization = orgDoc.data();
-        if (!organization.ownerPhone || !organization.ownerTaxId) {
-            throw new HttpsError("failed-precondition", "Dados do cliente (Telefone, CPF/CNPJ) estão faltando.");
+        if (!organization.ownerName || !organization.ownerPhone || !organization.ownerTaxId) {
+            throw new HttpsError("failed-precondition", "Dados do cliente (Nome, Telefone, CPF/CNPJ) estão faltando. Por favor, preencha-os na página de assinatura.");
+        }
+        
+        if (organization.ownerName.trim().split(/\s+/).length < 2) {
+            throw new HttpsError("invalid-argument", "O nome do responsável cadastrado está incompleto. Por favor, atualize para nome e sobrenome na página de assinatura.");
         }
         
         const plan = plans[planId];
@@ -156,7 +165,7 @@ exports.createPagSeguroOrder = functions
         const body = {
             "reference_id": `ORG_${orgId}_${Date.now()}`,
             "customer": {
-                "name": organization.name,
+                "name": organization.ownerName,
                 "email": organization.ownerEmail,
                 "tax_id": taxId,
                 "phones": [{ "country": "55", "area": areaCode, "number": phoneNumber, "type": "MOBILE" }]

@@ -71,6 +71,7 @@ export type PlanId = 'basic' | 'professional';
 export interface Organization {
   id: string;
   name: string;
+  ownerName?: string;
   ownerEmail: string;
   ownerUid: string;
   status: OrganizationStatus;
