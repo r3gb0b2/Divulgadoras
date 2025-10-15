@@ -452,35 +452,30 @@ exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // 1. Ensure user is a superadmin
     await requireSuperAdmin(context.auth);
-
     const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
 
     try {
-        const templateDoc = await templateDocRef.get();
-
-        // 2. We only need to act if the document exists.
-        // If it exists, we issue an update to delete the field.
-        // Firestore's update with FieldValue.delete() is idempotent; if the field isn't there, it does nothing and succeeds.
-        // This is simpler and more robust than checking for the field's existence first.
-        if (templateDoc.exists) {
-            await templateDocRef.update({
-                approvedPromoterHtml: admin.firestore.FieldValue.delete(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Also track this reset action
-            });
-        }
-
-        // If the document never existed, that's fine too. The template is effectively "reset".
-        return { success: true, message: "Template de e-mail redefinido para o padrão." };
-
+        // Optimistically attempt the update. This is more robust than a read-then-write.
+        await templateDocRef.update({
+            approvedPromoterHtml: admin.firestore.FieldValue.delete(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return { success: true, message: "Template de e-mail redefinido com sucesso." };
     } catch (error) {
+        // The gRPC error code for 'NOT_FOUND' is 5. If the update fails because the document
+        // doesn't exist, we can treat it as a success for a "reset" operation.
+        if (error.code === 5) {
+            functions.logger.info("resetEmailTemplate: Document 'emailTemplates' did not exist, which is a successful reset.");
+            return { success: true, message: "Template redefinido (nenhum template customizado existia)." };
+        }
+        
+        // For any other error, it's a genuine failure.
         functions.logger.error("Error in resetEmailTemplate function", {
             errorMessage: error.message,
             errorCode: error.code,
-            uid: context.auth.uid
+            uid: context.auth.uid,
         });
-        // Return a generic but clear error to the user.
         throw new functions.https.HttpsError('internal', 'Ocorreu uma falha no servidor ao tentar redefinir. Verifique os logs da função.');
     }
 });
