@@ -1,257 +1,137 @@
-import { firestore, auth } from '../firebase/config';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, addDoc, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import { AdminUserData, AdminApplication, OrganizationStatus, PlanId } from '../types';
-import { createOrganization } from './organizationService';
+
+import { firestore, auth, functions } from '../firebase/config';
+import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, serverTimestamp, query, where, writeBatch } from 'firebase/firestore';
+import { AdminUserData, AdminApplication, Organization } from '../types';
+import { httpsCallable } from 'firebase/functions';
 
 /**
- * Fetches the permission data for a specific admin user from Firestore.
- * @param uid The Firebase Auth UID of the user.
- * @returns AdminUserData object or null if not found.
+ * Fetches admin user data from Firestore by UID.
  */
 export const getAdminUserData = async (uid: string): Promise<AdminUserData | null> => {
-    try {
-        const adminDocRef = doc(firestore, 'admins', uid);
-        const docSnap = await getDoc(adminDocRef);
-        if (docSnap.exists()) {
-            // FIX: Cast doc.data() to a specific type to avoid 'unknown' property access errors.
-            const data = docSnap.data() as Omit<AdminUserData, 'uid'>;
-            return {
-                uid,
-                email: data.email,
-                role: data.role,
-                assignedStates: data.assignedStates || [],
-                assignedCampaigns: data.assignedCampaigns || {},
-                organizationId: data.organizationId,
-            };
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching admin user data:", error);
-        throw new Error("Failed to fetch admin user data.");
+    const docRef = doc(firestore, 'admins', uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { uid, ...docSnap.data() } as AdminUserData;
     }
+    return null;
 };
 
 /**
- * Fetches all admin users' permission data from Firestore.
- * Can be filtered by organizationId.
- * @returns An array of AdminUserData objects.
+ * Sets/updates admin user data in Firestore.
+ */
+export const setAdminUserData = async (uid: string, data: Omit<AdminUserData, 'uid'>): Promise<void> => {
+    const docRef = doc(firestore, 'admins', uid);
+    await setDoc(docRef, data, { merge: true });
+};
+
+/**
+ * Fetches all admin users.
+ * If organizationId is provided, filters admins for that organization.
  */
 export const getAllAdmins = async (organizationId?: string): Promise<AdminUserData[]> => {
     try {
-        let q = query(collection(firestore, 'admins'));
+        let q = query(collection(firestore, "admins"));
         if (organizationId) {
             q = query(q, where("organizationId", "==", organizationId));
         }
         const querySnapshot = await getDocs(q);
         const admins: AdminUserData[] = [];
         querySnapshot.forEach(doc => {
-            // FIX: Cast doc.data() to a specific type to avoid 'unknown' property access errors.
-            const data = doc.data() as Omit<AdminUserData, 'uid'>;
-            admins.push({
-                uid: doc.id,
-                email: data.email,
-                role: data.role,
-                assignedStates: data.assignedStates || [],
-                assignedCampaigns: data.assignedCampaigns || {},
-                organizationId: data.organizationId,
-            });
+            admins.push({ uid: doc.id, ...doc.data() } as AdminUserData);
         });
         return admins;
     } catch (error) {
-        console.error("Error getting all admins:", error);
-        throw new Error("Failed to fetch admin list.");
-    }
-}
-
-/**
- * Creates or updates an admin user's permission document in Firestore.
- * @param uid The UID of the user to grant/update permissions.
- * @param data The permission data (email, role, assignedStates, organizationId).
- */
-export const setAdminUserData = async (uid: string, data: Omit<AdminUserData, 'uid'>): Promise<void> => {
-    try {
-        const adminDocRef = doc(firestore, 'admins', uid);
-        await setDoc(adminDocRef, data);
-    } catch (error) {
-        console.error("Error setting admin user data:", error);
-        throw new Error("Failed to save admin user data.");
+        console.error("Error getting all admins: ", error);
+        throw new Error("Não foi possível buscar os administradores.");
     }
 };
 
-
 /**
- * Deletes an admin user's permission document from Firestore.
- * @param uid The UID of the admin user to delete.
+ * Deletes an admin user's permissions document. This does not delete their auth record.
  */
 export const deleteAdminUser = async (uid: string): Promise<void> => {
     try {
-        const adminDocRef = doc(firestore, 'admins', uid);
-        await deleteDoc(adminDocRef);
+        await deleteDoc(doc(firestore, "admins", uid));
     } catch (error) {
-        console.error("Error deleting admin user:", error);
-        throw new Error("Failed to delete admin user.");
+        console.error("Error deleting admin user: ", error);
+        throw new Error("Não foi possível remover as permissões do administrador.");
     }
 };
 
-// --- New Organization Sign Up Flow ---
 
-export const signUpAndCreateOrganization = async (email: string, password: string, orgName: string, planId: 'basic' | 'professional'): Promise<void> => {
-    try {
-        const normalizedEmail = email.toLowerCase().trim();
-        
-        // 1. Create the user in Firebase Auth first
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const { uid } = userCredential.user;
-
-        // 2. Create the organization document
-        const newOrgId = await createOrganization(uid, normalizedEmail, orgName, planId);
-
-        // 3. Create the admin user document and link it to the organization
-        const adminData: Omit<AdminUserData, 'uid'> = {
-            email: normalizedEmail,
-            role: 'admin', // Owner of the org is an 'admin'
-            assignedStates: [], // Initially no states, they need to configure this
-            assignedCampaigns: {},
-            organizationId: newOrgId,
-        };
-        await setAdminUserData(uid, adminData);
-
-    } catch (error: any) {
-        console.error("Error during sign up: ", error);
-        if (error.code === 'auth/email-already-in-use') {
-            throw new Error("Este e-mail já está cadastrado.");
-        }
-        if (error.code === 'auth/weak-password') {
-            throw new Error("A senha deve ter pelo menos 6 caracteres.");
-        }
-        // Clean up Auth user if org/admin creation fails? (Advanced topic)
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível concluir o cadastro da organização.");
-    }
-};
-
-// --- Admin Application for SuperAdmin Approval ---
+// --- Admin Application Service Functions ---
 
 /**
- * Creates an Auth user and submits an application for a new admin.
- * @param applicationData The data from the application form.
- * @param password The user's chosen password.
+ * Submits an application to become an admin.
+ * This is handled by a Firebase Function to securely create the auth user.
  */
-export const submitAdminApplication = async (applicationData: Omit<AdminApplication, 'id' | 'status' | 'createdAt' | 'uid'>, password: string): Promise<void> => {
+export const submitAdminApplication = async (applicationData: Omit<AdminApplication, 'id' | 'createdAt'>, password: string): Promise<void> => {
     try {
-        const normalizedEmail = applicationData.email.toLowerCase().trim();
-        // Check for existing application with the same email
-        const q = query(collection(firestore, "adminApplications"), where("email", "==", normalizedEmail));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            throw new Error("Já existe uma solicitação de acesso para este e-mail. Aguarde o contato da nossa equipe.");
-        }
-
-        // IMPORTANT: We create the user in Auth immediately. This can fail if email is already in use by another admin.
-        const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
-        const { uid } = userCredential.user;
-
-        // Sign out immediately so they don't get logged in and redirected.
-        await signOut(auth);
-
-        const dataToSave = {
-            ...applicationData,
-            uid,
-            email: normalizedEmail,
-            status: 'pending' as const,
-            createdAt: serverTimestamp(),
-        };
-        await addDoc(collection(firestore, 'adminApplications'), dataToSave);
+        const createAdminRequest = httpsCallable(functions, 'createAdminRequest');
+        await createAdminRequest({ ...applicationData, password });
     } catch (error: any) {
         console.error("Error submitting admin application: ", error);
-        if (error.code === 'auth/email-already-in-use') {
-            throw new Error("Este e-mail já está em uso por outro administrador. Por favor, use um e-mail diferente ou faça login.");
-        }
-        if (error.code === 'auth/weak-password') {
-            throw new Error("A senha deve ter pelo menos 6 caracteres.");
-        }
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível enviar sua solicitação. Tente novamente.");
+        const detail = error.details?.message || error.message;
+        throw new Error(`Falha ao enviar solicitação: ${detail}`);
     }
 };
 
 /**
- * Approves an admin application by creating admin permissions and linking them to an existing organization.
- * @param application The application object to approve.
- * @param organizationId The ID of the organization to assign the new admin to.
- */
-export const acceptAdminApplication = async (application: AdminApplication, organizationId: string): Promise<void> => {
-    try {
-        if (!organizationId) {
-            throw new Error("A organização é obrigatória para aprovar um novo admin.");
-        }
-        const batch = writeBatch(firestore);
-
-        // 1. Define the admin user document reference and data
-        const adminDocRef = doc(firestore, 'admins', application.uid);
-        const adminData: Omit<AdminUserData, 'uid'> = {
-            email: application.email,
-            role: 'admin', // New admins default to 'admin' role. Can be changed later.
-            assignedStates: [],
-            assignedCampaigns: {},
-            organizationId: organizationId,
-        };
-
-        // 2. Define the application document reference to be deleted
-        const appDocRef = doc(firestore, 'adminApplications', application.id);
-
-        // 3. Add all writes to the batch
-        batch.set(adminDocRef, adminData);
-        batch.delete(appDocRef);
-
-        // 4. Commit the batch atomically
-        await batch.commit();
-
-    } catch (error) {
-        console.error("Error accepting admin application:", error);
-        throw new Error("Falha ao aprovar a solicitação. A operação falhou e foi revertida. Verifique os logs e tente novamente.");
-    }
-};
-
-
-/**
- * Fetches all pending admin applications. For superadmins only.
- * @returns An array of AdminApplication objects.
+ * Fetches all pending admin applications.
  */
 export const getAdminApplications = async (): Promise<AdminApplication[]> => {
     try {
-        const q = query(
-            collection(firestore, "adminApplications"), 
-            where("status", "==", "pending")
-        );
-        const querySnapshot = await getDocs(q);
-        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-        const applications = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as AdminApplication);
-
-        // Sort client-side to avoid needing a composite index
-        applications.sort((a, b) => {
-            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
-            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
-            return timeB - timeA; // Descending
-        });
-
-        return applications;
+        const querySnapshot = await getDocs(collection(firestore, "adminApplications"));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
     } catch (error) {
-        console.error("Error getting admin applications:", error);
-        throw new Error("Failed to fetch admin applications.");
+        console.error("Error getting admin applications: ", error);
+        throw new Error("Não foi possível buscar as solicitações de acesso.");
     }
 };
 
 /**
- * Deletes an admin application document from Firestore.
- * @param id The ID of the application to delete.
+ * Accepts an admin application.
+ * This function will create the admin document and delete the application document.
+ */
+export const acceptAdminApplication = async (application: AdminApplication, organizationId: string): Promise<void> => {
+    if (!application.id) throw new Error("ID da solicitação não encontrado.");
+
+    const batch = writeBatch(firestore);
+
+    // 1. Reference to the application to be deleted
+    const appDocRef = doc(firestore, "adminApplications", application.id);
+
+    // 2. Reference to the future admin doc (ID is the UID stored in the application doc)
+    const adminDocRef = doc(firestore, "admins", application.id);
+
+    // 3. Data for the new admin
+    const newAdminData: Omit<AdminUserData, 'uid'> = {
+        email: application.email,
+        role: 'admin',
+        organizationId: organizationId,
+        assignedStates: [],
+        assignedCampaigns: {}
+    };
+
+    batch.set(adminDocRef, newAdminData);
+    batch.delete(appDocRef);
+
+    try {
+        await batch.commit();
+    } catch (error) {
+        console.error("Error accepting admin application:", error);
+        throw new Error("Falha ao aprovar a solicitação.");
+    }
+};
+
+/**
+ * Deletes an admin application document.
  */
 export const deleteAdminApplication = async (id: string): Promise<void> => {
     try {
         await deleteDoc(doc(firestore, "adminApplications", id));
     } catch (error) {
-        console.error("Error deleting admin application:", error);
-        throw new Error("Failed to delete admin application.");
+        console.error("Error deleting admin application: ", error);
+        throw new Error("Não foi possível deletar a solicitação de acesso.");
     }
 };

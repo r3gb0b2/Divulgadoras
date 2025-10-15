@@ -1,5 +1,6 @@
+
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData, FieldValue } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -32,7 +33,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, ...rest } = promoterData;
 
-    const newPromoter = {
+    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       campaignName: promoterData.campaignName || null,
       photoUrls,

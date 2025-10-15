@@ -1,169 +1,71 @@
+
 import { firestore } from '../firebase/config';
-import {
-    collection,
-    doc,
-    addDoc,
-    getDoc,
-    getDocs,
-    updateDoc,
-    deleteDoc,
-    query,
-    where,
-    serverTimestamp,
-    Timestamp,
-    writeBatch
-} from 'firebase/firestore';
-import { Organization, OrganizationStatus, PlanId } from '../types';
-
-const ORGS_COLLECTION = 'organizations';
+import { collection, doc, getDoc, getDocs, query, where, updateDoc, deleteDoc, Timestamp, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Organization } from '../types';
 
 /**
- * Creates a new organization document in Firestore.
- * @param ownerUid - The Firebase Auth UID of the organization's owner.
- * @param ownerEmail - The email of the organization's owner.
- * @param orgName - The name of the new organization.
- * @param planId - The ID of the subscription plan ('basic' or 'professional').
- * @returns The ID of the newly created organization document.
- */
-export const createOrganization = async (ownerUid: string, ownerEmail: string, orgName: string, planId: PlanId): Promise<string> => {
-    try {
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 3); // 3-day trial
-
-        const newOrgData = {
-            name: orgName,
-            ownerUid,
-            ownerEmail,
-            status: 'trial' as OrganizationStatus,
-            planId,
-            createdAt: serverTimestamp(),
-            planExpiresAt: Timestamp.fromDate(trialEndDate),
-            assignedStates: [], // Admin must configure this later
-            public: true, // Public by default,
-        };
-
-        const batch = writeBatch(firestore);
-
-        // Create a reference for the new organization document
-        const orgDocRef = doc(collection(firestore, ORGS_COLLECTION));
-        batch.set(orgDocRef, newOrgData);
-
-        // Add default rejection reasons for this new organization
-        const defaultReasons = [
-            "Perfil inadequado para a vaga.",
-            "Fotos de baixa qualidade ou inadequadas.",
-            "Informações de contato inválidas.",
-            "Não cumpre os pré-requisitos da vaga.",
-            "Vagas preenchidas no momento, tente novamente no futuro."
-        ];
-
-        const reasonsCollection = collection(firestore, 'rejectionReasons');
-        defaultReasons.forEach(reasonText => {
-            const reasonDocRef = doc(reasonsCollection);
-            batch.set(reasonDocRef, { text: reasonText, organizationId: orgDocRef.id });
-        });
-
-        // Commit all writes atomically
-        await batch.commit();
-
-        return orgDocRef.id;
-
-    } catch (error) {
-        console.error("Error creating organization with default reasons: ", error);
-        throw new Error("Não foi possível criar a organização.");
-    }
-};
-
-/**
- * Fetches a single organization's data from Firestore.
- * @param id - The document ID of the organization.
- * @returns The Organization object or null if not found.
- */
-export const getOrganization = async (id: string): Promise<Organization | null> => {
-    try {
-        const docRef = doc(firestore, ORGS_COLLECTION, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-            return Object.assign({ id: docSnap.id }, docSnap.data()) as Organization;
-        }
-        return null;
-    } catch (error) {
-        console.error("Error getting organization: ", error);
-        throw new Error("Não foi possível buscar os dados da organização.");
-    }
-};
-
-/**
- * Fetches all organizations from Firestore.
- * @returns An array of all Organization objects.
+ * Fetches all organizations.
  */
 export const getOrganizations = async (): Promise<Organization[]> => {
     try {
-        const querySnapshot = await getDocs(collection(firestore, ORGS_COLLECTION));
-        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
+        const querySnapshot = await getDocs(collection(firestore, "organizations"));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
     } catch (error) {
-        console.error("Error getting all organizations: ", error);
-        throw new Error("Não foi possível buscar a lista de organizações.");
+        console.error("Error getting organizations: ", error);
+        throw new Error("Não foi possível buscar as organizações.");
     }
 };
 
-
 /**
- * Fetches all organizations that are marked as public and not expired.
- * @returns An array of Organization objects for public display.
+ * Fetches only organizations marked as public and not expired.
  */
 export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        const q = query(
-            collection(firestore, ORGS_COLLECTION),
-            where("public", "==", true)
-        );
+        const q = query(collection(firestore, "organizations"), where("public", "==", true), where("status", "in", ["active", "trial"]));
         const querySnapshot = await getDocs(q);
-        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-        const allPublicOrgs = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
-
-        const now = new Date();
-        
-        // Client-side filter to ensure expired orgs are hidden
-        const visibleOrgs = allPublicOrgs.filter(org => {
-            // Condition 1: Check if the plan is expired based on the date.
-            const hasExpired = org.planExpiresAt ? (org.planExpiresAt as Timestamp).toDate() < now : false;
-            if (hasExpired) {
-                return false;
-            }
-
-            // Condition 2: Check for explicit "hidden" or "expired" status.
-            const isHiddenByStatus = org.status === 'expired' || org.status === 'hidden';
-            if (isHiddenByStatus) {
-                return false;
-            }
-
-            // If it passes both checks, it should be visible.
-            // This includes orgs with status 'active', 'trial', or no status (for backward compatibility).
-            return true;
-        });
-        
-        // Sort alphabetically
-        visibleOrgs.sort((a, b) => a.name.localeCompare(b.name));
-
-        return visibleOrgs;
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
     } catch (error) {
         console.error("Error getting public organizations: ", error);
         throw new Error("Não foi possível buscar as organizações públicas.");
     }
 };
 
+/**
+ * Fetches a single organization by its ID.
+ */
+export const getOrganization = async (id: string): Promise<Organization | null> => {
+    try {
+        const docRef = doc(firestore, 'organizations', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Organization;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting organization: ", error);
+        throw new Error("Não foi possível buscar a organização.");
+    }
+};
 
 /**
- * Updates an existing organization document in Firestore.
- * @param id - The ID of the organization to update.
- * @param data - An object containing the fields to update.
+ * Creates a new organization document in Firestore.
+ */
+export const createOrganization = async (orgId: string, data: Omit<Organization, 'id' | 'createdAt'>): Promise<void> => {
+    try {
+        const orgDoc = doc(firestore, 'organizations', orgId);
+        await setDoc(orgDoc, { ...data, createdAt: serverTimestamp() });
+    } catch (error) {
+        console.error("Error creating organization: ", error);
+        throw new Error("Não foi possível criar a organização.");
+    }
+};
+
+/**
+ * Updates an existing organization.
  */
 export const updateOrganization = async (id: string, data: Partial<Omit<Organization, 'id'>>): Promise<void> => {
     try {
-        const orgDoc = doc(firestore, ORGS_COLLECTION, id);
+        const orgDoc = doc(firestore, 'organizations', id);
         await updateDoc(orgDoc, data);
     } catch (error) {
         console.error("Error updating organization: ", error);
@@ -172,12 +74,11 @@ export const updateOrganization = async (id: string, data: Partial<Omit<Organiza
 };
 
 /**
- * Deletes an organization document from Firestore.
- * @param id - The ID of the organization to delete.
+ * Deletes an organization.
  */
 export const deleteOrganization = async (id: string): Promise<void> => {
     try {
-        await deleteDoc(doc(firestore, ORGS_COLLECTION, id));
+        await deleteDoc(doc(firestore, "organizations", id));
     } catch (error) {
         console.error("Error deleting organization: ", error);
         throw new Error("Não foi possível deletar a organização.");

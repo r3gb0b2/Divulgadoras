@@ -1,157 +1,106 @@
+
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
-import { createPagSeguroOrder } from '../services/credentialsService';
-import { Organization, OrganizationStatus } from '../types';
-import { plans, Plan } from './PricingPage'; // Import plans array
+import { Organization } from '../types';
 import { Timestamp } from 'firebase/firestore';
-import { CreditCardIcon, WhatsAppIcon, ArrowLeftIcon, PagSeguroIcon } from '../components/Icons';
+import { plans } from './PricingPage';
+import { ArrowLeftIcon } from '../components/Icons';
 
 const SubscriptionPage: React.FC = () => {
+    const navigate = useNavigate();
     const { adminData } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const navigate = useNavigate();
-
-    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        const fetchInitialData = async () => {
+        const fetchOrg = async () => {
             if (adminData?.organizationId) {
                 try {
                     const orgData = await getOrganization(adminData.organizationId);
-                    if (orgData) {
-                        setOrganization(orgData);
-                    } else {
-                        setError("Não foi possível encontrar os dados da sua organização.");
-                    }
-                } catch (err) {
-                    setError("Erro ao carregar os dados da assinatura.");
+                    setOrganization(orgData);
+                } catch (err: any) {
+                    setError(err.message || 'Falha ao carregar dados da organização.');
                 }
+            } else if (!adminData) {
+                 setError("Dados do administrador não encontrados.");
             } else {
-                setError("Você não está associado a uma organização.");
+                 setError("Este administrador não está vinculado a uma organização.");
             }
             setIsLoading(false);
         };
-
-        fetchInitialData();
+        fetchOrg();
     }, [adminData]);
     
-    const handlePayment = async () => {
-        if (!organization || !organization.planId) return;
-
-        setIsCreatingOrder(true);
-        setError(null);
-        
-        try {
-            const { payLink } = await createPagSeguroOrder(organization.id, organization.planId);
-            if (payLink) {
-                window.location.href = payLink;
-            } else {
-                throw new Error("O link de pagamento não foi retornado pelo servidor.");
-            }
-        } catch (err: any) {
-            setError(err.message || "Não foi possível iniciar o pagamento.");
-            setIsCreatingOrder(false);
-        }
-    };
-
-
-    const getStatusBadge = (status: OrganizationStatus | undefined) => {
-        if (!status) return null;
-        const styles: Record<OrganizationStatus, string> = {
-            active: "bg-green-900/50 text-green-300",
-            trial: "bg-blue-900/50 text-blue-300",
-            expired: "bg-red-900/50 text-red-300",
-            hidden: "bg-gray-700 text-gray-400",
-        };
-        const text: Record<OrganizationStatus, string> = {
-            active: "Ativa",
-            trial: "Teste",
-            expired: "Expirada",
-            hidden: "Oculta",
-        };
-        return <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
-    };
-
-    const formatDate = (timestamp: Timestamp | undefined) => {
-        if (!timestamp) return 'Indefinida';
-        return timestamp.toDate().toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric'
-        });
+    const formatDate = (timestamp?: Timestamp) => {
+        if (!timestamp) return 'N/A';
+        return timestamp.toDate().toLocaleDateString('pt-BR');
     };
     
-    if (isLoading) {
+    const planDetails = organization ? plans.find(p => p.id === organization.planId) : null;
+
+    const renderContent = () => {
+        if (isLoading) {
+            return <div className="text-center">Carregando...</div>;
+        }
+        if (error) {
+            return <div className="text-center text-red-400">{error}</div>;
+        }
+        if (!organization || !planDetails) {
+            return <div className="text-center text-gray-400">Não foi possível carregar os detalhes da sua assinatura.</div>;
+        }
+
+        const isExpired = organization.planExpiresAt && organization.planExpiresAt.toDate() < new Date();
+
         return (
-            <div className="flex justify-center items-center py-10">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <div className="bg-gray-700/50 p-6 rounded-lg">
+                <h2 className="text-2xl font-bold text-white mb-4">Seu Plano Atual</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <p className="text-gray-400 text-sm">Plano</p>
+                        <p className="text-xl font-semibold text-primary">{planDetails.name}</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-400 text-sm">Status</p>
+                        <p className={`text-xl font-semibold ${isExpired ? 'text-red-400' : 'text-green-400'}`}>
+                            {organization.status === 'trial' ? 'Em Teste' : isExpired ? 'Expirado' : 'Ativo'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-gray-400 text-sm">Preço</p>
+                        <p className="text-xl font-semibold text-white">{planDetails.priceFormatted} / mês</p>
+                    </div>
+                    <div>
+                        <p className="text-gray-400 text-sm">Válido até</p>
+                        <p className="text-xl font-semibold text-white">{formatDate(organization.planExpiresAt)}</p>
+                    </div>
+                </div>
+
+                <div className="mt-8 border-t border-gray-600 pt-6">
+                    <h3 className="text-lg font-semibold text-white mb-2">Gerenciar Assinatura</h3>
+                    <p className="text-gray-400 text-sm mb-4">No momento, o gerenciamento de assinaturas (troca de plano, cancelamento, etc.) é feito através do nosso suporte.</p>
+                    <a href="#" className="inline-block px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark">
+                        Falar com o Suporte
+                    </a>
+                </div>
             </div>
         );
-    }
-    
-    if (!organization) {
-         return <p className="text-gray-400 text-center">Nenhuma informação de assinatura encontrada.</p>;
-    }
-
-    const currentPlan: Plan | undefined = plans.find(p => p.id === organization.planId);
-    const isExpired = organization.status === 'expired' || (organization.planExpiresAt && (organization.planExpiresAt as Timestamp).toDate() < new Date());
+    };
 
     return (
         <div>
-            <div className="mb-6">
-                <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
-                    <ArrowLeftIcon className="w-5 h-5" />
-                    <span>Voltar para Configurações</span>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold">Gerenciar Assinatura</h1>
+                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
                 </button>
-                <h1 className="text-3xl font-bold mt-1">Gerenciar Assinatura</h1>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                    <div className="bg-secondary p-6 rounded-lg shadow">
-                        <h3 className="text-xl font-semibold mb-4 text-white">Seu Plano Atual</h3>
-                        <div className="space-y-3 text-gray-300">
-                           <div className="flex justify-between"><span>Plano:</span> <span className="font-semibold text-primary">{currentPlan?.name || 'N/A'}</span></div>
-                           <div className="flex justify-between"><span>Preço:</span> <span className="font-semibold">{currentPlan?.priceFormatted ? `${currentPlan.priceFormatted}/mês` : 'N/A'}</span></div>
-                           <div className="flex justify-between items-center">
-                               <span>Status:</span> 
-                               {getStatusBadge(organization.status)}
-                           </div>
-                           <div className="flex justify-between"><span>Expira em:</span> <span className="font-semibold">{formatDate(organization.planExpiresAt as Timestamp)}</span></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-6">
-                     <div className="bg-secondary p-6 rounded-lg shadow">
-                        <h3 className="text-xl font-semibold mb-4 text-white">Pagamento e Renovação</h3>
-                        {isExpired && (
-                            <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 mb-4 rounded-md text-sm">
-                                <p className="font-bold">Seu plano expirou!</p>
-                                <p>Para reativar sua conta e não perder seus dados, realize o pagamento.</p>
-                            </div>
-                        )}
-                        <p className="text-gray-400 mb-4">
-                           Para renovar ou reativar seu plano, clique no botão abaixo para pagar com PagSeguro.
-                        </p>
-                        
-                        <button 
-                            onClick={handlePayment}
-                            disabled={isCreatingOrder}
-                            className="w-full flex items-center justify-center mt-4 px-4 py-3 bg-[#FFC72C] text-black rounded-md hover:bg-[#ffb700] text-sm font-bold disabled:opacity-50"
-                        >
-                            <PagSeguroIcon className="w-6 h-auto mr-2" />
-                            {isCreatingOrder ? 'Gerando pagamento...' : `Pagar ${currentPlan?.priceFormatted} com PagSeguro`}
-                        </button>
-
-                        {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
-                    </div>
-                </div>
-            </div>
+             <div className="bg-secondary shadow-lg rounded-lg p-6">
+                {renderContent()}
+             </div>
         </div>
     );
 };

@@ -1,4 +1,5 @@
-import { Timestamp } from 'firebase/firestore';
+
+import { Timestamp, FieldValue } from 'firebase/firestore';
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected';
 
@@ -12,92 +13,99 @@ export interface Promoter {
   dateOfBirth: string;
   photoUrls: string[];
   status: PromoterStatus;
-  createdAt: Timestamp | Date;
+  createdAt: Timestamp | FieldValue;
   state: string;
   campaignName: string | null;
   organizationId: string;
-  hasJoinedGroup?: boolean;
   rejectionReason?: string;
-  statusChangedAt?: Timestamp | Date;
+  hasJoinedGroup?: boolean;
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
+  statusChangedAt?: Timestamp | FieldValue;
 }
 
 export interface PromoterApplicationData {
-    name: string;
-    whatsapp: string;
-    email: string;
-    instagram: string;
-    tiktok?: string;
-    dateOfBirth: string;
-    photos: File[];
-    state: string;
-    campaignName?: string;
-    organizationId: string;
+  name: string;
+  whatsapp: string;
+  email: string;
+  instagram: string;
+  tiktok: string;
+  dateOfBirth: string;
+  photos: File[];
+  state: string;
+  campaignName?: string;
+  organizationId: string;
 }
 
 export interface RejectionReason {
-    id: string;
-    text: string;
-    organizationId: string;
+  id: string;
+  text: string;
+  organizationId: string;
 }
 
 export interface Campaign {
-    id: string;
-    name: string;
-    description?: string;
-    isActive: boolean;
-    whatsappLink?: string;
-    rules: string;
-    stateAbbr: string;
-    organizationId: string;
-}
-
-export interface StateConfig {
-    isActive: boolean;
-    rules: string;
-}
-
-export interface StatesConfig {
-    [key: string]: StateConfig;
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  whatsappLink: string;
+  rules: string;
+  stateAbbr: string;
+  organizationId: string;
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer';
 
 export interface AdminUserData {
-    uid: string;
-    email: string;
-    role: AdminRole;
-    assignedStates: string[];
-    assignedCampaigns?: { [stateAbbr: string]: string[] }; // Key is state abbr, value is array of campaign names
-    organizationId?: string;
-}
-
-export interface AdminApplication {
-    id: string;
-    uid: string;
-    name: string;
-    email: string;
-    // FIX: Added missing phone property to align with the data submitted by the admin registration form.
-    phone: string;
-    message: string;
-    status: 'pending';
-    createdAt: Timestamp;
+  uid: string;
+  email: string;
+  role: AdminRole;
+  assignedStates: string[];
+  organizationId?: string;
+  assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 
 export type OrganizationStatus = 'active' | 'trial' | 'expired' | 'hidden';
+
 export type PlanId = 'basic' | 'professional';
 
 export interface Organization {
-    id: string;
-    name: string;
-    ownerUid: string;
-    ownerEmail: string;
-    status: OrganizationStatus;
-    planId: PlanId;
-    createdAt: Timestamp;
-    planExpiresAt?: Timestamp;
-    assignedStates: string[];
-    public: boolean;
-    paymentLink?: string;
+  id: string;
+  name: string;
+  ownerEmail: string;
+  ownerUid: string;
+  status: OrganizationStatus;
+  planId: PlanId;
+  planExpiresAt?: Timestamp;
+  createdAt?: Timestamp | FieldValue;
+  public: boolean;
+  assignedStates: string[];
+}
+
+export interface StateConfig {
+  isActive: boolean;
+  rules: string;
+}
+
+export interface StatesConfig {
+  [stateAbbr: string]: StateConfig;
+}
+
+export interface AdminApplication {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  message?: string;
+  createdAt?: Timestamp;
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  priceFormatted: string;
+  description: string;
+  features: string[];
+  isPopular: boolean;
 }

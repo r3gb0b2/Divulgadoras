@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
@@ -16,7 +17,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -165,8 +166,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (data.status && data.status !== currentPromoter?.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
-                // FIX: Cast serverTimestamp() to any to satisfy the strict Promoter type while allowing Firestore's FieldValue.
-                updatedData.statusChangedAt = serverTimestamp() as any;
+                // FIX: Removed `as any` cast by improving the Promoter type definition to accept FieldValue.
+                updatedData.statusChangedAt = serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);

@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
@@ -12,7 +14,7 @@ import { WhatsAppIcon, InstagramIcon, TikTokIcon, ArrowLeftIcon } from '../compo
 import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
 
@@ -220,8 +222,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         if (data.status && data.status !== currentPromoter?.status) {
             updatedData.actionTakenByUid = adminData.uid;
             updatedData.actionTakenByEmail = adminData.email;
-            // FIX: Cast serverTimestamp() to any to satisfy the strict Promoter type while allowing Firestore's FieldValue.
-            updatedData.statusChangedAt = serverTimestamp() as any;
+            // FIX: Removed `as any` cast by improving the Promoter type definition to accept FieldValue.
+            updatedData.statusChangedAt = serverTimestamp();
         }
 
         await updatePromoter(id, updatedData);
@@ -539,7 +541,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 <div className="flex items-center gap-4 mb-3">
                                     <span className="text-sm font-medium text-gray-300">Fotos:</span>
                                     <div className="flex -space-x-2">
-                                        {promoter.photoUrls.map((url, index) => (
+                                        {(promoter.photoUrls || []).map((url, index) => (
                                             <img key={index} src={url} alt={`Foto ${index + 1}`} className="w-8 h-8 rounded-full object-cover border-2 border-secondary cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, index)}/>
                                         ))}
                                     </div>
