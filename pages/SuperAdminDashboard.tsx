@@ -11,9 +11,10 @@ type SystemStatus = {
     emailProvider: string;
     configured: boolean;
     message: string;
+    details?: string[];
 } | null;
 
-const FRONTEND_VERSION = "5.0"; // Must match version in AdminAuth.tsx
+const FRONTEND_VERSION = "6.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
@@ -23,7 +24,7 @@ const SuperAdminDashboard: React.FC = () => {
     });
     const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
-    const [isVersionMismatch, setIsVersionMismatch] = useState(false);
+    const [isSyncError, setIsSyncError] = useState(false);
 
     useEffect(() => {
         const checkSystemStatus = async () => {
@@ -34,25 +35,26 @@ const SuperAdminDashboard: React.FC = () => {
                 const statusData = result.data as SystemStatus;
                 setSystemStatus(statusData);
 
-                // Compare versions
+                // A sync error occurs if the backend function failed critically or versions don't match
                 const backendVersion = statusData?.functionVersion?.split('-')[0] || '';
                 const frontendVersionMajor = FRONTEND_VERSION.split('.')[0];
                 const backendVersionMajor = backendVersion.replace('v','').split('.')[0];
                 
-                if (backendVersion && frontendVersionMajor !== backendVersionMajor) {
-                    setIsVersionMismatch(true);
+                if (statusData?.emailProvider === "Erro no Servidor" || (backendVersion && frontendVersionMajor !== backendVersionMajor)) {
+                    setIsSyncError(true);
                 } else {
-                    setIsVersionMismatch(false);
+                    setIsSyncError(false);
                 }
 
             } catch (error) {
-                console.error("Failed to get system status:", error);
+                console.error("Failed to call getSystemStatus function:", error);
                 setSystemStatus({
-                    emailProvider: 'Desconhecido',
+                    emailProvider: 'Erro Crítico',
                     configured: false,
-                    message: 'Não foi possível verificar o status do sistema de e-mail. Verifique os logs da função.'
+                    message: 'Falha ao comunicar com a função do servidor. A função pode não existir ou estar com erro grave.',
+                    details: [String(error)]
                 });
-                setIsVersionMismatch(true); // Assume mismatch on error
+                setIsSyncError(true);
             } finally {
                 setIsCheckingStatus(false);
             }
@@ -89,24 +91,36 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
-    const renderVersionMismatchWarning = () => (
+    const renderSyncErrorWarning = () => (
         <div className="bg-red-900/50 border-2 border-red-600 text-red-200 p-6 rounded-lg mb-6">
             <h3 className="font-extrabold text-2xl mb-3 flex items-center gap-3">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.257 3.099c.636-1.21 2.37-1.21 3.006 0l4.312 8.225c.606 1.157-.23 2.625-1.503 2.625H5.448c-1.273 0-2.109-1.468-1.503-2.625L8.257 3.099zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-                ALERTA DE SINCRONIZAÇÃO
+                ERRO CRÍTICO DE SINCRONIZAÇÃO
             </h3>
-            <p className="mb-2">Seu painel (<strong>Frontend v{FRONTEND_VERSION}</strong>) está mais novo que o seu servidor (<strong>Backend {systemStatus?.functionVersion || 'indisponível'}</strong>).</p>
-            <p className="mb-4">Isso significa que o último deploy das suas 'Cloud Functions' falhou ou não foi completado. Siga os passos abaixo para resolver:</p>
+            <p className="mb-2">Seu painel (<strong>Frontend v{FRONTEND_VERSION}</strong>) não está sincronizado com o servidor (<strong>Backend {systemStatus?.functionVersion || 'indisponível'}</strong>).</p>
+            <p className="mb-4">Isso geralmente acontece quando uma dependência do servidor não foi instalada. Siga os passos abaixo para resolver:</p>
+            
+            {systemStatus?.details && (
+                <div className="mb-4">
+                    <p className="font-semibold">Mensagem de erro do servidor:</p>
+                    <pre className="text-xs bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap"><code>{systemStatus.details.join('\n')}</code></pre>
+                </div>
+            )}
             
             <div className="space-y-3 text-sm bg-black/30 p-4 rounded-md">
-                <p><strong>Passo 1: Verifique o projeto Firebase</strong><br/>
-                No terminal, execute `firebase projects:list` e garanta que o projeto correto está como "(current)".</p>
-                
-                <p><strong>Passo 2: Force um novo deploy</strong><br/>
-                Execute o comando abaixo para enviar a versão mais recente do código do servidor:</p>
-                <pre className="bg-gray-800 p-2 rounded text-white overflow-x-auto"><code>firebase deploy --only functions</code></pre>
+                <p><strong>Passo 1: Abra o terminal na pasta `functions`</strong><br/>
+                No seu computador, navegue até a pasta `functions` dentro do seu projeto.</p>
+                <pre className="bg-gray-800 p-2 rounded text-white overflow-x-auto"><code>cd functions</code></pre>
 
-                <p><strong>Passo 3: Verifique o resultado</strong><br/>
+                <p><strong>Passo 2: Instale as dependências</strong><br/>
+                Execute o comando abaixo para garantir que todos os pacotes do servidor estão instalados.</p>
+                <pre className="bg-gray-800 p-2 rounded text-white overflow-x-auto"><code>npm install</code></pre>
+
+                <p><strong>Passo 3: Volte para a pasta raiz e faça o deploy</strong><br/>
+                Depois de instalar, volte e execute o deploy novamente.</p>
+                 <pre className="bg-gray-800 p-2 rounded text-white overflow-x-auto"><code>cd ..{'\n'}firebase deploy --only functions</code></pre>
+
+                <p><strong>Passo 4: Verifique o resultado</strong><br/>
                 Após o deploy ser concluído, atualize esta página. Este alerta deverá desaparecer.</p>
             </div>
         </div>
@@ -178,7 +192,7 @@ const SuperAdminDashboard: React.FC = () => {
     
     return (
         <div>
-            {isVersionMismatch && renderVersionMismatchWarning()}
+            {isSyncError && renderSyncErrorWarning()}
 
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
@@ -254,10 +268,10 @@ const SuperAdminDashboard: React.FC = () => {
                    {renderConfigurationGuide()}
                 </div>
                 
-                {isVersionMismatch ? (
+                {isSyncError ? (
                      <div className="text-center p-6 bg-gray-700/50 rounded-lg">
                         <p className="font-bold text-yellow-400">Ferramentas de diagnóstico desativadas.</p>
-                        <p className="text-gray-400 text-sm">Resolva o problema de sincronização de versão para habilitá-las.</p>
+                        <p className="text-gray-400 text-sm">Resolva o problema de sincronização para habilitá-las.</p>
                     </div>
                 ) : systemStatus?.configured ? (
                     <div className="space-y-4 border-t border-gray-700 pt-6 mt-6">

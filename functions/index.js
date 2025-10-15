@@ -48,34 +48,47 @@ const sendMailchimpEmail = async (recipientEmail, subject, htmlContent) => {
 exports.getSystemStatus = functions
     .region("southamerica-east1")
     .https.onCall((data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-        }
-
-        const mailchimpConfig = functions.config().mailchimp;
-        const status = {
-            functionVersion: "v5.0-MAILCHIMP-FINAL",
-            emailProvider: "Mailchimp",
-            configured: false,
-            message: "Configuração da API Mailchimp incompleta ou ausente.",
-            details: []
-        };
-
-        if (mailchimpConfig) {
-            if (!mailchimpConfig.key) status.details.push("A variável 'mailchimp.key' está faltando.");
-            if (!mailchimpConfig.sender_email) status.details.push("A variável 'mailchimp.sender_email' está faltando.");
-
-            if (status.details.length === 0) {
-                status.configured = true;
-                status.message = "API da Mailchimp configurada corretamente.";
-            } else {
-                status.message = "Configuração da Mailchimp incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
+        const FUNCTION_VERSION = "v6.0-MAILCHIMP-DIAGNOSTIC";
+        try {
+            if (!context.auth) {
+                throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
             }
-        } else {
-             status.details.push("O grupo de configuração 'mailchimp' está ausente. Execute 'firebase functions:config:set mailchimp.key=...' para começar.");
-        }
 
-        return status;
+            const mailchimpConfig = functions.config().mailchimp;
+            const status = {
+                functionVersion: FUNCTION_VERSION,
+                emailProvider: "Mailchimp",
+                configured: false,
+                message: "Configuração da API Mailchimp incompleta ou ausente.",
+                details: []
+            };
+
+            if (mailchimpConfig) {
+                if (!mailchimpConfig.key) status.details.push("A variável 'mailchimp.key' está faltando.");
+                if (!mailchimpConfig.sender_email) status.details.push("A variável 'mailchimp.sender_email' está faltando.");
+
+                if (status.details.length === 0) {
+                    status.configured = true;
+                    status.message = "API da Mailchimp configurada corretamente.";
+                } else {
+                    status.message = "Configuração da Mailchimp incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
+                }
+            } else {
+                 status.details.push("O grupo de configuração 'mailchimp' está ausente. Execute 'firebase functions:config:set mailchimp.key=...' para começar.");
+            }
+
+            return status;
+        } catch (error) {
+            console.error(`CRITICAL ERROR in getSystemStatus (v${FUNCTION_VERSION})`, error);
+            // Return a structured error object instead of crashing, so the frontend can display it.
+            return {
+                functionVersion: FUNCTION_VERSION,
+                emailProvider: "Erro no Servidor",
+                configured: false,
+                message: "A função de verificação do sistema falhou no servidor.",
+                details: [error.message, `Stack: ${error.stack}`] // Send back the real error message and stack
+            };
+        }
     });
 
 
@@ -257,7 +270,7 @@ exports.manuallySendStatusEmail = functions
             throw new functions.https.HttpsError('invalid-argument', 'O ID da divulgadora é obrigatório.');
         }
 
-        const provider = "Mailchimp (v5.0)";
+        const provider = "Mailchimp (v6.0)";
         functions.logger.info(`[MANUAL TRIGGER] for promoterId: ${promoterId} by user: ${context.auth.token.email} via ${provider}`);
 
         try {
