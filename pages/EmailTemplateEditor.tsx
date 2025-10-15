@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail } from '../services/emailService';
+import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate } from '../services/emailService';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -11,6 +12,7 @@ const EmailTemplateEditor: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -88,6 +90,37 @@ const EmailTemplateEditor: React.FC = () => {
             setIsTesting(false);
         }
     };
+    
+    const handleSync = async () => {
+        if (window.confirm('Esta ação substituirá o conteúdo do seu template (a parte entre <body> e </body>) pelo conteúdo padrão do sistema, que contém as correções de link. Seus estilos e head serão mantidos. Deseja continuar?')) {
+            setIsSyncing(true);
+            setError(null);
+            try {
+                const defaultHtml = await getDefaultEmailTemplate();
+                
+                const bodyContentRegex = /<body[^>]*>([\s\S]*?)<\/body>/i;
+                const defaultBodyMatch = defaultHtml.match(bodyContentRegex);
+                const currentUserBodyMatch = htmlContent.match(bodyContentRegex);
+
+                if (defaultBodyMatch && currentUserBodyMatch) {
+                    const defaultBodyContent = defaultBodyMatch[1];
+                    // Replace only the inner content of the user's body tag
+                    const newHtml = htmlContent.replace(currentUserBodyMatch[1], defaultBodyContent);
+                    setHtmlContent(newHtml);
+                    showSuccessMessage('Corpo do template sincronizado! Revise e clique em "Salvar Template".');
+                } else {
+                    // Fallback: if user template is malformed, just replace the whole thing
+                    setHtmlContent(defaultHtml);
+                    showSuccessMessage('Seu template parecia estar malformado. Substituímos pelo padrão do sistema. Revise e salve.');
+                }
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setIsSyncing(false);
+            }
+        }
+    };
+
 
     const handleAiGenerate = async () => {
         if (!aiPrompt.trim()) {
@@ -199,7 +232,7 @@ const EmailTemplateEditor: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleAiGenerate}
-                                disabled={isGenerating || isLoading || isSaving || isTesting}
+                                disabled={isGenerating || isLoading || isSaving || isTesting || isSyncing}
                                 className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:bg-indigo-600/50 disabled:cursor-wait"
                             >
                                 {isGenerating ? 'Gerando...' : 'Gerar com IA'}
@@ -210,13 +243,16 @@ const EmailTemplateEditor: React.FC = () => {
                 </div>
 
                 <div className="mt-6 border-t border-gray-700 pt-4 flex flex-wrap gap-4 justify-end">
-                    <button onClick={handleReset} disabled={isSaving || isTesting || isGenerating} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleSync} disabled={isSaving || isTesting || isGenerating || isSyncing} className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 font-semibold disabled:opacity-50 text-sm">
+                        {isSyncing ? 'Sincronizando...' : 'Sincronizar com Padrão'}
+                    </button>
+                    <button onClick={handleReset} disabled={isSaving || isTesting || isGenerating || isSyncing} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm">
                         Redefinir para Padrão
                     </button>
-                    <button onClick={handleSendTest} disabled={isSaving || isTesting || isGenerating} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleSendTest} disabled={isSaving || isTesting || isGenerating || isSyncing} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold disabled:opacity-50 text-sm">
                         {isTesting ? 'Enviando...' : 'Enviar Teste'}
                     </button>
-                    <button onClick={handleSave} disabled={isSaving || isTesting || isGenerating} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50 text-sm">
+                    <button onClick={handleSave} disabled={isSaving || isTesting || isGenerating || isSyncing} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark font-semibold disabled:opacity-50 text-sm">
                          {isSaving ? 'Salvando...' : 'Salvar Template'}
                     </button>
                 </div>

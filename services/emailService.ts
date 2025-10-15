@@ -1,4 +1,5 @@
 
+
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 
@@ -34,6 +35,21 @@ export const getEmailTemplate = async (): Promise<string> => {
         return data.htmlContent;
     } catch (error) {
         throw handleCallableError(error, "Não foi possível carregar o template de e-mail");
+    }
+};
+
+/**
+ * Fetches the system's hardcoded default email template, ignoring any custom template.
+ * @returns {Promise<string>} A promise that resolves to the default HTML content.
+ */
+export const getDefaultEmailTemplate = async (): Promise<string> => {
+    try {
+        const getDefault = httpsCallable(functions, 'getDefaultEmailTemplate');
+        const result = await getDefault();
+        const data = result.data as { htmlContent: string };
+        return data.htmlContent;
+    } catch (error) {
+        throw handleCallableError(error, "Não foi possível carregar o template padrão do sistema");
     }
 };
 

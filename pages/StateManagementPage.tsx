@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
@@ -219,7 +220,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         if (data.status && data.status !== currentPromoter?.status) {
             updatedData.actionTakenByUid = adminData.uid;
             updatedData.actionTakenByEmail = adminData.email;
-            updatedData.statusChangedAt = serverTimestamp();
+            // FIX: Cast serverTimestamp() to any to satisfy the strict Promoter type while allowing Firestore's FieldValue.
+            updatedData.statusChangedAt = serverTimestamp() as any;
         }
 
         await updatePromoter(id, updatedData);

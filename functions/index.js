@@ -453,6 +453,13 @@ exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(a
     return { htmlContent };
 });
 
+exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await requireSuperAdmin(context.auth);
+    // This function explicitly returns the hardcoded default template, ignoring any custom one.
+    const defaultHtmlContent = generateDefaultApprovedEmailHtml();
+    return { htmlContent: defaultHtmlContent };
+});
+
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await requireSuperAdmin(context.auth);
     const { htmlContent } = data;
