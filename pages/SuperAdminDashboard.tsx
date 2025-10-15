@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -106,6 +105,19 @@ const SuperAdminDashboard: React.FC = () => {
 
             <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
                 <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
+                <div className="bg-yellow-900/50 border-l-4 border-yellow-500 text-yellow-300 p-4 mb-6 rounded-md" role="alert">
+                    <p className="font-bold">Atenção: Modo de Teste de E-mail (Sandbox)</p>
+                    <p className="mt-1 text-sm">
+                        Sua conta de envio de e-mails (Mailgun) parece estar no modo "sandbox". Neste modo, os e-mails <strong>só podem ser enviados para "destinatários autorizados"</strong> previamente cadastrados no seu painel da Mailgun.
+                    </p>
+                    <p className="mt-2 text-sm">
+                        <strong>Para garantir que os e-mails sejam entregues:</strong>
+                        <ul className="list-disc list-inside mt-1 pl-2">
+                            <li>Adicione os e-mails das divulgadoras (e o seu próprio) à lista de "Authorized Recipients" na sua conta Mailgun.</li>
+                            <li>Ou, para produção, configure um domínio personalizado na Mailgun para remover esta limitação.</li>
+                        </ul>
+                    </p>
+                </div>
                 <div className="space-y-4">
                     {/* Teste Genérico */}
                     <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
