@@ -235,6 +235,12 @@ exports.createPagSeguroOrder = functions
         if (!response.ok) {
             functions.logger.error("PagSeguro API error:", responseData);
             const errorDetail = responseData.error_messages?.[0]?.description || "Erro desconhecido.";
+            
+            // Check for specific "whitelist" error from PagSeguro
+            if (errorDetail.toLowerCase().includes("whitelist")) {
+                 throw new HttpsError("failed-precondition", "Sua conta PagSeguro precisa ser liberada para transações via API (whitelist). Por favor, entre em contato com o suporte do PagSeguro para solicitar a liberação.");
+            }
+
             throw new HttpsError("internal", `Falha ao criar pedido de pagamento no PagSeguro. ${errorDetail}`);
         }
         

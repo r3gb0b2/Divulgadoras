@@ -99,6 +99,16 @@ const PagSeguroSettingsPage: React.FC = () => {
                 </div>
              </div>
         </div>
+        
+        <div className="mt-6 bg-blue-900/30 p-4 rounded-lg border border-blue-700">
+            <h3 className="text-lg font-semibold text-blue-300">Observação Importante sobre a Liberação da API</h3>
+            <p className="text-sm text-gray-300 mt-2">
+                Mesmo com o token e e-mail configurados corretamente, sua conta PagSeguro pode precisar de uma liberação manual para aceitar pagamentos via API (Checkout Pro).
+            </p>
+            <p className="text-sm text-gray-300 mt-2">
+                Se você encontrar um erro como <strong className="text-yellow-300">"whitelist access required"</strong> ao tentar realizar um pagamento, significa que você precisa entrar em contato com o suporte comercial do PagSeguro e solicitar a liberação da sua conta para produção.
+            </p>
+        </div>
 
       </div>
     </div>
