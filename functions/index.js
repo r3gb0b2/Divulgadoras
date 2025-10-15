@@ -456,36 +456,31 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
     await requireSuperAdmin(context.auth);
 
     const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
-    
+
     try {
         const templateDoc = await templateDocRef.get();
 
         // 2. We only need to act if the document exists.
+        // If it exists, we issue an update to delete the field.
+        // Firestore's update with FieldValue.delete() is idempotent; if the field isn't there, it does nothing and succeeds.
+        // This is simpler and more robust than checking for the field's existence first.
         if (templateDoc.exists) {
-            // 3. Get the data from the document.
-            const docData = templateDoc.data();
-            
-            // 4. IMPORTANT FIX: Check if the data object itself is valid and then check for the key.
-            // This prevents a potential crash if .data() returns something unexpected.
-            // Using `in` operator as an alternative safe check.
-            if (docData && 'approvedPromoterHtml' in docData) {
-                // 5. If the field exists, delete it.
-                await templateDocRef.update({
-                    approvedPromoterHtml: admin.firestore.FieldValue.delete()
-                });
-            }
+            await templateDocRef.update({
+                approvedPromoterHtml: admin.firestore.FieldValue.delete(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Also track this reset action
+            });
         }
-        
-        // If the document or field never existed, we consider it a success.
+
+        // If the document never existed, that's fine too. The template is effectively "reset".
         return { success: true, message: "Template de e-mail redefinido para o padrão." };
 
     } catch (error) {
-        functions.logger.error("Error in resetEmailTemplate function", { 
-            errorMessage: error.message, 
-            errorCode: error.code, 
-            uid: context.auth.uid 
+        functions.logger.error("Error in resetEmailTemplate function", {
+            errorMessage: error.message,
+            errorCode: error.code,
+            uid: context.auth.uid
         });
-        // 6. Return a generic but clear error to the user.
+        // Return a generic but clear error to the user.
         throw new functions.https.HttpsError('internal', 'Ocorreu uma falha no servidor ao tentar redefinir. Verifique os logs da função.');
     }
 });
