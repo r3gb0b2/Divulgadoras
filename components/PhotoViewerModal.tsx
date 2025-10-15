@@ -70,41 +70,37 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
           &times;
         </button>
 
-        <div className="relative flex items-center justify-center">
-          {imageUrls.length > 1 && (
-             <button
-                onClick={goToPrevious}
-                className="absolute left-0 -translate-x-12 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all z-50"
-                aria-label="Foto anterior"
-             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-             </button>
-          )}
-          
+        <div className="flex-grow flex items-center justify-center min-h-0">
           <img
             src={imageUrls[currentIndex]}
             alt={`Foto ${currentIndex + 1} de ${imageUrls.length}`}
-            className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
           />
-
-          {imageUrls.length > 1 && (
-            <button
-              onClick={goToNext}
-              className="absolute right-0 translate-x-12 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all z-50"
-              aria-label="Próxima foto"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
         </div>
         
         {imageUrls.length > 1 && (
-            <div className="text-center text-white text-sm mt-2 font-mono">
-                {currentIndex + 1} / {imageUrls.length}
+            <div className="flex-shrink-0 flex items-center justify-center w-full gap-8 mt-4">
+                <button
+                    onClick={goToPrevious}
+                    className="bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
+                    aria-label="Foto anterior"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <div className="text-center text-white text-sm font-mono">
+                    {currentIndex + 1} / {imageUrls.length}
+                </div>
+                <button
+                    onClick={goToNext}
+                    className="bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
+                    aria-label="Próxima foto"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
             </div>
         )}
       </div>
