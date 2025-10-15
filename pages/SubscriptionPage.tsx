@@ -2,61 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
-import { getMercadoPagoConfig, createMercadoPagoPreference } from '../services/credentialsService';
+import { createPagSeguroOrder } from '../services/credentialsService';
 import { Organization, OrganizationStatus } from '../types';
 import { plans, Plan } from './PricingPage'; // Import plans array
 import { Timestamp } from 'firebase/firestore';
-import { CreditCardIcon, WhatsAppIcon, ArrowLeftIcon, MercadoPagoIcon } from '../components/Icons';
-
-declare global {
-    interface Window {
-        MercadoPago: any;
-    }
-}
-
-const MercadoPagoCheckout: React.FC<{ preferenceId: string; publicKey: string }> = ({ preferenceId, publicKey }) => {
-    useEffect(() => {
-        if (preferenceId && publicKey && window.MercadoPago) {
-            try {
-                const mp = new window.MercadoPago(publicKey, { locale: 'pt-BR' });
-                const bricksBuilder = mp.bricks();
-                
-                const renderWallet = async () => {
-                    const container = document.getElementById('wallet_container');
-                    if (container?.firstChild) {
-                       // Simple unmount, official SDK has better methods
-                       container.innerHTML = '';
-                    }
-                    await bricksBuilder.create("wallet", "wallet_container", {
-                        initialization: {
-                            preferenceId: preferenceId,
-                        },
-                        customization: {
-                            texts: {
-                                valueProp: 'smart_option',
-                                action: 'pay',
-                            },
-                        },
-                    });
-                };
-                renderWallet();
-            } catch (e) {
-                console.error("Error rendering Mercado Pago wallet:", e);
-            }
-        }
-    }, [preferenceId, publicKey]);
-
-    if (!preferenceId) return null;
-
-    return (
-        <div className="mt-6 p-4 border border-gray-600 rounded-lg bg-dark/50">
-            <h3 className="text-xl font-semibold mb-2 text-white text-center">Finalize seu Pagamento</h3>
-            <p className="text-gray-400 mb-4 text-center text-sm">Abra o checkout seguro do Mercado Pago para concluir sua assinatura.</p>
-            <div id="wallet_container" className="flex justify-center"></div>
-        </div>
-    );
-};
-
+import { CreditCardIcon, WhatsAppIcon, ArrowLeftIcon, PagSeguroIcon } from '../components/Icons';
 
 const SubscriptionPage: React.FC = () => {
     const { adminData } = useAdminAuth();
@@ -65,29 +15,17 @@ const SubscriptionPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    // Mercado Pago State
-    const [isCreatingPreference, setIsCreatingPreference] = useState(false);
-    const [publicKey, setPublicKey] = useState<string | null>(null);
-    const [preferenceId, setPreferenceId] = useState<string | null>(null);
+    const [isCreatingOrder, setIsCreatingOrder] = useState(false);
 
     useEffect(() => {
         const fetchInitialData = async () => {
             if (adminData?.organizationId) {
                 try {
-                    const [orgData, mpConfig] = await Promise.all([
-                        getOrganization(adminData.organizationId),
-                        getMercadoPagoConfig()
-                    ]);
-
+                    const orgData = await getOrganization(adminData.organizationId);
                     if (orgData) {
                         setOrganization(orgData);
                     } else {
                         setError("Não foi possível encontrar os dados da sua organização.");
-                    }
-                    if(mpConfig?.publicKey) {
-                        setPublicKey(mpConfig.publicKey);
-                    } else {
-                        console.warn("Mercado Pago Public Key not found.");
                     }
                 } catch (err) {
                     setError("Erro ao carregar os dados da assinatura.");
@@ -104,17 +42,19 @@ const SubscriptionPage: React.FC = () => {
     const handlePayment = async () => {
         if (!organization || !organization.planId) return;
 
-        setIsCreatingPreference(true);
+        setIsCreatingOrder(true);
         setError(null);
-        setPreferenceId(null);
         
         try {
-            const { preferenceId } = await createMercadoPagoPreference(organization.id, organization.planId);
-            setPreferenceId(preferenceId);
+            const { payLink } = await createPagSeguroOrder(organization.id, organization.planId);
+            if (payLink) {
+                window.location.href = payLink;
+            } else {
+                throw new Error("O link de pagamento não foi retornado pelo servidor.");
+            }
         } catch (err: any) {
             setError(err.message || "Não foi possível iniciar o pagamento.");
-        } finally {
-            setIsCreatingPreference(false);
+            setIsCreatingOrder(false);
         }
     };
 
@@ -196,29 +136,19 @@ const SubscriptionPage: React.FC = () => {
                             </div>
                         )}
                         <p className="text-gray-400 mb-4">
-                           Para renovar ou reativar seu plano, clique no botão abaixo para pagar com Mercado Pago.
+                           Para renovar ou reativar seu plano, clique no botão abaixo para pagar com PagSeguro.
                         </p>
                         
-                        {publicKey ? (
-                             <button 
-                                onClick={handlePayment}
-                                disabled={isCreatingPreference}
-                                className="w-full flex items-center justify-center mt-4 px-4 py-3 bg-[#009ee3] text-white rounded-md hover:bg-[#0089cc] text-sm font-semibold disabled:opacity-50"
-                            >
-                                <MercadoPagoIcon className="w-6 h-auto mr-2" />
-                                {isCreatingPreference ? 'Gerando pagamento...' : `Pagar ${currentPlan?.priceFormatted} com Mercado Pago`}
-                            </button>
-                        ) : (
-                            <div className="text-center p-4 bg-gray-700/50 rounded-md text-gray-400">
-                                A integração de pagamentos não está configurada. Contate o suporte.
-                            </div>
-                        )}
+                        <button 
+                            onClick={handlePayment}
+                            disabled={isCreatingOrder}
+                            className="w-full flex items-center justify-center mt-4 px-4 py-3 bg-[#FFC72C] text-black rounded-md hover:bg-[#ffb700] text-sm font-bold disabled:opacity-50"
+                        >
+                            <PagSeguroIcon className="w-6 h-auto mr-2" />
+                            {isCreatingOrder ? 'Gerando pagamento...' : `Pagar ${currentPlan?.priceFormatted} com PagSeguro`}
+                        </button>
 
                         {error && <p className="text-red-400 text-sm mt-4 text-center">{error}</p>}
-                        
-                        {publicKey && preferenceId && (
-                           <MercadoPagoCheckout preferenceId={preferenceId} publicKey={publicKey} />
-                        )}
                     </div>
                 </div>
             </div>

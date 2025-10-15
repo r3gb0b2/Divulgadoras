@@ -1,15 +1,17 @@
 
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('@getbrevo/brevo');
 const { GoogleGenAI } = require("@google/genai");
-const mercadopago = require("mercadopago");
+const xml2js = require("xml2js");
+const { fetch } = require("undici");
 
 admin.initializeApp();
 
 const PLANS = {
-    basic: { id: 'basic', name: 'Plano Básico', price: 49.00 },
-    professional: { id: 'professional', name: 'Plano Profissional', price: 99.00 },
+    basic: { id: 'basic', name: 'Plano Básico', price: 4900 }, // Price in cents
+    professional: { id: 'professional', name: 'Plano Profissional', price: 9900 }, // Price in cents
 };
 
 /**
@@ -31,7 +33,6 @@ const requireSuperAdmin = async (auth) => {
             return;
         }
     } else {
-        // Doc doesn't exist, check for hardcoded superadmin email for first-time setup.
         if (auth.token && auth.token.email === 'r3gb0b@gmail.com') {
             functions.logger.warn(`Admin doc for superadmin email ${auth.token.email} not found. Creating it now.`);
             const superAdminPayload = {
@@ -44,8 +45,7 @@ const requireSuperAdmin = async (auth) => {
             return;
         }
     }
-
-    // If we reach this point, access is denied. Log the reason for debugging.
+    
     const adminDataIfPresent = adminDoc.exists ? adminDoc.data() : null;
     const role = adminDataIfPresent ? adminDataIfPresent.role : 'documento não encontrado';
     functions.logger.warn(`Permission denied for UID: ${auth.uid}. Role is '${role}'.`);
@@ -54,11 +54,6 @@ const requireSuperAdmin = async (auth) => {
 
 // --- Centralized Email Logic ---
 
-/**
- * Creates the default HTML for an 'approved' status email.
- * This is the fallback if no custom template is set.
- * @returns {string} The full default HTML email content with placeholders.
- */
 const generateDefaultApprovedEmailHtml = () => {
     const currentYear = new Date().getFullYear();
     return `
@@ -112,12 +107,6 @@ const generateDefaultApprovedEmailHtml = () => {
 </html>`;
 };
 
-/**
- * [ROBUST] Fetches the raw HTML template for approved emails.
- * It first tries to fetch a custom template from Firestore. If it fails or the template is empty,
- * it returns the hardcoded default template.
- * @returns {Promise<string>} The raw HTML template string with placeholders.
- */
 const getRawApprovedEmailTemplate = async () => {
     try {
         const docRef = admin.firestore().collection('settings').doc('emailTemplate');
@@ -133,41 +122,19 @@ const getRawApprovedEmailTemplate = async () => {
     return generateDefaultApprovedEmailHtml();
 };
 
-/**
- * Replaces placeholders in an HTML string with actual data.
- * @param {string} htmlContent - The raw HTML with placeholders.
- * @param {object} data - An object containing data like promoterName, etc.
- * @returns {string} The populated HTML string.
- */
 const populateTemplate = (htmlContent, data) => {
-    // Construct the correct portal link with the encoded recipient email.
     const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(data.recipientEmail || '')}`;
-    
-    // Define the full HTML for the button. This will replace the comment placeholder in the default template.
     const portalButtonHtml = `<a href="${portalLink}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 16px; font-weight: bold; color: #ffffff; background-color: #e83a93; text-decoration: none; border-radius: 5px;">Acessar Portal da Divulgadora</a>`;
-    
     let populatedHtml = String(htmlContent);
-    
-    // Replace standard placeholders
     populatedHtml = populatedHtml.replace(/{{promoterName}}/g, data.promoterName || '');
     populatedHtml = populatedHtml.replace(/{{campaignName}}/g, data.campaignName || '');
     populatedHtml = populatedHtml.replace(/{{orgName}}/g, data.orgName || '');
     populatedHtml = populatedHtml.replace(/{{recipientEmail}}/g, data.recipientEmail || '');
-    
-    // New replacement for the default template's placeholder comment.
     populatedHtml = populatedHtml.replace('<!-- PORTAL_BUTTON -->', portalButtonHtml);
-    
-    // For backward compatibility with custom templates that might still use {{portalLink}}, we replace it with just the URL.
     populatedHtml = populatedHtml.replace(/{{portalLink}}/g, portalLink);
-    
     return populatedHtml;
 };
 
-/**
- * [CENTRALIZED] Gets the raw template and populates it with data.
- * @param {object} promoterData - Data object for populating the template.
- * @returns {Promise<{htmlContent: string, subject: string}>} The final email content and subject.
- */
 const getPopulatedApprovedEmail = async (promoterData) => {
     const rawHtml = await getRawApprovedEmailTemplate();
     const htmlContent = populateTemplate(rawHtml, promoterData);
@@ -175,13 +142,6 @@ const getPopulatedApprovedEmail = async (promoterData) => {
     return { htmlContent, subject };
 };
 
-/**
- * Sends an email using the Brevo (Sendinblue) API.
- * @param {string} recipientEmail - The email address of the recipient.
- * @param {string} subject - The subject of the email.
- * @param {string} htmlContent - The HTML body of the email.
- * @throws {functions.https.HttpsError} If config is missing or API call fails.
- */
 const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     const brevoConfig = functions.config().brevo;
     if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email) {
@@ -222,8 +182,6 @@ const sendBrevoEmail = async (recipientEmail, subject, htmlContent) => {
     }
 };
 
-// --- Email Template Management Functions ---
-
 exports.getEmailTemplate = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
@@ -258,16 +216,12 @@ exports.resetEmailTemplate = functions
     .https.onCall(async (data, context) => {
         await requireSuperAdmin(context);
         const docRef = admin.firestore().collection('settings').doc('emailTemplate');
-        // Check if doc exists before trying to delete for robustness
         const doc = await docRef.get();
         if (doc.exists) {
             await docRef.delete();
         }
         return { success: true };
     });
-
-
-// --- System & Diagnostic Functions ---
 
 exports.getSystemStatus = functions
     .region("southamerica-east1")
@@ -328,7 +282,7 @@ exports.sendTestEmail = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
         const userEmail = 'r3gb0b@gmail.com';
-        const { testType, customHtmlContent } = data; // Receive custom HTML
+        const { testType, customHtmlContent } = data;
         functions.logger.info(`[TEST EMAIL TRIGGER] for user: ${userEmail}, type: ${testType}`);
 
         try {
@@ -349,7 +303,7 @@ exports.sendTestEmail = functions
                     htmlContent = populated.htmlContent;
                     break;
                 }
-                case 'custom_approved': { // New case for editor test
+                case 'custom_approved': {
                     subject = "✅ (TESTE DO EDITOR) Sua candidatura foi aprovada!";
                     htmlContent = populateTemplate(customHtmlContent || '<body>Template Vazio</body>', testData);
                     break;
@@ -373,8 +327,6 @@ exports.sendTestEmail = functions
             throw new functions.https.HttpsError('internal', 'Falha ao enviar e--mail de teste.', { originalError: error.message });
         }
     });
-
-// --- Main Email Automation Functions ---
 
 exports.sendPromoterStatusEmail = functions
     .region("southamerica-east1")
@@ -448,8 +400,6 @@ exports.manuallySendStatusEmail = functions
         }
     });
 
-// --- Gemini AI Function ---
-
 exports.askGemini = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
@@ -480,15 +430,7 @@ exports.askGemini = functions
         }
     });
 
-// --- Mercado Pago Integration ---
-const configureMercadoPago = () => {
-    const mpConfig = functions.config().mercadopago;
-    if (!mpConfig || !mpConfig.token) {
-        throw new Error("Mercado Pago access token is not configured.");
-    }
-    mercadopago.configure({ access_token: mpConfig.token });
-};
-
+// FIX: Add missing getMercadoPagoStatus cloud function to support MercadoPagoSettingsPage.
 exports.getMercadoPagoStatus = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
@@ -496,107 +438,144 @@ exports.getMercadoPagoStatus = functions
         const mpConfig = functions.config().mercadopago;
         const status = {
             configured: false,
-            publicKey: false,
             token: false,
+            publicKey: false,
             webhookSecret: false,
         };
         if (mpConfig) {
-            if (mpConfig.public_key) status.publicKey = true;
             if (mpConfig.token) status.token = true;
+            if (mpConfig.public_key) status.publicKey = true;
             if (mpConfig.webhook_secret) status.webhookSecret = true;
         }
-        status.configured = status.publicKey && status.token && status.webhookSecret;
+        status.configured = status.token && status.publicKey;
         return status;
     });
 
-exports.getMercadoPagoConfig = functions
+// --- PagSeguro Integration ---
+
+exports.getPagSeguroStatus = functions
     .region("southamerica-east1")
-    .https.onCall((data, context) => {
-        if (!context.auth) {
-            throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const psConfig = functions.config().pagseguro;
+        const status = {
+            configured: false,
+            token: false,
+            email: false,
+        };
+        if (psConfig) {
+            if (psConfig.token) status.token = true;
+            if (psConfig.email) status.email = true;
         }
-        const mpConfig = functions.config().mercadopago;
-        if (!mpConfig || !mpConfig.public_key) {
-            throw new functions.https.HttpsError('failed-precondition', 'A chave pública do Mercado Pago não está configurada.');
-        }
-        return { publicKey: mpConfig.public_key };
+        status.configured = status.token && status.email;
+        return status;
     });
 
-exports.createMercadoPagoPreference = functions
+exports.createPagSeguroOrder = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
         if (!context.auth) {
             throw new functions.https.HttpsError('unauthenticated', 'Ação requer autenticação.');
         }
-
+        
         const { orgId, planId } = data;
         if (!orgId || !planId) {
             throw new functions.https.HttpsError('invalid-argument', 'IDs da organização e do plano são obrigatórios.');
         }
 
-        configureMercadoPago();
+        const psConfig = functions.config().pagseguro;
+        if (!psConfig || !psConfig.token) {
+            throw new functions.https.HttpsError('failed-precondition', 'A integração com PagSeguro não está configurada no servidor.');
+        }
 
         const plan = PLANS[planId];
         if (!plan) {
             throw new functions.https.HttpsError('not-found', 'Plano não encontrado.');
         }
 
-        const orgRef = admin.firestore().collection('organizations').doc(orgId);
-        const orgDoc = await orgRef.get();
+        const orgDoc = await admin.firestore().collection('organizations').doc(orgId).get();
         if (!orgDoc.exists) {
             throw new functions.https.HttpsError('not-found', 'Organização não encontrada.');
         }
+        const orgData = orgDoc.data();
 
-        const preference = {
-            items: [
-                {
-                    title: `Assinatura Equipe Certa - ${plan.name}`,
-                    quantity: 1,
-                    currency_id: 'BRL',
-                    unit_price: plan.price,
-                },
-            ],
-            payer: {
-                email: orgDoc.data().ownerEmail,
+        const order = {
+            reference_id: `${orgId}|${planId}`,
+            customer: {
+                email: orgData.ownerEmail,
+                name: orgData.name,
             },
-            back_urls: {
-                success: `https://divulgadoras.vercel.app/#/admin/settings/subscription`,
-            },
-            auto_return: 'approved',
-            external_reference: `${orgId}|${planId}`,
-            notification_url: `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/mercadoPagoWebhook`,
+            items: [{
+                name: `Assinatura Equipe Certa - ${plan.name}`,
+                quantity: 1,
+                unit_amount: plan.price,
+            }],
+            redirect_url: "https://divulgadoras.vercel.app/#/admin/settings/subscription?status=success",
+            notification_urls: [`https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/pagSeguroWebhook`],
         };
 
         try {
-            const response = await mercadopago.preferences.create(preference);
-            return { preferenceId: response.body.id };
+            const response = await fetch("https://api.pagseguro.com/orders", {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${psConfig.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(order),
+            });
+            
+            const responseData = await response.json();
+
+            if (!response.ok) {
+                functions.logger.error("PagSeguro API error:", responseData);
+                throw new Error(responseData.error_messages?.[0]?.description || 'Erro da API PagSeguro.');
+            }
+            
+            const payLink = responseData.links?.find(link => link.rel === 'PAY')?.href;
+            if (!payLink) {
+                 throw new Error("Link de pagamento não encontrado na resposta da API.");
+            }
+
+            return { payLink };
         } catch (error) {
-            console.error("Mercado Pago preference creation failed:", error);
-            throw new functions.https.HttpsError('internal', 'Falha ao criar preferência de pagamento.');
+            console.error("PagSeguro order creation failed:", error);
+            throw new functions.https.HttpsError('internal', 'Falha ao criar pedido de pagamento no PagSeguro.', { originalError: error.message });
         }
     });
 
-exports.mercadoPagoWebhook = functions
+exports.pagSeguroWebhook = functions
     .region("southamerica-east1")
     .https.onRequest(async (req, res) => {
         if (req.method !== 'POST') {
             return res.status(405).send('Method Not Allowed');
         }
         
-        functions.logger.info("Mercado Pago Webhook received:", { body: req.body });
+        functions.logger.info("PagSeguro Webhook received:", { body: req.body });
         
-        const { type, data } = req.body;
+        const { notificationCode, notificationType } = req.body;
         
-        if (type === 'payment') {
+        if (notificationType === 'transaction') {
             try {
-                configureMercadoPago();
-                const payment = await mercadopago.payment.get(data.id);
+                const psConfig = functions.config().pagseguro;
+                if (!psConfig || !psConfig.token || !psConfig.email) {
+                    throw new Error("PagSeguro config is missing for webhook processing.");
+                }
+
+                const url = `https://ws.pagseguro.uol.com.br/v3/transactions/notifications/${notificationCode}?email=${psConfig.email}&token=${psConfig.token}`;
                 
-                if (payment.body.status === 'approved') {
-                    const [orgId, planId] = payment.body.external_reference.split('|');
+                const response = await fetch(url);
+                const xmlText = await response.text();
+                const result = await xml2js.parseStringPromise(xmlText);
+
+                const transaction = result.transaction;
+                const status = transaction.status[0]; // Status '3' is Paid
+                const reference = transaction.reference[0];
+
+                if (status === '3' || status === '4') { // 3 = Paga, 4 = Disponível
+                    const [orgId, planId] = reference.split('|');
                     
                     if (!orgId || !planId) {
-                        functions.logger.error("Invalid external_reference in payment", payment.body.external_reference);
+                        functions.logger.error("Invalid reference in PagSeguro notification", reference);
                         return res.status(200).send('OK');
                     }
 
@@ -614,11 +593,11 @@ exports.mercadoPagoWebhook = functions
                             planExpiresAt: admin.firestore.Timestamp.fromDate(baseDate),
                             planId: planId
                         });
-                        functions.logger.info(`Organization ${orgId} subscription updated successfully.`);
+                        functions.logger.info(`Organization ${orgId} subscription updated via PagSeguro.`);
                     }
                 }
             } catch (error) {
-                functions.logger.error("Error processing Mercado Pago webhook:", error);
+                functions.logger.error("Error processing PagSeguro webhook:", error);
             }
         }
         
