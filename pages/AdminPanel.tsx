@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
+import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
@@ -91,69 +91,68 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [isSuperAdmin, selectedOrg, adminData.organizationId]);
 
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
+    const fetchStaticData = useCallback(async () => {
         try {
             const orgId = isSuperAdmin ? undefined : adminData.organizationId;
-            const states = isSuperAdmin ? null : adminData.assignedStates;
-            
             if (!isSuperAdmin && !orgId) {
                 throw new Error("Administrador não está vinculado a uma organização.");
             }
-
-            // Base promises for all roles
-            const promotersPromise = getPromoters(orgId, states);
+            
             const reasonsPromise = orgId ? getRejectionReasons(orgId) : Promise.resolve([]);
-
             if (isSuperAdmin) {
-                // Superadmin fetches everything
                 const orgsPromise = getOrganizations();
                 const campaignsPromise = getAllCampaigns();
-    
-                const [promotersData, reasonsData, orgsData, campaignsData] = await Promise.all([
-                    promotersPromise,
-                    reasonsPromise, // This will be an empty array as orgId is undefined
-                    orgsPromise,
-                    campaignsPromise,
-                ]);
-    
-                setPromoters(promotersData);
-                setRejectionReasons(reasonsData); // Empty, which is fine. The button is hidden.
+                const [reasonsData, orgsData, campaignsData] = await Promise.all([reasonsPromise, orgsPromise, campaignsPromise]);
+                setRejectionReasons(reasonsData);
                 setAllOrganizations(orgsData.sort((a,b) => a.name.localeCompare(b.name)));
                 setAllCampaigns(campaignsData);
-
             } else {
-                 // Regular admin fetches scoped data
-                const [promotersData, reasonsData] = await Promise.all([promotersPromise, reasonsPromise]);
-
+                const reasonsData = await reasonsPromise;
                 setRejectionReasons(reasonsData);
-                
-                // Further client-side filtering based on assigned campaigns for non-superadmins
-                if (adminData.assignedCampaigns) {
-                    const filtered = promotersData.filter(p => {
-                        const campaignsForState = adminData.assignedCampaigns?.[p.state];
-                        // If no campaigns are assigned for the state, admin can see all for that state.
-                        if (!campaignsForState || campaignsForState.length === 0) return true;
-                        // Otherwise, only show promoters from assigned campaigns.
-                        return p.campaignName && campaignsForState.includes(p.campaignName);
-                    });
-                    setPromoters(filtered);
-                } else {
-                    setPromoters(promotersData);
-                }
             }
-
         } catch (err: any) {
-            setError(err.message || 'Não foi possível carregar as divulgadoras.');
-        } finally {
-            setIsLoading(false);
+            setError(err.message || 'Não foi possível carregar os dados estáticos.');
         }
     }, [adminData, isSuperAdmin]);
 
+
+    // Real-time listener for promoters
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        setIsLoading(true);
+        const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+        const states = isSuperAdmin ? null : adminData.assignedStates;
+
+        if (!isSuperAdmin && !orgId) {
+            setError("Administrador não está vinculado a uma organização.");
+            setIsLoading(false);
+            return;
+        }
+
+        const unsubscribe = listenToPromoters(orgId, states, (promotersData) => {
+            if (adminData.assignedCampaigns) {
+                const filtered = promotersData.filter(p => {
+                    const campaignsForState = adminData.assignedCampaigns?.[p.state];
+                    if (!campaignsForState || campaignsForState.length === 0) return true;
+                    return p.campaignName && campaignsForState.includes(p.campaignName);
+                });
+                setPromoters(filtered);
+            } else {
+                setPromoters(promotersData);
+            }
+            setIsLoading(false);
+        }, (err) => {
+            setError(err.message);
+            setIsLoading(false);
+        });
+
+        // Cleanup listener on unmount
+        return () => unsubscribe();
+    }, [adminData, isSuperAdmin]);
+    
+    // Fetch static data on load and when it changes
+    useEffect(() => {
+        fetchStaticData();
+    }, [fetchStaticData]);
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
@@ -169,7 +168,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
             
             await updatePromoter(id, updatedData);
-            await fetchData(); // Refresh data
+            // No need to fetch data, listener will update UI
             alert("Status da divulgadora atualizado com sucesso.");
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
@@ -213,7 +212,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
             try {
                 await deletePromoter(id);
-                await fetchData(); // Refresh data
+                // No need to fetch, listener will update
             } catch (error) {
                 alert("Falha ao excluir a inscrição.");
             }
@@ -497,7 +496,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     isOpen={isReasonsModalOpen}
                     onClose={() => setIsReasonsModalOpen(false)}
                     organizationId={organizationIdForReasons}
-                    onReasonsUpdated={fetchData}
+                    onReasonsUpdated={fetchStaticData}
                 />
             )}
 

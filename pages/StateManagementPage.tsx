@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
+import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { getStateConfig, setStatesConfig, getStatesConfig, getCampaigns, addCampaign, updateCampaign, deleteCampaign, getAllCampaigns } from '../services/settingsService';
 import { getOrganizations, getOrganization } from '../services/organizationService';
 import { Promoter, StateConfig, AdminUserData, PromoterStatus, Campaign, Organization, RejectionReason } from '../types';
@@ -78,23 +78,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
   const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
   const isSuperAdmin = adminData.role === 'superadmin';
 
-  const fetchData = useCallback(async () => {
+  const fetchStaticData = useCallback(async () => {
     if (!stateAbbr) return;
-    
-    if (!isSuperAdmin && !adminData.organizationId) {
-         setError("Organização não encontrada para este administrador.");
-         setIsLoading(false);
-         return;
-    }
-
-    setIsLoading(true);
-    setError(null);
     try {
       const orgId = adminData.organizationId;
       const reasonsPromise = !isSuperAdmin && orgId ? getRejectionReasons(orgId) : Promise.resolve([]);
 
       const promises = [
-        getPromoters(orgId, [stateAbbr]),
         getStateConfig(stateAbbr),
         getCampaigns(stateAbbr, orgId),
         isSuperAdmin ? getOrganizations() : getOrganization(orgId!),
@@ -103,7 +93,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
       ];
 
       const [
-        promotersData,
         configData,
         campaignsData,
         orgsOrOrgData,
@@ -126,28 +115,56 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
       const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
       const hasSpecificCampaigns = !isSuperAdmin && assignedCampaignsForState && assignedCampaignsForState.length > 0;
       
-      const filteredPromoters = hasSpecificCampaigns
-        ? (promotersData as Promoter[]).filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
-        : (promotersData as Promoter[]);
-
       const filteredCampaigns = hasSpecificCampaigns
         ? (campaignsData as Campaign[]).filter(c => assignedCampaignsForState.includes(c.name))
         : (campaignsData as Campaign[]);
 
-      setPromoters(filteredPromoters);
       setStateConfig(configData as StateConfig | null);
       setCampaigns(filteredCampaigns);
 
     } catch (err: any) {
       setError(err.message || 'Falha ao carregar dados da localidade.');
-    } finally {
-      setIsLoading(false);
     }
   }, [stateAbbr, adminData, isSuperAdmin]);
 
+  // Real-time listener for promoters
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!stateAbbr) return;
+
+    if (!isSuperAdmin && !adminData.organizationId) {
+        setError("Organização não encontrada para este administrador.");
+        setIsLoading(false);
+        return;
+    }
+    setIsLoading(true);
+    setError(null);
+    
+    const orgId = adminData.organizationId;
+
+    const unsubscribe = listenToPromoters(orgId, [stateAbbr], (promotersData) => {
+      const assignedCampaignsForState = adminData.assignedCampaigns?.[stateAbbr];
+      const hasSpecificCampaigns = !isSuperAdmin && assignedCampaignsForState && assignedCampaignsForState.length > 0;
+      
+      const filteredPromoters = hasSpecificCampaigns
+        ? promotersData.filter(p => p.campaignName && assignedCampaignsForState.includes(p.campaignName))
+        : promotersData;
+
+      setPromoters(filteredPromoters);
+      setIsLoading(false); // Set loading to false after first data arrives
+    }, (err) => {
+        setError(err.message);
+        setIsLoading(false);
+    });
+
+    // Clean up listener
+    return () => unsubscribe();
+  }, [stateAbbr, adminData, isSuperAdmin]);
+
+
+  // Fetch static data
+  useEffect(() => {
+    fetchStaticData();
+  }, [fetchStaticData]);
 
   const stats = useMemo(() => {
     return {
@@ -206,7 +223,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         }
 
         await updatePromoter(id, updatedData);
-        await fetchData(); // Refresh data
+        // No need to fetch, listener will handle update
         alert("Status da divulgadora atualizado com sucesso.");
     } catch (error) {
         alert("Falha ao atualizar a divulgadora.");
@@ -249,7 +266,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     if (window.confirm("Tem certeza que deseja excluir esta inscrição?")) {
          try {
             await deletePromoter(id);
-            await fetchData(); // Refresh data
+            // No need to fetch, listener will handle update
          } catch (error) {
             alert("Falha ao excluir a inscrição.");
          }
@@ -303,7 +320,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         await addCampaign(dataToSave);
       }
       setCampaignForm({ name: '', description: '', isActive: true, whatsappLink: '', rules: '' }); // Reset form
-      await fetchData(); // Refresh
+      await fetchStaticData(); // Refresh static data like campaigns
     } catch (err) {
       alert('Falha ao salvar evento/gênero.');
     } finally {
@@ -315,7 +332,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     if (window.confirm("Tem certeza que deseja excluir este evento/gênero?")) {
       try {
         await deleteCampaign(id);
-        await fetchData();
+        await fetchStaticData();
       } catch (err) {
         alert('Falha ao excluir evento/gênero.');
       }

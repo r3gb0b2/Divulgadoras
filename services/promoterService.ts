@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -81,6 +81,49 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
   } catch (error) {
     console.error("Error getting promoters: ", error);
     throw new Error("Não foi possível buscar as divulgadoras.");
+  }
+};
+
+
+export const listenToPromoters = (
+  organizationId: string | undefined,
+  states: string[] | null | undefined,
+  callback: (promoters: Promoter[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe => {
+  try {
+    let q = query(collection(firestore, "promoters"));
+
+    if (organizationId) {
+      q = query(q, where("organizationId", "==", organizationId));
+    }
+
+    if (states && states.length > 0) {
+      q = query(q, where("state", "in", states));
+    }
+
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const promoters: Promoter[] = [];
+      querySnapshot.forEach((doc) => {
+        promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+      });
+
+      promoters.sort((a, b) => {
+          const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+          const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+          return timeB - timeA;
+      });
+
+      callback(promoters);
+    }, (error) => {
+        console.error("Error listening to promoters: ", error);
+        onError(new Error("Não foi possível receber atualizações em tempo real."));
+    });
+
+    return unsubscribe;
+  } catch (error) {
+    console.error("Error setting up promoter listener: ", error);
+    throw new Error("Não foi possível iniciar a escuta de divulgadoras.");
   }
 };
 
