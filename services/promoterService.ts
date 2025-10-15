@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -67,7 +67,8 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
-      promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+      // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+      promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
     });
     
     // Always sort manually on the client-side for consistency and to include documents without `createdAt`.
@@ -105,7 +106,8 @@ export const listenToPromoters = (
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const promoters: Promoter[] = [];
       querySnapshot.forEach((doc) => {
-        promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
       });
 
       promoters.sort((a, b) => {
@@ -164,7 +166,8 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
         
         const promoters: Promoter[] = [];
         querySnapshot.forEach((doc) => {
-            promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+            promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
         });
 
         promoters.sort((a, b) => {
@@ -189,7 +192,8 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
             where("organizationId", "==", organizationId)
         );
         const querySnapshot = await getDocs(q);
-        const reasons = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RejectionReason));
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        const reasons = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as RejectionReason);
         
         // Sort client-side to avoid needing a composite index in Firestore
         reasons.sort((a, b) => a.text.localeCompare(b.text));

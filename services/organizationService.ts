@@ -84,7 +84,8 @@ export const getOrganization = async (id: string): Promise<Organization | null> 
         const docRef = doc(firestore, ORGS_COLLECTION, id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            return { id: docSnap.id, ...docSnap.data() } as Organization;
+            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+            return Object.assign({ id: docSnap.id }, docSnap.data()) as Organization;
         }
         return null;
     } catch (error) {
@@ -100,7 +101,8 @@ export const getOrganization = async (id: string): Promise<Organization | null> 
 export const getOrganizations = async (): Promise<Organization[]> => {
     try {
         const querySnapshot = await getDocs(collection(firestore, ORGS_COLLECTION));
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
     } catch (error) {
         console.error("Error getting all organizations: ", error);
         throw new Error("Não foi possível buscar a lista de organizações.");
@@ -119,7 +121,8 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
             where("public", "==", true)
         );
         const querySnapshot = await getDocs(q);
-        const allPublicOrgs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        const allPublicOrgs = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
 
         const now = new Date();
         

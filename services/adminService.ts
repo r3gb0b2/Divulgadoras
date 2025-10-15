@@ -14,7 +14,8 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
         const adminDocRef = doc(firestore, 'admins', uid);
         const docSnap = await getDoc(adminDocRef);
         if (docSnap.exists()) {
-            const data = docSnap.data();
+            // FIX: Cast doc.data() to a specific type to avoid 'unknown' property access errors.
+            const data = docSnap.data() as Omit<AdminUserData, 'uid'>;
             return {
                 uid,
                 email: data.email,
@@ -22,7 +23,7 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
                 assignedStates: data.assignedStates || [],
                 assignedCampaigns: data.assignedCampaigns || {},
                 organizationId: data.organizationId,
-            } as AdminUserData;
+            };
         }
         return null;
     } catch (error) {
@@ -45,7 +46,8 @@ export const getAllAdmins = async (organizationId?: string): Promise<AdminUserDa
         const querySnapshot = await getDocs(q);
         const admins: AdminUserData[] = [];
         querySnapshot.forEach(doc => {
-            const data = doc.data();
+            // FIX: Cast doc.data() to a specific type to avoid 'unknown' property access errors.
+            const data = doc.data() as Omit<AdminUserData, 'uid'>;
             admins.push({
                 uid: doc.id,
                 email: data.email,
@@ -53,7 +55,7 @@ export const getAllAdmins = async (organizationId?: string): Promise<AdminUserDa
                 assignedStates: data.assignedStates || [],
                 assignedCampaigns: data.assignedCampaigns || {},
                 organizationId: data.organizationId,
-            } as AdminUserData);
+            });
         });
         return admins;
     } catch (error) {
@@ -224,7 +226,8 @@ export const getAdminApplications = async (): Promise<AdminApplication[]> => {
             where("status", "==", "pending")
         );
         const querySnapshot = await getDocs(q);
-        const applications = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        const applications = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as AdminApplication);
 
         // Sort client-side to avoid needing a composite index
         applications.sort((a, b) => {

@@ -29,8 +29,16 @@ export const getMercadoPagoStatus = async (): Promise<any> => {
         const getStatus = httpsCallable(functions, 'getMercadoPagoStatus');
         const result = await getStatus();
         return result.data;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error getting Mercado Pago status:", error);
-        throw new Error("Não foi possível verificar o status da integração com Mercado Pago.");
+        let detailMessage = "Verifique os logs da função no Firebase para mais detalhes.";
+        if (error.code === 'unavailable') {
+            detailMessage = "O serviço está temporariamente indisponível. A função pode não ter sido implantada corretamente ou está com erro de inicialização.";
+        } else if (error.code === 'not-found') {
+            detailMessage = "A função 'getMercadoPagoStatus' não foi encontrada no servidor. Verifique se o deploy foi concluído com sucesso.";
+        } else if (error.message) {
+            detailMessage = `Detalhes: ${error.message}`;
+        }
+        throw new Error(`Não foi possível verificar o status da integração com Mercado Pago. ${detailMessage}`);
     }
 };

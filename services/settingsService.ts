@@ -83,11 +83,13 @@ export const getCampaigns = async (stateAbbr: string, organizationId?: string): 
             // Fetch all campaigns for a specific organization (more efficient query)
             const q = query(collection(firestore, "campaigns"), where("organizationId", "==", organizationId));
             const querySnapshot = await getDocs(q);
-            campaignsToFilter = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
+            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+            campaignsToFilter = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
         } else {
             // Superadmin case: fetch all campaigns from all organizations
             const querySnapshot = await getDocs(collection(firestore, "campaigns"));
-            campaignsToFilter = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign));
+            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+            campaignsToFilter = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
         }
 
         // Now, filter the results by the selected state on the client side
@@ -108,7 +110,8 @@ export const getAllCampaigns = async (organizationId?: string): Promise<Campaign
             q = query(q, where("organizationId", "==", organizationId));
         }
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Campaign)).sort((a, b) => a.name.localeCompare(b.name));
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
         console.error("Error getting all campaigns: ", error);
         throw new Error("Não foi possível buscar todos os eventos/gêneros.");
