@@ -16,7 +16,7 @@ type SystemStatus = {
     details?: string[];
 } | null;
 
-const FRONTEND_VERSION = "8.0"; // Must match version in AdminAuth.tsx
+const FRONTEND_VERSION = "9.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
@@ -37,7 +37,6 @@ const SuperAdminDashboard: React.FC = () => {
                 const statusData = result.data as SystemStatus;
                 setSystemStatus(statusData);
 
-                // A sync error occurs if the backend function failed critically or versions don't match
                 const backendVersion = statusData?.functionVersion?.split('-')[0] || '';
                 const frontendVersionMajor = FRONTEND_VERSION.split('.')[0];
                 const backendVersionMajor = backendVersion.replace('v','').split('.')[0];
@@ -159,12 +158,11 @@ const SuperAdminDashboard: React.FC = () => {
              );
         }
     
-        // If not configured, show the specific guide for the error.
         let guideTitle = "⚠️ Ação Necessária: Configurar Envio de E-mail";
         let guideMessage = `O sistema detectou que o serviço de e-mail (${systemStatus.emailProvider}) não está configurado corretamente.`;
         if (systemStatus.message.includes("INVÁLIDA")) {
             guideTitle = "⚠️ Erro de Configuração: Chave de API Inválida";
-            guideMessage = "A verificação com a Mailchimp falhou. A chave da API configurada parece estar incorreta ou não ter as permissões necessárias. Por favor, gere uma nova chave e reconfigure."
+            guideMessage = "A verificação com a Brevo falhou. A chave da API configurada parece estar incorreta ou não ter as permissões necessárias. Por favor, gere uma nova chave e reconfigure."
         }
         
         return (
@@ -177,10 +175,10 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="text-gray-300">Execute o comando abaixo no terminal, substituindo os valores de exemplo.</p>
                         <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
                             <code>
-                                {`firebase functions:config:set mailchimp.key="SUA_API_KEY" mailchimp.sender_email="seu@emailverificado.com"`}
+                                {`firebase functions:config:set brevo.key="SUA_API_KEY" brevo.sender_email="seu@emailverificado.com"`}
                             </code>
                         </pre>
-                        <p className="text-xs text-yellow-200/80 mt-1"><strong>Atenção:</strong> O e-mail remetente precisa ser de um domínio verificado na sua conta Mailchimp/Mandrill.</p>
+                        <p className="text-xs text-yellow-200/80 mt-1"><strong>Atenção:</strong> O e-mail remetente precisa ser de um remetente validado na sua conta Brevo.</p>
                     </div>
                     <div>
                         <strong>Passo 2: Faça o deploy das alterações</strong>
@@ -284,12 +282,11 @@ const SuperAdminDashboard: React.FC = () => {
                     </div>
                 ) : systemStatus?.configured ? (
                     <div className="space-y-4 border-t border-gray-700 pt-6 mt-6">
-                        {/* Teste Genérico */}
                         <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
-                                <h3 className="font-semibold text-gray-100">Teste de Conexão Mailchimp</h3>
+                                <h3 className="font-semibold text-gray-100">Teste de Conexão Brevo</h3>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Mailchimp</strong>.
+                                    Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Brevo</strong>.
                                 </p>
                             </div>
                             <button 
@@ -307,7 +304,6 @@ const SuperAdminDashboard: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Teste de Aprovação */}
                         <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <h3 className="font-semibold text-gray-100">Teste de E-mail de Aprovação</h3>
@@ -330,7 +326,6 @@ const SuperAdminDashboard: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Teste de Rejeição */}
                         <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <h3 className="font-semibold text-gray-100">Teste de E-mail de Rejeição</h3>
