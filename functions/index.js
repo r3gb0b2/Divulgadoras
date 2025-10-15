@@ -121,8 +121,15 @@ const getRawApprovedEmailTemplate = async () => {
     try {
         const templateDoc = await admin.firestore().collection('settings').doc('emailTemplates').get();
         if (templateDoc.exists) {
-            // Safer access to document data to prevent rare crashes.
-            const docData = templateDoc.data();
+            let docData;
+            try {
+                docData = templateDoc.data();
+            } catch (parseError) {
+                functions.logger.error("Could not parse Firestore document data for 'emailTemplates'. Document might be corrupt.", { error: parseError });
+                // If parsing fails, we definitely want to use the default.
+                return defaultHtml;
+            }
+
             const customHtml = docData ? docData.approvedPromoterHtml : undefined;
             
             if (typeof customHtml === 'string' && customHtml.length > 0) {
@@ -137,6 +144,7 @@ const getRawApprovedEmailTemplate = async () => {
         return defaultHtml;
     }
 };
+
 
 /**
  * Replaces placeholders in an HTML string with actual data.
@@ -318,7 +326,7 @@ exports.sendTestEmail = functions
         } catch (error) {
             functions.logger.error(`FATAL ERROR in sendTestEmail (type: ${testType})`, { error });
             if (error instanceof functions.https.HttpsError) throw error;
-            throw new functions.https.HttpsError('internal', 'Falha ao enviar e-mail de teste.', { originalError: error.message });
+            throw new functions.https.HttpsError('internal', 'Falha ao enviar e--mail de teste.', { originalError: error.message });
         }
     });
 
@@ -456,17 +464,16 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
     const templateDocRef = admin.firestore().collection('settings').doc('emailTemplates');
 
     try {
-        // This is a more robust approach.
-        // First, we ensure the document exists using set() with merge:true. This is idempotent
-        // and creates an empty document if it doesn't exist, preventing the subsequent update from failing.
-        await templateDocRef.set({}, { merge: true });
-
-        // Now that the document is guaranteed to exist, we can safely update it to delete the field.
-        // If the field doesn't exist, this operation succeeds without error.
-        await templateDocRef.update({
-            approvedPromoterHtml: admin.firestore.FieldValue.delete(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        const doc = await templateDocRef.get();
+        // Only update the document if it actually exists.
+        // If it doesn't exist, the system will correctly use the default template anyway,
+        // so no action is needed. This is the desired "reset" state.
+        if (doc.exists) {
+            await templateDocRef.update({
+                approvedPromoterHtml: admin.firestore.FieldValue.delete(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        }
 
         return { success: true, message: "Template de e-mail redefinido com sucesso." };
     } catch (error) {
