@@ -26,7 +26,7 @@ const GeminiPage: React.FC = () => {
             setResponse(data.text);
         } catch (err: any) {
             console.error("Gemini function call failed:", err);
-            const errorMessage = err.details?.message || err.message || 'Ocorreu um erro desconhecido.';
+            const errorMessage = err.details?.originalError || err.message || 'Ocorreu um erro desconhecido.';
             setError(`Falha ao obter resposta: ${errorMessage}`);
         } finally {
             setIsLoading(false);
@@ -73,6 +73,11 @@ const GeminiPage: React.FC = () => {
                 </form>
                 
                 <div className="mt-8">
+                    {isLoading && (
+                         <div className="flex justify-center items-center py-10">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                        </div>
+                    )}
                     {error && (
                         <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md">
                             <p className="font-bold">Erro</p>

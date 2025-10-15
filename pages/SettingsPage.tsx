@@ -72,7 +72,7 @@ const SettingsPage: React.FC = () => {
           {/* Assistente Gemini */}
           <Link
             to="/admin/gemini"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 md:col-span-2"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
           >
             <div className="flex items-center">
               <SparklesIcon className="w-8 h-8 text-primary" />

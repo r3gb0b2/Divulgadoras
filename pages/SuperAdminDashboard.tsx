@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -267,7 +268,7 @@ const SuperAdminDashboard: React.FC = () => {
                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Editar &rarr;</div>
                     </Link>
                     
-                    <Link to="/admin/gemini" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 md:col-span-2 lg:col-span-1">
+                    <Link to="/admin/gemini" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
                             <SparklesIcon className="w-8 h-8 text-primary" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
