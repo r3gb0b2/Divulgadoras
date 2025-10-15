@@ -1,6 +1,6 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
@@ -8,6 +8,12 @@ import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
+type SystemStatus = {
+    emailProvider: string;
+    configured: boolean;
+    message: string;
+} | null;
+
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
@@ -15,6 +21,31 @@ const SuperAdminDashboard: React.FC = () => {
         approved: { type: 'idle', message: '' },
         rejected: { type: 'idle', message: '' },
     });
+    const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
+    const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+
+    useEffect(() => {
+        const checkSystemStatus = async () => {
+            setIsCheckingStatus(true);
+            try {
+                const getStatus = httpsCallable(functions, 'getSystemStatus');
+                const result = await getStatus();
+                setSystemStatus(result.data as SystemStatus);
+            } catch (error) {
+                console.error("Failed to get system status:", error);
+                setSystemStatus({
+                    emailProvider: 'Desconhecido',
+                    configured: false,
+                    message: 'Não foi possível verificar o status do sistema de e-mail. Verifique os logs da função.'
+                });
+            } finally {
+                setIsCheckingStatus(false);
+            }
+        };
+
+        checkSystemStatus();
+    }, []);
+
 
     const handleLogout = async () => {
         try {
@@ -42,6 +73,40 @@ const SuperAdminDashboard: React.FC = () => {
             setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${errorMessage}` } }));
         }
     };
+
+    const renderSystemStatus = () => {
+        if (isCheckingStatus) {
+            return (
+                 <div className="bg-gray-700/50 p-4 rounded-lg flex items-center gap-4">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    <p className="font-semibold text-gray-300">Verificando configuração do sistema de e-mail...</p>
+                 </div>
+            );
+        }
+
+        if (!systemStatus) return null;
+
+        const isOk = systemStatus.configured;
+
+        return (
+             <div className={`${isOk ? 'bg-green-900/50 border-green-700 text-green-300' : 'bg-red-900/50 border-red-700 text-red-300'} border p-4 rounded-lg`}>
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                     {isOk ? (
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                     ) : (
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                     )}
+                    Verificação do Servidor de E-mail
+                </h3>
+                <div className="mt-2 text-sm space-y-1">
+                    <p><strong>Provedor Detectado:</strong> {systemStatus.emailProvider}</p>
+                    <p><strong>Status da Configuração:</strong> <span className="font-semibold">{isOk ? "OK" : "ERRO"}</span></p>
+                    <p><strong>Mensagem:</strong> {systemStatus.message}</p>
+                    {!isOk && <p className="mt-2 font-semibold">AÇÃO NECESSÁRIA: Configure as variáveis de ambiente das suas Firebase Functions para que o envio de e-mail funcione.</p>}
+                </div>
+             </div>
+        );
+    }
     
     return (
         <div>
@@ -106,11 +171,8 @@ const SuperAdminDashboard: React.FC = () => {
 
             <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
                 <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
-                <div className="bg-blue-900/50 border-l-4 border-blue-500 text-blue-300 p-4 mb-6 rounded-md" role="status">
-                    <p className="font-bold">Atualização do Sistema de E-mail</p>
-                    <p className="mt-1">
-                        O sistema de e-mail foi atualizado para <strong>Moosend</strong>. Todas as notificações e testes agora são enviados através da API da Moosend.
-                    </p>
+                <div className="mb-6">
+                   {renderSystemStatus()}
                 </div>
                 <div className="space-y-4">
                     {/* Teste Genérico */}

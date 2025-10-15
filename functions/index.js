@@ -1,5 +1,3 @@
-
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const axios = require("axios");
@@ -42,6 +40,40 @@ const sendMoosendEmail = async (recipientEmail, subject, htmlContent) => {
         });
     }
 };
+
+exports.getSystemStatus = functions
+    .region("southamerica-east1")
+    .https.onCall((data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+        }
+
+        const moosendConfig = functions.config().moosend;
+        const status = {
+            emailProvider: "Moosend",
+            configured: false,
+            message: "Configuração da API Moosend incompleta ou ausente.",
+            details: []
+        };
+
+        if (moosendConfig) {
+            if (!moosendConfig.key) status.details.push("A variável 'moosend.key' está faltando.");
+            if (!moosendConfig.sender_email) status.details.push("A variável 'moosend.sender_email' está faltando.");
+            if (!moosendConfig.sender_name) status.details.push("A variável 'moosend.sender_name' está faltando.");
+
+            if (status.details.length === 0) {
+                status.configured = true;
+                status.message = "API da Moosend configurada corretamente.";
+            } else {
+                status.message = "Configuração da Moosend incompleta. Verifique as seguintes variáveis de ambiente no Firebase: " + status.details.join(' ');
+            }
+        } else {
+             status.details.push("O grupo de configuração 'moosend' está ausente. Execute 'firebase functions:config:set moosend.key=...' para começar.");
+        }
+
+        return status;
+    });
+
 
 exports.sendTestEmail = functions
     .region("southamerica-east1")
