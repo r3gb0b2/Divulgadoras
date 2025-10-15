@@ -371,19 +371,51 @@ exports.askGemini = functions
                 model: 'gemini-2.5-flash',
                 contents: prompt,
             });
+
+            // Check for prompt feedback and blocking reasons first.
+            if (response.promptFeedback?.blockReason) {
+                const blockReason = response.promptFeedback.blockReason;
+                const safetyRatings = response.promptFeedback.safetyRatings;
+                const errorMessage = `Sua solicitação foi bloqueada por motivos de segurança: ${blockReason}.`;
+                
+                console.warn("Gemini API request was blocked.", { blockReason, safetyRatings });
+                
+                // Use 'invalid-argument' as the user's prompt was the cause.
+                throw new functions.https.HttpsError('invalid-argument', errorMessage, {
+                    blockReason,
+                    safetyRatings,
+                });
+            }
             
             const text = response.text;
             
-            if (!text) {
-                console.warn("Gemini API returned a response without text.", { response });
-                throw new functions.https.HttpsError('internal', 'A API retornou uma resposta vazia.');
+            if (text === undefined || text === null || text.trim() === '') {
+                 const finishReason = response.candidates?.[0]?.finishReason;
+                 console.warn("Gemini API returned a response with no text.", { finishReason, response });
+                 if (finishReason && finishReason !== 'STOP') {
+                     throw new functions.https.HttpsError('internal', `A API finalizou a geração por um motivo inesperado: ${finishReason}.`);
+                 }
             }
 
-            return { text: text };
+            return { text: text || '' };
+
         } catch (error) {
             console.error("Error calling Gemini API:", error);
-            const message = error.message || 'Ocorreu um erro ao se comunicar com a API Gemini.';
-            throw new functions.https.HttpsError('internal', message, {
+            // Make the error message more user-friendly for common issues.
+            let userMessage = 'Ocorreu um erro ao se comunicar com o assistente de IA.';
+            const originalMessage = error.message || '';
+
+            if (originalMessage.toLowerCase().includes('api key not valid')) {
+                userMessage = 'A chave da API Gemini configurada no servidor é inválida. Verifique suas credenciais no Firebase.';
+            } else if (originalMessage.includes('billing') || originalMessage.includes('project has been disabled')) {
+                userMessage = 'O projeto do Google Cloud associado não tem faturamento ativo ou foi desativado.';
+            } else if (error.code === 'invalid-argument') {
+                // This is our own error from the block reason check. Pass it through.
+                userMessage = originalMessage;
+            }
+            
+            // Re-throw with a structured error.
+            throw new functions.https.HttpsError('internal', userMessage, {
                 originalError: error.toString(),
             });
         }
