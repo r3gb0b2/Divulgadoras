@@ -113,7 +113,8 @@ export const getPromotersPage = async (options: {
   organizationId?: string;
   statesForScope?: string[] | null;
   status: PromoterStatus | 'all';
-  campaignName: string | 'all';
+  campaignsInScope: string[] | null;
+  selectedCampaign: string | 'all';
   filterOrgId: string | 'all';
   filterState: string | 'all';
   limitPerPage: number;
@@ -122,9 +123,8 @@ export const getPromotersPage = async (options: {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    // Sort by document ID to ensure consistent pagination without requiring complex composite indexes.
-    // User-facing sorting (e.g., by name) will be handled on the client-side.
-    let dataQuery = query(promotersRef, orderBy(documentId(), "asc"));
+    // Sort by creation date ascending (oldest first).
+    let dataQuery = query(promotersRef, orderBy("createdAt", "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
@@ -139,9 +139,37 @@ export const getPromotersPage = async (options: {
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
     }
-    if (options.campaignName !== 'all') {
-      filters.push(where("campaignName", "==", options.campaignName));
+
+    // Handle campaign permissions and filters
+    let finalCampaignFilter: string[] | null = options.campaignsInScope;
+
+    if (options.selectedCampaign !== 'all') {
+        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
+            finalCampaignFilter = [options.selectedCampaign];
+        } else { // Has restrictions, so intersection is needed
+            if (finalCampaignFilter.includes(options.selectedCampaign)) {
+                finalCampaignFilter = [options.selectedCampaign];
+            } else {
+                // User selected a campaign they can't see, so return nothing
+                return { promoters: [], lastVisible: null, totalCount: 0 };
+            }
+        }
     }
+
+    if (finalCampaignFilter) { // if it's an array (not null)
+        if (finalCampaignFilter.length === 0) {
+             return { promoters: [], lastVisible: null, totalCount: 0 };
+        }
+        // Firestore 'in' query has a limit of 30 items. 
+        // For now, we assume an admin won't be assigned to more than 30 specific campaigns.
+        if (finalCampaignFilter.length > 30) {
+            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
+            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
+        } else {
+            filters.push(where("campaignName", "in", finalCampaignFilter));
+        }
+    }
+
     if (options.filterOrgId !== 'all') {
       filters.push(where("organizationId", "==", options.filterOrgId));
     }
