@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
+import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -151,9 +152,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
     const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
         if (!stateAbbr || (!adminData.organizationId && !isSuperAdmin)) return;
-        
-        // Superadmin needs a selected org to create a campaign, this UI doesn't support that.
-        // A better UX would be to select an org, but for now we restrict to org admins.
+
         if (isSuperAdmin && !adminData.organizationId) {
              setError("Super Admins devem gerenciar campanhas no painel da organização.");
              return;
@@ -164,11 +163,22 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 const { id, ...dataToUpdate } = campaignData;
                 await updateCampaign(id, dataToUpdate);
             } else {
+                const newCampaignName = (campaignData as { name: string }).name;
                 await addCampaign({
                     ...(campaignData as Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'>),
                     stateAbbr,
                     organizationId: adminData.organizationId!,
                 });
+
+                // Auto-assign the new campaign to the creating admin if they have restrictions for this state.
+                const adminRestrictions = adminData.assignedCampaigns?.[stateAbbr];
+                if (adminRestrictions !== undefined) { // `undefined` means all access, an array (even empty) means restricted access
+                    const newAssignedCampaigns = { ...(adminData.assignedCampaigns || {}) };
+                    const updatedCampaignsForState = [...(newAssignedCampaigns[stateAbbr] || []), newCampaignName];
+                    newAssignedCampaigns[stateAbbr] = updatedCampaignsForState;
+                    
+                    await setAdminUserData(adminData.uid, { assignedCampaigns: newAssignedCampaigns });
+                }
             }
             setIsModalOpen(false);
             fetchData();
