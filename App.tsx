@@ -11,6 +11,7 @@ import { AdminAuthProvider } from './contexts/AdminAuthContext';
 import { LogoIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
+import GuestListCheck from './pages/GuestListCheck'; // Import new page
 
 const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ const App: React.FC = () => {
               <div className='space-x-4'>
                 <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
                 <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
+                <Link to="/lista" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Confirmar Lista</Link>
                 <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
                 <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Login Organizador</Link>
               </div>
@@ -39,6 +41,7 @@ const App: React.FC = () => {
               <Route path="/admin/*" element={<AdminAuth />} />
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/posts" element={<PostCheck />} />
+              <Route path="/lista" element={<GuestListCheck />} />
               <Route path="/planos" element={<PricingPage />} />
               <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
             </Routes>

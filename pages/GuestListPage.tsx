@@ -1,0 +1,124 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getGuestListForCampaign } from '../services/guestListService';
+import { getCampaigns } from '../services/settingsService';
+import { GuestListConfirmation, Campaign } from '../types';
+import { ArrowLeftIcon } from '../components/Icons';
+
+const GuestListPage: React.FC = () => {
+    const { campaignId } = useParams<{ campaignId: string }>();
+    const navigate = useNavigate();
+    const [confirmations, setConfirmations] = useState<GuestListConfirmation[]>([]);
+    const [campaign, setCampaign] = useState<Campaign | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchData = useCallback(async () => {
+        if (!campaignId) {
+            setError("ID do evento não fornecido.");
+            setIsLoading(false);
+            return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+        try {
+            const confirmationData = await getGuestListForCampaign(campaignId);
+            setConfirmations(confirmationData);
+
+            // Fetch campaign details to show its name (assuming we might not have it)
+            // This is a bit inefficient but makes the component self-contained.
+            if (confirmationData.length > 0) {
+                 const firstConfirm = confirmationData[0];
+                 const campaigns = await getCampaigns(firstConfirm.campaignName.split(' - ')[1], firstConfirm.organizationId);
+                 const camp = campaigns.find(c => c.id === campaignId);
+                 setCampaign(camp || null);
+            }
+
+        } catch (err: any) {
+            setError(err.message || 'Falha ao carregar a lista de convidados.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [campaignId]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const totalConfirmed = confirmations.reduce((acc, curr) => {
+        let count = 0;
+        if (curr.isPromoterAttending) count++;
+        count += curr.guestNames.filter(name => name.trim() !== '').length;
+        return acc + count;
+    }, 0);
+    
+    const renderContent = () => {
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center py-10">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+            );
+        }
+
+        if (error) {
+            return <p className="text-red-400 text-center">{error}</p>;
+        }
+        
+        if (confirmations.length === 0) {
+            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação na lista para este evento ainda.</p>;
+        }
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-700">
+                    <thead className="bg-gray-700/50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Divulgadora</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Convidados</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700">
+                        {confirmations.map(conf => (
+                            <tr key={conf.id} className="hover:bg-gray-700/40">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-white">{conf.promoterName}</div>
+                                    <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
+                                    {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    const campaignName = campaign?.name || (confirmations.length > 0 ? confirmations[0].campaignName : 'Evento');
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar</span>
+                    </button>
+                    <h1 className="text-3xl font-bold mt-1">Lista de Convidados: {campaignName}</h1>
+                </div>
+                <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
+                    <div className="text-3xl">{totalConfirmed}</div>
+                    <div className="text-sm uppercase">Confirmados</div>
+                </div>
+            </div>
+            <div className="bg-secondary shadow-lg rounded-lg p-6">
+                {renderContent()}
+            </div>
+        </div>
+    );
+};
+
+export default GuestListPage;

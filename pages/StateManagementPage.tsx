@@ -12,7 +12,15 @@ const CampaignModal: React.FC<{
     onSave: (campaign: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => void;
     campaign: Omit<Campaign, 'id' | 'stateAbbr' | 'organizationId'> | Campaign | null;
 }> = ({ isOpen, onClose, onSave, campaign }) => {
-    const [formData, setFormData] = useState({ name: '', description: '', whatsappLink: '', rules: '', isActive: true });
+    const [formData, setFormData] = useState({ 
+        name: '', 
+        description: '', 
+        whatsappLink: '', 
+        rules: '', 
+        isActive: true,
+        isGuestListActive: false,
+        guestAllowance: 0,
+    });
 
     useEffect(() => {
         if (campaign) {
@@ -22,9 +30,11 @@ const CampaignModal: React.FC<{
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
+                isGuestListActive: campaign.isGuestListActive || false,
+                guestAllowance: campaign.guestAllowance || 0,
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0 });
         }
     }, [campaign, isOpen]);
     
@@ -46,6 +56,20 @@ const CampaignModal: React.FC<{
                     <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
                     <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
+                    
+                    <div className="border-t border-gray-700 pt-4 space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
+                         <label className="flex items-center space-x-2 text-white">
+                             <input type="checkbox" checked={formData.isGuestListActive} onChange={e => setFormData({...formData, isGuestListActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                             <span>Ativar lista de presença para este evento</span>
+                         </label>
+                         {formData.isGuestListActive && (
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300">Nº de convidados por divulgadora</label>
+                                 <input type="number" min="0" value={formData.guestAllowance} onChange={e => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
+                             </div>
+                         )}
+                    </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
@@ -201,12 +225,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                     <div className="space-y-3">
                         {campaigns.map(c => (
                             <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                                <div className="flex-grow">
+                                <div>
                                     <p className="font-semibold text-white">{c.name} <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span></p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
                                 </div>
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
+                                        {c.isGuestListActive && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
                                         <button 
                                             onClick={() => handleCopyLink(c)} 
                                             className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"

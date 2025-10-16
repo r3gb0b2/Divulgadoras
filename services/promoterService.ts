@@ -184,6 +184,28 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
     }
 };
 
+export const getApprovedEventsForPromoter = async (email: string): Promise<Promoter[]> => {
+    try {
+        const q = query(
+            collection(firestore, "promoters"),
+            where("email", "==", email.toLowerCase().trim()),
+            where("status", "==", "approved")
+        );
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) return [];
+
+        const promoters: Promoter[] = [];
+        querySnapshot.forEach((doc) => {
+            promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
+        });
+
+        return promoters;
+    } catch (error) {
+        console.error("Error getting approved events for promoter: ", error);
+        throw new Error("Não foi possível buscar os eventos aprovados.");
+    }
+};
+
 export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
   try {
     const q = query(

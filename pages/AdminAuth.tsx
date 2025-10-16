@@ -21,6 +21,7 @@ import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
 import CreatePost from './CreatePost';
 import PostDetails from './PostDetails';
+import GuestListPage from './GuestListPage'; // Import new page
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -219,6 +220,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
                     <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
+                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -234,6 +236,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
                     <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
+                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                 </>
             )}
             

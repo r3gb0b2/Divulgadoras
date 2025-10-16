@@ -51,6 +51,9 @@ export interface Campaign {
   rules: string;
   stateAbbr: string;
   organizationId: string;
+  // Guest List Feature
+  isGuestListActive?: boolean;
+  guestAllowance?: number;
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer';
@@ -141,4 +144,17 @@ export interface PostAssignment {
   promoterName: string;
   status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
+}
+
+export interface GuestListConfirmation {
+    id: string;
+    organizationId: string;
+    campaignId: string;
+    campaignName: string;
+    promoterId: string;
+    promoterName: string;
+    promoterEmail: string;
+    isPromoterAttending: boolean;
+    guestNames: string[];
+    confirmedAt: Timestamp | FieldValue;
 }
