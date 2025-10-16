@@ -77,28 +77,33 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        let campaignsToFilter: Campaign[];
+        let q;
+        const campaignsCollection = collection(firestore, "campaigns");
 
         if (organizationId) {
-            // Fetch all campaigns for a specific organization (more efficient query)
-            const q = query(collection(firestore, "campaigns"), where("organizationId", "==", organizationId));
-            const querySnapshot = await getDocs(q);
-            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-            campaignsToFilter = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
+            // This is a composite query. It might require a manual index in Firestore.
+            // If it fails, the error log in the browser console will provide a direct link to create it.
+            q = query(
+                campaignsCollection,
+                where("organizationId", "==", organizationId),
+                where("stateAbbr", "==", stateAbbr)
+            );
         } else {
-            // Superadmin case: fetch all campaigns from all organizations
-            const querySnapshot = await getDocs(collection(firestore, "campaigns"));
-            // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-            campaignsToFilter = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
+            // Superadmin case, fetching all campaigns for a specific state across all orgs
+            q = query(campaignsCollection, where("stateAbbr", "==", stateAbbr));
         }
 
-        // Now, filter the results by the selected state on the client side
-        const result = campaignsToFilter.filter(c => c.stateAbbr === stateAbbr);
+        const querySnapshot = await getDocs(q);
+        const campaigns = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
         
-        return result.sort((a, b) => a.name.localeCompare(b.name));
+        return campaigns.sort((a, b) => a.name.localeCompare(b.name));
 
     } catch (error) {
         console.error("Error getting campaigns: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing. Please create the required composite index in your Firebase console. The error message in the browser console contains a direct link to create it.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Contate o suporte técnico.");
+        }
         throw new Error("Não foi possível buscar os eventos/gêneros.");
     }
 };
