@@ -33,6 +33,12 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, ...rest } = promoterData;
 
+    const allCampaigns = [];
+    if (promoterData.campaignName) {
+        allCampaigns.push(promoterData.campaignName);
+    }
+    allCampaigns.push(`org_${promoterData.organizationId}`);
+
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
@@ -40,6 +46,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
+      allCampaigns,
     };
 
     await addDoc(collection(firestore, 'promoters'), newPromoter);
@@ -118,30 +125,39 @@ export const getPromotersPage = async (options: {
   filterState: string | 'all';
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
+  campaignsInScope?: string[] | null;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    // Sort by document ID to ensure consistent pagination without requiring complex composite indexes.
-    // User-facing sorting (e.g., by name) will be handled on the client-side.
     let dataQuery = query(promotersRef, orderBy(documentId(), "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
     
-    if (options.organizationId) {
-      filters.push(where("organizationId", "==", options.organizationId));
-    }
-    if (options.statesForScope && options.statesForScope.length > 0) {
-      filters.push(where("state", "in", options.statesForScope));
+    if (options.campaignName !== 'all') {
+        filters.push(where("allCampaigns", "array-contains", options.campaignName));
+    } else if (options.campaignsInScope && options.campaignsInScope.length > 0) {
+        if (options.campaignsInScope.length > 30) {
+            if (options.organizationId) {
+                filters.push(where("organizationId", "==", options.organizationId));
+            }
+        } else {
+            filters.push(where("allCampaigns", "array-contains-any", options.campaignsInScope));
+        }
+    } else {
+      if (options.organizationId) {
+        filters.push(where("organizationId", "==", options.organizationId));
+      }
+      if (options.statesForScope && options.statesForScope.length > 0) {
+        filters.push(where("state", "in", options.statesForScope));
+      }
     }
 
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
     }
-    if (options.campaignName !== 'all') {
-      filters.push(where("campaignName", "==", options.campaignName));
-    }
+    
     if (options.filterOrgId !== 'all') {
       filters.push(where("organizationId", "==", options.filterOrgId));
     }

@@ -112,12 +112,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     setAllOrganizations(orgsData.sort((a, b) => a.name.localeCompare(b.name)));
                     setAllCampaigns(campaignsData);
                 } else if (adminData.organizationId) {
-                    const [reasonsData, orgData] = await Promise.all([
+                    const [reasonsData, orgData, allCampaignsData] = await Promise.all([
                         getRejectionReasons(adminData.organizationId),
                         getOrganization(adminData.organizationId),
+                        getAllCampaigns(),
                     ]);
                     setRejectionReasons(reasonsData);
                     setOrganization(orgData);
+                    setAllCampaigns(allCampaignsData);
                 }
             } catch (err: any) {
                 setError(err.message || 'Não foi possível carregar dados de suporte.');
@@ -129,15 +131,47 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const getStatesForScope = useCallback(() => {
         let statesForScope: string[] | null = null;
         if (!isSuperAdmin) {
-            // Start with org-level states
             statesForScope = organization?.assignedStates || null;
-            // Restrict to admin-specific states if they exist
             if (adminData.assignedStates && adminData.assignedStates.length > 0) {
                 statesForScope = adminData.assignedStates;
             }
         }
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
+
+    const campaignsInScope = useMemo(() => {
+        if (!adminData) return null;
+        if (isSuperAdmin) {
+            return null; 
+        }
+
+        const scopedItems = new Set<string>();
+        const ownOrgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationId);
+        
+        ownOrgCampaigns.forEach(campaign => {
+            const hasStateAccess = !adminData.assignedStates || adminData.assignedStates.length === 0 || adminData.assignedStates.includes(campaign.stateAbbr);
+            if (hasStateAccess) {
+                const restrictedForState = adminData.assignedCampaigns?.[campaign.stateAbbr];
+                const hasCampaignAccess = !restrictedForState || restrictedForState.length === 0 || restrictedForState.includes(campaign.name);
+                if (hasCampaignAccess) {
+                    scopedItems.add(campaign.name);
+                }
+            }
+        });
+        
+        allCampaigns.forEach(campaign => {
+            if (campaign.associatedAdmins?.includes(adminData.uid)) {
+                scopedItems.add(campaign.name);
+            }
+        });
+
+        if (ownOrgCampaigns.length === scopedItems.size) {
+            scopedItems.add(`org_${adminData.organizationId}`);
+        }
+
+        return Array.from(scopedItems);
+
+    }, [adminData, allCampaigns, isSuperAdmin]);
 
     const fetchStats = useCallback(async () => {
         const orgId = isSuperAdmin ? undefined : adminData.organizationId;
@@ -152,52 +186,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const newStats = await getPromoterStats({ organizationId: orgId, statesForScope });
             setStats(newStats);
         } catch (err: any) {
-            // Avoid overwriting a more specific error from the main fetch
             if (!error) setError(err.message);
         }
     }, [adminData, organization, isSuperAdmin, getStatesForScope, error]);
 
 
-    // Fetch stats
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
 
-    // Fetch paginated promoters
     useEffect(() => {
         const fetchPromoterPage = async () => {
             setIsLoading(true);
             setError(null);
-            
-            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
-            if (!isSuperAdmin && !orgId) {
-                 setError("Administrador não está vinculado a uma organização.");
-                 setIsLoading(false);
-                 return;
-            }
-
-            const statesForScope = getStatesForScope();
-            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
-                setPromotersOnPage([]);
-                setTotalPromotersCount(0);
-                setIsLoading(false);
-                return;
-            }
 
             try {
                 const result = await getPromotersPage({
-                    organizationId: orgId,
-                    statesForScope,
+                    organizationId: isSuperAdmin ? undefined : adminData.organizationId,
+                    statesForScope: getStatesForScope(),
                     status: filter,
                     campaignName: selectedCampaign,
                     filterOrgId: selectedOrg,
                     filterState: selectedState,
                     limitPerPage: PROMOTERS_PER_PAGE,
-                    cursor: pageCursors[currentPage - 1]
+                    cursor: pageCursors[currentPage - 1],
+                    campaignsInScope: campaignsInScope,
                 });
                 
-                // Sort promoters by name on the client-side as the query is now ordered by document ID for performance.
-                const sortedPromoters = result.promoters.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+                const sortedPromoters = result.promoters.sort((a, b) => (a.createdAt as Timestamp).toMillis() - (b.createdAt as Timestamp).toMillis());
                 setPromotersOnPage(sortedPromoters);
 
                 setTotalPromotersCount(result.totalCount);
@@ -213,8 +229,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
         };
 
-        fetchPromoterPage();
-    }, [adminData, organization, isSuperAdmin, currentPage, filter, selectedOrg, selectedState, selectedCampaign, pageCursors, getStatesForScope]);
+        if ((isSuperAdmin && allCampaigns.length > 0) || (!isSuperAdmin && campaignsInScope)) {
+            fetchPromoterPage();
+        }
+    }, [adminData, isSuperAdmin, currentPage, filter, selectedOrg, selectedState, selectedCampaign, pageCursors, getStatesForScope, campaignsInScope, allCampaigns]);
 
 
     // Reset page number whenever filters change
@@ -236,7 +254,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
             const updatedData = { ...data };
 
-            // Only add audit fields if status is actually changing
             if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
@@ -247,18 +264,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             alert("Divulgadora atualizada com sucesso.");
 
-            // Optimistic UI update: Remove from list if it no longer matches the filter
             if (data.status && filter !== 'all' && data.status !== filter) {
                 setPromotersOnPage(prev => prev.filter(p => p.id !== id));
                 setTotalPromotersCount(prev => prev > 0 ? prev - 1 : 0);
             } else {
-                // Otherwise, update the promoter's data in the list
                 setPromotersOnPage(prev => prev.map(p => 
                     p.id === id ? { ...p, ...data } as Promoter : p
                 ));
             }
             
-            // Refetch dashboard stats in the background
             fetchStats();
 
         } catch (error) {
@@ -381,21 +395,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const displayPromoters = useMemo(() => {
-        // Apply client-side filters (search query, fine-grained campaign permissions)
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         
         return promotersOnPage.filter(p => {
-            // Fine-grained campaign filter for regular admins
-            if (!isSuperAdmin && adminData.assignedCampaigns) {
-                const campaignsForState = adminData.assignedCampaigns?.[p.state];
-                if (campaignsForState && campaignsForState.length > 0) {
-                    if (!p.campaignName || !campaignsForState.includes(p.campaignName)) {
-                        return false;
-                    }
-                }
-            }
-
-            // Text search filter
             if (lowercasedQuery !== '') {
                 return p.name.toLowerCase().includes(lowercasedQuery) ||
                     p.email.toLowerCase().includes(lowercasedQuery) ||
@@ -405,7 +407,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             return true;
         });
-    }, [promotersOnPage, searchQuery, isSuperAdmin, adminData.assignedCampaigns]);
+    }, [promotersOnPage, searchQuery]);
     
     // Pagination Calculations
     const pageCount = Math.ceil(totalPromotersCount / PROMOTERS_PER_PAGE);

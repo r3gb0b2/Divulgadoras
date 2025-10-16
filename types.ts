@@ -23,6 +23,7 @@ export interface Promoter {
   actionTakenByEmail?: string;
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
+  allCampaigns?: string[];
 }
 
 export interface PromoterApplicationData {
@@ -56,6 +57,7 @@ export interface Campaign {
   // Guest List Feature
   isGuestListActive?: boolean;
   guestAllowance?: number;
+  associatedAdmins?: string[];
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer';
