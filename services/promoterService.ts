@@ -122,7 +122,7 @@ export const getPromotersPage = async (options: {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    let dataQuery = query(promotersRef, orderBy("createdAt", "desc"));
+    let dataQuery = query(promotersRef, orderBy("name", "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
