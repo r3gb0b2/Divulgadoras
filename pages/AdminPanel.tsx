@@ -1,3 +1,7 @@
+
+
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
@@ -54,10 +58,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
-    
-    // State for bulk selection
-    const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
-    const [isBulkNotifying, setIsBulkNotifying] = useState(false);
 
     // State for super admin filters
     const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
@@ -297,60 +297,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         });
     }, [promoters, filter, searchQuery, isSuperAdmin, selectedOrg, selectedState, selectedCampaign]);
     
-    // --- Bulk Selection Logic ---
-    const visibleApprovedIds = useMemo(() => 
-        filteredPromoters.filter(p => p.status === 'approved').map(p => p.id),
-        [filteredPromoters]
-    );
-
-    const areAllVisibleApprovedSelected = useMemo(() => 
-        visibleApprovedIds.length > 0 && visibleApprovedIds.every(id => selectedPromoterIds.has(id)),
-        [visibleApprovedIds, selectedPromoterIds]
-    );
-
-    const handleToggleSelectAll = () => {
-        const newSelectedIds = new Set(selectedPromoterIds);
-        if (areAllVisibleApprovedSelected) {
-            visibleApprovedIds.forEach(id => newSelectedIds.delete(id));
-        } else {
-            visibleApprovedIds.forEach(id => newSelectedIds.add(id));
-        }
-        setSelectedPromoterIds(newSelectedIds);
-    };
-
-    const handleTogglePromoterSelection = (id: string) => {
-        const newSelectedIds = new Set(selectedPromoterIds);
-        if (newSelectedIds.has(id)) {
-            newSelectedIds.delete(id);
-        } else {
-            newSelectedIds.add(id);
-        }
-        setSelectedPromoterIds(newSelectedIds);
-    };
-    
-    const handleSendBulkNotification = async () => {
-        const count = selectedPromoterIds.size;
-        if (count === 0 || isBulkNotifying) return;
-
-        if (window.confirm(`Tem certeza que deseja enviar o e-mail de aprovação para ${count} divulgadora(s) selecionada(s)?`)) {
-            setIsBulkNotifying(true);
-            try {
-                const batchNotifyPromoters = httpsCallable(functions, 'batchNotifyPromoters');
-                const result = await batchNotifyPromoters({ promoterIds: Array.from(selectedPromoterIds) });
-                const data = result.data as { success: boolean, message: string };
-                alert(data.message || 'Notificações enviadas com sucesso.');
-                setSelectedPromoterIds(new Set()); // Clear selection on success
-            } catch (error: any) {
-                console.error("Failed to send bulk notification:", error);
-                const detailedError = error?.details?.message || error.message || 'Ocorreu um erro desconhecido.';
-                alert(`Falha ao enviar notificações: ${detailedError}`);
-            } finally {
-                setIsBulkNotifying(false);
-            }
-        }
-    };
-
-
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
@@ -369,18 +315,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return (
             <div className="space-y-4">
                 {filteredPromoters.map(promoter => (
-                    <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm relative">
-                        {promoter.status === 'approved' && canManage && (
-                           <div className="absolute top-4 right-4 z-10">
-                               <input
-                                   type="checkbox"
-                                   className="h-5 w-5 rounded bg-gray-700 border-gray-500 text-primary focus:ring-primary cursor-pointer"
-                                   checked={selectedPromoterIds.has(promoter.id)}
-                                   onChange={() => handleTogglePromoterSelection(promoter.id)}
-                                   aria-label={`Selecionar ${promoter.name}`}
-                                />
-                           </div>
-                        )}
+                    <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
                             <div>
                                 <p className="font-bold text-lg text-white">{promoter.name}</p>
@@ -483,87 +418,59 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                            {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
-                                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
-                                </button>
-                            ))}
-                        </div>
-                        
-                        {isSuperAdmin && (
-                            <div className="flex flex-wrap gap-2 flex-grow">
-                                <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                    <option value="all">Todas Organizações</option>
-                                    {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                                </select>
-                                <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                    <option value="all">Todos Estados</option>
-                                    {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
-                                </select>
-                                <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                    <option value="all">Todos Eventos</option>
-                                    {[...new Set(allCampaigns.map(c => c.name))].sort().map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
-                        <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
-                            <input 
-                                type="text"
-                                placeholder="Buscar por nome, e-mail, telefone, evento..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                            />
-                        </div>
-                        {canManage && (
-                            <button
-                                onClick={() => {
-                                    if (organizationIdForReasons) {
-                                        setIsReasonsModalOpen(true);
-                                    }
-                                }}
-                                disabled={!organizationIdForReasons}
-                                className="text-sm text-primary hover:underline flex-shrink-0 disabled:text-gray-500 disabled:cursor-not-allowed disabled:no-underline"
-                                title={isSuperAdmin && !organizationIdForReasons ? "Selecione uma organização para gerenciar os motivos" : "Gerenciar Motivos de Rejeição"}
-                            >
-                                Gerenciar Motivos
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                        {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
+                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
                             </button>
-                        )}
+                        ))}
                     </div>
-
-                    {canManage && visibleApprovedIds.length > 0 && (
-                        <div className="bg-dark/70 p-3 rounded-lg flex flex-wrap items-center justify-between gap-4 border-t-2 border-primary/50">
-                            <div className="flex items-center gap-3">
-                                <input
-                                    id="select-all"
-                                    type="checkbox"
-                                    className="h-5 w-5 rounded bg-gray-700 border-gray-500 text-primary focus:ring-primary cursor-pointer"
-                                    checked={areAllVisibleApprovedSelected}
-                                    onChange={handleToggleSelectAll}
-                                />
-                                <label htmlFor="select-all" className="text-sm font-medium text-gray-200 cursor-pointer">
-                                    Selecionar todas as {visibleApprovedIds.length} aprovadas visíveis
-                                </label>
-                            </div>
-                            <button
-                                onClick={handleSendBulkNotification}
-                                disabled={selectedPromoterIds.size === 0 || isBulkNotifying}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-wait"
-                            >
-                                {isBulkNotifying ? 'Enviando...' : `Notificar ${selectedPromoterIds.size} Selecionada(s)`}
-                            </button>
+                    
+                    {isSuperAdmin && (
+                        <div className="flex flex-wrap gap-2 flex-grow">
+                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todas Organizações</option>
+                                {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                            </select>
+                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todos Estados</option>
+                                {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
+                            </select>
+                             <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                                <option value="all">Todos Eventos</option>
+                                {[...new Set(allCampaigns.map(c => c.name))].sort().map(name => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
                         </div>
                     )}
+
+                     <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
+                        <input 
+                            type="text"
+                            placeholder="Buscar por nome, e-mail, telefone, evento..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                        />
+                    </div>
+                     {canManage && (
+                        <button
+                            onClick={() => {
+                                if (organizationIdForReasons) {
+                                    setIsReasonsModalOpen(true);
+                                }
+                            }}
+                            disabled={!organizationIdForReasons}
+                            className="text-sm text-primary hover:underline flex-shrink-0 disabled:text-gray-500 disabled:cursor-not-allowed disabled:no-underline"
+                            title={isSuperAdmin && !organizationIdForReasons ? "Selecione uma organização para gerenciar os motivos" : "Gerenciar Motivos de Rejeição"}
+                        >
+                            Gerenciar Motivos
+                        </button>
+                    )}
                 </div>
-                <div className="mt-4">
-                  {renderContent()}
-                </div>
+                {renderContent()}
             </div>
 
             {/* Modals */}

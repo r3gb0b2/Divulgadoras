@@ -77,6 +77,7 @@ const PromoterForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -120,6 +121,11 @@ const PromoterForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
+    if (!agreedToTerms) {
+        setSubmitError("Você deve concordar com os Termos de Serviço e a Política de Privacidade para continuar.");
+        return;
+    }
+
     if (!organizationId) {
         setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
         return;
@@ -145,6 +151,7 @@ const PromoterForm: React.FC = () => {
       setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
+      setAgreedToTerms(false);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -224,9 +231,36 @@ const PromoterForm: React.FC = () => {
                     </div>
                 </div>
 
+                <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                        <input
+                            id="terms"
+                            name="terms"
+                            type="checkbox"
+                            checked={agreedToTerms}
+                            onChange={(e) => setAgreedToTerms(e.target.checked)}
+                            className="focus:ring-primary h-4 w-4 text-primary border-gray-600 rounded bg-gray-700"
+                            aria-describedby="terms-description"
+                        />
+                    </div>
+                    <div className="ml-3 text-sm">
+                        <label htmlFor="terms" className="text-gray-300">
+                            Eu li e concordo com os{' '}
+                            <a href="#" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+                                Termos de Serviço
+                            </a>{' '}
+                            e a{' '}
+                            <a href="#" target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+                                Política de Privacidade
+                            </a>
+                            .
+                        </label>
+                    </div>
+                </div>
+
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
+                    disabled={isSubmitting || isProcessingPhoto || !agreedToTerms}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}
