@@ -148,7 +148,9 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
                         <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
                         {promoter.campaignName && <p className="text-xs text-primary">{promoter.campaignName}</p>}
                     </div>
-                    <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">{stateMap[promoter.state.toUpperCase()] || promoter.state}</div>
+                    <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">
+                        {promoter.state ? stateMap[promoter.state.toUpperCase()] || promoter.state : 'N/A'}
+                    </div>
                 </div>
 
                 <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
