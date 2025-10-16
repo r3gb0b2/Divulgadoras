@@ -22,12 +22,12 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         email: promoter.email,
         whatsapp: promoter.whatsapp,
         instagram: promoter.instagram,
-        tiktok: promoter.tiktok,
+        tiktok: promoter.tiktok || '',
         dateOfBirth: promoter.dateOfBirth,
         status: promoter.status,
-        rejectionReason: promoter.rejectionReason,
-        hasJoinedGroup: promoter.hasJoinedGroup,
-        observation: promoter.observation,
+        rejectionReason: promoter.rejectionReason || '',
+        hasJoinedGroup: promoter.hasJoinedGroup || false,
+        observation: promoter.observation || '',
       });
     }
   }, [promoter]);
