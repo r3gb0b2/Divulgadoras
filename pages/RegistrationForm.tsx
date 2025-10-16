@@ -119,7 +119,7 @@ const PromoterForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
+    
     if (!organizationId) {
         setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
         return;
