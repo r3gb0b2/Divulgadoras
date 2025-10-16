@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
@@ -26,41 +26,42 @@ const SuperAdminDashboard: React.FC = () => {
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [isSyncError, setIsSyncError] = useState(false);
 
-    useEffect(() => {
-        const checkSystemStatus = async () => {
-            setIsCheckingStatus(true);
-            try {
-                const getStatus = httpsCallable(functions, 'getSystemStatus');
-                const result = await getStatus();
-                const statusData = result.data as SystemStatus;
-                setSystemStatus(statusData);
+    const checkSystemStatus = useCallback(async () => {
+        setIsCheckingStatus(true);
+        try {
+            const getStatus = httpsCallable(functions, 'getSystemStatus');
+            const result = await getStatus();
+            const statusData = result.data as SystemStatus;
+            setSystemStatus(statusData);
 
-                const backendVersion = statusData?.functionVersion?.split('-')[0] || '';
-                const frontendVersionMajor = FRONTEND_VERSION.split('.')[0];
-                const backendVersionMajor = backendVersion.replace('v','').split('.')[0];
-                
-                if (statusData?.emailProvider === "Erro no Servidor" || (backendVersion && frontendVersionMajor !== backendVersionMajor)) {
-                    setIsSyncError(true);
-                } else {
-                    setIsSyncError(false);
-                }
-
-            } catch (error) {
-                console.error("Failed to call getSystemStatus function:", error);
-                setSystemStatus({
-                    emailProvider: 'Erro Crítico',
-                    configured: false,
-                    message: 'Falha ao comunicar com a função do servidor. A função pode não existir ou estar com erro grave.',
-                    details: [String(error)]
-                });
+            const backendVersion = statusData?.functionVersion?.split('-')[0] || '';
+            const frontendVersionMajor = FRONTEND_VERSION.split('.')[0];
+            const backendVersionMajor = backendVersion.replace('v','').split('.')[0];
+            
+            if (statusData?.emailProvider === "Erro no Servidor" || (backendVersion && frontendVersionMajor !== backendVersionMajor)) {
                 setIsSyncError(true);
-            } finally {
-                setIsCheckingStatus(false);
+            } else {
+                setIsSyncError(false);
             }
-        };
 
-        checkSystemStatus();
+        } catch (error) {
+            console.error("Failed to call getSystemStatus function:", error);
+            setSystemStatus({
+                emailProvider: 'Erro Crítico',
+                configured: false,
+                message: 'Falha ao comunicar com a função do servidor. A função pode não existir ou estar com erro grave.',
+                details: [String(error)]
+            });
+            setIsSyncError(true);
+        } finally {
+            setIsCheckingStatus(false);
+        }
     }, []);
+
+
+    useEffect(() => {
+        checkSystemStatus();
+    }, [checkSystemStatus]);
 
 
     const handleLogout = async () => {
@@ -145,13 +146,23 @@ const SuperAdminDashboard: React.FC = () => {
     
         if (systemStatus.configured) {
              return (
-                 <div className="bg-green-900/50 border border-green-700 text-green-300 p-4 rounded-lg">
-                    <h3 className="font-bold flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        Sistema de E-mail Operacional
-                    </h3>
-                    <p className="mt-2 text-sm">{systemStatus.message}</p>
-                    <p className="text-sm">Frontend: <strong className="font-mono">v{FRONTEND_VERSION}</strong> | Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
+                 <div className="bg-green-900/50 border border-green-700 text-green-300 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div>
+                        <h3 className="font-bold flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Sistema de E-mail Operacional
+                        </h3>
+                        <p className="mt-2 text-sm">{systemStatus.message}</p>
+                        <p className="text-sm">Frontend: <strong className="font-mono">v{FRONTEND_VERSION}</strong> | Servidor: <strong className="font-mono">{systemStatus.functionVersion || 'Indisponível'}</strong></p>
+                    </div>
+                    <button 
+                        onClick={() => handleSendTestEmail('generic')}
+                        disabled={testStatuses.generic.type === 'loading'}
+                        className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm"
+                    >
+                        <EnvelopeIcon className="w-5 h-5"/>
+                        {testStatuses.generic.type === 'loading' ? 'Enviando...' : 'Testar Conexão'}
+                    </button>
                  </div>
              );
         }
@@ -186,9 +197,16 @@ const SuperAdminDashboard: React.FC = () => {
                             </code>
                         </pre>
                     </div>
-                    <div>
-                         <strong>Passo 3: Verifique novamente</strong>
-                         <p className="text-gray-300">Após o deploy, atualize esta página. Esta mensagem deve ser substituída por uma de sucesso.</p>
+                    <div className="border-t border-yellow-700/50 pt-4">
+                         <strong>Passo 3: Verifique a configuração</strong>
+                         <p className="text-gray-300">Após o deploy ser concluído, clique no botão abaixo para verificar a configuração sem precisar recarregar a página.</p>
+                          <button 
+                            onClick={checkSystemStatus}
+                            disabled={isCheckingStatus}
+                            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 font-semibold disabled:opacity-50 text-sm"
+                        >
+                            {isCheckingStatus ? 'Verificando...' : 'Verificar Novamente'}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -286,40 +304,23 @@ const SuperAdminDashboard: React.FC = () => {
             </div>
 
             <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
-                <h2 className="text-2xl font-bold mb-4 text-white">Ferramentas de Diagnóstico</h2>
+                <h2 className="text-2xl font-bold mb-4 text-white">Diagnóstico e Ações</h2>
                 <div className="mb-6">
                    {renderConfigurationGuide()}
+                   {testStatuses.generic.type !== 'idle' && testStatuses.generic.type !== 'loading' && (
+                        <div className={`p-3 mt-4 rounded-md text-sm ${testStatuses.generic.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                            <p><span className="font-bold">{testStatuses.generic.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testStatuses.generic.message}</p>
+                        </div>
+                    )}
                 </div>
                 
                 {isSyncError ? (
                      <div className="text-center p-6 bg-gray-700/50 rounded-lg">
-                        <p className="font-bold text-yellow-400">Ferramentas de diagnóstico desativadas.</p>
+                        <p className="font-bold text-yellow-400">Ferramentas de teste de e-mail desativadas.</p>
                         <p className="text-gray-400 text-sm">Resolva o problema de sincronização para habilitá-las.</p>
                     </div>
                 ) : systemStatus?.configured ? (
                     <div className="space-y-4 border-t border-gray-700 pt-6 mt-6">
-                        <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                            <div>
-                                <h3 className="font-semibold text-gray-100">Teste de Conexão Brevo</h3>
-                                <p className="text-sm text-gray-400 mt-1">
-                                    Envia um e-mail simples para <span className="font-medium text-gray-300">r3gb0b@gmail.com</span> para verificar a conexão com a API da <strong>Brevo</strong>.
-                                </p>
-                            </div>
-                            <button 
-                                onClick={() => handleSendTestEmail('generic')}
-                                disabled={testStatuses.generic.type === 'loading'}
-                                className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 font-semibold disabled:opacity-50 text-sm"
-                            >
-                            <EnvelopeIcon className="w-5 h-5"/>
-                            {testStatuses.generic.type === 'loading' ? 'Enviando...' : 'Testar Conexão'}
-                            </button>
-                        </div>
-                        {testStatuses.generic.type !== 'idle' && testStatuses.generic.type !== 'loading' && (
-                            <div className={`p-3 rounded-md text-sm ${testStatuses.generic.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                                <p><span className="font-bold">{testStatuses.generic.type === 'success' ? 'Sucesso:' : 'Erro:'}</span> {testStatuses.generic.message}</p>
-                            </div>
-                        )}
-
                         <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <h3 className="font-semibold text-gray-100">Teste de E-mail de Aprovação</h3>
