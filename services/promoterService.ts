@@ -111,63 +111,57 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
 
 
 export const getPromotersPage = async (options: {
-  organizationId?: string; // ID of the logged-in admin's org
+  organizationId?: string;
   statesForScope?: string[] | null;
   status: PromoterStatus | 'all';
   campaignsInScope: string[] | null;
-  selectedCampaign: string | 'all'; // UI filter
-  filterOrgId: string | 'all'; // UI filter
-  filterState: string | 'all'; // UI filter
+  selectedCampaign: string | 'all';
+  filterOrgId: string | 'all';
+  filterState: string | 'all';
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
     const isSuperAdmin = !options.organizationId;
-
-    let dataQuery;
     const filters: any[] = [];
-    
-    // --- Determine filter logic based on admin role and UI selection ---
+    let useArrayContainsAny = false;
 
-    // SUPER ADMIN and has selected a specific campaign: This overrides everything.
-    if (isSuperAdmin && options.selectedCampaign !== 'all') {
-      filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
-      if (options.status !== 'all') {
-        filters.push(where("status", "==", options.status));
-      }
-    } 
-    // REGULAR ADMIN or SUPER ADMIN with general filters
-    else {
-      // Scope by org for regular admins, or by UI filter for super admins
-      const orgToFilter = isSuperAdmin ? options.filterOrgId : options.organizationId;
-      if (orgToFilter && orgToFilter !== 'all') {
-        filters.push(where("organizationId", "==", orgToFilter));
-      }
+    // Status filter is common to all queries
+    if (options.status !== 'all') {
+      filters.push(where("status", "==", options.status));
+    }
 
-      // Scope by state for regular admins, or by UI filter for super admins
-      const statesToFilter = isSuperAdmin ? (options.filterState !== 'all' ? [options.filterState] : null) : options.statesForScope;
-      if (statesToFilter && statesToFilter.length > 0) {
-        filters.push(where("state", "in", statesToFilter));
-      }
-      
-      // Status filter
-      if (options.status !== 'all') {
-        filters.push(where("status", "==", options.status));
-      }
-
-      // Campaign filter (for regular admin scope or super admin UI filter)
-      let finalCampaignFilter = isSuperAdmin ? (options.selectedCampaign !== 'all' ? [options.selectedCampaign] : null) : options.campaignsInScope;
-      
-      if (finalCampaignFilter) {
-        if (finalCampaignFilter.length === 0) {
-          return { promoters: [], lastVisible: null, totalCount: 0 }; // Explicitly assigned to NO campaigns
+    if (isSuperAdmin) {
+      // --- SUPER ADMIN LOGIC ---
+      // If a specific campaign is selected, that's the primary filter and ignores org/state.
+      if (options.selectedCampaign !== 'all') {
+        filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
+      } else {
+        // Otherwise, apply general org and state filters from UI
+        if (options.filterOrgId !== 'all') {
+          filters.push(where("organizationId", "==", options.filterOrgId));
         }
-        // Firestore 'in' query has a limit of 30 items. 
-        if (finalCampaignFilter.length > 30) {
-            console.warn(`Campaign filter exceeds Firestore's 30 item limit.`);
+        if (options.filterState !== 'all') {
+          filters.push(where("state", "==", options.filterState));
         }
-        filters.push(where("allCampaigns", "array-contains-any", finalCampaignFilter.slice(0, 30)));
+      }
+    } else { 
+      // --- REGULAR ADMIN LOGIC ---
+      // A regular admin's view is defined ONLY by the campaigns they have access to.
+      const campaignsToFilter = options.campaignsInScope;
+
+      if (!campaignsToFilter) {
+        // This case implies they can see all campaigns in their organization.
+        // Fallback to filtering by their organization ID.
+        filters.push(where("organizationId", "==", options.organizationId));
+      } else if (campaignsToFilter.length === 0) {
+        // Explicitly assigned to NO campaigns, so they see nothing.
+        return { promoters: [], lastVisible: null, totalCount: 0 };
+      } else {
+        // Filter by the campaigns they are allowed to see. This allows for cross-org visibility.
+        filters.push(where("allCampaigns", "array-contains-any", campaignsToFilter.slice(0, 30)));
+        useArrayContainsAny = true; // Required when using array-contains-any
       }
     }
 
@@ -176,8 +170,14 @@ export const getPromotersPage = async (options: {
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
-    // orderBy must be on a different field than array-contains-any, so use documentId as a stable default.
-    dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
+    let dataQuery;
+    if (useArrayContainsAny) {
+      // When using `array-contains-any`, we MUST order by documentId.
+      dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
+    } else {
+      // For all other queries, we can sort by creation date.
+      dataQuery = query(promotersRef, ...filters, orderBy("createdAt", "asc"));
+    }
 
     if (options.cursor) {
       dataQuery = query(dataQuery, startAfter(options.cursor));
@@ -188,6 +188,13 @@ export const getPromotersPage = async (options: {
     const querySnapshot = await getDocs(dataQuery);
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+
+    // Client-side sort if server couldn't sort by date, to ensure consistent ordering.
+    if (useArrayContainsAny) {
+      promoters.sort((a, b) => 
+        ((a.createdAt as Timestamp)?.toMillis() || 0) - ((b.createdAt as Timestamp)?.toMillis() || 0)
+      );
+    }
 
     return { promoters, lastVisible, totalCount };
 
