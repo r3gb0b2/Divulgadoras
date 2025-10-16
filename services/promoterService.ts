@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
@@ -122,7 +122,9 @@ export const getPromotersPage = async (options: {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    let dataQuery = query(promotersRef, orderBy("name", "asc"));
+    // Sort by document ID to ensure consistent pagination without requiring complex composite indexes.
+    // User-facing sorting (e.g., by name) will be handled on the client-side.
+    let dataQuery = query(promotersRef, orderBy(documentId(), "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];

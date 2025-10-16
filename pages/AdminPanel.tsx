@@ -192,8 +192,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     limitPerPage: PROMOTERS_PER_PAGE,
                     cursor: pageCursors[currentPage - 1]
                 });
+                
+                // Sort promoters by name on the client-side as the query is now ordered by document ID for performance.
+                const sortedPromoters = result.promoters.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+                setPromotersOnPage(sortedPromoters);
 
-                setPromotersOnPage(result.promoters);
                 setTotalPromotersCount(result.totalCount);
 
                 if (result.lastVisible && pageCursors.length === currentPage) {
