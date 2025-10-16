@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import { auth, functions } from '../firebase/config';
 import { serverTimestamp } from 'firebase/firestore';
 import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
 import { Promoter, PromoterStatus, RejectionReason, AdminUserData } from '../types';
@@ -11,6 +11,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import { stateMap } from '../constants/states';
+import { httpsCallable } from 'firebase/functions';
 
 interface AdminPanelProps {
   adminData: AdminUserData;
@@ -37,6 +38,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
   const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
   
   const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
+
+  // State for bulk email selection
+  const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
+  const [isSendingEmails, setIsSendingEmails] = useState(false);
+  const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
 
   const fetchReasons = useCallback(async () => {
     if (adminData.organizationId) {
@@ -109,6 +115,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
       );
   }, [promoters, statusFilter, stateFilter, searchQuery, adminData]);
 
+  useEffect(() => {
+    // Clear selection when filters change to avoid confusion
+    setSelectedPromoters(new Set());
+  }, [statusFilter, stateFilter, searchQuery]);
+
+  useEffect(() => {
+    // Handle the indeterminate state of the select all checkbox
+    if (selectAllCheckboxRef.current) {
+        const numSelected = selectedPromoters.size;
+        const numVisible = filteredPromoters.length;
+        selectAllCheckboxRef.current.checked = numSelected === numVisible && numVisible > 0;
+        selectAllCheckboxRef.current.indeterminate = numSelected > 0 && numSelected < numVisible;
+    }
+  }, [selectedPromoters, filteredPromoters]);
+
   const counts = useMemo(() => ({
     pending: promoters.filter(p => p.status === 'pending').length,
     approved: promoters.filter(p => p.status === 'approved').length,
@@ -173,6 +194,55 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     setIsPhotoViewerOpen(true);
   };
 
+  const handleSelectOne = (promoterId: string) => {
+    setSelectedPromoters(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(promoterId)) {
+            newSet.delete(promoterId);
+        } else {
+            newSet.add(promoterId);
+        }
+        return newSet;
+    });
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.checked) {
+          const allVisibleIds = new Set(filteredPromoters.map(p => p.id));
+          setSelectedPromoters(allVisibleIds);
+      } else {
+          setSelectedPromoters(new Set());
+      }
+  };
+
+  const handleSendNotifications = async () => {
+      if (selectedPromoters.size === 0) return;
+
+      if (!window.confirm(`Tem certeza que deseja reenviar e-mails de notificação para ${selectedPromoters.size} divulgadora(s) selecionada(s)?`)) {
+          return;
+      }
+
+      setIsSendingEmails(true);
+      setError(null);
+
+      try {
+          const sendEmails = httpsCallable(functions, 'sendManualApprovalNotifications');
+          const promoterIds = Array.from(selectedPromoters);
+          const result = await sendEmails({ promoterIds });
+          
+          const data = result.data as { message: string };
+
+          alert(data.message || 'E-mails de notificação enviados para a fila com sucesso!');
+          setSelectedPromoters(new Set());
+      } catch (err: any) {
+          console.error("Failed to send notification emails:", err);
+          const detail = err.details?.message || err.message;
+          setError(`Falha ao enviar e-mails: ${detail}`);
+      } finally {
+          setIsSendingEmails(false);
+      }
+  };
+
   const statusBadge = (status: PromoterStatus) => {
     const styles = {
       pending: 'bg-blue-900/50 text-blue-300',
@@ -221,23 +291,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
       {/* Filters & Table */}
       <div className="bg-secondary p-6 rounded-lg shadow-md">
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm">
+        <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm w-full md:w-auto">
                 <option value="all">Todos Status</option>
                 <option value="pending">Pendentes</option>
                 <option value="approved">Aprovados</option>
                 <option value="rejected">Rejeitados</option>
             </select>
-            <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm">
+            <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm w-full md:w-auto">
                 <option value="all">Todos Estados</option>
                 {availableStates.map(s => <option key={s} value={s}>{stateMap[s] || s}</option>)}
             </select>
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome, e-mail, evento..." className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" />
-            {adminData.role === 'admin' && (
-              <button onClick={() => setIsReasonsModalOpen(true)} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded-md md:ml-auto">
-                  Gerenciar Motivos
-              </button>
-            )}
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome, e-mail, evento..." className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm w-full md:w-auto" />
+            <div className="flex gap-4 w-full md:w-auto md:ml-auto">
+              {statusFilter === 'approved' && adminData.role !== 'viewer' && (
+                  <button
+                      type="button"
+                      onClick={handleSendNotifications}
+                      disabled={selectedPromoters.size === 0 || isSendingEmails}
+                      className="w-full md:w-auto px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark text-sm font-semibold disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
+                  >
+                      {isSendingEmails ? 'Enviando...' : `Enviar Notificação (${selectedPromoters.size})`}
+                  </button>
+              )}
+              {adminData.role === 'admin' && (
+                <button onClick={() => setIsReasonsModalOpen(true)} className="w-full md:w-auto bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded-md">
+                    Gerenciar Motivos
+                </button>
+              )}
+            </div>
         </div>
         
         {isLoading ? <p>Carregando...</p> : error ? <p className="text-red-400">{error}</p> : (
@@ -245,6 +327,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 <table className="min-w-full divide-y divide-gray-700">
                     <thead>
                         <tr>
+                           {statusFilter === 'approved' && adminData.role !== 'viewer' && (
+                                <th className="px-4 py-3">
+                                    <input
+                                        type="checkbox"
+                                        ref={selectAllCheckboxRef}
+                                        onChange={handleSelectAll}
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                    />
+                                </th>
+                            )}
                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Divulgadora</th>
                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado/Evento</th>
                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Data de Inscrição</th>
@@ -255,6 +347,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     <tbody className="divide-y divide-gray-700">
                         {filteredPromoters.map(p => (
                             <tr key={p.id} className="hover:bg-gray-800/50">
+                                {statusFilter === 'approved' && adminData.role !== 'viewer' && (
+                                    <td className="px-4 py-4 whitespace-nowrap">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPromoters.has(p.id)}
+                                            onChange={() => handleSelectOne(p.id)}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                        />
+                                    </td>
+                                )}
                                 <td className="px-4 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10">
