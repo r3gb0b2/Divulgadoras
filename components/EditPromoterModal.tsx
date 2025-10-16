@@ -84,7 +84,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const dataToSave: Partial<Promoter> = { ...formData };
+      const dataToSave = { ...formData };
       if (dataToSave.email) {
         dataToSave.email = dataToSave.email.toLowerCase().trim();
       }
@@ -94,17 +94,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'approved') {
         dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
-      
-      // Recalculate and add the denormalized `allCampaigns` array for querying
-      const allCampaignsSet = new Set<string>();
-      if (promoter.campaignName) {
-        allCampaignsSet.add(promoter.campaignName);
-      }
-      if (dataToSave.associatedCampaigns) {
-        dataToSave.associatedCampaigns.forEach(c => allCampaignsSet.add(c));
-      }
-      dataToSave.allCampaigns = Array.from(allCampaignsSet);
-
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
@@ -185,12 +174,12 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                 <p className="text-sm text-gray-400">Carregando eventos...</p>
             ) : Object.keys(campaignsByState).length > 0 ? (
                 <div className="max-h-48 overflow-y-auto space-y-3 p-2 border border-gray-600 rounded-md">
-                    {Object.entries(campaignsByState).sort(([stateA], [stateB]) => (stateMap[stateA] || stateA).localeCompare(stateMap[stateB] || stateB)).map(([stateAbbr, campaigns]: [string, Campaign[]]) => (
+                    {Object.entries(campaignsByState).sort(([stateA], [stateB]) => (stateMap[stateA] || stateA).localeCompare(stateMap[stateB] || stateB)).map(([stateAbbr, campaigns]) => (
                         <div key={stateAbbr}>
                             <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
                             <div className="pl-2 space-y-1">
-                                {/* FIX: Explicitly typed 'campaigns' as Campaign[] to fix map error. */}
-                                {campaigns.map(campaign => (
+                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
+                                {(campaigns as Campaign[]).map(campaign => (
                                     <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
                                         <input
                                             type="checkbox"
