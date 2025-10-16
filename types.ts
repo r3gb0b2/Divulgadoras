@@ -127,6 +127,8 @@ export interface Post {
   instructions: string;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
+  isActive: boolean;
+  expiresAt: Timestamp | FieldValue | null;
 }
 
 export interface PostAssignment {
@@ -138,6 +140,8 @@ export interface PostAssignment {
     textContent?: string;
     instructions: string;
     campaignName: string;
+    isActive: boolean;
+    expiresAt: Timestamp | FieldValue | null;
   };
   organizationId: string;
   promoterId: string;

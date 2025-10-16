@@ -84,9 +84,13 @@ const AdminPosts: React.FC = () => {
                             <div>
                                 {isSuperAdmin && <p className="text-xs font-semibold text-gray-400">{orgNameMap[post.organizationId] || 'Organização Desconhecida'}</p>}
                                 <p className="font-bold text-lg text-primary">{post.campaignName}</p>
-                                <p className="text-sm text-gray-400">
-                                    {post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}
-                                </p>
+                                <div className="flex items-center gap-3 text-sm text-gray-400">
+                                    <span>{post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}</span>
+                                     <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
+                                        {post.isActive ? 'Ativo' : 'Inativo'}
+                                    </span>
+                                    {post.expiresAt && <p className="text-xs text-yellow-400">Expira em: {formatDate(post.expiresAt)}</p>}
+                                </div>
                             </div>
                             <button 
                                 onClick={() => navigate(`/admin/posts/${post.id}`)}

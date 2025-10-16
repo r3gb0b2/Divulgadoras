@@ -7,6 +7,7 @@ import { getApprovedPromoters } from '../services/promoterService';
 import { createPost } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
+import { Timestamp } from 'firebase/firestore';
 
 const CreatePost: React.FC = () => {
     const navigate = useNavigate();
@@ -26,6 +27,8 @@ const CreatePost: React.FC = () => {
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [instructions, setInstructions] = useState('');
+    const [isActive, setIsActive] = useState(true);
+    const [expiresAt, setExpiresAt] = useState('');
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
@@ -142,6 +145,14 @@ const CreatePost: React.FC = () => {
 
             const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
 
+            let expiryTimestamp = null;
+            if (expiresAt) {
+                // Set timestamp to the end of the selected day in local time
+                const [year, month, day] = expiresAt.split('-').map(Number);
+                const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
+                expiryTimestamp = Timestamp.fromDate(expiryDate);
+            }
+
             const postData = {
                 organizationId: adminData.organizationId,
                 createdByEmail: adminData.email,
@@ -150,6 +161,8 @@ const CreatePost: React.FC = () => {
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
                 instructions,
+                isActive,
+                expiresAt: expiryTimestamp,
             };
 
             await createPost(postData, imageFile, promotersToAssign);
@@ -229,6 +242,17 @@ const CreatePost: React.FC = () => {
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                    
+                     <div className="flex flex-col sm:flex-row items-center gap-6 mt-4">
+                        <label className="flex items-center space-x-2">
+                            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Ativo (visível para divulgadoras)</span>
+                        </label>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                            <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                        </div>
+                    </div>
                 </fieldset>
 
                 <div className="flex justify-end">

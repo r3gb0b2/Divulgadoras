@@ -1,39 +1,84 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+
+const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
+    if (!ts) return '';
+    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+};
 
 const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
     const [post, setPost] = useState<Post | null>(null);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
+    
+    // Edit state
+    const [isActive, setIsActive] = useState(false);
+    const [expiresAt, setExpiresAt] = useState('');
+
+    // UI State
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchDetails = async () => {
         if (!postId) {
             setError("ID da publicação não encontrado.");
             setIsLoading(false);
             return;
         }
-        const fetchDetails = async () => {
-            setIsLoading(true);
-            try {
-                const { post, assignments } = await getPostWithAssignments(postId);
-                setPost(post);
-                setAssignments(assignments.sort((a,b) => a.promoterName.localeCompare(b.promoterName)));
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+        setIsLoading(true);
+        try {
+            const { post, assignments } = await getPostWithAssignments(postId);
+            setPost(post);
+            setIsActive(post.isActive);
+            setExpiresAt(timestampToInputDate(post.expiresAt));
+            setAssignments(assignments.sort((a,b) => a.promoterName.localeCompare(b.promoterName)));
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchDetails();
     }, [postId]);
+
+    const handleSaveChanges = async () => {
+        if (!postId) return;
+        setIsSaving(true);
+        setError(null);
+        try {
+            let expiryTimestamp = null;
+            if (expiresAt) {
+                const [year, month, day] = expiresAt.split('-').map(Number);
+                const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
+                expiryTimestamp = Timestamp.fromDate(expiryDate);
+            }
+            
+            const updateData: Partial<Post> = {
+                isActive,
+                expiresAt: expiryTimestamp,
+            };
+
+            await updatePost(postId, updateData);
+            alert('Publicação atualizada com sucesso!');
+            await fetchDetails(); // Refresh data to confirm changes
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
 
     const handleDelete = async () => {
         if (!postId || !post) return;
@@ -65,7 +110,7 @@ const PostDetails: React.FC = () => {
 
     const renderContent = () => {
         if (isLoading) return <div className="text-center py-10">Carregando detalhes...</div>;
-        if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
+        if (error && !post) return <div className="text-red-400 text-center py-10">{error}</div>;
         if (!post) return <div className="text-center py-10">Publicação não encontrada.</div>;
 
         return (
@@ -90,6 +135,21 @@ const PostDetails: React.FC = () => {
                     <div className="mt-4 border-t border-gray-600 pt-4">
                         <p className="text-xs text-gray-500">Criado por: {post.createdByEmail}</p>
                         <p className="text-xs text-gray-500">Em: {formatDate(post.createdAt)}</p>
+                    </div>
+
+                    <div className="mt-4 border-t border-gray-600 pt-4 space-y-4">
+                        <h4 className="font-semibold text-gray-200">Gerenciamento</h4>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Post Ativo</span>
+                        </label>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                            <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                        </div>
+                        <button onClick={handleSaveChanges} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
                     </div>
                 </div>
 
@@ -142,12 +202,13 @@ const PostDetails: React.FC = () => {
                 </div>
                 <button
                     onClick={handleDelete}
-                    disabled={isDeleting}
+                    disabled={isDeleting || isSaving}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
                 >
                     {isDeleting ? 'Deletando...' : 'Deletar Publicação'}
                 </button>
             </div>
+             {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 {renderContent()}
             </div>

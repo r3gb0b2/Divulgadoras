@@ -108,15 +108,31 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
         const snapshot = await getDocs(q);
         const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
         
+        // Filter out inactive or expired posts
+        const now = new Date();
+        const visibleAssignments = assignments.filter(assignment => {
+            const post = assignment.post;
+            if (!post.isActive) {
+                return false;
+            }
+            if (post.expiresAt) {
+                const expiryDate = (post.expiresAt as Timestamp).toDate();
+                if (expiryDate < now) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        
         // Sort by pending first, then by date
-        assignments.sort((a, b) => {
+        visibleAssignments.sort((a, b) => {
             if (a.status === 'pending' && b.status === 'confirmed') return -1;
             if (a.status === 'confirmed' && b.status === 'pending') return 1;
             const postA = a.post as any;
             const postB = b.post as any;
             return ((postB.createdAt as Timestamp)?.toMillis() || 0) - ((postA.createdAt as Timestamp)?.toMillis() || 0)
         });
-        return assignments;
+        return visibleAssignments;
     } catch (error) {
         console.error("Error fetching promoter assignments: ", error);
         throw new Error("Não foi possível buscar as publicações.");
@@ -135,6 +151,19 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
         throw new Error("Não foi possível confirmar a publicação.");
     }
 }
+
+export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
+    try {
+        const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
+        await updatePostStatus({ postId, updateData });
+    } catch (error) {
+        console.error("Error updating post status:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível atualizar a publicação.");
+    }
+};
 
 export const deletePost = async (postId: string): Promise<void> => {
     const batch = writeBatch(firestore);

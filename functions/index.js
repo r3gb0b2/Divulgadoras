@@ -703,6 +703,8 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
     textContent: postData.textContent,
     instructions: postData.instructions,
     campaignName: postData.campaignName,
+    isActive: postData.isActive,
+    expiresAt: postData.expiresAt,
   };
 
   for (const promoter of assignedPromoters) {
@@ -739,4 +741,47 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   await Promise.allSettled(emailPromises);
 
   return { success: true, postId: postDocRef.id };
+});
+
+exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    }
+
+    const { postId, updateData } = data;
+    if (!postId || !updateData) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
+    }
+
+    const batch = db.batch();
+
+    // 1. Update main post document
+    const postDocRef = db.collection("posts").doc(postId);
+    batch.update(postDocRef, updateData);
+
+    // 2. Find and update all assignments
+    const assignmentsQuery = db.collection("postAssignments").where("postId", "==", postId);
+    const assignmentsSnapshot = await assignmentsQuery.get();
+
+    const denormalizedUpdateData = {};
+    if (Object.prototype.hasOwnProperty.call(updateData, "isActive")) {
+        denormalizedUpdateData["post.isActive"] = updateData.isActive;
+    }
+    if (Object.prototype.hasOwnProperty.call(updateData, "expiresAt")) {
+        denormalizedUpdateData["post.expiresAt"] = updateData.expiresAt;
+    }
+
+    if (Object.keys(denormalizedUpdateData).length > 0) {
+        assignmentsSnapshot.forEach((doc) => {
+            batch.update(doc.ref, denormalizedUpdateData);
+        });
+    }
+
+    await batch.commit();
+
+    return { success: true };
 });
