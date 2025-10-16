@@ -1,6 +1,5 @@
-
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData, FieldValue } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData, FieldValue, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
@@ -50,6 +49,28 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
   }
 };
+
+export const getLatestPromoterProfileByEmail = async (email: string): Promise<Promoter | null> => {
+    try {
+        const q = query(
+            collection(firestore, "promoters"),
+            where("email", "==", email.toLowerCase().trim()),
+            orderBy("createdAt", "desc"),
+            limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return null;
+        }
+        const promoterDoc = querySnapshot.docs[0];
+        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
+        return Object.assign({ id: promoterDoc.id }, promoterDoc.data()) as Promoter;
+    } catch (error) {
+        console.error("Error fetching latest promoter profile: ", error);
+        throw new Error("Não foi possível buscar os dados do seu cadastro anterior.");
+    }
+};
+
 
 export const getPromoters = async (organizationId: string | undefined, states?: string[] | null): Promise<Promoter[]> => {
   try {

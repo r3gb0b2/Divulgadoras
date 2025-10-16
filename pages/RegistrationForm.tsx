@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { addPromoter } from '../services/promoterService';
+import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
@@ -64,9 +64,9 @@ const PromoterForm: React.FC = () => {
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
+    email: '',
     name: '',
     whatsapp: '',
-    email: '',
     instagram: '',
     tiktok: '',
     dateOfBirth: '',
@@ -78,6 +78,8 @@ const PromoterForm: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -85,6 +87,40 @@ const PromoterForm: React.FC = () => {
       ...prev,
       [name]: value,
     }));
+  };
+  
+  const handleCheckEmail = async () => {
+    const email = formData.email.trim();
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return; // Don't search for invalid or empty emails
+    }
+
+    setIsCheckingEmail(true);
+    setProfileLoaded(false);
+    setSubmitError(null);
+
+    try {
+      const profile = await getLatestPromoterProfileByEmail(email);
+      if (profile) {
+        setFormData({
+          email: profile.email,
+          name: profile.name,
+          whatsapp: profile.whatsapp,
+          instagram: profile.instagram,
+          tiktok: profile.tiktok || '',
+          dateOfBirth: profile.dateOfBirth,
+        });
+        setProfileLoaded(true);
+        // Clear photos as they need to be re-uploaded for each event
+        setPhotoFiles([]);
+        setPhotoPreviews([]);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao buscar seus dados.";
+      setSubmitError(message);
+    } finally {
+      setIsCheckingEmail(false);
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,10 +184,11 @@ const PromoterForm: React.FC = () => {
       await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
       setSubmitSuccess(true);
       
-      setFormData({ name: '', whatsapp: '', email: '', instagram: '', tiktok: '', dateOfBirth: '' });
+      setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
       setAgreedToTerms(false);
+      setProfileLoaded(false);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -198,17 +235,35 @@ const PromoterForm: React.FC = () => {
             )}
             
             <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                    <InputWithIcon 
+                        Icon={MailIcon} 
+                        type="email" 
+                        name="email" 
+                        placeholder="Seu melhor e-mail" 
+                        value={formData.email} 
+                        onChange={handleChange} 
+                        onBlur={handleCheckEmail}
+                        required 
+                    />
+                     {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
+                     {profileLoaded && (
+                        <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
+                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
+                        </div>
+                    )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
                     <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
                 </div>
-                <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} required />
                 <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
                 <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Seu usuário do Instagram (@usuario)" value={formData.instagram} onChange={handleChange} required />
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (obrigatório)</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
