@@ -69,6 +69,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [error, setError] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+    const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
@@ -97,6 +98,18 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const handleOpenModal = (campaign: Campaign | null = null) => {
         setEditingCampaign(campaign);
         setIsModalOpen(true);
+    };
+    
+    const handleCopyLink = (campaign: Campaign) => {
+        if (!stateAbbr || !adminData?.organizationId) return;
+        const link = `${window.location.origin}/#/${adminData.organizationId}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
+        navigator.clipboard.writeText(link).then(() => {
+            setCopiedLink(campaign.id);
+            setTimeout(() => setCopiedLink(null), 2500);
+        }).catch(err => {
+            console.error('Failed to copy direct link: ', err);
+            alert('Falha ao copiar o link. Por favor, tente manualmente.');
+        });
     };
 
     const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
@@ -187,13 +200,20 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta localidade.</p> : (
                     <div className="space-y-3">
                         {campaigns.map(c => (
-                            <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex justify-between items-center">
-                                <div>
+                            <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                                <div className="flex-grow">
                                     <p className="font-semibold text-white">{c.name} <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span></p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
                                 </div>
                                 {adminData.role !== 'viewer' && (
-                                    <div className="flex gap-3">
+                                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
+                                        <button 
+                                            onClick={() => handleCopyLink(c)} 
+                                            className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
+                                            disabled={copiedLink === c.id}
+                                        >
+                                            {copiedLink === c.id ? 'Link Copiado!' : 'Copiar Link Direto'}
+                                        </button>
                                         <button onClick={() => handleOpenModal(c)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                         <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:text-red-300">Excluir</button>
                                     </div>
