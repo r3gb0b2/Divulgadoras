@@ -134,35 +134,37 @@ export const getPromotersPage = async (options: {
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
-    
-    if (options.campaignName !== 'all') {
-        filters.push(where("allCampaigns", "array-contains", options.campaignName));
-    } else if (options.campaignsInScope && options.campaignsInScope.length > 0) {
-        if (options.campaignsInScope.length > 30) {
-            if (options.organizationId) {
-                filters.push(where("organizationId", "==", options.organizationId));
-            }
+    const isSuperAdmin = !options.organizationId;
+
+    if (isSuperAdmin) {
+        if (options.campaignName !== 'all') {
+            filters.push(where("allCampaigns", "array-contains", options.campaignName));
         } else {
-            filters.push(where("allCampaigns", "array-contains-any", options.campaignsInScope));
+            if (options.filterOrgId !== 'all') {
+                filters.push(where("organizationId", "==", options.filterOrgId));
+            }
+            if (options.filterState !== 'all') {
+                filters.push(where("state", "==", options.filterState));
+            }
         }
-    } else {
-      if (options.organizationId) {
-        filters.push(where("organizationId", "==", options.organizationId));
-      }
-      if (options.statesForScope && options.statesForScope.length > 0) {
-        filters.push(where("state", "in", options.statesForScope));
-      }
+    } else { // Regular Admin Logic
+        // If filtering by a specific campaign, use allCampaigns to allow for cross-org.
+        if (options.campaignName !== 'all') {
+             filters.push(where("allCampaigns", "array-contains", options.campaignName));
+        }
+        // For the MAIN LIST VIEW ("all events"), revert to organizationId to fix the bug of missing promoters.
+        else {
+            filters.push(where("organizationId", "==", options.organizationId));
+
+            // Still respect state scopes
+            if (options.statesForScope && options.statesForScope.length > 0) {
+                filters.push(where("state", "in", options.statesForScope));
+            }
+        }
     }
 
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
-    }
-    
-    if (options.filterOrgId !== 'all') {
-      filters.push(where("organizationId", "==", options.filterOrgId));
-    }
-    if (options.filterState !== 'all') {
-      filters.push(where("state", "==", options.filterState));
     }
 
     if (filters.length > 0) {
