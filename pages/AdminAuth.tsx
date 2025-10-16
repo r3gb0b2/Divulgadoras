@@ -163,7 +163,7 @@ const AdminLogin: React.FC = () => {
                                 Solicite seu acesso
                             </button>
                         </p>
-                        <p className="text-xs text-gray-600 mt-4 text-center">Frontend v15.0</p>
+                        <p className="text-xs text-gray-600 mt-4 text-center">Frontend v19.0</p>
                     </form>
                 </div>
             )}

@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { HttpsError } = require("firebase-functions/v1/https");
-const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { getFirestore, Timestamp, FieldValue } = require("firebase-admin/firestore");
 const { GoogleGenAI } = require("@google/genai");
 const Brevo = require("@getbrevo/brevo");
 const xml2js = require("xml2js");
@@ -309,11 +309,12 @@ exports.askGemini = functions
         if (!prompt) throw new HttpsError("invalid-argument", "O prompt não pode ser vazio.");
 
         try {
-            const genAI = new GoogleGenAI(functions.config().gemini.key);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            return { text: response.text() };
+            const ai = new GoogleGenAI({apiKey: functions.config().gemini.key});
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+            });
+            return { text: response.text };
         } catch (error) {
             functions.logger.error("Gemini API call failed", error);
             throw new HttpsError("internal", "Falha ao comunicar com a API de IA.");
@@ -323,7 +324,31 @@ exports.askGemini = functions
 
 // --- EMAIL (BREVO) INTEGRATION & TEMPLATES ---
 
-const defaultApprovalHtml = `...`; // Placeholder for default template
+const defaultApprovalHtml = `<!DOCTYPE html>
+<html>
+<head>
+<title>Aprovação de Cadastro</title>
+<style>
+  body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+  .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 20px; border-radius: 8px; }
+  .header { font-size: 24px; font-weight: bold; color: #e83a93; text-align: center; }
+  .content { margin-top: 20px; }
+  .button { display: block; width: fit-content; margin: 20px auto; padding: 12px 25px; background-color: #e83a93; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">Parabéns, {{promoterName}}!</div>
+    <div class="content">
+      <p>Temos uma ótima notícia! Seu cadastro para o evento/gênero <strong>{{campaignName}}</strong> da organização <strong>{{orgName}}</strong> foi aprovado!</p>
+      <p>Estamos muito felizes em ter você em nossa equipe. Para continuar, por favor, acesse seu portal exclusivo clicando no botão abaixo:</p>
+      <a href="{{portalLink}}" class="button">Acessar Portal da Divulgadora</a>
+      <p>No portal, você encontrará as regras do evento e o link para o grupo oficial no WhatsApp.</p>
+      <p>Atenciosamente,<br>Equipe {{orgName}}</p>
+    </div>
+  </div>
+</body>
+</html>`;
 
 /**
  * Manually sends a status email to a promoter.
@@ -339,7 +364,117 @@ exports.manuallySendStatusEmail = functions
         return { success: true, message: `E-mail de aprovação enviado para a divulgadora (ID: ${promoterId}).` };
     });
 
-// (Other email functions like getEmailTemplate, setEmailTemplate would go here)
+/**
+ * Sends a test email to the currently authenticated super admin.
+ */
+exports.sendTestEmail = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        await requireSuperAdmin(context);
+        const { testType, customHtmlContent } = data;
+        const recipientEmail = context.auth.token.email;
+
+        const config = functions.config();
+        const brevoKey = config.brevo?.key;
+        const senderEmail = config.brevo?.sender_email;
+
+        if (!brevoKey || !senderEmail) {
+            throw new HttpsError("failed-precondition", "As credenciais do provedor de e-mail (Brevo) não estão configuradas no servidor.");
+        }
+
+        let subject = "";
+        let htmlContent = "";
+        const placeholderData = {
+            promoterName: "Maria Exemplo",
+            campaignName: "Evento de Teste",
+            orgName: "Sua Organização",
+            portalLink: `https://${process.env.GCLOUD_PROJECT}.web.app/#/status?email=maria@exemplo.com`,
+        };
+
+        switch (testType) {
+        case "generic":
+            subject = "Teste de Conexão - Equipe Certa";
+            htmlContent = "<p>Se você recebeu este e-mail, a conexão com a Brevo está funcionando corretamente!</p>";
+            break;
+        case "approved":
+        case "custom_approved": {
+            const templateDoc = await db.collection("settings").doc("emailTemplates").get();
+            const hasCustomTemplate = templateDoc.exists() && templateDoc.data().approvedHtml;
+
+            if (testType === 'custom_approved') {
+                 if (!customHtmlContent) throw new HttpsError("invalid-argument", "Conteúdo HTML customizado é necessário para este tipo de teste.");
+                 htmlContent = customHtmlContent;
+                 subject = "Teste: E-mail de Aprovação (Customizado)";
+            } else {
+                 htmlContent = hasCustomTemplate ? templateDoc.data().approvedHtml : defaultApprovalHtml;
+                 subject = `Teste: E-mail de Aprovação (${hasCustomTemplate ? "Custom" : "Padrão"})`;
+            }
+            break;
+        }
+        case "rejected":
+            subject = "Teste: E-mail de Rejeição";
+            htmlContent = "<p>Este é um e-mail de teste para uma candidata não aprovada.</p><p><b>Motivo Exemplo:</b> Perfil inadequado para a vaga.</p>";
+            break;
+        default:
+            throw new HttpsError("invalid-argument", "Tipo de teste de e-mail inválido fornecido.");
+        }
+
+        // Replace placeholders in the chosen template
+        for (const key in placeholderData) {
+            htmlContent = htmlContent.replace(new RegExp(`{{${key}}}`, "g"), placeholderData[key]);
+        }
+
+        try {
+            const defaultClient = Brevo.ApiClient.instance;
+            const apiKeyAuth = defaultClient.authentications["api-key"];
+            apiKeyAuth.apiKey = brevoKey;
+            const apiInstance = new Brevo.TransactionalEmailsApi();
+            const sendSmtpEmail = {
+                sender: { name: "Equipe Certa (Teste)", email: senderEmail },
+                to: [{ email: recipientEmail }],
+                subject,
+                htmlContent,
+            };
+            await apiInstance.sendTransacEmail(sendSmtpEmail);
+            functions.logger.info(`Test email '${testType}' sent to ${recipientEmail}`);
+            return { success: true, message: `E-mail de teste '${testType}' enviado para ${recipientEmail}.` };
+        } catch (error) {
+            functions.logger.error("Failed to send test email via Brevo:", error.response ? error.response.body : error);
+            const errorMessage = error.response?.body?.message || error.message || "Erro desconhecido";
+            throw new HttpsError("internal", "Falha ao enviar e-mail através do provedor.", { originalError: errorMessage });
+        }
+    });
+
+exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await requireSuperAdmin(context);
+    const docRef = db.collection("settings").doc("emailTemplates");
+    const docSnap = await docRef.get();
+    if (docSnap.exists() && docSnap.data().approvedHtml) {
+        return { htmlContent: docSnap.data().approvedHtml };
+    }
+    return { htmlContent: defaultApprovalHtml };
+});
+
+exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await requireSuperAdmin(context);
+    return { htmlContent: defaultApprovalHtml };
+});
+
+exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await requireSuperAdmin(context);
+    const { htmlContent } = data;
+    if (typeof htmlContent !== 'string') {
+        throw new HttpsError("invalid-argument", "htmlContent deve ser uma string.");
+    }
+    await db.collection("settings").doc("emailTemplates").set({ approvedHtml: htmlContent }, { merge: true });
+    return { success: true };
+});
+
+exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await requireSuperAdmin(context);
+    await db.collection("settings").doc("emailTemplates").update({ approvedHtml: FieldValue.delete() });
+    return { success: true };
+});
 
 
 // --- SYSTEM STATUS & DIAGNOSTICS ---
@@ -406,7 +541,6 @@ exports.getSystemStatus = functions
         try {
             log.push({ level: "INFO", message: "Tentando autenticar com a API da Brevo..." });
 
-            // Correct way to set the API key for @getbrevo/brevo
             const defaultClient = Brevo.ApiClient.instance;
             const apiKeyAuth = defaultClient.authentications["api-key"];
             apiKeyAuth.apiKey = brevoKey;
@@ -415,15 +549,19 @@ exports.getSystemStatus = functions
             const accountInfo = await apiInstance.getAccount();
             
             log.push({ level: "SUCCESS", message: "Autenticação com a Brevo bem-sucedida." });
-            log.push({ level: "INFO", message: `Conta Brevo: ${accountInfo.body.email} | Plano: ${accountInfo.body.plan[0].type}` });
+            
+            // FIX: Access account info directly on the returned object, not under a 'body' property.
+            if (accountInfo && accountInfo.email && accountInfo.plan) {
+                 log.push({ level: "INFO", message: `Conta Brevo: ${accountInfo.email} | Plano: ${accountInfo.plan[0].type}` });
+            }
 
             response.configured = true;
             response.message = `Conexão com a Brevo (remetente: ${brevoEmail}) estabelecida com sucesso.`;
         } catch (error) {
             functions.logger.error("Brevo API connection failed during status check:", error);
             let errorMessage = "Erro desconhecido ao conectar com a Brevo.";
+            // Brevo library wraps the actual response in `response.body` on errors
             if (error.response && error.response.body && error.response.body.message) {
-                // Brevo's specific error message
                 errorMessage = `API da Brevo respondeu com: '${error.response.body.message}'`;
             } else if (error.message) {
                 errorMessage = error.message;
@@ -440,5 +578,3 @@ exports.getSystemStatus = functions
 
         return response;
     });
-
-// (Other system functions like sendTestEmail, etc. would go here)
