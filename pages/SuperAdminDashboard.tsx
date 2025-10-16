@@ -14,7 +14,7 @@ type SystemStatus = {
     details?: string[];
 } | null;
 
-const FRONTEND_VERSION = "14.0"; // Must match version in AdminAuth.tsx
+const FRONTEND_VERSION = "15.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
