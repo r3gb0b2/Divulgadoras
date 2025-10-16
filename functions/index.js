@@ -1,7 +1,10 @@
+
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const Brevo = require("@getbrevo/brevo");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// FIX: Corrected the package name from "@google/generative-ai" to "@google/genai"
+// and the imported class from "GoogleGenerativeAI" to "GoogleGenAI" to match the installed package and latest SDK.
+const { GoogleGenAI } = require("@google/genai");
 const xml2js = require("xml2js");
 
 admin.initializeApp();
@@ -37,9 +40,14 @@ const getBrevoApi = () => {
         console.error("Brevo API key is not set in Firebase Functions config.");
         throw new functions.https.HttpsError("failed-precondition", "A API de e-mail não está configurada.");
     }
-    const apiInstance = new Brevo.TransactionalEmailsApi();
-    apiInstance.authentications["apiKey"].apiKey = apiKey;
-    return apiInstance;
+    
+    // Create a new, isolated ApiClient instance for each call.
+    // This is safer in serverless environments than relying on a shared singleton instance.
+    const apiClient = new Brevo.ApiClient();
+    apiClient.authentications["api-key"].apiKey = apiKey;
+
+    // Pass the configured client directly to the API constructor.
+    return new Brevo.TransactionalEmailsApi(apiClient);
 };
 
 /**
