@@ -54,17 +54,26 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
     try {
         const q = query(
             collection(firestore, "promoters"),
-            where("email", "==", email.toLowerCase().trim()),
-            orderBy("createdAt", "desc"),
-            limit(1)
+            where("email", "==", email.toLowerCase().trim())
         );
         const querySnapshot = await getDocs(q);
         if (querySnapshot.empty) {
             return null;
         }
-        const promoterDoc = querySnapshot.docs[0];
+
+        // Sort documents by createdAt timestamp descending to find the latest one
+        const promoterDocs = querySnapshot.docs.sort((a, b) => {
+            const dataA = a.data();
+            const dataB = b.data();
+            const timeA = (dataA.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (dataB.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA;
+        });
+
+        const latestPromoterDoc = promoterDocs[0];
+
         // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-        return Object.assign({ id: promoterDoc.id }, promoterDoc.data()) as Promoter;
+        return Object.assign({ id: latestPromoterDoc.id }, latestPromoterDoc.data()) as Promoter;
     } catch (error) {
         console.error("Error fetching latest promoter profile: ", error);
         throw new Error("Não foi possível buscar os dados do seu cadastro anterior.");
