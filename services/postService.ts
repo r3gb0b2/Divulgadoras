@@ -60,9 +60,13 @@ export const createPost = async (
   }
 };
 
-export const getPostsForOrg = async (organizationId: string): Promise<Post[]> => {
+export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
     try {
-        const q = query(collection(firestore, "posts"), where("organizationId", "==", organizationId));
+        const postsCollection = collection(firestore, "posts");
+        const q = organizationId 
+            ? query(postsCollection, where("organizationId", "==", organizationId))
+            : query(postsCollection);
+
         const snapshot = await getDocs(q);
         const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         posts.sort((a, b) => 

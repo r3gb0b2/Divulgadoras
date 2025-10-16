@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg } from '../services/postService';
-import { Post } from '../types';
+import { getOrganizations } from '../services/organizationService';
+import { Post, Organization } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -10,20 +11,36 @@ const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
     const { adminData } = useAdminAuth();
     const [posts, setPosts] = useState<Post[]>([]);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const isSuperAdmin = adminData?.role === 'superadmin';
+
     useEffect(() => {
         const fetchPosts = async () => {
-            if (!adminData?.organizationId) {
+            if (!adminData) return;
+            
+            setIsLoading(true);
+            setError(null);
+            
+            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+
+            if (!isSuperAdmin && !orgId) {
                 setError("Organização não encontrada para este admin.");
                 setIsLoading(false);
                 return;
             }
-            setIsLoading(true);
+
             try {
-                const fetchedPosts = await getPostsForOrg(adminData.organizationId);
+                const postPromise = getPostsForOrg(orgId);
+                const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
+                
+                const [fetchedPosts, fetchedOrgs] = await Promise.all([postPromise, orgPromise]);
+
                 setPosts(fetchedPosts);
+                setOrganizations(fetchedOrgs);
+
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -32,7 +49,16 @@ const AdminPosts: React.FC = () => {
         };
 
         fetchPosts();
-    }, [adminData]);
+    }, [adminData, isSuperAdmin]);
+
+    const orgNameMap = useMemo(() => {
+        if (!isSuperAdmin) return {};
+        return organizations.reduce((acc, org) => {
+            acc[org.id] = org.name;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [organizations, isSuperAdmin]);
+
 
     const formatDate = (timestamp: any): string => {
         if (!timestamp) return 'N/A';
@@ -56,6 +82,7 @@ const AdminPosts: React.FC = () => {
                     <div key={post.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start">
                             <div>
+                                {isSuperAdmin && <p className="text-xs font-semibold text-gray-400">{orgNameMap[post.organizationId] || 'Organização Desconhecida'}</p>}
                                 <p className="font-bold text-lg text-primary">{post.campaignName}</p>
                                 <p className="text-sm text-gray-400">
                                     {post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}
@@ -83,12 +110,14 @@ const AdminPosts: React.FC = () => {
                         <ArrowLeftIcon className="w-4 h-4" />
                         <span>Voltar ao Painel</span>
                     </button>
-                    <button 
-                        onClick={() => navigate('/admin/posts/new')}
-                        className="px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"
-                    >
-                        + Nova Publicação
-                    </button>
+                    {!isSuperAdmin && (
+                        <button 
+                            onClick={() => navigate('/admin/posts/new')}
+                            className="px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"
+                        >
+                            + Nova Publicação
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
