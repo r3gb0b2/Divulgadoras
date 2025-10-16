@@ -5,10 +5,11 @@ import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
+    const normalizedEmail = promoterData.email.toLowerCase().trim();
     // Check for existing registration for the same email, state, campaign and organization
     const q = query(
       collection(firestore, "promoters"),
-      where("email", "==", promoterData.email.toLowerCase().trim()),
+      where("email", "==", normalizedEmail),
       where("state", "==", promoterData.state),
       where("campaignName", "==", promoterData.campaignName || null),
       where("organizationId", "==", promoterData.organizationId)
@@ -34,6 +35,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
+      email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
       photoUrls,
       status: 'pending' as const,

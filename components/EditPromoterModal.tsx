@@ -50,6 +50,9 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     setIsSaving(true);
     try {
       const dataToSave = { ...formData };
+      if (dataToSave.email) {
+        dataToSave.email = dataToSave.email.toLowerCase().trim();
+      }
       if (dataToSave.status !== 'rejected') {
         dataToSave.rejectionReason = ''; // Clear reason if not rejected
       }
