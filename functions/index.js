@@ -520,7 +520,7 @@ exports.createAdminRequest = functions.region("southamerica-east1").https.onCall
 exports.createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   const { orgName, ownerName, phone, taxId, email, password, planId } = data;
   if (!orgName || !ownerName || !email || !password || !planId) {
-    throw new functions.https.HttpsError("invalid-argument", "Dados insuficientes para criar a organização.");
+    throw new functions.https.HttpsError("invalid-argument", "Dados insuficientes para criar la organização.");
   }
   return db.runTransaction(async (transaction) => {
     const existingUser = await admin.auth().getUserByEmail(email).catch(() => null);
@@ -684,10 +684,10 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   }
 
   // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
-  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt._seconds !== undefined) {
+  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
       postData.expiresAt = new admin.firestore.Timestamp(
-          postData.expiresAt._seconds,
-          postData.expiresAt._nanoseconds,
+          postData.expiresAt.seconds,
+          postData.expiresAt.nanoseconds,
       );
   }
 
@@ -766,10 +766,10 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     }
 
     // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
-    if (updateData.expiresAt && typeof updateData.expiresAt === "object" && updateData.expiresAt._seconds !== undefined) {
+    if (updateData.expiresAt && typeof updateData.expiresAt === "object" && updateData.expiresAt.seconds !== undefined) {
         updateData.expiresAt = new admin.firestore.Timestamp(
-            updateData.expiresAt._seconds,
-            updateData.expiresAt._nanoseconds,
+            updateData.expiresAt.seconds,
+            updateData.expiresAt.nanoseconds,
         );
     } else if (updateData.expiresAt === null) {
         updateData.expiresAt = null;

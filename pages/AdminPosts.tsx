@@ -66,9 +66,10 @@ const AdminPosts: React.FC = () => {
         // Handle Firestore Timestamp object from SDK
         if (timestamp.toDate) {
             date = timestamp.toDate();
-        } else if (typeof timestamp === 'object' && timestamp._seconds) {
-            // Handle serialized Timestamp from cloud function or from malformed db entry
-            date = new Date(timestamp._seconds * 1000);
+        } else if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
+            // Handle serialized Timestamp from cloud function OR from malformed db entry
+            const seconds = timestamp.seconds || timestamp._seconds;
+            date = new Date(seconds * 1000);
         } else {
             // Handle string date
             date = new Date(timestamp);

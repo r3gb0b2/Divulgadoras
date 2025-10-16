@@ -7,20 +7,20 @@ import { Timestamp } from 'firebase/firestore';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
+    let date;
     // Handle Firestore Timestamp object from SDK
     if (ts.toDate) {
-        const date = ts.toDate();
-        if (isNaN(date.getTime())) return '';
-        return date.toISOString().split('T')[0];
+        date = ts.toDate();
     }
     // Handle serialized Timestamp from cloud function or from malformed db entry
-    if (typeof ts === 'object' && ts._seconds) {
-        const date = new Date(ts._seconds * 1000);
-        if (isNaN(date.getTime())) return '';
-        return date.toISOString().split('T')[0];
+    else if (typeof ts === 'object' && (ts.seconds || ts._seconds)) {
+        const seconds = ts.seconds || ts._seconds;
+        date = new Date(seconds * 1000);
     }
     // Handle string date
-    const date = new Date(ts);
+    else {
+        date = new Date(ts);
+    }
     if (isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
 };
@@ -115,9 +115,10 @@ const PostDetails: React.FC = () => {
         // Handle Firestore Timestamp object from SDK
         if (timestamp.toDate) {
             date = timestamp.toDate();
-        } else if (typeof timestamp === 'object' && timestamp._seconds) {
-            // Handle serialized Timestamp from cloud function or from malformed db entry
-            date = new Date(timestamp._seconds * 1000);
+        } else if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
+            // Handle serialized Timestamp from cloud function OR from malformed db entry
+            const seconds = timestamp.seconds || timestamp._seconds;
+            date = new Date(seconds * 1000);
         } else {
             // Handle string date
             date = new Date(timestamp);
