@@ -94,7 +94,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const isSuperAdmin = adminData.role === 'superadmin';
     const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
-    const isCampaignFilterActive = isSuperAdmin && selectedCampaign !== 'all';
 
     const organizationIdForReasons = useMemo(() => {
         if (isSuperAdmin) {
@@ -108,24 +107,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     useEffect(() => {
         const fetchStaticData = async () => {
             try {
-                let campaignsPromise;
                 if (isSuperAdmin) {
-                    campaignsPromise = getAllCampaigns();
-                    const orgsData = await getOrganizations();
+                    const [orgsData, campaignsData] = await Promise.all([getOrganizations(), getAllCampaigns()]);
                     setAllOrganizations(orgsData.sort((a, b) => a.name.localeCompare(b.name)));
+                    setAllCampaigns(campaignsData);
                 } else if (adminData.organizationId) {
-                    campaignsPromise = getAllCampaigns(adminData.organizationId);
                     const [reasonsData, orgData] = await Promise.all([
                         getRejectionReasons(adminData.organizationId),
                         getOrganization(adminData.organizationId),
                     ]);
                     setRejectionReasons(reasonsData);
                     setOrganization(orgData);
-                } else {
-                    campaignsPromise = Promise.resolve([]);
                 }
-                const campaignsData = await campaignsPromise;
-                setAllCampaigns(campaignsData);
             } catch (err: any) {
                 setError(err.message || 'Não foi possível carregar dados de suporte.');
             }
@@ -145,35 +138,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
-
-    // Calculate the exact list of campaigns the admin is allowed to see.
-    const campaignsInScope = useMemo(() => {
-        if (isSuperAdmin) return null; // null means no campaign filter
-        if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            return null; // No specific campaign assignments means access to all within assigned states.
-        }
-
-        const allowedCampaignNames = new Set<string>();
-        const statesForScope = getStatesForScope() || [];
-
-        for (const stateAbbr of statesForScope) {
-            const restrictedCampaigns = adminData.assignedCampaigns[stateAbbr];
-            
-            if (restrictedCampaigns) { // Restriction exists for this state
-                // If there are specific campaigns, add them
-                if (restrictedCampaigns.length > 0) {
-                    restrictedCampaigns.forEach(name => allowedCampaignNames.add(name));
-                }
-                // If restrictedCampaigns is an empty array [], they can't see any campaigns in this state, so we add nothing.
-            } else { // No restriction for this state, so they can see all campaigns in it.
-                allCampaigns
-                    .filter(c => c.stateAbbr === stateAbbr)
-                    .forEach(c => allowedCampaignNames.add(c.name));
-            }
-        }
-        
-        return Array.from(allowedCampaignNames);
-    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
 
     const fetchStats = useCallback(async () => {
         const orgId = isSuperAdmin ? undefined : adminData.organizationId;
@@ -225,15 +189,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     organizationId: orgId,
                     statesForScope,
                     status: filter,
-                    campaignsInScope: campaignsInScope,
-                    selectedCampaign: selectedCampaign,
+                    campaignName: selectedCampaign,
                     filterOrgId: selectedOrg,
                     filterState: selectedState,
                     limitPerPage: PROMOTERS_PER_PAGE,
                     cursor: pageCursors[currentPage - 1]
                 });
                 
+                // Data is now pre-sorted by the server (createdAt ascending).
                 setPromotersOnPage(result.promoters);
+
                 setTotalPromotersCount(result.totalCount);
 
                 if (result.lastVisible && pageCursors.length === currentPage) {
@@ -248,7 +213,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         };
 
         fetchPromoterPage();
-    }, [adminData, organization, isSuperAdmin, currentPage, filter, selectedOrg, selectedState, selectedCampaign, pageCursors, getStatesForScope, campaignsInScope]);
+    }, [adminData, organization, isSuperAdmin, currentPage, filter, selectedOrg, selectedState, selectedCampaign, pageCursors, getStatesForScope]);
 
 
     // Reset page number whenever filters change
@@ -415,31 +380,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const displayPromoters = useMemo(() => {
-        // Create a mutable copy to sort
-        const promotersToSort = [...promotersOnPage];
-
-        // Sort by creation date ascending (oldest first)
-        promotersToSort.sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-            return timeA - timeB;
-        });
-
-        // Apply client-side text search filter
+        // Apply client-side filters (search query, fine-grained campaign permissions)
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         
-        if (lowercasedQuery === '') {
-            return promotersToSort; // Return the sorted list if no search query
-        }
-        
-        // Filter the sorted list
-        return promotersToSort.filter(p => {
-            return p.name.toLowerCase().includes(lowercasedQuery) ||
-                p.email.toLowerCase().includes(lowercasedQuery) ||
-                (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
-                (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+        return promotersOnPage.filter(p => {
+            // Fine-grained campaign filter for regular admins
+            if (!isSuperAdmin && adminData.assignedCampaigns) {
+                const campaignsForState = adminData.assignedCampaigns?.[p.state];
+                if (campaignsForState && campaignsForState.length > 0) {
+                    if (!p.campaignName || !campaignsForState.includes(p.campaignName)) {
+                        return false;
+                    }
+                }
+            }
+
+            // Text search filter
+            if (lowercasedQuery !== '') {
+                return p.name.toLowerCase().includes(lowercasedQuery) ||
+                    p.email.toLowerCase().includes(lowercasedQuery) ||
+                    (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
+                    (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+            }
+            
+            return true;
         });
-    }, [promotersOnPage, searchQuery]);
+    }, [promotersOnPage, searchQuery, isSuperAdmin, adminData.assignedCampaigns]);
     
     // Pagination Calculations
     const pageCount = Math.ceil(totalPromotersCount / PROMOTERS_PER_PAGE);
@@ -603,22 +568,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     </div>
                     
                     {isSuperAdmin && (
-                        <div className="flex flex-wrap gap-2 flex-grow items-start">
-                             <select 
-                                value={selectedOrg} 
-                                onChange={e => setSelectedOrg(e.target.value)}
-                                disabled={isCampaignFilterActive}
-                                title={isCampaignFilterActive ? "Desativado ao filtrar por evento" : ""}
-                                className={`px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200 transition-opacity ${isCampaignFilterActive ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <div className="flex flex-wrap gap-2 flex-grow">
+                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
                                 <option value="all">Todas Organizações</option>
                                 {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
                             </select>
-                            <select 
-                                value={selectedState} 
-                                onChange={e => setSelectedState(e.target.value)}
-                                disabled={isCampaignFilterActive}
-                                title={isCampaignFilterActive ? "Desativado ao filtrar por evento" : ""}
-                                className={`px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200 transition-opacity ${isCampaignFilterActive ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
                                 <option value="all">Todos Estados</option>
                                 {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                             </select>
@@ -628,11 +583,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     <option key={name} value={name}>{name}</option>
                                 ))}
                             </select>
-                            {isCampaignFilterActive && (
-                                <p className="text-xs text-yellow-400 w-full basis-full -mt-1 ml-1">
-                                    Filtros de organização e estado são ignorados quando um evento específico é selecionado.
-                                </p>
-                            )}
                         </div>
                     )}
 

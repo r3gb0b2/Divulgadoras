@@ -94,17 +94,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'approved') {
         dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
-      
-      // Construct the 'allCampaigns' field for efficient querying
-      const primaryCampaign = promoter.campaignName;
-      const associated = dataToSave.associatedCampaigns || [];
-      const allCampaignsSet = new Set<string>();
-      if (primaryCampaign) {
-          allCampaignsSet.add(primaryCampaign);
-      }
-      associated.forEach(c => allCampaignsSet.add(c));
-      dataToSave.allCampaigns = Array.from(allCampaignsSet);
-
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
