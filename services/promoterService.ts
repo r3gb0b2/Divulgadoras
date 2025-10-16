@@ -153,38 +153,37 @@ export const getPromotersPage = async (options: {
       }
     } else {
       // --- REGULAR ADMIN LOGIC ---
+      if (!options.organizationId) {
+        return { promoters: [], lastVisible: null, totalCount: 0 };
+      }
+
+      // This is the admin's entire visibility scope (e.g., ['eventA', 'eventB', 'org_ORG_ID'])
       const campaignsInScope = options.campaignsInScope;
+      let campaignsToQuery = campaignsInScope;
 
-      if (campaignsInScope === null) {
-        // This case is for an unrestricted admin whose organization has NO campaigns.
-        // We find promoters belonging to their org, who likely also have no campaign.
-        filters.push(where("organizationId", "==", options.organizationId));
+      if (options.selectedCampaign !== 'all') {
+          // If filtering by a specific campaign in UI, narrow the query to just that one,
+          // but only if it's within their allowed scope.
+          if (campaignsInScope && campaignsInScope.includes(options.selectedCampaign)) {
+              campaignsToQuery = [options.selectedCampaign];
+          } else {
+              // They are filtering for something outside their scope. Return nothing.
+              return { promoters: [], lastVisible: null, totalCount: 0 };
+          }
+      }
+
+      if (!campaignsToQuery || campaignsToQuery.length === 0) {
+          // This admin has an empty scope. Return nothing to be safe.
+          return { promoters: [], lastVisible: null, totalCount: 0 };
+      }
+
+      if (campaignsToQuery.length === 1) {
+          // 'array-contains' is more efficient and allows server-side sorting
+          filters.push(where("allCampaigns", "array-contains", campaignsToQuery[0]));
       } else {
-        // This case is for:
-        // 1. Unrestricted admins whose org has campaigns.
-        // 2. Restricted admins.
-        let campaignsToQuery = campaignsInScope;
-        if (options.selectedCampaign !== 'all') {
-            if (campaignsInScope.includes(options.selectedCampaign)) {
-                campaignsToQuery = [options.selectedCampaign];
-            } else {
-                // Admin selected a campaign they are not scoped for.
-                return { promoters: [], lastVisible: null, totalCount: 0 };
-            }
-        }
-
-        if (campaignsToQuery.length === 0) {
-            // This happens if a restricted admin has no campaigns in their scope.
-            // Correctly returns no promoters.
-            return { promoters: [], lastVisible: null, totalCount: 0 };
-        }
-
-        if (campaignsToQuery.length === 1) {
-            filters.push(where("allCampaigns", "array-contains", campaignsToQuery[0]));
-        } else {
-            filters.push(where("allCampaigns", "array-contains-any", campaignsToQuery.slice(0, 30)));
-            queryNeedsClientSideSort = true; // Disable server sorting due to 'array-contains-any'
-        }
+          // 'array-contains-any' is needed for multiple campaigns but has limitations
+          filters.push(where("allCampaigns", "array-contains-any", campaignsToQuery.slice(0, 30)));
+          queryNeedsClientSideSort = true; // Firestore limitation: cannot order by a different field
       }
     }
 
@@ -394,19 +393,20 @@ export const addRejectionReason = async (text: string, organizationId: string): 
 };
 
 export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
-    try {
-        await updateDoc(doc(firestore, 'rejectionReasons', id), { text });
-    } catch (error) {
-        console.error("Error updating rejection reason: ", error);
-        throw new Error("Não foi possível atualizar o motivo de rejeição.");
-    }
+  try {
+    const reasonDoc = doc(firestore, 'rejectionReasons', id);
+    await updateDoc(reasonDoc, { text });
+  } catch (error) {
+    console.error("Error updating rejection reason: ", error);
+    throw new Error("Não foi possível atualizar o motivo de rejeição.");
+  }
 };
 
 export const deleteRejectionReason = async (id: string): Promise<void> => {
-    try {
-        await deleteDoc(doc(firestore, "rejectionReasons", id));
-    } catch (error) {
-        console.error("Error deleting rejection reason: ", error);
-        throw new Error("Não foi possível deletar o motivo de rejeição.");
-    }
+  try {
+    await deleteDoc(doc(firestore, "rejectionReasons", id));
+  } catch (error) {
+    console.error("Error deleting rejection reason: ", error);
+    throw new Error("Não foi possível remover o motivo de rejeição.");
+  }
 };

@@ -189,7 +189,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                         <div key={stateAbbr}>
                             <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
                             <div className="pl-2 space-y-1">
-                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
                                 {(campaigns as Campaign[]).map(campaign => (
                                     <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
                                         <input
