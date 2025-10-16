@@ -378,28 +378,59 @@ exports.getSystemStatus = functions
         const brevoKey = config.brevo?.key;
         const brevoEmail = config.brevo?.sender_email;
         
+        const log = [];
         const response = {
             functionVersion: process.env.K_REVISION,
             emailProvider: "Brevo",
             configured: false,
             message: "",
-            details: []
+            log: log,
         };
         
-        if (!brevoKey || !brevoEmail) {
-            response.message = "As variáveis de ambiente 'brevo.key' e 'brevo.sender_email' não estão configuradas.";
+        log.push({ level: "INFO", message: "Iniciando verificação do sistema de e-mail..." });
+
+        if (!brevoKey) {
+            log.push({ level: "ERROR", message: "A variável 'brevo.key' não foi encontrada na configuração." });
+            response.message = "Configuração incompleta. A chave da API (brevo.key) está faltando.";
             return response;
         }
+        log.push({ level: "SUCCESS", message: "Variável 'brevo.key' encontrada." });
+
+        if (!brevoEmail) {
+            log.push({ level: "ERROR", message: "A variável 'brevo.sender_email' não foi encontrada." });
+            response.message = "Configuração incompleta. O e-mail do remetente (brevo.sender_email) está faltando.";
+            return response;
+        }
+        log.push({ level: "SUCCESS", message: `Variável 'brevo.sender_email' encontrada: ${brevoEmail}` });
 
         try {
+            log.push({ level: "INFO", message: "Tentando autenticar com a API da Brevo..." });
             const apiInstance = new Brevo.AccountApi();
             apiInstance.setApiKey(Brevo.AccountApiApiKeys.apiKey, brevoKey);
-            await apiInstance.getAccount();
+            const accountInfo = await apiInstance.getAccount();
+            
+            log.push({ level: "SUCCESS", message: "Autenticação com a Brevo bem-sucedida." });
+            log.push({ level: "INFO", message: `Conta Brevo: ${accountInfo.body.email} | Plano: ${accountInfo.body.plan[0].type}` });
+
             response.configured = true;
             response.message = `Conexão com a Brevo (remetente: ${brevoEmail}) estabelecida com sucesso.`;
         } catch (error) {
-            response.message = "A chave da API da Brevo configurada é INVÁLIDA ou a conta está suspensa.";
-            response.details.push(error.message);
+            functions.logger.error("Brevo API connection failed during status check:", error);
+            let errorMessage = "Erro desconhecido ao conectar com a Brevo.";
+            if (error.response && error.response.body && error.response.body.message) {
+                // Brevo's specific error message
+                errorMessage = `API da Brevo respondeu com: '${error.response.body.message}'`;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            log.push({ level: "ERROR", message: `Falha na autenticação. ${errorMessage}` });
+            
+            if (errorMessage.toLowerCase().includes("api key is invalid")) {
+                 response.message = "A chave da API da Brevo configurada é INVÁLIDA. Verifique se copiou a chave corretamente.";
+            } else {
+                 response.message = "A verificação com a API da Brevo falhou. Veja o log de diagnóstico para detalhes.";
+            }
         }
 
         return response;

@@ -6,12 +6,13 @@ import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
+type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
 type SystemStatus = {
     functionVersion?: string;
     emailProvider: string;
     configured: boolean;
     message: string;
-    details?: string[];
+    log?: SystemStatusLogEntry[];
 } | null;
 
 const FRONTEND_VERSION = "15.0"; // Must match version in AdminAuth.tsx
@@ -50,7 +51,7 @@ const SuperAdminDashboard: React.FC = () => {
                 emailProvider: 'Erro Crítico',
                 configured: false,
                 message: 'Falha ao comunicar com a função do servidor. A função pode não existir ou estar com erro grave.',
-                details: [String(error)]
+                log: [{ level: 'ERROR', message: String(error) }]
             });
             setIsSyncError(true);
         } finally {
@@ -89,6 +90,26 @@ const SuperAdminDashboard: React.FC = () => {
             setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${detailedError}` } }));
         }
     };
+    
+    const renderDiagnosticLog = (log: SystemStatusLogEntry[]) => {
+        const levelStyles: { [key: string]: string } = {
+            INFO: 'text-blue-300',
+            SUCCESS: 'text-green-300',
+            ERROR: 'text-red-300 font-bold',
+        };
+        return (
+            <div className="mt-4">
+                <h4 className="text-md font-semibold text-gray-200">Log de Diagnóstico:</h4>
+                <pre className="text-xs bg-black/40 p-3 rounded mt-2 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                    {log.map((entry, index) => (
+                        <div key={index} className={levelStyles[entry.level]}>
+                            <span className="font-bold">[{entry.level}]</span> {entry.message}
+                        </div>
+                    ))}
+                </pre>
+            </div>
+        );
+    };
 
     const renderSyncErrorWarning = () => (
         <div className="bg-red-900/50 border-2 border-red-600 text-red-200 p-6 rounded-lg mb-6">
@@ -99,10 +120,10 @@ const SuperAdminDashboard: React.FC = () => {
             <p className="mb-2">Seu painel (<strong>Frontend v{FRONTEND_VERSION}</strong>) não está sincronizado com o servidor (<strong>Backend {systemStatus?.functionVersion || 'indisponível'}</strong>).</p>
             <p className="mb-4">Isso geralmente acontece quando uma dependência do servidor não foi instalada. Siga os passos abaixo para resolver:</p>
             
-            {systemStatus?.details && (
+            {systemStatus?.log && (
                 <div className="mb-4">
-                    <p className="font-semibold">Mensagem de erro do servidor:</p>
-                    <pre className="text-xs bg-black/40 p-2 rounded mt-1 whitespace-pre-wrap"><code>{systemStatus.details.join('\n')}</code></pre>
+                    <p className="font-semibold">Log de diagnóstico do servidor:</p>
+                    {renderDiagnosticLog(systemStatus.log)}
                 </div>
             )}
             
@@ -167,18 +188,18 @@ const SuperAdminDashboard: React.FC = () => {
              );
         }
     
-        let guideTitle = "⚠️ Ação Necessária: Configurar Envio de E-mail";
-        let guideMessage = `O sistema detectou que o serviço de e-mail (${systemStatus.emailProvider}) não está configurado corretamente.`;
-        if (systemStatus.message.includes("INVÁLIDA")) {
-            guideTitle = "⚠️ Erro de Configuração: Chave de API Inválida";
-            guideMessage = "A verificação com a Brevo falhou. A chave da API configurada parece estar incorreta ou não ter as permissões necessárias. Por favor, gere uma nova chave e reconfigure."
-        }
+        const hasErrorInLog = systemStatus.log?.some(l => l.level === 'ERROR');
+        const guideTitle = hasErrorInLog ? "⚠️ Erro de Configuração Detectado" : "⚠️ Ação Necessária: Configurar Envio de E-mail";
+        const guideMessage = systemStatus.message;
         
         return (
             <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 p-6 rounded-lg">
                 <h3 className="font-bold text-xl mb-3">{guideTitle}</h3>
                 <p className="mb-4">{guideMessage}</p>
-                <div className="space-y-4 text-sm">
+                
+                {systemStatus.log && renderDiagnosticLog(systemStatus.log)}
+                
+                <div className="space-y-4 text-sm mt-4">
                     <div>
                         <strong>Passo 1: Configure as variáveis no Firebase</strong>
                         <p className="text-gray-300">Execute o comando abaixo no terminal, substituindo os valores de exemplo.</p>
