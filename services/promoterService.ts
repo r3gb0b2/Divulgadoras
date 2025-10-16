@@ -65,8 +65,8 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         const promoterDocs = querySnapshot.docs.sort((a, b) => {
             const dataA = a.data();
             const dataB = b.data();
-            const timeA = (dataA.createdAt as Timestamp)?.toMillis() || 0;
-            const timeB = (dataB.createdAt as Timestamp)?.toMillis() || 0;
+            const timeA = (dataA.createdAt instanceof Timestamp) ? dataA.createdAt.toMillis() : 0;
+            const timeB = (dataB.createdAt instanceof Timestamp) ? dataB.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 
@@ -104,8 +104,8 @@ export const getPromoters = async (organizationId: string | undefined, states?: 
     
     // Always sort manually on the client-side for consistency and to include documents without `createdAt`.
     promoters.sort((a, b) => {
-        const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-        const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+        const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+        const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
         return timeB - timeA;
     });
 
@@ -142,8 +142,8 @@ export const listenToPromoters = (
       });
 
       promoters.sort((a, b) => {
-          const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-          const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+          const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+          const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
           return timeB - timeA;
       });
 
@@ -202,8 +202,8 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
         });
 
         promoters.sort((a, b) => {
-            const timeA = (a.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
-            const timeB = (b.createdAt as unknown as Timestamp)?.toDate?.().getTime() || 0;
+            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 
