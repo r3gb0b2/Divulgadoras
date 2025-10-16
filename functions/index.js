@@ -216,6 +216,10 @@ exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) =
         throw new functions.https.HttpsError("failed-precondition", "Apenas divulgadoras aprovadas podem ser notificadas.");
     }
 
+    if (!promoter.organizationId || typeof promoter.organizationId !== "string") {
+        throw new functions.https.HttpsError("failed-precondition", `A divulgadora ${promoterId} não possui um ID de organização válido.`);
+    }
+
     const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
     const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
 
@@ -248,7 +252,6 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Chunk the promoterIds array to handle Firestore's 'in' query limit.
         const chunks = [];
         const chunkSize = 30;
         for (let i = 0; i < promoterIds.length; i += chunkSize) {
@@ -260,13 +263,7 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
         );
 
         const querySnapshots = await Promise.all(queryPromises);
-
-        const allPromoterDocs = [];
-        querySnapshots.forEach((snapshot) => {
-            snapshot.forEach((doc) => {
-                allPromoterDocs.push(doc);
-            });
-        });
+        const allPromoterDocs = querySnapshots.flatMap((snapshot) => snapshot.docs);
 
         if (allPromoterDocs.length === 0) {
             throw new functions.https.HttpsError("not-found", "Nenhuma divulgadora encontrada para os IDs fornecidos.");
@@ -276,11 +273,16 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
         const errors = [];
         const emailHtml = await getEmailHtmlContent();
 
-        // Send emails in parallel for better performance
         const emailPromises = allPromoterDocs.map(async (doc) => {
             const promoter = doc.data();
             try {
-                if (promoter.status !== "approved") return; // Skip non-approved
+                if (promoter.status !== "approved") return;
+
+                if (!promoter.organizationId || typeof promoter.organizationId !== "string") {
+                    logger.warn(`Skipping promoter ${doc.id} due to missing or invalid organizationId.`);
+                    errors.push({id: doc.id, error: "ID da organização ausente ou inválido."});
+                    return;
+                }
 
                 const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
                 const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
