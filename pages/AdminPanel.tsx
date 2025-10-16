@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
@@ -54,10 +57,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
-    
-    // State for batch notifications
-    const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
-    const [isBatchNotifying, setIsBatchNotifying] = useState(false);
+    const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
     // State for super admin filters
     const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
@@ -162,13 +162,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const currentPromoter = promoters.find(p => p.id === id);
             const updatedData = { ...data };
 
+            // If status is being set and is different from the current promoter's status
             if (data.status && data.status !== currentPromoter?.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
+                // FIX: Removed `as any` cast by improving the Promoter type definition to accept FieldValue.
                 updatedData.statusChangedAt = serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);
+            // No need to fetch data, listener will update UI
             alert("Status da divulgadora atualizado com sucesso.");
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
@@ -182,6 +185,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
+    };
+
+    const handleManualNotify = async (promoterId: string) => {
+        if (notifyingId) return;
+        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado). Deseja continuar?")) {
+            return;
+        }
+        
+        setNotifyingId(promoterId);
+        try {
+            const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+            const result = await manuallySendStatusEmail({ promoterId });
+            const data = result.data as { success: boolean, message: string, provider?: string };
+            const providerName = data.provider || 'Brevo (v9.2)';
+            alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
+        } catch (error: any) {
+            console.error("Failed to send manual notification:", error);
+            const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
+            const providerName = error?.details?.provider || 'Brevo (v9.2)';
+            alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
+        } finally {
+            setNotifyingId(null);
+        }
     };
 
     const handleDeletePromoter = async (id: string) => {
@@ -208,12 +234,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const openRejectionModal = async (promoter: Promoter) => {
+        // If superadmin, fetch reasons for the specific promoter's org
         if (isSuperAdmin && promoter.organizationId) {
             try {
                 const reasons = await getRejectionReasons(promoter.organizationId);
                 setRejectionReasons(reasons);
             } catch (e) {
                 console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
+                // Set to empty array to not show stale reasons from another org
                 setRejectionReasons([]);
             }
         }
@@ -224,101 +252,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleLogout = async () => {
         try {
             await signOut(auth);
+            // The auth context will handle navigation
         } catch (error) {
             console.error("Logout failed", error);
         }
     };
-    
+
+    const stats = useMemo(() => {
+        const promoterSource = promoters; // Use all promoters before filtering for stats
+        return {
+          total: promoterSource.length,
+          pending: promoterSource.filter(p => p.status === 'pending').length,
+          approved: promoterSource.filter(p => p.status === 'approved').length,
+          rejected: promoterSource.filter(p => p.status === 'rejected').length,
+        };
+      }, [promoters]);
+
     const filteredPromoters = useMemo(() => {
         const lowercasedQuery = searchQuery.toLowerCase().trim();
+        
         return promoters.filter(p => {
             const statusMatch = filter === 'all' || p.status === filter;
             if (!statusMatch) return false;
+
             const queryMatch = lowercasedQuery === '' ||
                 p.name.toLowerCase().includes(lowercasedQuery) ||
                 p.email.toLowerCase().includes(lowercasedQuery) ||
                 (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
                 (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
             if (!queryMatch) return false;
+
             if (isSuperAdmin) {
                 const orgMatch = selectedOrg === 'all' || p.organizationId === selectedOrg;
                 if (!orgMatch) return false;
+
                 const stateMatch = selectedState === 'all' || p.state === selectedState;
                 if (!stateMatch) return false;
+
                 const campaignMatch = selectedCampaign === 'all' || p.campaignName === selectedCampaign;
                 if (!campaignMatch) return false;
             }
+            
             return true;
         });
     }, [promoters, filter, searchQuery, isSuperAdmin, selectedOrg, selectedState, selectedCampaign]);
-
-    // Batch notification logic
-    const handleSelectionChange = (promoterId: string) => {
-        setSelectedPromoterIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(promoterId)) newSet.delete(promoterId);
-            else newSet.add(promoterId);
-            return newSet;
-        });
-    };
-
-    const approvedPromotersInView = useMemo(() => filteredPromoters.filter(p => p.status === 'approved'), [filteredPromoters]);
     
-    const allVisibleApprovedSelected = useMemo(() => {
-        return approvedPromotersInView.length > 0 && approvedPromotersInView.every(p => selectedPromoterIds.has(p.id));
-    }, [approvedPromotersInView, selectedPromoterIds]);
-    
-    const handleSelectAllVisible = () => {
-        setSelectedPromoterIds(currentSelection => {
-            const newSelection = new Set(currentSelection);
-            if (allVisibleApprovedSelected) {
-                approvedPromotersInView.forEach(p => newSelection.delete(p.id));
-            } else {
-                approvedPromotersInView.forEach(p => newSelection.add(p.id));
-            }
-            return newSelection;
-        });
-    };
-    
-    const handleBatchNotify = async () => {
-        if (selectedPromoterIds.size === 0) return;
-        if (!window.confirm(`Você tem certeza que deseja enviar uma notificação de aprovação para ${selectedPromoterIds.size} divulgadoras selecionadas?`)) {
-            return;
-        }
-
-        setIsBatchNotifying(true);
-        setError(null);
-        try {
-            const batchNotifyPromoters = httpsCallable(functions, 'batchNotifyPromoters');
-            const result = await batchNotifyPromoters({ promoterIds: Array.from(selectedPromoterIds) });
-            const data = result.data as { success: boolean, message: string, errors: any[] };
-            
-            let alertMessage = data.message;
-            if (data.errors && data.errors.length > 0) {
-                alertMessage += `\n\nOcorreram ${data.errors.length} erros. Verifique o console para mais detalhes.`;
-                console.error("Batch notification errors:", data.errors);
-            }
-            alert(alertMessage);
-            setSelectedPromoterIds(new Set()); // Clear selection on success
-        } catch (error: any) {
-            console.error("Failed to send batch notification:", error);
-            const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
-            alert(`Falha ao enviar notificações: ${detailedError}`);
-        } finally {
-            setIsBatchNotifying(false);
-        }
-    };
-    // End batch notification logic
-    
-    const stats = useMemo(() => {
-        return {
-          total: promoters.length,
-          pending: promoters.filter(p => p.status === 'pending').length,
-          approved: promoters.filter(p => p.status === 'approved').length,
-          rejected: promoters.filter(p => p.status === 'rejected').length,
-        };
-    }, [promoters]);
-
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
@@ -337,83 +315,79 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return (
             <div className="space-y-4">
                 {filteredPromoters.map(promoter => (
-                    <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm flex items-start gap-4">
-                        {canManage && promoter.status === 'approved' && filter === 'approved' && (
-                            <div className="flex-shrink-0 flex items-center justify-center pt-1">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedPromoterIds.has(promoter.id)}
-                                    onChange={() => handleSelectionChange(promoter.id)}
-                                    className="h-5 w-5 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                                    aria-label={`Selecionar ${promoter.name}`}
-                                />
+                    <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
+                            <div>
+                                <p className="font-bold text-lg text-white">{promoter.name}</p>
+                                {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
+                                {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
+                                <p className="text-sm text-gray-400">{promoter.email}</p>
+                                <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             </div>
-                        )}
-                        <div className="flex-grow">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
-                                <div>
-                                    <p className="font-bold text-lg text-white">{promoter.name}</p>
-                                    {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
-                                    {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
-                                    <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
-                                </div>
-                                <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
-                            </div>
+                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
+                        </div>
 
-                            <div className="text-xs text-gray-500 mb-3 space-y-1">
-                                <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>
-                                {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
-                                    <p><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt)}</p>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-4 mb-3">
-                                <span className="text-sm font-medium text-gray-300">Fotos:</span>
-                                <div className="flex -space-x-2">
-                                    {(promoter.photoUrls || []).map((url, index) => (
-                                        <img key={index} src={url} alt={`Foto ${index + 1}`} className="w-8 h-8 rounded-full object-cover border-2 border-secondary cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, index)}/>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <div className="border-t border-gray-700 pt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                                <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center"><WhatsAppIcon className="w-4 h-4 mr-2" /><span>WhatsApp</span></a>
-                                <a href={`https://instagram.com/${(promoter.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center"><InstagramIcon className="w-4 h-4 mr-2" /><span>Instagram</span></a>
-                                {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline flex items-center"><TikTokIcon className="w-4 h-4 mr-2" /><span>TikTok</span></a>}
-                            </div>
-                            
-                            {canManage && (
-                                <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
-                                    <div>
-                                        {promoter.status === 'approved' && (
-                                            <label className="flex items-center space-x-2 cursor-pointer">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={!!promoter.hasJoinedGroup} 
-                                                    onChange={(e) => handleUpdatePromoter(promoter.id, { hasJoinedGroup: e.target.checked })}
-                                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                                                />
-                                                <span className="text-gray-300">Entrou no grupo</span>
-                                            </label>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end">
-                                        {promoter.status === 'pending' && (
-                                            <>
-                                                <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                                <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                            </>
-                                        )}
-                                        <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                        {isSuperAdmin && (
-                                            <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
-                                        )}
-                                    </div>
-                                </div>
+                        <div className="text-xs text-gray-500 mb-3 space-y-1">
+                            <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>
+                            {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
+                                <p><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt)}</p>
                             )}
                         </div>
+
+                        <div className="flex items-center gap-4 mb-3">
+                            <span className="text-sm font-medium text-gray-300">Fotos:</span>
+                            <div className="flex -space-x-2">
+                                {(promoter.photoUrls || []).map((url, index) => (
+                                    <img key={index} src={url} alt={`Foto ${index + 1}`} className="w-8 h-8 rounded-full object-cover border-2 border-secondary cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, index)}/>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="border-t border-gray-700 pt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                            <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center"><WhatsAppIcon className="w-4 h-4 mr-2" /><span>WhatsApp</span></a>
+                            <a href={`https://instagram.com/${(promoter.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center"><InstagramIcon className="w-4 h-4 mr-2" /><span>Instagram</span></a>
+                            {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline flex items-center"><TikTokIcon className="w-4 h-4 mr-2" /><span>TikTok</span></a>}
+                        </div>
+                        
+                        {canManage && (
+                            <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
+                                <div>
+                                    {promoter.status === 'approved' && (
+                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!promoter.hasJoinedGroup} 
+                                                onChange={(e) => handleUpdatePromoter(promoter.id, { hasJoinedGroup: e.target.checked })}
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                            />
+                                            <span className="text-gray-300">Entrou no grupo</span>
+                                        </label>
+                                    )}
+                                </div>
+                                
+                                <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end">
+                                    {promoter.status === 'pending' && (
+                                        <>
+                                            <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
+                                            <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                        </>
+                                    )}
+                                    {promoter.status === 'approved' && (
+                                        <button
+                                            onClick={() => handleManualNotify(promoter.id)}
+                                            disabled={notifyingId === promoter.id}
+                                            className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
+                                        >
+                                            {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
+                                        </button>
+                                    )}
+                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                    {isSuperAdmin && (
+                                        <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -447,7 +421,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                         {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
-                            <button key={f} onClick={() => { setFilter(f); setSelectedPromoterIds(new Set()); }} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                 {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
                             </button>
                         ))}
@@ -496,29 +470,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </button>
                     )}
                 </div>
-                {filter === 'approved' && canManage && approvedPromotersInView.length > 0 && (
-                    <div className="mb-4 p-3 bg-gray-800 rounded-md flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="checkbox"
-                                id="select-all-visible"
-                                checked={allVisibleApprovedSelected}
-                                onChange={handleSelectAllVisible}
-                                className="h-5 w-5 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                            />
-                            <label htmlFor="select-all-visible" className="text-sm font-medium text-gray-200">
-                                Selecionar todas as {approvedPromotersInView.length} aprovadas visíveis
-                            </label>
-                        </div>
-                        <button
-                            onClick={handleBatchNotify}
-                            disabled={isBatchNotifying || selectedPromoterIds.size === 0}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isBatchNotifying ? 'Enviando...' : `Notificar Selecionadas (${selectedPromoterIds.size})`}
-                        </button>
-                    </div>
-                )}
                 {renderContent()}
             </div>
 
