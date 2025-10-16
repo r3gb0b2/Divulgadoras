@@ -33,16 +33,10 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, ...rest } = promoterData;
 
-    const allCampaigns = [`org_${promoterData.organizationId}`];
-    if (promoterData.campaignName) {
-        allCampaigns.push(promoterData.campaignName);
-    }
-
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
-      allCampaigns,
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
@@ -119,8 +113,7 @@ export const getPromotersPage = async (options: {
   organizationId?: string;
   statesForScope?: string[] | null;
   status: PromoterStatus | 'all';
-  campaignsInScope: string[] | null;
-  selectedCampaign: string | 'all';
+  campaignName: string | 'all';
   filterOrgId: string | 'all';
   filterState: string | 'all';
   limitPerPage: number;
@@ -128,78 +121,41 @@ export const getPromotersPage = async (options: {
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    const isSuperAdmin = !options.organizationId;
-    const filters: any[] = [];
-    let queryNeedsClientSideSort = false;
+    
+    // Sort by creation date ascending (oldest first).
+    // NOTE: This may require composite indexes in Firestore if combined with filters.
+    let dataQuery = query(promotersRef, orderBy("createdAt", "asc"));
+    let countQuery = query(promotersRef);
 
-    // Status filter is common to all queries
+    const filters: any[] = [];
+    
+    if (options.organizationId) {
+      filters.push(where("organizationId", "==", options.organizationId));
+    }
+    if (options.statesForScope && options.statesForScope.length > 0) {
+      filters.push(where("state", "in", options.statesForScope));
+    }
+
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
     }
-
-    if (isSuperAdmin) {
-      // --- SUPER ADMIN LOGIC ---
-      if (options.selectedCampaign !== 'all') {
-        // When filtering by a single campaign, the view is global across all orgs.
-        filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
-      } else {
-        // Default Super Admin view, can filter by org and state.
-        if (options.filterOrgId !== 'all') {
-          filters.push(where("organizationId", "==", options.filterOrgId));
-        }
-        if (options.filterState !== 'all') {
-          filters.push(where("state", "==", options.filterState));
-        }
-      }
-    } else {
-      // --- REGULAR ADMIN LOGIC (NOT SuperAdmin) ---
-      if (!options.organizationId) {
-        // An org admin must have an orgId. If not, they see nothing.
-        return { promoters: [], lastVisible: null, totalCount: 0 };
-      }
-
-      if (options.selectedCampaign !== 'all') {
-        // CASE 1: Admin is filtering by a SINGLE campaign in the UI.
-        // This is efficient and works for both restricted and unrestricted admins.
-        // It provides cross-org visibility for that specific campaign.
-        filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
-      } else {
-        // CASE 2: Admin is in an "ALL" view (all events in their scope).
-        const scope = options.campaignsInScope;
-        if (!scope) {
-          // Fallback: If scope isn't provided, query by the org ID to be safe.
-          filters.push(where("organizationId", "==", options.organizationId));
-        } else if (scope.length === 0) {
-          // This case can happen if an org has no campaigns. Query by orgId to show promoters without campaigns.
-          filters.push(where("organizationId", "==", options.organizationId));
-        } else if (scope.length > 30) {
-          // This is an unrestricted admin with too many campaigns for 'array-contains-any'.
-          // Revert to the simpler, robust query by organizationId.
-          // This fixes the "missing promoters" bug at the cost of cross-org visibility in this specific view.
-          filters.push(where("organizationId", "==", options.organizationId));
-        } else {
-          // This is a restricted admin OR an unrestricted admin with < 30 campaigns.
-          // The `array-contains-any` query is safe and provides full cross-org visibility.
-          filters.push(where("allCampaigns", "array-contains-any", scope));
-          queryNeedsClientSideSort = true;
-        }
-      }
+    if (options.campaignName !== 'all') {
+      filters.push(where("campaignName", "==", options.campaignName));
+    }
+    if (options.filterOrgId !== 'all') {
+      filters.push(where("organizationId", "==", options.filterOrgId));
+    }
+    if (options.filterState !== 'all') {
+      filters.push(where("state", "==", options.filterState));
     }
 
-
-    // --- Build and execute queries ---
-    const countQuery = query(promotersRef, ...filters);
+    if (filters.length > 0) {
+      dataQuery = query(dataQuery, ...filters);
+      countQuery = query(countQuery, ...filters);
+    }
+    
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
-
-    let dataQuery;
-    // The client will handle sorting if the query is complex
-    if (queryNeedsClientSideSort) {
-        dataQuery = query(promotersRef, ...filters);
-    } else {
-        // Simple queries can be ordered by documentId for stable pagination
-        dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
-    }
 
     if (options.cursor) {
       dataQuery = query(dataQuery, startAfter(options.cursor));
@@ -209,10 +165,10 @@ export const getPromotersPage = async (options: {
     
     const querySnapshot = await getDocs(dataQuery);
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
 
     return { promoters, lastVisible, totalCount };
-
   } catch (error) {
     console.error("Error fetching promoter page:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {
@@ -344,7 +300,7 @@ export const getApprovedPromoters = async (organizationId: string, state: string
       collection(firestore, "promoters"),
       where("organizationId", "==", organizationId),
       where("state", "==", state),
-      where("allCampaigns", "array-contains", campaignName),
+      where("campaignName", "==", campaignName),
       where("status", "==", "approved")
     );
     const querySnapshot = await getDocs(q);
@@ -392,20 +348,19 @@ export const addRejectionReason = async (text: string, organizationId: string): 
 };
 
 export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
-  try {
-    const reasonDoc = doc(firestore, 'rejectionReasons', id);
-    await updateDoc(reasonDoc, { text });
-  } catch (error) {
-    console.error("Error updating rejection reason: ", error);
-    throw new Error("Não foi possível atualizar o motivo de rejeição.");
-  }
+    try {
+        await updateDoc(doc(firestore, 'rejectionReasons', id), { text });
+    } catch (error) {
+        console.error("Error updating rejection reason: ", error);
+        throw new Error("Não foi possível atualizar o motivo de rejeição.");
+    }
 };
 
 export const deleteRejectionReason = async (id: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(firestore, "rejectionReasons", id));
-  } catch (error) {
-    console.error("Error deleting rejection reason: ", error);
-    throw new Error("Não foi possível remover o motivo de rejeição.");
-  }
+    try {
+        await deleteDoc(doc(firestore, "rejectionReasons", id));
+    } catch (error) {
+        console.error("Error deleting rejection reason: ", error);
+        throw new Error("Não foi possível deletar o motivo de rejeição.");
+    }
 };

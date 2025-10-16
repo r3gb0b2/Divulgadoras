@@ -16,7 +16,6 @@ export interface Promoter {
   state: string;
   campaignName: string | null;
   associatedCampaigns?: string[];
-  allCampaigns?: string[]; // Campo denormalizado para buscas
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;

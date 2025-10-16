@@ -94,17 +94,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'approved') {
         dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
-
-      // Recalculate and add the denormalized 'allCampaigns' field
-      const primaryCampaign = promoter.campaignName;
-      const associated = dataToSave.associatedCampaigns || [];
-      const allCampaignsSet = new Set<string>(associated);
-      if (primaryCampaign) {
-        allCampaignsSet.add(primaryCampaign);
-      }
-      allCampaignsSet.add(`org_${promoter.organizationId}`);
-      dataToSave.allCampaigns = Array.from(allCampaignsSet);
-
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
@@ -189,6 +178,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                         <div key={stateAbbr}>
                             <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
                             <div className="pl-2 space-y-1">
+                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
                                 {(campaigns as Campaign[]).map(campaign => (
                                     <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
                                         <input
