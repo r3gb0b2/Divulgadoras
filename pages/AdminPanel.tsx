@@ -139,26 +139,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
+    const fetchStats = useCallback(async () => {
+        const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+        if (!isSuperAdmin && !orgId) return;
+
+        const statesForScope = getStatesForScope();
+        if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
+            setStats({ total: 0, pending: 0, approved: 0, rejected: 0 });
+            return;
+        }
+        try {
+            const newStats = await getPromoterStats({ organizationId: orgId, statesForScope });
+            setStats(newStats);
+        } catch (err: any) {
+            // Avoid overwriting a more specific error from the main fetch
+            if (!error) setError(err.message);
+        }
+    }, [adminData, organization, isSuperAdmin, getStatesForScope, error]);
+
+
     // Fetch stats
     useEffect(() => {
-        const fetchStats = async () => {
-            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
-            if (!isSuperAdmin && !orgId) return;
-
-            const statesForScope = getStatesForScope();
-            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
-                setStats({ total: 0, pending: 0, approved: 0, rejected: 0 });
-                return;
-            }
-            try {
-                const newStats = await getPromoterStats({ organizationId: orgId, statesForScope });
-                setStats(newStats);
-            } catch (err: any) {
-                setError(err.message);
-            }
-        };
         fetchStats();
-    }, [adminData, organization, isSuperAdmin, getStatesForScope]);
+    }, [fetchStats]);
 
     // Fetch paginated promoters
     useEffect(() => {
@@ -226,9 +229,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (!canManage) return;
         try {
             const currentPromoter = promotersOnPage.find(p => p.id === id);
+            if (!currentPromoter) {
+                console.error("Promoter to update not found in current page list.");
+                return;
+            }
+
             const updatedData = { ...data };
 
-            if (data.status && data.status !== currentPromoter?.status) {
+            // Only add audit fields if status is actually changing
+            if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
                 updatedData.statusChangedAt = serverTimestamp();
@@ -236,12 +245,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             await updatePromoter(id, updatedData);
             
-            // Refresh current page to show changes
-            const tempPage = currentPage;
-            setCurrentPage(0); // Force useEffect to re-run
-            setTimeout(() => setCurrentPage(tempPage), 0);
+            alert("Divulgadora atualizada com sucesso.");
+
+            // Optimistic UI update: Remove from list if it no longer matches the filter
+            if (data.status && filter !== 'all' && data.status !== filter) {
+                setPromotersOnPage(prev => prev.filter(p => p.id !== id));
+                setTotalPromotersCount(prev => prev > 0 ? prev - 1 : 0);
+            } else {
+                // Otherwise, update the promoter's data in the list
+                setPromotersOnPage(prev => prev.map(p => 
+                    p.id === id ? { ...p, ...data } as Promoter : p
+                ));
+            }
             
-            alert("Status da divulgadora atualizado com sucesso.");
+            // Refetch dashboard stats in the background
+            fetchStats();
+
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
             throw error;
