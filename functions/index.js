@@ -198,6 +198,7 @@ exports.createOrganizationAndUser = functions.https.onCall(async (data, context)
 
 /**
  * Manually sends a status notification email to a single promoter.
+ * REVERTED to a simpler version to restore functionality.
  */
 exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) => {
     const {promoterId} = data;
@@ -214,10 +215,6 @@ exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) =
     const promoter = promoterDoc.data();
     if (promoter.status !== "approved") {
         throw new functions.https.HttpsError("failed-precondition", "Apenas divulgadoras aprovadas podem ser notificadas.");
-    }
-
-    if (!promoter.organizationId || typeof promoter.organizationId !== "string") {
-        throw new functions.https.HttpsError("failed-precondition", `A divulgadora ${promoterId} não possui um ID de organização válido.`);
     }
 
     const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
@@ -244,28 +241,19 @@ exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) =
 
 /**
  * Sends status notification emails to a batch of promoters.
+ * REVERTED to a simpler version without batching logic to restore functionality.
+ * This version is limited by Firestore's 'in' query to 30 IDs per call.
  */
 exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
-    const {promoterIds} = data;
+    const { promoterIds } = data;
     if (!promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
         throw new functions.https.HttpsError("invalid-argument", "A lista de IDs de divulgadoras é obrigatória.");
     }
 
     try {
-        const chunks = [];
-        const chunkSize = 30;
-        for (let i = 0; i < promoterIds.length; i += chunkSize) {
-            chunks.push(promoterIds.slice(i, i + chunkSize));
-        }
+        const promoterDocs = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", promoterIds).get();
 
-        const queryPromises = chunks.map((chunk) =>
-            db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", chunk).get(),
-        );
-
-        const querySnapshots = await Promise.all(queryPromises);
-        const allPromoterDocs = querySnapshots.flatMap((snapshot) => snapshot.docs);
-
-        if (allPromoterDocs.length === 0) {
+        if (promoterDocs.empty) {
             throw new functions.https.HttpsError("not-found", "Nenhuma divulgadora encontrada para os IDs fornecidos.");
         }
 
@@ -273,16 +261,10 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
         const errors = [];
         const emailHtml = await getEmailHtmlContent();
 
-        const emailPromises = allPromoterDocs.map(async (doc) => {
+        const emailPromises = promoterDocs.docs.map(async (doc) => {
             const promoter = doc.data();
             try {
                 if (promoter.status !== "approved") return;
-
-                if (!promoter.organizationId || typeof promoter.organizationId !== "string") {
-                    logger.warn(`Skipping promoter ${doc.id} due to missing or invalid organizationId.`);
-                    errors.push({id: doc.id, error: "ID da organização ausente ou inválido."});
-                    return;
-                }
 
                 const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
                 const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
@@ -297,20 +279,20 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
                 });
 
                 await sendEmail({
-                    to: [{email: promoter.email, name: promoter.name}],
+                    to: [{ email: promoter.email, name: promoter.name }],
                     subject: `Parabéns, você foi aprovada - ${orgName}`,
                     htmlContent: finalHtml,
                 });
                 successCount++;
             } catch (error) {
                 logger.error(`Failed to notify promoter ${doc.id}`, error);
-                errors.push({id: doc.id, error: error.message});
+                errors.push({ id: doc.id, error: error.message });
             }
         });
 
         await Promise.all(emailPromises);
 
-        return {success: true, message: `${successCount} de ${promoterIds.length} notificações enviadas.`, errors};
+        return { success: true, message: `${successCount} de ${promoterIds.length} notificações enviadas.`, errors };
     } catch (error) {
         logger.error("Error in batchNotifyPromoters:", error);
         if (error instanceof functions.https.HttpsError) {
@@ -319,6 +301,7 @@ exports.batchNotifyPromoters = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("internal", "Ocorreu um erro inesperado ao processar as notificações.", error.message);
     }
 });
+
 
 /**
  * Sends a test email.
