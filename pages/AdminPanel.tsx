@@ -49,17 +49,6 @@ const StatusCard: React.FC<{ count: number; label: string; onClick: () => void; 
     </button>
 );
 
-const InfoItem: React.FC<{ Icon: React.ElementType; text: string | undefined }> = ({ Icon, text }) => {
-    if (!text) return null;
-    return (
-      <div className="flex items-center gap-2 text-gray-300">
-        <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        <span className="truncate" title={text}>{text}</span>
-      </div>
-    );
-};
-
-
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
   const navigate = useNavigate();
   const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -338,7 +327,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             />
                             <div className="flex-grow min-w-0">
                                 <div className="flex justify-between items-start">
-                                    <p className="font-bold text-white truncate" title={p.name}>{p.name}</p>
+                                    <p className="font-bold text-white break-words" title={p.name}>{p.name}</p>
                                     {statusFilter === 'approved' && adminData.role !== 'viewer' && (
                                          <input 
                                             type="checkbox" 
@@ -349,17 +338,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     )}
                                 </div>
                                 {statusBadge(p.status)}
-                                <p className="text-xs text-gray-400 mt-1 truncate" title={p.email}>{p.email}</p>
+                                <p className="text-xs text-gray-400 mt-1 break-words" title={p.email}>{p.email}</p>
                             </div>
                         </div>
 
-                        <div className="p-4 space-y-2 text-sm flex-grow">
-                            <InfoItem Icon={WhatsAppIcon} text={p.whatsapp} />
-                            <InfoItem Icon={InstagramIcon} text={p.instagram} />
-                            <p className="text-gray-300"><strong>Idade:</strong> {calculateAge(p.dateOfBirth)}</p>
-                            <p className="text-gray-300"><strong>Estado:</strong> {stateMap[p.state] || p.state}</p>
-                            <p className="text-gray-300"><strong>Evento:</strong> {p.campaignName || 'Geral'}</p>
-                            <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50 mt-2">
+                        <div className="p-4 space-y-3 text-sm flex-grow">
+                            <div className="flex items-center gap-2">
+                                <WhatsAppIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                {p.whatsapp ? (
+                                    <a href={`https://wa.me/${p.whatsapp.replace(/\D/g, '')}?text=Olá, ${encodeURIComponent(p.name)}!`} target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-primary break-all">{p.whatsapp}</a>
+                                ) : <span className="text-gray-500">N/A</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <InstagramIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                {p.instagram ? (
+                                    <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-primary break-all">{p.instagram}</a>
+                                ) : <span className="text-gray-500">N/A</span>}
+                            </div>
+                            <div className="pt-3 border-t border-gray-700/50 space-y-1">
+                                <p className="text-gray-300"><strong>Idade:</strong> {calculateAge(p.dateOfBirth)} anos</p>
+                                <p className="text-gray-300"><strong>Estado:</strong> {stateMap[p.state] || p.state}</p>
+                                <p className="text-gray-300"><strong>Evento:</strong> {p.campaignName || 'Geral'}</p>
+                            </div>
+                             <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50 mt-2">
                                 Inscrito em: {p.createdAt ? (p.createdAt as Timestamp).toDate().toLocaleDateString('pt-BR') : 'N/A'}
                             </p>
                         </div>
