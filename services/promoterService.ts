@@ -125,6 +125,7 @@ export const getPromotersPage = async (options: {
     const promotersRef = collection(firestore, "promoters");
     const isSuperAdmin = !options.organizationId;
     const filters: any[] = [];
+    let queryNeedsOrderBy = true; // By default, we order on the server for stable pagination
 
     // Status filter is common to all queries
     if (options.status !== 'all') {
@@ -133,11 +134,9 @@ export const getPromotersPage = async (options: {
 
     if (isSuperAdmin) {
       // --- SUPER ADMIN LOGIC ---
-      // If a specific campaign is selected, that's the primary filter and ignores org/state.
       if (options.selectedCampaign !== 'all') {
         filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
       } else {
-        // Otherwise, apply general org and state filters from UI
         if (options.filterOrgId !== 'all') {
           filters.push(where("organizationId", "==", options.filterOrgId));
         }
@@ -147,30 +146,55 @@ export const getPromotersPage = async (options: {
       }
     } else {
       // --- REGULAR ADMIN LOGIC ---
-      // A regular admin's view is defined ONLY by the campaigns they have access to.
-      const campaignsToFilter = options.campaignsInScope;
+      const campaignsInScope = options.campaignsInScope;
 
-      if (!campaignsToFilter) {
-        // This case implies they can see all campaigns in their organization.
-        // Fallback to filtering by their organization ID.
-        filters.push(where("organizationId", "==", options.organizationId));
-      } else if (campaignsToFilter.length === 0) {
-        // Explicitly assigned to NO campaigns, so they see nothing.
-        return { promoters: [], lastVisible: null, totalCount: 0 };
+      if (campaignsInScope === null) {
+          // UNRESTRICTED admin. Their scope is their organization.
+          filters.push(where("organizationId", "==", options.organizationId));
+          if (options.selectedCampaign !== 'all') {
+              filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
+          }
       } else {
-        // Filter by the campaigns they are allowed to see. This allows for cross-org visibility.
-        filters.push(where("allCampaigns", "array-contains-any", campaignsToFilter.slice(0, 30)));
+          // RESTRICTED admin. Their scope is the campaignsInScope array.
+          let campaignsToQuery = campaignsInScope;
+          if (options.selectedCampaign !== 'all') {
+              if (campaignsInScope.includes(options.selectedCampaign)) {
+                  campaignsToQuery = [options.selectedCampaign];
+              } else {
+                  return { promoters: [], lastVisible: null, totalCount: 0 };
+              }
+          }
+
+          if (campaignsToQuery.length === 0) {
+              return { promoters: [], lastVisible: null, totalCount: 0 };
+          }
+
+          // Use array-contains for single campaign, array-contains-any for multiple
+          if (campaignsToQuery.length === 1) {
+              filters.push(where("allCampaigns", "array-contains", campaignsToQuery[0]));
+          } else {
+              // The 'array-contains-any' is what can cause index issues with orderBy.
+              // We disable server-side ordering for this case. Client-side will handle it.
+              filters.push(where("allCampaigns", "array-contains-any", campaignsToQuery.slice(0, 30)));
+              queryNeedsOrderBy = false;
+          }
       }
     }
+
 
     // --- Build and execute queries ---
     const countQuery = query(promotersRef, ...filters);
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
-    // ALWAYS order by documentId on the server to prevent composite index errors with multiple filters.
-    // The client (AdminPanel) will handle the user-facing sort order.
-    let dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
+    let dataQuery;
+    if (queryNeedsOrderBy) {
+        dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
+    } else {
+        // We can't safely order on the server when using array-contains-any without risking index errors.
+        // Firestore's default order (by doc ID) is stable enough for pagination with startAfter.
+        dataQuery = query(promotersRef, ...filters);
+    }
 
     if (options.cursor) {
       dataQuery = query(dataQuery, startAfter(options.cursor));
@@ -181,8 +205,6 @@ export const getPromotersPage = async (options: {
     const querySnapshot = await getDocs(dataQuery);
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
-
-    // NO client-side sorting here. The AdminPanel component handles the final presentation sort.
 
     return { promoters, lastVisible, totalCount };
 

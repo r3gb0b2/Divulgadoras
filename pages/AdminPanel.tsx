@@ -147,13 +147,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
-        if (isSuperAdmin) return null; // Super Admin scope is handled differently, so null is fine.
+        if (isSuperAdmin) return null; // Super Admin scope is handled differently.
         if (!adminData.organizationId) return []; // Should not happen, but a safe guard.
 
-        // If the admin has no specific campaign assignments, their scope includes ALL campaigns within their organization.
+        // If no specific assignments, return null to filter by the admin's organizationId.
+        // This is more robust than using array-contains-any with a potentially large array of campaigns.
         if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            // `allCampaigns` is already filtered by organization for regular admins.
-            return allCampaigns.map(c => c.name);
+            return null;
         }
         
         // This part correctly calculates the scope for admins with specific assignments.
