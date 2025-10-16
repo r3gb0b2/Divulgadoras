@@ -147,11 +147,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
-        if (isSuperAdmin) return null; // null means no campaign filter
-        if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            return null; // No specific campaign assignments means access to all within assigned states.
-        }
+        if (isSuperAdmin) return null; // Super Admin scope is handled differently, so null is fine.
+        if (!adminData.organizationId) return []; // Should not happen, but a safe guard.
 
+        // If the admin has no specific campaign assignments, their scope includes ALL campaigns within their organization.
+        if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
+            // `allCampaigns` is already filtered by organization for regular admins.
+            return allCampaigns.map(c => c.name);
+        }
+        
+        // This part correctly calculates the scope for admins with specific assignments.
         const allowedCampaignNames = new Set<string>();
         const statesForScope = getStatesForScope() || [];
 
@@ -159,11 +164,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const restrictedCampaigns = adminData.assignedCampaigns[stateAbbr];
             
             if (restrictedCampaigns) { // Restriction exists for this state
-                // If there are specific campaigns, add them
                 if (restrictedCampaigns.length > 0) {
                     restrictedCampaigns.forEach(name => allowedCampaignNames.add(name));
                 }
-                // If restrictedCampaigns is an empty array [], they can't see any campaigns in this state, so we add nothing.
             } else { // No restriction for this state, so they can see all campaigns in it.
                 allCampaigns
                     .filter(c => c.stateAbbr === stateAbbr)
@@ -212,7 +215,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
 
             const statesForScope = getStatesForScope();
-            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
+            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0) && !campaignsInScope) {
                 setPromotersOnPage([]);
                 setTotalPromotersCount(0);
                 setIsLoading(false);
@@ -263,14 +266,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const currentPromoter = promotersOnPage.find(p => p.id === id);
             if (!currentPromoter) {
-                console.error("Promoter to update not found in current page list.");
-                return;
+                // If not found on current page, could be in lookup results
+                const fullList = [...promotersOnPage, ...(lookupResults || [])];
+                const foundPromoter = fullList.find(p => p.id === id);
+                 if (!foundPromoter) {
+                    console.error("Promoter to update not found.");
+                    return;
+                }
             }
 
             const updatedData = { ...data };
 
             // Only add audit fields if status is actually changing
-            if (data.status && data.status !== currentPromoter.status) {
+            const originalStatus = promotersOnPage.find(p => p.id === id)?.status;
+            if (data.status && data.status !== originalStatus) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
                 updatedData.statusChangedAt = serverTimestamp();
@@ -417,11 +426,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         // Create a mutable copy to sort
         const promotersToSort = [...promotersOnPage];
 
-        // Sort by creation date ascending (oldest first)
+        // The server query now orders by documentId to prevent index errors.
+        // We must sort here to present the chronological order to the user.
         promotersToSort.sort((a, b) => {
             const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
             const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-            return timeA - timeB;
+            return timeA - timeB; // Oldest first
         });
 
         // Apply client-side text search filter
