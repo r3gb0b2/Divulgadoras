@@ -196,8 +196,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     cursor: pageCursors[currentPage - 1]
                 });
                 
-                // Data is now pre-sorted by the server (createdAt ascending).
-                setPromotersOnPage(result.promoters);
+                // Sort promoters by name on the client-side as the query is now ordered by document ID for performance.
+                const sortedPromoters = result.promoters.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+                setPromotersOnPage(sortedPromoters);
 
                 setTotalPromotersCount(result.totalCount);
 

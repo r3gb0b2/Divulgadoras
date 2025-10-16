@@ -122,9 +122,9 @@ export const getPromotersPage = async (options: {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    // Sort by creation date ascending (oldest first).
-    // NOTE: This may require composite indexes in Firestore if combined with filters.
-    let dataQuery = query(promotersRef, orderBy("createdAt", "asc"));
+    // Sort by document ID to ensure consistent pagination without requiring complex composite indexes.
+    // User-facing sorting (e.g., by name) will be handled on the client-side.
+    let dataQuery = query(promotersRef, orderBy(documentId(), "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
