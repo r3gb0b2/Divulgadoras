@@ -140,7 +140,7 @@ const replacePlaceholders = (html, data) => {
  * Triggered when a promoter's status changes to 'approved' for the first time.
  */
 exports.onPromoterStatusChange = onDocumentCreated(
-    {document: "promoters/{promoterId}", secrets: ["BREVO_KEY", "BREVO_SENDER_EMAIL"]},
+    {document: "promoters/{promoterId}"},
     async (event) => {
         const promoterData = event.data.data();
         const promoterId = event.params.promoterId;
@@ -202,171 +202,159 @@ exports.createOrganizationAndUser = onCall(async (request) => {
 /**
  * Manually sends a status notification email to a single promoter.
  */
-exports.manuallySendStatusEmail = onCall(
-    {secrets: ["BREVO_KEY", "BREVO_SENDER_EMAIL"]},
-    async (request) => {
-        const {promoterId} = request.data;
-        if (!promoterId) {
-            throw new HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
-        }
+exports.manuallySendStatusEmail = onCall(async (request) => {
+    const {promoterId} = request.data;
+    if (!promoterId) {
+        throw new HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+    }
 
-        const promoterRef = db.collection("promoters").doc(promoterId);
-        const promoterDoc = await promoterRef.get();
-        if (!promoterDoc.exists) {
-            throw new HttpsError("not-found", "Divulgadora não encontrada.");
-        }
+    const promoterRef = db.collection("promoters").doc(promoterId);
+    const promoterDoc = await promoterRef.get();
+    if (!promoterDoc.exists) {
+        throw new HttpsError("not-found", "Divulgadora não encontrada.");
+    }
 
-        const promoter = promoterDoc.data();
-        if (promoter.status !== "approved") {
-            throw new HttpsError("failed-precondition", "Apenas divulgadoras aprovadas podem ser notificadas.");
-        }
+    const promoter = promoterDoc.data();
+    if (promoter.status !== "approved") {
+        throw new HttpsError("failed-precondition", "Apenas divulgadoras aprovadas podem ser notificadas.");
+    }
 
-        const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
-        const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
+    const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
+    const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
 
-        const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoter.email)}`;
-        const emailHtml = await getEmailHtmlContent();
-        const finalHtml = replacePlaceholders(emailHtml, {
-            promoterName: promoter.name,
-            promoterEmail: promoter.email,
-            campaignName: promoter.campaignName || "Geral",
-            orgName,
-            portalLink,
-        });
+    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoter.email)}`;
+    const emailHtml = await getEmailHtmlContent();
+    const finalHtml = replacePlaceholders(emailHtml, {
+        promoterName: promoter.name,
+        promoterEmail: promoter.email,
+        campaignName: promoter.campaignName || "Geral",
+        orgName,
+        portalLink,
+    });
 
-        await sendEmail({
-            to: [{email: promoter.email, name: promoter.name}],
-            subject: `Parabéns, você foi aprovada - ${orgName}`,
-            htmlContent: finalHtml,
-        });
+    await sendEmail({
+        to: [{email: promoter.email, name: promoter.name}],
+        subject: `Parabéns, você foi aprovada - ${orgName}`,
+        htmlContent: finalHtml,
+    });
 
-        return {success: true, message: "Notificação enviada com sucesso."};
-    },
-);
+    return {success: true, message: "Notificação enviada com sucesso."};
+});
 
 /**
  * Sends status notification emails to a batch of promoters.
  */
-exports.batchNotifyPromoters = onCall(
-    {secrets: ["BREVO_KEY", "BREVO_SENDER_EMAIL"]},
-    async (request) => {
-        const {promoterIds} = request.data;
-        if (!promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
-            throw new HttpsError("invalid-argument", "A lista de IDs de divulgadoras é obrigatória.");
+exports.batchNotifyPromoters = onCall(async (request) => {
+    const {promoterIds} = request.data;
+    if (!promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
+        throw new HttpsError("invalid-argument", "A lista de IDs de divulgadoras é obrigatória.");
+    }
+
+    const promoterDocs = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", promoterIds).get();
+    if (promoterDocs.empty) {
+        throw new HttpsError("not-found", "Nenhuma divulgadora encontrada para os IDs fornecidos.");
+    }
+
+    let successCount = 0;
+    const errors = [];
+    const emailHtml = await getEmailHtmlContent();
+
+    for (const doc of promoterDocs.docs) {
+        const promoter = doc.data();
+        try {
+            if (promoter.status !== "approved") continue;
+
+            const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
+            const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
+
+            const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoter.email)}`;
+            const finalHtml = replacePlaceholders(emailHtml, {
+                promoterName: promoter.name,
+                promoterEmail: promoter.email,
+                campaignName: promoter.campaignName || "Geral",
+                orgName,
+                portalLink,
+            });
+
+            await sendEmail({
+                to: [{email: promoter.email, name: promoter.name}],
+                subject: `Parabéns, você foi aprovada - ${orgName}`,
+                htmlContent: finalHtml,
+            });
+            successCount++;
+        } catch (error) {
+            logger.error(`Failed to notify promoter ${doc.id}`, error);
+            errors.push({id: doc.id, error: error.message});
         }
+    }
 
-        const promoterDocs = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", promoterIds).get();
-        if (promoterDocs.empty) {
-            throw new HttpsError("not-found", "Nenhuma divulgadora encontrada para os IDs fornecidos.");
-        }
-
-        let successCount = 0;
-        const errors = [];
-        const emailHtml = await getEmailHtmlContent();
-
-        for (const doc of promoterDocs.docs) {
-            const promoter = doc.data();
-            try {
-                if (promoter.status !== "approved") continue;
-
-                const orgDoc = await db.collection("organizations").doc(promoter.organizationId).get();
-                const orgName = orgDoc.exists() ? orgDoc.data().name : "Nossa Equipe";
-
-                const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoter.email)}`;
-                const finalHtml = replacePlaceholders(emailHtml, {
-                    promoterName: promoter.name,
-                    promoterEmail: promoter.email,
-                    campaignName: promoter.campaignName || "Geral",
-                    orgName,
-                    portalLink,
-                });
-
-                await sendEmail({
-                    to: [{email: promoter.email, name: promoter.name}],
-                    subject: `Parabéns, você foi aprovada - ${orgName}`,
-                    htmlContent: finalHtml,
-                });
-                successCount++;
-            } catch (error) {
-                logger.error(`Failed to notify promoter ${doc.id}`, error);
-                errors.push({id: doc.id, error: error.message});
-            }
-        }
-
-        return {success: true, message: `${successCount} de ${promoterIds.length} notificações enviadas.`, errors};
-    },
-);
+    return {success: true, message: `${successCount} de ${promoterIds.length} notificações enviadas.`, errors};
+});
 
 /**
  * Sends a test email.
  */
-exports.sendTestEmail = onCall(
-    {secrets: ["BREVO_KEY", "BREVO_SENDER_EMAIL"]},
-    async (request) => {
-        const {testType, customHtmlContent} = request.data;
+exports.sendTestEmail = onCall(async (request) => {
+    const {testType, customHtmlContent} = request.data;
 
-        let subject = "E-mail de Teste - Equipe Certa";
-        let htmlContent = "<h1>Olá!</h1><p>Este é um e-mail de teste da plataforma Equipe Certa. Se você o recebeu, a conexão com o provedor de e-mail está funcionando.</p>";
-        const testRecipient = process.env.BREVO_SENDER_EMAIL;
+    let subject = "E-mail de Teste - Equipe Certa";
+    let htmlContent = "<h1>Olá!</h1><p>Este é um e-mail de teste da plataforma Equipe Certa. Se você o recebeu, a conexão com o provedor de e-mail está funcionando.</p>";
+    const testRecipient = process.env.BREVO_SENDER_EMAIL;
 
-        if (testType === "approved" || testType === "custom_approved") {
-            subject = "TESTE: Parabéns, você foi aprovada!";
-            htmlContent = testType === "custom_approved" ? customHtmlContent : await getEmailHtmlContent();
-            htmlContent = replacePlaceholders(htmlContent, {
-                promoterName: "Divulgadora Teste",
-                promoterEmail: testRecipient,
-                campaignName: "Evento de Teste",
-                orgName: "Organização Teste",
-                portalLink: "https://divulgadoras.vercel.app/",
-            });
-        }
-
-        await sendEmail({
-            to: [{email: testRecipient, name: "Admin Teste"}],
-            subject,
-            htmlContent,
+    if (testType === "approved" || testType === "custom_approved") {
+        subject = "TESTE: Parabéns, você foi aprovada!";
+        htmlContent = testType === "custom_approved" ? customHtmlContent : await getEmailHtmlContent();
+        htmlContent = replacePlaceholders(htmlContent, {
+            promoterName: "Divulgadora Teste",
+            promoterEmail: testRecipient,
+            campaignName: "Evento de Teste",
+            orgName: "Organização Teste",
+            portalLink: "https://divulgadoras.vercel.app/",
         });
-        return {success: true, message: `E-mail de teste enviado para ${testRecipient}.`};
-    },
-);
+    }
+
+    await sendEmail({
+        to: [{email: testRecipient, name: "Admin Teste"}],
+        subject,
+        htmlContent,
+    });
+    return {success: true, message: `E-mail de teste enviado para ${testRecipient}.`};
+});
 
 /**
  * Gets the system status, especially for email configuration.
  */
-exports.getSystemStatus = onCall(
-    {secrets: ["BREVO_KEY", "BREVO_SENDER_EMAIL"]},
-    async () => {
-        const log = [];
-        let configured = true;
-        let message = "Configuração de e-mail parece estar correta.";
+exports.getSystemStatus = onCall(async () => {
+    const log = [];
+    let configured = true;
+    let message = "Configuração de e-mail parece estar correta.";
 
-        if (process.env.BREVO_KEY) {
-            log.push({level: "SUCCESS", message: "Variável BREVO_KEY encontrada."});
-        } else {
-            configured = false;
-            log.push({level: "ERROR", message: "Variável de ambiente BREVO_KEY não encontrada."});
-        }
+    if (process.env.BREVO_KEY) {
+        log.push({level: "SUCCESS", message: "Variável BREVO_KEY encontrada."});
+    } else {
+        configured = false;
+        log.push({level: "ERROR", message: "Variável de ambiente BREVO_KEY não encontrada."});
+    }
 
-        if (process.env.BREVO_SENDER_EMAIL) {
-            log.push({level: "SUCCESS", message: "Variável BREVO_SENDER_EMAIL encontrada."});
-        } else {
-            configured = false;
-            log.push({level: "ERROR", message: "Variável de ambiente BREVO_SENDER_EMAIL não encontrada."});
-        }
+    if (process.env.BREVO_SENDER_EMAIL) {
+        log.push({level: "SUCCESS", message: "Variável BREVO_SENDER_EMAIL encontrada."});
+    } else {
+        configured = false;
+        log.push({level: "ERROR", message: "Variável de ambiente BREVO_SENDER_EMAIL não encontrada."});
+    }
 
-        if (!configured) {
-            message = "Faltam variáveis de ambiente para o envio de e-mails. Configure-as no Firebase.";
-        }
+    if (!configured) {
+        message = "Faltam variáveis de ambiente para o envio de e-mails. Configure-as no Firebase.";
+    }
 
-        return {
-            functionVersion: "19.0",
-            emailProvider: "Brevo",
-            configured,
-            message,
-            log,
-        };
-    },
-);
+    return {
+        functionVersion: "19.0",
+        emailProvider: "Brevo",
+        configured,
+        message,
+        log,
+    };
+});
 
 /**
  * Creates an admin application and a disabled auth user.
@@ -392,101 +380,92 @@ exports.createAdminRequest = onCall(async (request) => {
 /**
  * Creates a PagSeguro order for subscription.
  */
-exports.createPagSeguroOrder = onCall(
-    {secrets: ["PAGSEGURO_TOKEN", "PAGSEGURO_EMAIL"]},
-    async (request) => {
-        const {orgId, planId} = request.data;
-        if (!orgId || !planId) throw new HttpsError("invalid-argument", "ID da organização e do plano são obrigatórios.");
+exports.createPagSeguroOrder = onCall(async (request) => {
+    const {orgId, planId} = request.data;
+    if (!orgId || !planId) throw new HttpsError("invalid-argument", "ID da organização e do plano são obrigatórios.");
 
-        const token = process.env.PAGSEGURO_TOKEN;
-        const email = process.env.PAGSEGURO_EMAIL;
-        if (!token || !email) throw new HttpsError("failed-precondition", "Credenciais do PagSeguro não configuradas.");
+    const token = process.env.PAGSEGURO_TOKEN;
+    const email = process.env.PAGSEGURO_EMAIL;
+    if (!token || !email) throw new HttpsError("failed-precondition", "Credenciais do PagSeguro não configuradas.");
 
-        // Fetch organization details
-        const orgDoc = await db.collection("organizations").doc(orgId).get();
-        if (!orgDoc.exists) throw new HttpsError("not-found", "Organização não encontrada.");
-        const orgData = orgDoc.data();
+    // Fetch organization details
+    const orgDoc = await db.collection("organizations").doc(orgId).get();
+    if (!orgDoc.exists) throw new HttpsError("not-found", "Organização não encontrada.");
+    const orgData = orgDoc.data();
 
-        const planDetails = {
-            basic: {id: "basic", amount: "49.00", description: "Plano Básico - Equipe Certa"},
-            professional: {id: "professional", amount: "99.00", description: "Plano Profissional - Equipe Certa"},
-        };
+    const planDetails = {
+        basic: {id: "basic", amount: "49.00", description: "Plano Básico - Equipe Certa"},
+        professional: {id: "professional", amount: "99.00", description: "Plano Profissional - Equipe Certa"},
+    };
 
-        const plan = planDetails[planId];
-        if (!plan) throw new HttpsError("invalid-argument", "Plano inválido.");
+    const plan = planDetails[planId];
+    if (!plan) throw new HttpsError("invalid-argument", "Plano inválido.");
+    
+    const url = `https://ws.pagseguro.uol.com.br/v2/checkout?email=${email}&token=${token}`;
+    const body = `currency=BRL&itemId1=${plan.id}&itemDescription1=${encodeURIComponent(plan.description)}&itemAmount1=${plan.amount}&itemQuantity1=1&reference=${orgId}`;
+    
+    try {
+        const fetch = (await import("node-fetch")).default;
+        const response = await fetch(url, {
+            method: "POST",
+            body,
+            headers: {"Content-Type": "application/x-www-form-urlencoded; charset=ISO-8859-1"},
+        });
         
-        const url = `https://ws.pagseguro.uol.com.br/v2/checkout?email=${email}&token=${token}`;
-        const body = `currency=BRL&itemId1=${plan.id}&itemDescription1=${encodeURIComponent(plan.description)}&itemAmount1=${plan.amount}&itemQuantity1=1&reference=${orgId}`;
-        
-        try {
-            const fetch = (await import("node-fetch")).default;
-            const response = await fetch(url, {
-                method: "POST",
-                body,
-                headers: {"Content-Type": "application/x-www-form-urlencoded; charset=ISO-8859-1"},
-            });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                logger.error("PagSeguro API error response:", errorText);
-                throw new Error(`Erro do PagSeguro: ${response.statusText}`);
-            }
-
-            const responseText = await response.text();
-            const parsed = await xml2js.parseStringPromise(responseText);
-            const checkoutCode = parsed.checkout.code[0];
-            const payLink = `https://pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
-            
-            return {payLink};
-        } catch (error) {
-            logger.error("Error creating PagSeguro order:", error);
-            throw new HttpsError("internal", error.message);
+        if (!response.ok) {
+            const errorText = await response.text();
+            logger.error("PagSeguro API error response:", errorText);
+            throw new Error(`Erro do PagSeguro: ${response.statusText}`);
         }
-    },
-);
+
+        const responseText = await response.text();
+        const parsed = await xml2js.parseStringPromise(responseText);
+        const checkoutCode = parsed.checkout.code[0];
+        const payLink = `https://pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
+        
+        return {payLink};
+    } catch (error) {
+        logger.error("Error creating PagSeguro order:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
 
 /**
  * Gets PagSeguro configuration status.
  */
-exports.getPagSeguroStatus = onCall(
-    {secrets: ["PAGSEGURO_TOKEN", "PAGSEGURO_EMAIL"]},
-    () => {
-        return {
-            configured: !!process.env.PAGSEGURO_TOKEN && !!process.env.PAGSEGURO_EMAIL,
-            token: !!process.env.PAGSEGURO_TOKEN,
-            email: !!process.env.PAGSEGURO_EMAIL,
-        };
-    },
-);
+exports.getPagSeguroStatus = onCall(() => {
+    return {
+        configured: !!process.env.PAGSEGURO_TOKEN && !!process.env.PAGSEGURO_EMAIL,
+        token: !!process.env.PAGSEGURO_TOKEN,
+        email: !!process.env.PAGSEGURO_EMAIL,
+    };
+});
 
 /**
  * Interacts with the Gemini API.
  */
-exports.askGemini = onCall(
-    {secrets: ["GEMINI_API_KEY"]},
-    async (request) => {
-        if (!process.env.GEMINI_API_KEY) {
-            throw new HttpsError("failed-precondition", "A API do Gemini não está configurada no servidor.");
-        }
+exports.askGemini = onCall(async (request) => {
+    if (!process.env.GEMINI_API_KEY) {
+        throw new HttpsError("failed-precondition", "A API do Gemini não está configurada no servidor.");
+    }
 
-        const {prompt} = request.data;
-        if (!prompt) {
-            throw new HttpsError("invalid-argument", "O prompt não pode ser vazio.");
-        }
+    const {prompt} = request.data;
+    if (!prompt) {
+        throw new HttpsError("invalid-argument", "O prompt não pode ser vazio.");
+    }
 
-        try {
-            const ai = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY});
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: prompt,
-            });
-            return {text: response.text};
-        } catch (error) {
-            logger.error("Error calling Gemini API:", error);
-            throw new HttpsError("internal", "Falha ao comunicar com a API do Gemini.");
-        }
-    },
-);
+    try {
+        const ai = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY});
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        return {text: response.text};
+    } catch (error) {
+        logger.error("Error calling Gemini API:", error);
+        throw new HttpsError("internal", "Falha ao comunicar com a API do Gemini.");
+    }
+});
 
 // --- Email Template Functions ---
 exports.getEmailTemplate = onCall(async () => ({htmlContent: await getEmailHtmlContent()}));
