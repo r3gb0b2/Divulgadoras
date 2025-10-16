@@ -70,30 +70,10 @@ const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaig
   );
 };
 
-
-// This component displays the status for a single registration
-const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = ({ promoter, organizationName }) => {
-    const [campaign, setCampaign] = useState<Campaign | null>(null);
+const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; isPrimary: boolean }> = ({ campaign, promoter, isPrimary }) => {
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [cardError, setCardError] = useState<string | null>(null);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
-
-    useEffect(() => {
-        const fetchCampaignData = async () => {
-            if (promoter && promoter.status === 'approved' && promoter.campaignName) {
-                try {
-                    const campaigns = await getCampaigns(promoter.state, promoter.organizationId);
-                    const foundCampaign = campaigns.find(c => c.name === promoter.campaignName);
-                    if (foundCampaign) {
-                        setCampaign(foundCampaign);
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch campaign data", e);
-                }
-            }
-        };
-        fetchCampaignData();
-    }, [promoter]);
 
     const handleAcceptRules = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
@@ -102,7 +82,6 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
         if (isChecked && promoter && !promoter.hasJoinedGroup) {
             try {
                 await updatePromoter(promoter.id, { hasJoinedGroup: true });
-                // No need to update local state promoter, this is a one-time action per card
             } catch (updateError) {
                 console.error("Failed to update status:", updateError);
                 setCardError("Não foi possível salvar sua confirmação. Tente novamente.");
@@ -110,7 +89,119 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             }
         }
     };
-    
+
+    return (
+        <>
+            <div className={`mt-4 ${isPrimary ? 'border-t' : 'border-t border-dashed'} border-gray-600/50 pt-4 space-y-4`}>
+                {isPrimary ? (
+                    <h3 className="font-bold text-lg text-white">Próximos Passos</h3>
+                ) : (
+                    <h3 className="font-semibold text-md text-gray-200">Evento Adicional: <span className="text-primary">{campaign.name}</span></h3>
+                )}
+
+                {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
+
+                {/* Step 1 */}
+                <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center font-bold text-white">1</div>
+                    <div className="flex-grow">
+                        <p className="font-semibold text-gray-200">Leia as Regras</p>
+                        <p className="text-xs text-gray-400 mb-2">Clique no botão para ver todas as regras e informações sobre o evento.</p>
+                        <button
+                            onClick={() => setIsRulesModalOpen(true)}
+                            className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors text-sm"
+                        >
+                            Ver Regras de {campaign.name}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex items-start gap-4">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-primary`}>2</div>
+                    <div className="flex-grow">
+                        <p className="font-semibold text-gray-200">Confirme a Leitura</p>
+                        <div className="p-3 border border-gray-600/50 rounded-md bg-black/20 mt-2">
+                            <label className="flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={hasAcceptedRules}
+                                    onChange={handleAcceptRules}
+                                    className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
+                                />
+                                <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex items-start gap-4">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${hasAcceptedRules ? 'bg-primary' : 'bg-gray-600'}`}>3</div>
+                    <div className="flex-grow">
+                        <p className="font-semibold text-gray-200">Entre no Grupo</p>
+                        <p className="text-xs text-gray-400 mb-2">Após confirmar a leitura das regras, o botão para entrar no grupo será liberado.</p>
+                        <a
+                            href={hasAcceptedRules ? campaign?.whatsappLink || '#' : undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`inline-flex items-center justify-center w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-base ${(!hasAcceptedRules || !campaign?.whatsappLink) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-disabled={!hasAcceptedRules || !campaign?.whatsappLink}
+                            onClick={(e) => (!hasAcceptedRules || !campaign?.whatsappLink) && e.preventDefault()}
+                        >
+                            <WhatsAppIcon className="w-6 h-6 mr-2"/>
+                            Entrar no Grupo de {campaign.name}
+                        </a>
+                        {!campaign?.whatsappLink && hasAcceptedRules && <p className="text-xs text-yellow-400 mt-2">O link para o grupo ainda não foi disponibilizado pelo organizador.</p>}
+                    </div>
+                </div>
+            </div>
+
+            <RulesModal
+                isOpen={isRulesModalOpen}
+                onClose={() => setIsRulesModalOpen(false)}
+                rules={campaign.rules}
+                campaignName={campaign.name}
+            />
+        </>
+    );
+};
+
+
+// This component displays the status for a single registration
+const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = ({ promoter, organizationName }) => {
+    const [primaryCampaign, setPrimaryCampaign] = useState<Campaign | null>(null);
+    const [associatedCampaignsDetails, setAssociatedCampaignsDetails] = useState<Campaign[]>([]);
+
+    useEffect(() => {
+        const fetchAllCampaignData = async () => {
+            if (promoter && promoter.status === 'approved') {
+                try {
+                    const allCampaignsForState = await getCampaigns(promoter.state, promoter.organizationId);
+
+                    if (promoter.campaignName) {
+                        const foundPrimary = allCampaignsForState.find(c => c.name === promoter.campaignName);
+                        setPrimaryCampaign(foundPrimary || null);
+                    } else {
+                        setPrimaryCampaign(null);
+                    }
+
+                    if (promoter.associatedCampaigns && promoter.associatedCampaigns.length > 0) {
+                        const foundAssociated = promoter.associatedCampaigns
+                            .map(assocName => allCampaignsForState.find(c => c.name === assocName))
+                            .filter((c): c is Campaign => !!c); // Filter out any not found
+                        setAssociatedCampaignsDetails(foundAssociated);
+                    } else {
+                        setAssociatedCampaignsDetails([]);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch campaign data", e);
+                }
+            }
+        };
+        fetchAllCampaignData();
+    }, [promoter]);
+
     const statusInfoMap = {
         pending: {
             title: 'Cadastro em Análise',
@@ -140,95 +231,29 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
         : statusInfo.message;
 
     return (
-        <>
-            <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="font-bold text-xl">{statusInfo.title}</p>
-                        <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
-                        {promoter.campaignName && <p className="text-xs text-primary">{promoter.campaignName}</p>}
-                    </div>
-                    <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">
-                        {promoter.state ? stateMap[promoter.state.toUpperCase()] || promoter.state : 'N/A'}
-                    </div>
+        <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-bold text-xl">{statusInfo.title}</p>
+                    <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
+                    {promoter.campaignName && <p className="text-xs text-primary">{promoter.campaignName} (Principal)</p>}
                 </div>
-
-                <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
-                {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
-                
-                {promoter.status === 'approved' && (
-                    <div className="mt-4 border-t border-gray-600/50 pt-4 space-y-4">
-                        <h3 className="font-bold text-lg text-white">Próximos Passos</h3>
-                        
-                        {/* Step 1 */}
-                        <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center font-bold text-white">1</div>
-                            <div className="flex-grow">
-                                <p className="font-semibold text-gray-200">Leia as Regras</p>
-                                <p className="text-xs text-gray-400 mb-2">Clique no botão para ver todas as regras e informações sobre o evento.</p>
-                                <button
-                                    onClick={() => setIsRulesModalOpen(true)}
-                                    disabled={!campaign}
-                                    className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed text-sm"
-                                >
-                                    Ver Regras
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Step 2 */}
-                        <div className="flex items-start gap-4">
-                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${campaign ? 'bg-primary' : 'bg-gray-600'}`}>2</div>
-                            <div className="flex-grow">
-                                <p className="font-semibold text-gray-200">Confirme a Leitura</p>
-                                <div className="p-3 border border-gray-600/50 rounded-md bg-black/20 mt-2">
-                                    <label className="flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={hasAcceptedRules}
-                                            onChange={handleAcceptRules}
-                                            disabled={!campaign}
-                                            className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary disabled:cursor-not-allowed"
-                                        />
-                                        <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Step 3 */}
-                         <div className="flex items-start gap-4">
-                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${hasAcceptedRules ? 'bg-primary' : 'bg-gray-600'}`}>3</div>
-                             <div className="flex-grow">
-                                <p className="font-semibold text-gray-200">Entre no Grupo</p>
-                                <p className="text-xs text-gray-400 mb-2">Após confirmar a leitura das regras, o botão para entrar no grupo será liberado.</p>
-                                <a
-                                    href={hasAcceptedRules ? campaign?.whatsappLink || '#' : undefined}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`inline-flex items-center justify-center w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-base ${(!hasAcceptedRules || !campaign?.whatsappLink) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    aria-disabled={!hasAcceptedRules || !campaign?.whatsappLink}
-                                    onClick={(e) => (!hasAcceptedRules || !campaign?.whatsappLink) && e.preventDefault()}
-                                >
-                                    <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                                    Entrar no Grupo Oficial
-                                </a>
-                                {!campaign?.whatsappLink && hasAcceptedRules && <p className="text-xs text-yellow-400 mt-2">O link para o grupo ainda não foi disponibilizado pelo organizador.</p>}
-                             </div>
-                         </div>
-                    </div>
-                )}
+                <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">
+                    {promoter.state ? stateMap[promoter.state.toUpperCase()] || promoter.state : 'N/A'}
+                </div>
             </div>
 
-            {campaign && (
-                <RulesModal
-                    isOpen={isRulesModalOpen}
-                    onClose={() => setIsRulesModalOpen(false)}
-                    rules={campaign.rules}
-                    campaignName={campaign.name}
-                />
+            <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
+            
+            {promoter.status === 'approved' && (
+                <>
+                    {primaryCampaign && <ApprovedPromoterSteps campaign={primaryCampaign} promoter={promoter} isPrimary={true} />}
+                    {associatedCampaignsDetails.map(assocCampaign => (
+                        <ApprovedPromoterSteps key={assocCampaign.id} campaign={assocCampaign} promoter={promoter} isPrimary={false} />
+                    ))}
+                </>
             )}
-        </>
+        </div>
     );
 };
 
