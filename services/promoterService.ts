@@ -32,14 +32,16 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     );
 
     const { photos, ...rest } = promoterData;
+    const campaign = promoterData.campaignName || null;
 
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
-      campaignName: promoterData.campaignName || null,
+      campaignName: campaign,
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
+      allCampaigns: campaign ? [campaign] : [],
     };
 
     await addDoc(collection(firestore, 'promoters'), newPromoter);
@@ -129,10 +131,21 @@ export const getPromotersPage = async (options: {
 
     const filters: any[] = [];
     
-    if (options.organizationId) {
+    // Only apply Super Admin's Org/State dropdown filters if a specific campaign is NOT selected.
+    // When a campaign is selected, it becomes the primary filter.
+    if (options.selectedCampaign === 'all') {
+        if (options.filterOrgId !== 'all') {
+          filters.push(where("organizationId", "==", options.filterOrgId));
+        }
+        if (options.filterState !== 'all') {
+          filters.push(where("state", "==", options.filterState));
+        }
+    }
+
+    if (options.organizationId && options.selectedCampaign === 'all') {
       filters.push(where("organizationId", "==", options.organizationId));
     }
-    if (options.statesForScope && options.statesForScope.length > 0) {
+    if (options.statesForScope && options.statesForScope.length > 0 && options.selectedCampaign === 'all') {
       filters.push(where("state", "in", options.statesForScope));
     }
 
@@ -144,41 +157,36 @@ export const getPromotersPage = async (options: {
     let finalCampaignFilter: string[] | null = options.campaignsInScope;
 
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
+        if (finalCampaignFilter === null) { // Super Admin or admin with no restrictions
             finalCampaignFilter = [options.selectedCampaign];
-        } else { // Has restrictions, so intersection is needed
+        } else { // Admin with campaign restrictions
             if (finalCampaignFilter.includes(options.selectedCampaign)) {
                 finalCampaignFilter = [options.selectedCampaign];
             } else {
-                // User selected a campaign they can't see, so return nothing
                 return { promoters: [], lastVisible: null, totalCount: 0 };
             }
         }
     }
 
-    if (finalCampaignFilter) { // if it's an array (not null)
-        if (finalCampaignFilter.length === 0) {
-             return { promoters: [], lastVisible: null, totalCount: 0 };
-        }
-        // Firestore 'in' query has a limit of 30 items. 
-        // For now, we assume an admin won't be assigned to more than 30 specific campaigns.
+    if (finalCampaignFilter) {
+      if (finalCampaignFilter.length === 0) {
+        return { promoters: [], lastVisible: null, totalCount: 0 };
+      }
+      
+      // If a single campaign is selected (common case), use the efficient 'allCampaigns' query.
+      if (finalCampaignFilter.length === 1) {
+        filters.push(where("allCampaigns", "array-contains", finalCampaignFilter[0]));
+      } else {
+        // Fallback for regular admins with multiple campaigns in scope viewing "All Events".
+        // `array-contains-any` is not compatible with `orderBy`, so we must query `campaignName` only.
+        // This is a known limitation to avoid crashing.
+        console.warn("Multiple campaign filter is active. Querying on 'campaignName' only due to Firestore limitations.");
+        const slicedFilter = finalCampaignFilter.length > 30 ? finalCampaignFilter.slice(0, 30) : finalCampaignFilter;
         if (finalCampaignFilter.length > 30) {
             console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
-            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
-        } else {
-            filters.push(where("campaignName", "in", finalCampaignFilter));
         }
-    }
-
-    // Only apply Super Admin's Org/State dropdown filters if a specific campaign is NOT selected.
-    // When a campaign is selected, it becomes the primary filter.
-    if (options.selectedCampaign === 'all') {
-        if (options.filterOrgId !== 'all') {
-          filters.push(where("organizationId", "==", options.filterOrgId));
-        }
-        if (options.filterState !== 'all') {
-          filters.push(where("state", "==", options.filterState));
-        }
+        filters.push(where("campaignName", "in", slicedFilter));
+      }
     }
 
 
@@ -333,7 +341,7 @@ export const getApprovedPromoters = async (organizationId: string, state: string
       collection(firestore, "promoters"),
       where("organizationId", "==", organizationId),
       where("state", "==", state),
-      where("campaignName", "==", campaignName),
+      where("allCampaigns", "array-contains", campaignName),
       where("status", "==", "approved")
     );
     const querySnapshot = await getDocs(q);
