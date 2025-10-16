@@ -94,6 +94,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
+    const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
@@ -133,6 +134,18 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         }).catch(err => {
             console.error('Failed to copy direct link: ', err);
             alert('Falha ao copiar o link. Por favor, tente manualmente.');
+        });
+    };
+
+    const handleCopyGuestListLink = (campaign: Campaign) => {
+        if (!adminData?.organizationId) return;
+        const link = `${window.location.origin}/#/lista/${adminData.organizationId}/${campaign.id}`;
+        navigator.clipboard.writeText(link).then(() => {
+            setCopiedGuestListLink(campaign.id);
+            setTimeout(() => setCopiedGuestListLink(null), 2500);
+        }).catch(err => {
+            console.error('Failed to copy guest list link: ', err);
+            alert('Falha ao copiar o link da lista.');
         });
     };
 
@@ -232,6 +245,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
                                         {c.isGuestListActive && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
+                                        {c.isGuestListActive && <button 
+                                            onClick={() => handleCopyGuestListLink(c)}
+                                            className="text-green-400 hover:text-green-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
+                                            disabled={copiedGuestListLink === c.id}
+                                        >
+                                            {copiedGuestListLink === c.id ? 'Link Copiado!' : 'Copiar Link da Lista'}
+                                        </button>}
                                         <button 
                                             onClick={() => handleCopyLink(c)} 
                                             className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"

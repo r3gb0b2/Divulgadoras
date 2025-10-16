@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { getApprovedEventsForPromoter } from '../services/promoterService';
-import { getCampaigns } from '../services/settingsService';
+import { getCampaigns, getAllCampaigns } from '../services/settingsService';
 import { addGuestListConfirmation } from '../services/guestListService';
 import { Promoter, Campaign } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
@@ -38,7 +38,7 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ eve
                 promoterName: event.name,
                 promoterEmail: event.email,
                 isPromoterAttending: isAttending,
-                guestNames: isAttending ? guestNames : [],
+                guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
             });
             setSuccess(true);
         } catch (err: any) {
@@ -98,7 +98,7 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ eve
                     disabled={isSubmitting}
                     className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
                 >
-                    {isSubmitting ? 'Confirmando...' : 'Confirmar Presença'}
+                    {isSubmitting ? 'Confirmando...' : 'Confirmar Lista'}
                 </button>
             </div>
         </form>
@@ -107,11 +107,38 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ eve
 
 const GuestListCheck: React.FC = () => {
     const navigate = useNavigate();
+    const { organizationId, campaignId } = useParams<{ organizationId: string; campaignId: string }>();
+
     const [email, setEmail] = useState('');
     const [events, setEvents] = useState<EventWithCampaign[] | null>(null);
+    const [directCampaign, setDirectCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+
+    useEffect(() => {
+        const fetchDirectCampaign = async () => {
+            if (organizationId && campaignId) {
+                setIsLoading(true);
+                try {
+                    const allCampaignsForOrg = await getAllCampaigns(organizationId);
+                    const foundCampaign = allCampaignsForOrg.find(c => c.id === campaignId);
+
+                    if (foundCampaign && foundCampaign.isGuestListActive) {
+                        setDirectCampaign(foundCampaign);
+                    } else {
+                        setError("Evento não encontrado ou a lista de presença não está ativa para ele.");
+                    }
+                } catch (err: any) {
+                    setError(err.message || 'Erro ao carregar detalhes do evento.');
+                } finally {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        fetchDirectCampaign();
+    }, [organizationId, campaignId]);
 
     const performSearch = async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -126,17 +153,33 @@ const GuestListCheck: React.FC = () => {
                 return;
             }
 
-            const eventsWithDetails: EventWithCampaign[] = [];
-            for (const entry of approvedPromoterEntries) {
-                if (entry.state && entry.campaignName) {
-                    const campaigns = await getCampaigns(entry.state, entry.organizationId);
-                    const campaignDetails = campaigns.find(c => c.name === entry.campaignName && c.isGuestListActive);
-                    if (campaignDetails) {
-                        eventsWithDetails.push({ ...entry, campaignDetails });
+            if (directCampaign) {
+                const entryForThisEvent = approvedPromoterEntries.find(entry =>
+                    entry.organizationId === directCampaign.organizationId &&
+                    entry.state === directCampaign.stateAbbr &&
+                    entry.campaignName === directCampaign.name
+                );
+
+                if (entryForThisEvent) {
+                    setEvents([{ ...entryForThisEvent, campaignDetails: directCampaign }]);
+                } else {
+                    setEvents([]);
+                    setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
+                }
+            } else {
+                // Legacy mode: find all events with active guest lists
+                const eventsWithDetails: EventWithCampaign[] = [];
+                for (const entry of approvedPromoterEntries) {
+                    if (entry.state && entry.campaignName) {
+                        const campaigns = await getCampaigns(entry.state, entry.organizationId);
+                        const campaignDetails = campaigns.find(c => c.name === entry.campaignName && c.isGuestListActive);
+                        if (campaignDetails) {
+                            eventsWithDetails.push({ ...entry, campaignDetails });
+                        }
                     }
                 }
+                setEvents(eventsWithDetails);
             }
-            setEvents(eventsWithDetails);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro ao buscar seus eventos.');
         } finally {
@@ -167,6 +210,45 @@ const GuestListCheck: React.FC = () => {
                 {events.map(event => <GuestListConfirmationCard key={event.id} event={event} />)}
             </div>
         );
+    };
+
+    const renderHeader = () => {
+        if (directCampaign) {
+            return (
+                <>
+                    <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Confirmar Presença</h1>
+                    <p className="text-center text-primary font-semibold text-lg mb-2">{directCampaign.name}</p>
+                    <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para confirmar sua presença e de seus convidados.</p>
+                </>
+            );
+        }
+        return (
+            <>
+                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Confirmar Presença na Lista</h1>
+                <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para ver os eventos disponíveis e confirmar sua presença e de seus convidados.</p>
+            </>
+        );
+    };
+
+    if (isLoading && !searched) { // Initial load for direct link
+        return (
+            <div className="flex justify-center items-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+    
+    // This handles critical error on direct link load (e.g. bad campaignId)
+    if (error && campaignId && !searched) {
+        return (
+            <div className="max-w-2xl mx-auto text-center">
+                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                    <h1 className="text-2xl font-bold text-red-400 mb-4">Erro ao Carregar Evento</h1>
+                    <p className="text-gray-300">{error}</p>
+                    <button onClick={() => navigate('/')} className="mt-6 px-6 py-2 bg-primary text-white rounded-md">Voltar à Página Inicial</button>
+                 </div>
+            </div>
+        );
     }
 
     return (
@@ -176,8 +258,7 @@ const GuestListCheck: React.FC = () => {
                 <span>Voltar</span>
             </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Confirmar Presença na Lista</h1>
-                <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para ver os eventos disponíveis e confirmar sua presença e de seus convidados.</p>
+                {renderHeader()}
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <input
@@ -193,7 +274,7 @@ const GuestListCheck: React.FC = () => {
                         disabled={isLoading}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
                     >
-                        {isLoading ? 'Verificando...' : 'Buscar Eventos'}
+                        {isLoading ? 'Verificando...' : 'Buscar'}
                     </button>
                 </form>
                 
