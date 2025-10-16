@@ -414,15 +414,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const displayPromoters = useMemo(() => {
+        // Create a mutable copy to sort
+        const promotersToSort = [...promotersOnPage];
+
+        // Sort by creation date ascending (oldest first)
+        promotersToSort.sort((a, b) => {
+            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            return timeA - timeB;
+        });
+
         // Apply client-side text search filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         
         if (lowercasedQuery === '') {
-            return promotersOnPage; // No search query, return all from page
+            return promotersToSort; // Return the sorted list if no search query
         }
         
-        return promotersOnPage.filter(p => {
-            // Text search filter
+        // Filter the sorted list
+        return promotersToSort.filter(p => {
             return p.name.toLowerCase().includes(lowercasedQuery) ||
                 p.email.toLowerCase().includes(lowercasedQuery) ||
                 (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
