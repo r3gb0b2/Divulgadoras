@@ -62,7 +62,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
     const [totalPromotersCount, setTotalPromotersCount] = useState(0);
-    const PROMOTERS_PER_PAGE = 50;
+    const PROMOTERS_PER_PAGE = 20;
 
     // State for super admin filters
     const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
