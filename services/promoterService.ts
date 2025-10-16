@@ -125,7 +125,6 @@ export const getPromotersPage = async (options: {
     const promotersRef = collection(firestore, "promoters");
     const isSuperAdmin = !options.organizationId;
     const filters: any[] = [];
-    let useArrayContainsAny = false;
 
     // Status filter is common to all queries
     if (options.status !== 'all') {
@@ -146,7 +145,7 @@ export const getPromotersPage = async (options: {
           filters.push(where("state", "==", options.filterState));
         }
       }
-    } else { 
+    } else {
       // --- REGULAR ADMIN LOGIC ---
       // A regular admin's view is defined ONLY by the campaigns they have access to.
       const campaignsToFilter = options.campaignsInScope;
@@ -161,7 +160,6 @@ export const getPromotersPage = async (options: {
       } else {
         // Filter by the campaigns they are allowed to see. This allows for cross-org visibility.
         filters.push(where("allCampaigns", "array-contains-any", campaignsToFilter.slice(0, 30)));
-        useArrayContainsAny = true; // Required when using array-contains-any
       }
     }
 
@@ -170,14 +168,9 @@ export const getPromotersPage = async (options: {
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
-    let dataQuery;
-    if (useArrayContainsAny) {
-      // When using `array-contains-any`, we MUST order by documentId.
-      dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
-    } else {
-      // For all other queries, we can sort by creation date.
-      dataQuery = query(promotersRef, ...filters, orderBy("createdAt", "asc"));
-    }
+    // ALWAYS order by documentId on the server to prevent composite index errors with multiple filters.
+    // The client (AdminPanel) will handle the user-facing sort order.
+    let dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
 
     if (options.cursor) {
       dataQuery = query(dataQuery, startAfter(options.cursor));
@@ -189,12 +182,7 @@ export const getPromotersPage = async (options: {
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
 
-    // Client-side sort if server couldn't sort by date, to ensure consistent ordering.
-    if (useArrayContainsAny) {
-      promoters.sort((a, b) => 
-        ((a.createdAt as Timestamp)?.toMillis() || 0) - ((b.createdAt as Timestamp)?.toMillis() || 0)
-      );
-    }
+    // NO client-side sorting here. The AdminPanel component handles the final presentation sort.
 
     return { promoters, lastVisible, totalCount };
 
