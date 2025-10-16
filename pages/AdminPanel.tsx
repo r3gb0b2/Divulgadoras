@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+// FIX: Corrected typo in function name from findPromersByEmail to findPromotersByEmail.
 import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -57,6 +58,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const PROMOTERS_PER_PAGE = 50;
 
     // State for super admin filters
     const [allOrganizations, setAllOrganizations] = useState<Organization[]>([]);
@@ -196,6 +201,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     useEffect(() => {
         fetchStaticData();
     }, [fetchStaticData]);
+
+    // Reset page number whenever filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filter, searchQuery, selectedOrg, selectedState, selectedCampaign]);
+
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
@@ -372,6 +383,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         });
     }, [promoters, filter, searchQuery, isSuperAdmin, selectedOrg, selectedState, selectedCampaign]);
     
+    // Pagination Calculations
+    const pageCount = Math.ceil(filteredPromoters.length / PROMOTERS_PER_PAGE);
+    const paginatedPromoters = useMemo(() => {
+        const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
+        const endIndex = startIndex + PROMOTERS_PER_PAGE;
+        return filteredPromoters.slice(startIndex, endIndex);
+    }, [filteredPromoters, currentPage]);
+
+    const handleNextPage = () => {
+        if (currentPage < pageCount) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+        }
+    };
+
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
@@ -385,11 +415,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const renderContent = () => {
         if (isLoading || isOrgLoading) return <div className="text-center py-10">Carregando divulgadoras...</div>;
         if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
-        if (filteredPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
+        if (paginatedPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
         return (
             <div className="space-y-4">
-                {filteredPromoters.map(promoter => (
+                {paginatedPromoters.map(promoter => (
                     <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
                             <div>
@@ -578,6 +608,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     )}
                  </div>
                 {renderContent()}
+
+                {pageCount > 0 && (
+                    <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-700 gap-4">
+                        <span className="text-sm text-gray-400">
+                            Mostrando {paginatedPromoters.length} de {filteredPromoters.length} resultados
+                        </span>
+                        {pageCount > 1 && (
+                            <div className="flex items-center">
+                                <button
+                                    onClick={handlePrevPage}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                >
+                                    Anterior
+                                </button>
+                                <span className="mx-4 text-gray-300 text-sm">
+                                    Página {currentPage} de {pageCount}
+                                </span>
+                                <button
+                                    onClick={handleNextPage}
+                                    disabled={currentPage === pageCount}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                >
+                                    Próxima
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Modals */}
