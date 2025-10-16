@@ -156,8 +156,10 @@ const GuestListCheck: React.FC = () => {
             if (directCampaign) {
                 const entryForThisEvent = approvedPromoterEntries.find(entry =>
                     entry.organizationId === directCampaign.organizationId &&
-                    entry.state === directCampaign.stateAbbr &&
-                    entry.campaignName === directCampaign.name
+                    (
+                        entry.campaignName === directCampaign.name ||
+                        (entry.associatedCampaigns || []).includes(directCampaign.name)
+                    )
                 );
 
                 if (entryForThisEvent) {
@@ -167,14 +169,31 @@ const GuestListCheck: React.FC = () => {
                     setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
                 }
             } else {
-                // Legacy mode: find all events with active guest lists
                 const eventsWithDetails: EventWithCampaign[] = [];
+                const uniqueOrgIds = [...new Set(approvedPromoterEntries.map(p => p.organizationId))];
+
+                const allCampaignsPromises = uniqueOrgIds.map(orgId => getAllCampaigns(orgId));
+                const campaignsByOrgArrays = await Promise.all(allCampaignsPromises);
+                const allCampaignsFlat = campaignsByOrgArrays.flat();
+                
+                const activeGuestListCampaigns = allCampaignsFlat.filter(c => c.isGuestListActive);
+                const campaignMap = new Map<string, Campaign>();
+                activeGuestListCampaigns.forEach(c => campaignMap.set(`${c.organizationId}-${c.name}`, c));
+
+                const addedCampaignIds = new Set<string>();
+
                 for (const entry of approvedPromoterEntries) {
-                    if (entry.state && entry.campaignName) {
-                        const campaigns = await getCampaigns(entry.state, entry.organizationId);
-                        const campaignDetails = campaigns.find(c => c.name === entry.campaignName && c.isGuestListActive);
-                        if (campaignDetails) {
+                    const potentialCampaignNames = [
+                        entry.campaignName,
+                        ...(entry.associatedCampaigns || [])
+                    ].filter((name): name is string => !!name);
+
+                    for (const campaignName of potentialCampaignNames) {
+                        const campaignDetails = campaignMap.get(`${entry.organizationId}-${campaignName}`);
+                        
+                        if (campaignDetails && !addedCampaignIds.has(campaignDetails.id)) {
                             eventsWithDetails.push({ ...entry, campaignDetails });
+                            addedCampaignIds.add(campaignDetails.id);
                         }
                     }
                 }
@@ -207,7 +226,7 @@ const GuestListCheck: React.FC = () => {
         }
         return (
             <div className="space-y-4">
-                {events.map(event => <GuestListConfirmationCard key={event.id} event={event} />)}
+                {events.map(event => <GuestListConfirmationCard key={event.campaignDetails.id} event={event} />)}
             </div>
         );
     };
