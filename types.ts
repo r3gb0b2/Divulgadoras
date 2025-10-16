@@ -21,6 +21,7 @@ export interface Promoter {
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
   statusChangedAt?: Timestamp | FieldValue;
+  observation?: string;
 }
 
 export interface PromoterApplicationData {

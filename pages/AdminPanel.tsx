@@ -382,6 +382,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline flex items-center"><TikTokIcon className="w-4 h-4 mr-2" /><span>TikTok</span></a>}
                         </div>
                         
+                        {promoter.observation && (
+                            <div className="mt-3 pt-3 border-t border-gray-700">
+                                <p className="text-sm text-gray-300 bg-gray-800/50 p-2 rounded-md">
+                                    <span className="font-semibold text-yellow-400">Obs:</span>
+                                    <span className="italic ml-2">{promoter.observation}</span>
+                                </p>
+                            </div>
+                        )}
+
                         {canManage && (
                             <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
                                 <div>

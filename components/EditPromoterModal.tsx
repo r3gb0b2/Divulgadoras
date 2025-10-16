@@ -27,6 +27,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         status: promoter.status,
         rejectionReason: promoter.rejectionReason,
         hasJoinedGroup: promoter.hasJoinedGroup,
+        observation: promoter.observation,
       });
     }
   }, [promoter]);
@@ -116,6 +117,16 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
           <div>
             <label className="block text-sm font-medium text-gray-300">Data de Nascimento</label>
             <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+           <div>
+            <label className="block text-sm font-medium text-gray-300">Observação (visível apenas para admins)</label>
+            <textarea
+                name="observation"
+                value={formData.observation || ''}
+                onChange={handleChange}
+                className={formInputStyle + ' min-h-[60px]'}
+                placeholder="Adicione uma nota rápida aqui..."
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300">Status</label>
