@@ -152,38 +152,38 @@ export const getPromotersPage = async (options: {
         }
       }
     } else {
-      // --- REGULAR ADMIN LOGIC ---
-      if (!options.organizationId) {
+      // --- UNIFIED REGULAR ADMIN LOGIC ---
+      if (!options.organizationId || !options.campaignsInScope) {
+        // An org admin must have an orgId and a scope. If not, they see nothing.
         return { promoters: [], lastVisible: null, totalCount: 0 };
       }
 
-      // This is the admin's entire visibility scope (e.g., ['eventA', 'eventB', 'org_ORG_ID'])
-      const campaignsInScope = options.campaignsInScope;
-      let campaignsToQuery = campaignsInScope;
+      let campaignsToQuery = options.campaignsInScope;
 
+      // If user filters by a specific campaign in the UI, narrow the query to that campaign.
       if (options.selectedCampaign !== 'all') {
-          // If filtering by a specific campaign in UI, narrow the query to just that one,
-          // but only if it's within their allowed scope.
-          if (campaignsInScope && campaignsInScope.includes(options.selectedCampaign)) {
+          if (options.campaignsInScope.includes(options.selectedCampaign)) {
               campaignsToQuery = [options.selectedCampaign];
           } else {
-              // They are filtering for something outside their scope. Return nothing.
+              // Admin is filtering for a campaign outside their scope, return empty.
               return { promoters: [], lastVisible: null, totalCount: 0 };
           }
       }
-
-      if (!campaignsToQuery || campaignsToQuery.length === 0) {
-          // This admin has an empty scope. Return nothing to be safe.
-          return { promoters: [], lastVisible: null, totalCount: 0 };
+      
+      if (campaignsToQuery.length === 0) {
+         // Admin's scope is empty. Return nothing.
+         return { promoters: [], lastVisible: null, totalCount: 0 };
       }
 
       if (campaignsToQuery.length === 1) {
-          // 'array-contains' is more efficient and allows server-side sorting
+          // Use 'array-contains' for single-item queries, more efficient.
           filters.push(where("allCampaigns", "array-contains", campaignsToQuery[0]));
       } else {
-          // 'array-contains-any' is needed for multiple campaigns but has limitations
+          // Use 'array-contains-any' for multi-item scope.
+          // Limited to 30 items by Firestore.
           filters.push(where("allCampaigns", "array-contains-any", campaignsToQuery.slice(0, 30)));
-          queryNeedsClientSideSort = true; // Firestore limitation: cannot order by a different field
+          // This query cannot be ordered by a different field on the server.
+          queryNeedsClientSideSort = true;
       }
     }
 
@@ -194,11 +194,11 @@ export const getPromotersPage = async (options: {
     const totalCount = countSnapshot.data().count;
 
     let dataQuery;
-    // We can't safely order on the server when using array-contains-any without risking index errors.
-    // The client will handle chronological sorting in this case.
+    // The client will handle sorting if the query is complex
     if (queryNeedsClientSideSort) {
         dataQuery = query(promotersRef, ...filters);
     } else {
+        // Simple queries can be ordered by documentId for stable pagination
         dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
     }
 
