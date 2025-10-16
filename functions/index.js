@@ -1,4 +1,3 @@
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { GoogleGenAI } = require("@google/genai");
@@ -41,7 +40,7 @@ const initializeBrevo = () => {
 
 
 // Centralized and robust email sending function
-const sendEmail = async (toEmail, toName, subject, htmlContent) => {
+const sendEmail = async (toEmail, toName, subject, htmlContent, orgId = null) => {
     const brevoApi = initializeBrevo();
     if (!brevoApi) {
         throw new functions.https.HttpsError("failed-precondition", "Brevo API is not initialized.");
@@ -52,25 +51,15 @@ const sendEmail = async (toEmail, toName, subject, htmlContent) => {
         throw new functions.https.HttpsError("failed-precondition", "Sender email is not configured.");
     }
     
-    // Fetch organization name to use as sender name
-    // This is a generic approach; specific sender name logic might be needed elsewhere
     let senderName = "Equipe Certa"; // Default fallback
-    try {
-        // A better approach would be to pass orgId to this function if available
-        const orgSettingsSnapshot = await db.collection("organizations").limit(1).get();
-        if (!orgSettingsSnapshot.empty) {
-           const orgData = orgSettingsSnapshot.docs[0].data();
-           if(orgData.name) senderName = orgData.name;
-        }
-    } catch(e) {
-        console.log("Could not fetch a default organization name, using fallback.", e);
-    }
-    
-    if (senderName === "Equipe Certa") {
-        const orgSettingsSnapshot = await db.collection("organizations").limit(1).get();
-        if(!orgSettingsSnapshot.empty){
-            const orgData = orgSettingsSnapshot.docs[0].data();
-            senderName = orgData.name;
+    if (orgId) {
+        try {
+            const orgDoc = await db.collection('organizations').doc(orgId).get();
+            if (orgDoc.exists && orgDoc.data().name) {
+                senderName = orgDoc.data().name;
+            }
+        } catch(e) {
+            console.log(`Could not fetch organization name for ${orgId}, using fallback.`, e);
         }
     }
     
@@ -192,7 +181,7 @@ exports.onPromoterStatusChange = functions.region('southamerica-east1').firestor
             const subject = replacePlaceholders(defaultTemplates.subject, placeholderData);
             const htmlContent = replacePlaceholders(template, placeholderData);
             
-            await sendEmail(newValue.email, newValue.name, subject, htmlContent);
+            await sendEmail(newValue.email, newValue.name, subject, htmlContent, newValue.organizationId);
             
             console.log(`Email successfully sent to ${newValue.email} for status ${newValue.status}.`);
             return null;
@@ -245,7 +234,7 @@ exports.manuallySendStatusEmail = functions.region('southamerica-east1').https.o
         const subject = replacePlaceholders(defaultTemplate.subject, placeholderData);
         const htmlContent = replacePlaceholders(template, placeholderData);
 
-        await sendEmail(promoter.email, promoter.name, subject, htmlContent);
+        await sendEmail(promoter.email, promoter.name, subject, htmlContent, promoter.organizationId);
 
         return { success: true, message: 'Notificação de aprovação enviada com sucesso!' };
 
