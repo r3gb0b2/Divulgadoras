@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
-import { setAdminUserData } from '../services/adminService';
+import { getAllAdmins, setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -12,7 +12,8 @@ const CampaignModal: React.FC<{
     onClose: () => void;
     onSave: (campaign: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => void;
     campaign: Omit<Campaign, 'id' | 'stateAbbr' | 'organizationId'> | Campaign | null;
-}> = ({ isOpen, onClose, onSave, campaign }) => {
+    allAdmins: AdminUserData[];
+}> = ({ isOpen, onClose, onSave, campaign, allAdmins }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -21,6 +22,7 @@ const CampaignModal: React.FC<{
         isActive: true,
         isGuestListActive: false,
         guestAllowance: 0,
+        associatedAdmins: [] as string[],
     });
 
     useEffect(() => {
@@ -33,9 +35,10 @@ const CampaignModal: React.FC<{
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
                 isGuestListActive: campaign.isGuestListActive || false,
                 guestAllowance: campaign.guestAllowance || 0,
+                associatedAdmins: (campaign as Campaign).associatedAdmins || [],
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0 });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0, associatedAdmins: [] });
         }
     }, [campaign, isOpen]);
     
@@ -46,6 +49,11 @@ const CampaignModal: React.FC<{
         onSave({ ...(campaign || {}), ...formData });
         onClose();
     };
+
+    const handleAdminSelection = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedUids = Array.from(e.target.selectedOptions, option => option.value);
+        setFormData(prev => ({ ...prev, associatedAdmins: selectedUids }));
+    }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
@@ -59,6 +67,16 @@ const CampaignModal: React.FC<{
                     <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
                     
                     <div className="border-t border-gray-700 pt-4 space-y-3">
+                        <h3 className="text-lg font-semibold text-gray-200">Administradores Vinculados</h3>
+                        <p className="text-xs text-gray-400">Selecione administradores (de qualquer organização) que também poderão ver as divulgadoras deste evento.</p>
+                         <select multiple value={formData.associatedAdmins} onChange={handleAdminSelection} className="w-full h-40 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white">
+                             {allAdmins.map(admin => (
+                                 <option key={admin.uid} value={admin.uid}>{admin.email}</option>
+                             ))}
+                         </select>
+                    </div>
+
+                    <div className="border-t border-gray-700 pt-4 space-y-3">
                         <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
                          <label className="flex items-center space-x-2 text-white">
                              <input type="checkbox" checked={formData.isGuestListActive} onChange={e => setFormData({...formData, isGuestListActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
@@ -67,7 +85,8 @@ const CampaignModal: React.FC<{
                          {formData.isGuestListActive && (
                              <div>
                                  <label className="block text-sm font-medium text-gray-300">Nº de convidados por divulgadora</label>
-                                 <input type="number" min="0" value={formData.guestAllowance} onChange={e => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
+                                 {/* FIX: Explicitly type the event 'e' to resolve property 'value' does not exist error. */}
+                                 <input type="number" min="0" value={formData.guestAllowance} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                              </div>
                          )}
                     </div>
@@ -89,6 +108,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const { stateAbbr } = useParams<{ stateAbbr: string }>();
     const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [allAdmins, setAllAdmins] = useState<AdminUserData[]>([]);
     const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
@@ -104,12 +124,24 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignData = await getCampaigns(stateAbbr, adminData.organizationId);
-            setCampaigns(campaignData);
+            // FIX: Explicitly type the promises array to handle multiple resolved types in Promise.all.
+            const promises: Promise<any>[] = [
+                getCampaigns(stateAbbr, adminData.organizationId),
+                getAllAdmins() // Fetch all admins to link them
+            ];
             if (isSuperAdmin) {
-                const config = await getStatesConfig();
-                setStatesConfig(config);
+                promises.push(getStatesConfig());
             }
+            
+            const [campaignData, adminDataResult, config] = await Promise.all(promises);
+
+            setCampaigns(campaignData);
+            setAllAdmins(adminDataResult as AdminUserData[]);
+            if (config) {
+                 // FIX: The cast to StatesConfig is now safe due to the promise array typing fix.
+                 setStatesConfig(config as StatesConfig);
+            }
+
         } catch (err: any) {
             setError(err.message || 'Falha ao carregar dados.');
         } finally {
@@ -279,7 +311,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 )}
             </div>
 
-            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCampaign} campaign={editingCampaign} />
+            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCampaign} campaign={editingCampaign} allAdmins={allAdmins} />
         </div>
     );
 };

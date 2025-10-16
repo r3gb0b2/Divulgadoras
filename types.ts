@@ -16,6 +16,7 @@ export interface Promoter {
   state: string;
   campaignName: string | null;
   associatedCampaigns?: string[];
+  allCampaigns?: string[]; // Denormalized field for querying
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
@@ -53,6 +54,7 @@ export interface Campaign {
   rules: string;
   stateAbbr: string;
   organizationId: string;
+  associatedAdmins?: string[]; // Array of admin UIDs
   // Guest List Feature
   isGuestListActive?: boolean;
   guestAllowance?: number;

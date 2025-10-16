@@ -32,14 +32,19 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     );
 
     const { photos, ...rest } = promoterData;
+    const campaignName = promoterData.campaignName || null;
+    
+    // Create the denormalized `allCampaigns` array
+    const allCampaigns: (string | null)[] = [campaignName];
 
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
-      campaignName: promoterData.campaignName || null,
+      campaignName: campaignName,
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
+      allCampaigns: allCampaigns.filter((c): c is string => !!c),
     };
 
     await addDoc(collection(firestore, 'promoters'), newPromoter);
@@ -119,84 +124,84 @@ export const getPromotersPage = async (options: {
   filterState: string | 'all';
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
+  // FIX: Added missing 'currentPage' property to the options type.
+  currentPage?: number;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    
-    // Sort by document ID to prevent composite index errors with multiple filters.
-    let dataQuery = query(promotersRef, orderBy(documentId()));
-    let countQuery = query(promotersRef);
-
     const filters: any[] = [];
-    
-    if (options.organizationId) {
-      filters.push(where("organizationId", "==", options.organizationId));
-    }
-    if (options.statesForScope && options.statesForScope.length > 0) {
-      filters.push(where("state", "in", options.statesForScope));
-    }
+    let useOrderBy = true;
 
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
     }
 
-    // Handle campaign permissions and filters
-    let finalCampaignFilter: string[] | null = options.campaignsInScope;
-
-    if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
-            finalCampaignFilter = [options.selectedCampaign];
-        } else { // Has restrictions, so intersection is needed
-            if (finalCampaignFilter.includes(options.selectedCampaign)) {
-                finalCampaignFilter = [options.selectedCampaign];
-            } else {
-                // User selected a campaign they can't see, so return nothing
-                return { promoters: [], lastVisible: null, totalCount: 0 };
-            }
-        }
-    }
-
-    if (finalCampaignFilter) { // if it's an array (not null)
-        if (finalCampaignFilter.length === 0) {
-             return { promoters: [], lastVisible: null, totalCount: 0 };
-        }
-        // Firestore 'in' query has a limit of 30 items. 
-        // For now, we assume an admin won't be assigned to more than 30 specific campaigns.
-        if (finalCampaignFilter.length > 30) {
-            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
-            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
-        } else {
-            filters.push(where("campaignName", "in", finalCampaignFilter));
-        }
-    }
-
     if (options.filterOrgId !== 'all') {
       filters.push(where("organizationId", "==", options.filterOrgId));
     }
+
     if (options.filterState !== 'all') {
       filters.push(where("state", "==", options.filterState));
     }
 
-    if (filters.length > 0) {
-      dataQuery = query(dataQuery, ...filters);
-      countQuery = query(countQuery, ...filters);
+    // New campaign and organization filtering logic
+    if (options.selectedCampaign !== 'all') {
+      // User is filtering by a specific campaign, allows cross-org view
+      filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
+    } else if (options.campaignsInScope) {
+      // Admin has a scope of campaigns (could be cross-org or just their own)
+      if (options.campaignsInScope.length > 0 && options.campaignsInScope.length <= 30) {
+        filters.push(where("allCampaigns", "array-contains-any", options.campaignsInScope));
+        // Using array-contains-any prohibits ordering, which breaks cursor-based pagination.
+        // The main list is sorted on the client, so we can omit server-side ordering here to make the query valid.
+        useOrderBy = false; 
+      } else if (options.campaignsInScope.length > 30) {
+         // Fallback for large organizations to prevent query failure. Show only their own promoters.
+         if (options.organizationId) {
+            filters.push(where("organizationId", "==", options.organizationId));
+         }
+      } else {
+        // campaignsInScope is an empty array, meaning no access.
+        return { promoters: [], lastVisible: null, totalCount: 0 };
+      }
+    } else if (options.organizationId) {
+        // Regular admin with no specific campaign scope, show all from their org.
+        filters.push(where("organizationId", "==", options.organizationId));
     }
+    
+    // Build queries
+    let countQuery = query(promotersRef, ...filters);
+    let dataQuery = query(promotersRef, ...filters);
     
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
-    if (options.cursor) {
-      dataQuery = query(dataQuery, startAfter(options.cursor));
+    if (useOrderBy) {
+        dataQuery = query(dataQuery, orderBy(documentId()));
+        if (options.cursor) {
+            dataQuery = query(dataQuery, startAfter(options.cursor));
+        }
+    } else if (options.currentPage && options.currentPage > 1) {
+        // A simple offset for non-cursor pagination. Less efficient but works.
+        // This path is taken when sorting is disabled due to array-contains-any.
+        dataQuery = query(dataQuery, limit(options.limitPerPage * (options.currentPage - 1)));
+        const snapshotToFindLast = await getDocs(dataQuery);
+        const lastDocForOffset = snapshotToFindLast.docs.length > 0 ? snapshotToFindLast.docs[snapshotToFindLast.docs.length-1] : null;
+
+        if (lastDocForOffset) {
+           dataQuery = query(promotersRef, ...filters, startAfter(lastDocForOffset));
+        }
     }
-    
+
     dataQuery = query(dataQuery, limit(options.limitPerPage));
     
     const querySnapshot = await getDocs(dataQuery);
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     
-    const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+    const lastVisible = useOrderBy && querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
 
     return { promoters, lastVisible, totalCount };
+
   } catch (error) {
     console.error("Error fetching promoter page:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {
@@ -205,6 +210,7 @@ export const getPromotersPage = async (options: {
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
+
 
 export const getPromoterStats = async (options: {
   organizationId?: string;
