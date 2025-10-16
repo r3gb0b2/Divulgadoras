@@ -18,6 +18,9 @@ import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import t
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
+import AdminPosts from './AdminPosts';
+import CreatePost from './CreatePost';
+import PostDetails from './PostDetails';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -213,6 +216,9 @@ const AdminAuth: React.FC = () => {
                     <Route path="settings/pagseguro" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                     <Route path="settings/email" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                 </>
             )}
 
@@ -225,6 +231,9 @@ const AdminAuth: React.FC = () => {
                     <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
                     <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                 </>
             )}
             

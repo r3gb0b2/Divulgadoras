@@ -111,3 +111,34 @@ export interface Plan {
   features: string[];
   isPopular: boolean;
 }
+
+export interface Post {
+  id: string;
+  organizationId: string;
+  campaignName: string;
+  stateAbbr: string;
+  type: 'image' | 'text';
+  imageUrl?: string;
+  textContent?: string;
+  instructions: string;
+  createdAt: Timestamp | FieldValue;
+  createdByEmail: string;
+}
+
+export interface PostAssignment {
+  id: string; // Firestore document ID
+  postId: string;
+  post: { // Denormalized post data
+    type: 'image' | 'text';
+    imageUrl?: string;
+    textContent?: string;
+    instructions: string;
+    campaignName: string;
+  };
+  organizationId: string;
+  promoterId: string;
+  promoterEmail: string; // lowercase
+  promoterName: string;
+  status: 'pending' | 'confirmed';
+  confirmedAt: Timestamp | FieldValue | null;
+}

@@ -184,6 +184,27 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
     }
 };
 
+export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
+  try {
+    const q = query(
+      collection(firestore, "promoters"),
+      where("organizationId", "==", organizationId),
+      where("state", "==", state),
+      where("campaignName", "==", campaignName),
+      where("status", "==", "approved")
+    );
+    const querySnapshot = await getDocs(q);
+    const promoters: Promoter[] = [];
+    querySnapshot.forEach((doc) => {
+      promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
+    });
+    return promoters.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error("Error getting approved promoters: ", error);
+    throw new Error("Não foi possível buscar as divulgadoras aprovadas.");
+  }
+};
+
 // --- Rejection Reasons Service ---
 
 export const getRejectionReasons = async (organizationId: string): Promise<RejectionReason[]> => {
