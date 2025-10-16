@@ -37,6 +37,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
+      allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
@@ -110,80 +111,73 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
 
 
 export const getPromotersPage = async (options: {
-  organizationId?: string;
+  organizationId?: string; // ID of the logged-in admin's org
   statesForScope?: string[] | null;
   status: PromoterStatus | 'all';
   campaignsInScope: string[] | null;
-  selectedCampaign: string | 'all';
-  filterOrgId: string | 'all';
-  filterState: string | 'all';
+  selectedCampaign: string | 'all'; // UI filter
+  filterOrgId: string | 'all'; // UI filter
+  filterState: string | 'all'; // UI filter
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    
-    // Sort by document ID to prevent composite index errors with multiple filters.
-    let dataQuery = query(promotersRef, orderBy(documentId()));
-    let countQuery = query(promotersRef);
+    const isSuperAdmin = !options.organizationId;
 
+    let dataQuery;
     const filters: any[] = [];
     
-    if (options.organizationId) {
-      filters.push(where("organizationId", "==", options.organizationId));
-    }
-    if (options.statesForScope && options.statesForScope.length > 0) {
-      filters.push(where("state", "in", options.statesForScope));
-    }
+    // --- Determine filter logic based on admin role and UI selection ---
 
-    if (options.status !== 'all') {
-      filters.push(where("status", "==", options.status));
-    }
+    // SUPER ADMIN and has selected a specific campaign: This overrides everything.
+    if (isSuperAdmin && options.selectedCampaign !== 'all') {
+      filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
+      if (options.status !== 'all') {
+        filters.push(where("status", "==", options.status));
+      }
+    } 
+    // REGULAR ADMIN or SUPER ADMIN with general filters
+    else {
+      // Scope by org for regular admins, or by UI filter for super admins
+      const orgToFilter = isSuperAdmin ? options.filterOrgId : options.organizationId;
+      if (orgToFilter && orgToFilter !== 'all') {
+        filters.push(where("organizationId", "==", orgToFilter));
+      }
 
-    // Handle campaign permissions and filters
-    let finalCampaignFilter: string[] | null = options.campaignsInScope;
+      // Scope by state for regular admins, or by UI filter for super admins
+      const statesToFilter = isSuperAdmin ? (options.filterState !== 'all' ? [options.filterState] : null) : options.statesForScope;
+      if (statesToFilter && statesToFilter.length > 0) {
+        filters.push(where("state", "in", statesToFilter));
+      }
+      
+      // Status filter
+      if (options.status !== 'all') {
+        filters.push(where("status", "==", options.status));
+      }
 
-    if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
-            finalCampaignFilter = [options.selectedCampaign];
-        } else { // Has restrictions, so intersection is needed
-            if (finalCampaignFilter.includes(options.selectedCampaign)) {
-                finalCampaignFilter = [options.selectedCampaign];
-            } else {
-                // User selected a campaign they can't see, so return nothing
-                return { promoters: [], lastVisible: null, totalCount: 0 };
-            }
-        }
-    }
-
-    if (finalCampaignFilter) { // if it's an array (not null)
+      // Campaign filter (for regular admin scope or super admin UI filter)
+      let finalCampaignFilter = isSuperAdmin ? (options.selectedCampaign !== 'all' ? [options.selectedCampaign] : null) : options.campaignsInScope;
+      
+      if (finalCampaignFilter) {
         if (finalCampaignFilter.length === 0) {
-             return { promoters: [], lastVisible: null, totalCount: 0 };
+          return { promoters: [], lastVisible: null, totalCount: 0 }; // Explicitly assigned to NO campaigns
         }
         // Firestore 'in' query has a limit of 30 items. 
-        // For now, we assume an admin won't be assigned to more than 30 specific campaigns.
         if (finalCampaignFilter.length > 30) {
-            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
-            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
-        } else {
-            filters.push(where("campaignName", "in", finalCampaignFilter));
+            console.warn(`Campaign filter exceeds Firestore's 30 item limit.`);
         }
+        filters.push(where("allCampaigns", "array-contains-any", finalCampaignFilter.slice(0, 30)));
+      }
     }
 
-    if (options.filterOrgId !== 'all') {
-      filters.push(where("organizationId", "==", options.filterOrgId));
-    }
-    if (options.filterState !== 'all') {
-      filters.push(where("state", "==", options.filterState));
-    }
-
-    if (filters.length > 0) {
-      dataQuery = query(dataQuery, ...filters);
-      countQuery = query(countQuery, ...filters);
-    }
-    
+    // --- Build and execute queries ---
+    const countQuery = query(promotersRef, ...filters);
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
+
+    // orderBy must be on a different field than array-contains-any, so use documentId as a stable default.
+    dataQuery = query(promotersRef, ...filters, orderBy(documentId()));
 
     if (options.cursor) {
       dataQuery = query(dataQuery, startAfter(options.cursor));
@@ -193,10 +187,10 @@ export const getPromotersPage = async (options: {
     
     const querySnapshot = await getDocs(dataQuery);
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-    
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
 
     return { promoters, lastVisible, totalCount };
+
   } catch (error) {
     console.error("Error fetching promoter page:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {
@@ -328,7 +322,7 @@ export const getApprovedPromoters = async (organizationId: string, state: string
       collection(firestore, "promoters"),
       where("organizationId", "==", organizationId),
       where("state", "==", state),
-      where("campaignName", "==", campaignName),
+      where("allCampaigns", "array-contains", campaignName),
       where("status", "==", "approved")
     );
     const querySnapshot = await getDocs(q);

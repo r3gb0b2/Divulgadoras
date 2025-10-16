@@ -94,6 +94,16 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'approved') {
         dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
+
+      // Recalculate and add the denormalized 'allCampaigns' field
+      const primaryCampaign = promoter.campaignName;
+      const associated = dataToSave.associatedCampaigns || [];
+      const allCampaignsSet = new Set<string>(associated);
+      if (primaryCampaign) {
+        allCampaignsSet.add(primaryCampaign);
+      }
+      dataToSave.allCampaigns = Array.from(allCampaignsSet);
+
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {
