@@ -80,6 +80,32 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
     }
 };
 
+export const findPromotersByEmail = async (email: string): Promise<Promoter[]> => {
+    try {
+        const q = query(
+            collection(firestore, "promoters"),
+            where("email", "==", email.toLowerCase().trim())
+        );
+        const querySnapshot = await getDocs(q);
+        const promoters: Promoter[] = [];
+        querySnapshot.forEach((doc) => {
+            promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
+        });
+        
+        // Sort by most recent first
+        promoters.sort((a, b) => {
+            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            return timeB - timeA;
+        });
+
+        return promoters;
+    } catch (error) {
+        console.error("Error finding promoters by email: ", error);
+        throw new Error("Não foi possível buscar as divulgadoras por e-mail.");
+    }
+};
+
 
 export const getPromoters = async (organizationId: string | undefined, states?: string[] | null): Promise<Promoter[]> => {
   try {

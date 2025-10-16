@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
+import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
@@ -12,6 +12,7 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
+import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
 
@@ -63,6 +64,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [selectedOrg, setSelectedOrg] = useState('all');
     const [selectedState, setSelectedState] = useState('all');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
+
+    // State for email lookup
+    const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
+    const [lookupEmail, setLookupEmail] = useState('');
+    const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
+    const [isLookingUp, setIsLookingUp] = useState(false);
+    const [lookupError, setLookupError] = useState<string | null>(null);
 
 
     // Modals state
@@ -291,6 +299,40 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
+    const organizationsMap = useMemo(() => {
+        return allOrganizations.reduce((acc, org) => {
+            acc[org.id] = org.name;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [allOrganizations]);
+
+    const handleLookupPromoter = async () => {
+        if (!lookupEmail.trim()) return;
+        setIsLookingUp(true);
+        setLookupError(null);
+        setLookupResults(null);
+        setIsLookupModalOpen(true);
+        try {
+            const results = await findPromotersByEmail(lookupEmail);
+            setLookupResults(results);
+        } catch (err: any) {
+            setLookupError(err.message);
+        } finally {
+            setIsLookingUp(false);
+        }
+    };
+
+    const handleGoToPromoter = (promoter: Promoter) => {
+        setFilter(promoter.status);
+        setSearchQuery(promoter.email);
+        if (isSuperAdmin) {
+            setSelectedOrg(promoter.organizationId);
+            setSelectedState(promoter.state);
+            setSelectedCampaign(promoter.campaignName || 'all');
+        }
+        setIsLookupModalOpen(false);
+    };
+
     const stats = useMemo(() => {
         const promoterSource = promoters; // Use all promoters before filtering for stats
         return {
@@ -497,6 +539,29 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         />
                     </div>
+                </div>
+
+                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4 border-t border-gray-700 pt-4">
+                     <div className="flex-grow">
+                        <label className="text-sm font-medium text-gray-300">Diagnóstico Rápido</label>
+                         <div className="flex gap-2 mt-1 w-full sm:w-auto sm:max-w-sm">
+                            <input 
+                                type="email"
+                                placeholder="Buscar por e-mail exato..."
+                                value={lookupEmail}
+                                onChange={(e) => setLookupEmail(e.target.value)}
+                                className="flex-grow px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                            />
+                            <button 
+                                type="button" 
+                                onClick={handleLookupPromoter}
+                                disabled={isLookingUp}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-semibold disabled:opacity-50"
+                            >
+                                {isLookingUp ? '...' : 'Buscar'}
+                            </button>
+                        </div>
+                     </div>
                      {canManage && (
                         <button
                             onClick={() => {
@@ -511,7 +576,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             Gerenciar Motivos
                         </button>
                     )}
-                </div>
+                 </div>
                 {renderContent()}
             </div>
 
@@ -544,6 +609,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     onReasonsUpdated={fetchStaticData}
                 />
             )}
+
+            <PromoterLookupModal 
+                isOpen={isLookupModalOpen}
+                onClose={() => setIsLookupModalOpen(false)}
+                isLoading={isLookingUp}
+                error={lookupError}
+                results={lookupResults}
+                onGoToPromoter={handleGoToPromoter}
+                organizationsMap={organizationsMap}
+            />
 
         </div>
     );
