@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
-import { getCampaigns } from '../services/settingsService';
+import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
 import { WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
@@ -177,10 +177,10 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
         const fetchAllCampaignData = async () => {
             if (promoter && promoter.status === 'approved') {
                 try {
-                    const allCampaignsForState = await getCampaigns(promoter.state, promoter.organizationId);
+                    const allCampaignsForOrg = await getAllCampaigns(promoter.organizationId);
 
                     if (promoter.campaignName) {
-                        const foundPrimary = allCampaignsForState.find(c => c.name === promoter.campaignName);
+                        const foundPrimary = allCampaignsForOrg.find(c => c.name === promoter.campaignName);
                         setPrimaryCampaign(foundPrimary || null);
                     } else {
                         setPrimaryCampaign(null);
@@ -188,7 +188,7 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
 
                     if (promoter.associatedCampaigns && promoter.associatedCampaigns.length > 0) {
                         const foundAssociated = promoter.associatedCampaigns
-                            .map(assocName => allCampaignsForState.find(c => c.name === assocName))
+                            .map(assocName => allCampaignsForOrg.find(c => c.name === assocName))
                             .filter((c): c is Campaign => !!c); // Filter out any not found
                         setAssociatedCampaignsDetails(foundAssociated);
                     } else {
