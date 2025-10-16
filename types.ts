@@ -15,6 +15,7 @@ export interface Promoter {
   createdAt: Timestamp | FieldValue;
   state: string;
   campaignName: string | null;
+  associatedCampaigns?: string[];
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;

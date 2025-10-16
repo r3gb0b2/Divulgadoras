@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Promoter } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Promoter, Campaign } from '../types';
+import { getAllCampaigns } from '../services/settingsService';
+import { stateMap } from '../constants/states';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -14,6 +16,8 @@ const formCheckboxStyle = "h-4 w-4 text-primary rounded border-gray-500 bg-gray-
 const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<Partial<Omit<Promoter, 'id'>>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
 
   useEffect(() => {
     if (promoter) {
@@ -28,9 +32,30 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         rejectionReason: promoter.rejectionReason || '',
         hasJoinedGroup: promoter.hasJoinedGroup || false,
         observation: promoter.observation || '',
+        associatedCampaigns: promoter.associatedCampaigns || [],
       });
+      
+      // Fetch campaigns for this promoter's organization
+      if (isOpen) {
+        setIsLoadingCampaigns(true);
+        getAllCampaigns(promoter.organizationId)
+          .then(campaigns => setAvailableCampaigns(campaigns))
+          .catch(err => console.error("Failed to load campaigns", err))
+          .finally(() => setIsLoadingCampaigns(false));
+      }
+
     }
-  }, [promoter]);
+  }, [promoter, isOpen]);
+
+  const campaignsByState = useMemo(() => {
+    return availableCampaigns.reduce((acc, campaign) => {
+        if (!acc[campaign.stateAbbr]) {
+            acc[campaign.stateAbbr] = [];
+        }
+        acc[campaign.stateAbbr].push(campaign);
+        return acc;
+    }, {} as Record<string, Campaign[]>);
+  }, [availableCampaigns]);
 
   if (!isOpen || !promoter) {
     return null;
@@ -44,6 +69,16 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         ...prev, 
         [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value 
     }));
+  };
+  
+  const handleCampaignToggle = (campaignName: string) => {
+    setFormData(prev => {
+        const currentAssociated = prev.associatedCampaigns || [];
+        const newAssociated = currentAssociated.includes(campaignName)
+            ? currentAssociated.filter(name => name !== campaignName)
+            : [...currentAssociated, campaignName];
+        return { ...prev, associatedCampaigns: newAssociated };
+    });
   };
 
   const handleSave = async () => {
@@ -131,6 +166,40 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                 placeholder="Adicione uma nota rápida aqui..."
             />
           </div>
+
+          <div className="border-t border-gray-700 pt-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Eventos Associados</label>
+            <p className="text-xs text-gray-400 mb-2">Associe esta divulgadora a outros eventos. O evento original do cadastro é: <strong>{promoter.campaignName || 'N/A'}</strong></p>
+            {isLoadingCampaigns ? (
+                <p className="text-sm text-gray-400">Carregando eventos...</p>
+            ) : Object.keys(campaignsByState).length > 0 ? (
+                <div className="max-h-48 overflow-y-auto space-y-3 p-2 border border-gray-600 rounded-md">
+                    {Object.entries(campaignsByState).sort(([stateA], [stateB]) => (stateMap[stateA] || stateA).localeCompare(stateMap[stateB] || stateB)).map(([stateAbbr, campaigns]) => (
+                        <div key={stateAbbr}>
+                            <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
+                            <div className="pl-2 space-y-1">
+                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
+                                {(campaigns as Campaign[]).map(campaign => (
+                                    <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={(formData.associatedCampaigns || []).includes(campaign.name)}
+                                            onChange={() => handleCampaignToggle(campaign.name)}
+                                            disabled={campaign.name === promoter.campaignName}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50"
+                                        />
+                                        <span className={`text-sm ${campaign.name === promoter.campaignName ? 'text-gray-500' : 'text-gray-200'}`}>{campaign.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-sm text-gray-400">Nenhum outro evento encontrado para esta organização.</p>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-300">Status</label>
             <select name="status" value={formData.status || 'pending'} onChange={handleChange} className={formInputStyle}>
