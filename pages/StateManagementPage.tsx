@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
-import { setAdminUserData, getAllAdmins } from '../services/adminService';
+import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -12,8 +12,7 @@ const CampaignModal: React.FC<{
     onClose: () => void;
     onSave: (campaign: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => void;
     campaign: Omit<Campaign, 'id' | 'stateAbbr' | 'organizationId'> | Campaign | null;
-    allAdmins: AdminUserData[];
-}> = ({ isOpen, onClose, onSave, campaign, allAdmins }) => {
+}> = ({ isOpen, onClose, onSave, campaign }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
         description: '', 
@@ -22,7 +21,6 @@ const CampaignModal: React.FC<{
         isActive: true,
         isGuestListActive: false,
         guestAllowance: 0,
-        associatedAdmins: [] as string[],
     });
 
     useEffect(() => {
@@ -35,10 +33,9 @@ const CampaignModal: React.FC<{
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
                 isGuestListActive: campaign.isGuestListActive || false,
                 guestAllowance: campaign.guestAllowance || 0,
-                associatedAdmins: 'associatedAdmins' in campaign ? campaign.associatedAdmins || [] : [],
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0, associatedAdmins: [] });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0 });
         }
     }, [campaign, isOpen]);
     
@@ -48,12 +45,6 @@ const CampaignModal: React.FC<{
         e.preventDefault();
         onSave({ ...(campaign || {}), ...formData });
         onClose();
-    };
-
-    const handleAdminSelectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        // FIX: Cast `option` to `HTMLOptionElement` to resolve TypeScript error where it was being inferred as `unknown`.
-        const selectedIds = Array.from(e.target.selectedOptions, option => (option as HTMLOptionElement).value);
-        setFormData(prev => ({ ...prev, associatedAdmins: selectedIds }));
     };
 
     return (
@@ -80,22 +71,6 @@ const CampaignModal: React.FC<{
                              </div>
                          )}
                     </div>
-
-                    <div className="border-t border-gray-700 pt-4 space-y-3">
-                        <h3 className="text-lg font-semibold text-gray-200">Administradores Vinculados</h3>
-                        <p className="text-xs text-gray-400">Vincule outros administradores a este evento. Eles poderão ver e gerenciar as divulgadoras cadastradas aqui, mesmo que sejam de outra organização.</p>
-                        <select
-                            multiple
-                            value={formData.associatedAdmins}
-                            onChange={handleAdminSelectionChange}
-                            className="w-full h-32 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                        >
-                            {allAdmins.map(admin => (
-                                <option key={admin.uid} value={admin.uid}>{admin.email}</option>
-                            ))}
-                        </select>
-                    </div>
-
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
@@ -121,7 +96,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
     const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
-    const [allAdmins, setAllAdmins] = useState<AdminUserData[]>([]);
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
@@ -130,19 +104,10 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignDataPromise = getCampaigns(stateAbbr, adminData.organizationId);
-            const adminsPromise = getAllAdmins();
-            const configPromise = isSuperAdmin ? getStatesConfig() : Promise.resolve(null);
-
-            const [campaignData, admins, config] = await Promise.all([
-                campaignDataPromise,
-                adminsPromise,
-                configPromise,
-            ]);
-
+            const campaignData = await getCampaigns(stateAbbr, adminData.organizationId);
             setCampaigns(campaignData);
-            setAllAdmins(admins);
             if (isSuperAdmin) {
+                const config = await getStatesConfig();
                 setStatesConfig(config);
             }
         } catch (err: any) {
@@ -314,7 +279,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 )}
             </div>
 
-            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCampaign} campaign={editingCampaign} allAdmins={allAdmins} />
+            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCampaign} campaign={editingCampaign} />
         </div>
     );
 };

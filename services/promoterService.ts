@@ -33,12 +33,6 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, ...rest } = promoterData;
 
-    const allCampaigns = [];
-    if (promoterData.campaignName) {
-        allCampaigns.push(promoterData.campaignName);
-    }
-    allCampaigns.push(`org_${promoterData.organizationId}`);
-
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
@@ -46,7 +40,6 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
-      allCampaigns,
     };
 
     await addDoc(collection(firestore, 'promoters'), newPromoter);
@@ -125,46 +118,35 @@ export const getPromotersPage = async (options: {
   filterState: string | 'all';
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
-  campaignsInScope?: string[] | null;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    let dataQuery = query(promotersRef, orderBy(documentId(), "asc"));
+    // Sort by creation date ascending (oldest first).
+    // NOTE: This may require composite indexes in Firestore if combined with filters.
+    let dataQuery = query(promotersRef, orderBy("createdAt", "asc"));
     let countQuery = query(promotersRef);
 
     const filters: any[] = [];
-    const isSuperAdmin = !options.organizationId;
-
-    if (isSuperAdmin) {
-        if (options.campaignName !== 'all') {
-            filters.push(where("allCampaigns", "array-contains", options.campaignName));
-        } else {
-            if (options.filterOrgId !== 'all') {
-                filters.push(where("organizationId", "==", options.filterOrgId));
-            }
-            if (options.filterState !== 'all') {
-                filters.push(where("state", "==", options.filterState));
-            }
-        }
-    } else { // Regular Admin Logic
-        // If filtering by a specific campaign, use allCampaigns to allow for cross-org.
-        if (options.campaignName !== 'all') {
-             filters.push(where("allCampaigns", "array-contains", options.campaignName));
-        }
-        // For the MAIN LIST VIEW ("all events"), revert to organizationId to fix the bug of missing promoters.
-        else {
-            filters.push(where("organizationId", "==", options.organizationId));
-
-            // Still respect state scopes
-            if (options.statesForScope && options.statesForScope.length > 0) {
-                filters.push(where("state", "in", options.statesForScope));
-            }
-        }
+    
+    if (options.organizationId) {
+      filters.push(where("organizationId", "==", options.organizationId));
+    }
+    if (options.statesForScope && options.statesForScope.length > 0) {
+      filters.push(where("state", "in", options.statesForScope));
     }
 
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
+    }
+    if (options.campaignName !== 'all') {
+      filters.push(where("campaignName", "==", options.campaignName));
+    }
+    if (options.filterOrgId !== 'all') {
+      filters.push(where("organizationId", "==", options.filterOrgId));
+    }
+    if (options.filterState !== 'all') {
+      filters.push(where("state", "==", options.filterState));
     }
 
     if (filters.length > 0) {
