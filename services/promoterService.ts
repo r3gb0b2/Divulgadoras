@@ -170,12 +170,17 @@ export const getPromotersPage = async (options: {
         }
     }
 
-    if (options.filterOrgId !== 'all') {
-      filters.push(where("organizationId", "==", options.filterOrgId));
+    // Only apply Super Admin's Org/State dropdown filters if a specific campaign is NOT selected.
+    // When a campaign is selected, it becomes the primary filter.
+    if (options.selectedCampaign === 'all') {
+        if (options.filterOrgId !== 'all') {
+          filters.push(where("organizationId", "==", options.filterOrgId));
+        }
+        if (options.filterState !== 'all') {
+          filters.push(where("state", "==", options.filterState));
+        }
     }
-    if (options.filterState !== 'all') {
-      filters.push(where("state", "==", options.filterState));
-    }
+
 
     if (filters.length > 0) {
       dataQuery = query(dataQuery, ...filters);

@@ -94,6 +94,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const isSuperAdmin = adminData.role === 'superadmin';
     const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
+    const isCampaignFilterActive = isSuperAdmin && selectedCampaign !== 'all';
 
     const organizationIdForReasons = useMemo(() => {
         if (isSuperAdmin) {
@@ -602,12 +603,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     </div>
                     
                     {isSuperAdmin && (
-                        <div className="flex flex-wrap gap-2 flex-grow">
-                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                        <div className="flex flex-wrap gap-2 flex-grow items-start">
+                             <select 
+                                value={selectedOrg} 
+                                onChange={e => setSelectedOrg(e.target.value)}
+                                disabled={isCampaignFilterActive}
+                                title={isCampaignFilterActive ? "Desativado ao filtrar por evento" : ""}
+                                className={`px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200 transition-opacity ${isCampaignFilterActive ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <option value="all">Todas Organizações</option>
                                 {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
                             </select>
-                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
+                            <select 
+                                value={selectedState} 
+                                onChange={e => setSelectedState(e.target.value)}
+                                disabled={isCampaignFilterActive}
+                                title={isCampaignFilterActive ? "Desativado ao filtrar por evento" : ""}
+                                className={`px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200 transition-opacity ${isCampaignFilterActive ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                 <option value="all">Todos Estados</option>
                                 {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                             </select>
@@ -617,6 +628,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     <option key={name} value={name}>{name}</option>
                                 ))}
                             </select>
+                            {isCampaignFilterActive && (
+                                <p className="text-xs text-yellow-400 w-full basis-full -mt-1 ml-1">
+                                    Filtros de organização e estado são ignorados quando um evento específico é selecionado.
+                                </p>
+                            )}
                         </div>
                     )}
 
