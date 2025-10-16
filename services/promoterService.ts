@@ -1,7 +1,7 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, onSnapshot, Unsubscribe, DocumentData, FieldValue, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Promoter, PromoterApplicationData, RejectionReason } from '../types';
+import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
@@ -109,84 +109,112 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
 };
 
 
-export const getPromoters = async (organizationId: string | undefined, states?: string[] | null): Promise<Promoter[]> => {
+export const getPromotersPage = async (options: {
+  organizationId?: string;
+  statesForScope?: string[] | null;
+  status: PromoterStatus | 'all';
+  campaignName: string | 'all';
+  filterOrgId: string | 'all';
+  filterState: string | 'all';
+  limitPerPage: number;
+  cursor?: QueryDocumentSnapshot<DocumentData>;
+}): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
-    let q = query(collection(firestore, "promoters"));
+    const promotersRef = collection(firestore, "promoters");
     
-    // Filter by organization if an ID is provided
-    if (organizationId) {
-      q = query(q, where("organizationId", "==", organizationId));
+    let dataQuery = query(promotersRef, orderBy("createdAt", "desc"));
+    let countQuery = query(promotersRef);
+
+    const filters: any[] = [];
+    
+    if (options.organizationId) {
+      filters.push(where("organizationId", "==", options.organizationId));
+    }
+    if (options.statesForScope && options.statesForScope.length > 0) {
+      filters.push(where("state", "in", options.statesForScope));
     }
 
-    if (states && states.length > 0) {
-      // Admin with specific state assignments
-      q = query(q, where("state", "in", states));
+    if (options.status !== 'all') {
+      filters.push(where("status", "==", options.status));
+    }
+    if (options.campaignName !== 'all') {
+      filters.push(where("campaignName", "==", options.campaignName));
+    }
+    if (options.filterOrgId !== 'all') {
+      filters.push(where("organizationId", "==", options.filterOrgId));
+    }
+    if (options.filterState !== 'all') {
+      filters.push(where("state", "==", options.filterState));
+    }
+
+    if (filters.length > 0) {
+      dataQuery = query(dataQuery, ...filters);
+      countQuery = query(countQuery, ...filters);
     }
     
-    const querySnapshot = await getDocs(q);
-    const promoters: Promoter[] = [];
-    querySnapshot.forEach((doc) => {
-      // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-      promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
-    });
-    
-    // Always sort manually on the client-side for consistency and to include documents without `createdAt`.
-    promoters.sort((a, b) => {
-        const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-        const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-        return timeB - timeA;
-    });
+    const countSnapshot = await getCountFromServer(countQuery);
+    const totalCount = countSnapshot.data().count;
 
-    return promoters;
+    if (options.cursor) {
+      dataQuery = query(dataQuery, startAfter(options.cursor));
+    }
+    
+    dataQuery = query(dataQuery, limit(options.limitPerPage));
+    
+    const querySnapshot = await getDocs(dataQuery);
+    const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    
+    const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+
+    return { promoters, lastVisible, totalCount };
   } catch (error) {
-    console.error("Error getting promoters: ", error);
+    console.error("Error fetching promoter page:", error);
+    if (error instanceof Error && error.message.includes("requires an index")) {
+        throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice composto no Firebase Console.");
+    }
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
 
+export const getPromoterStats = async (options: {
+  organizationId?: string;
+  statesForScope?: string[] | null;
+}): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
+    try {
+        const promotersRef = collection(firestore, "promoters");
+        
+        const baseFilters: any[] = [];
+        if (options.organizationId) {
+            baseFilters.push(where("organizationId", "==", options.organizationId));
+        }
+        if (options.statesForScope && options.statesForScope.length > 0) {
+            baseFilters.push(where("state", "in", options.statesForScope));
+        }
 
-export const listenToPromoters = (
-  organizationId: string | undefined,
-  states: string[] | null | undefined,
-  callback: (promoters: Promoter[]) => void,
-  onError: (error: Error) => void
-): Unsubscribe => {
-  try {
-    let q = query(collection(firestore, "promoters"));
+        const totalQuery = baseFilters.length > 0 ? query(promotersRef, ...baseFilters) : query(promotersRef);
+        const pendingQuery = query(totalQuery, where("status", "==", "pending"));
+        const approvedQuery = query(totalQuery, where("status", "==", "approved"));
+        const rejectedQuery = query(totalQuery, where("status", "==", "rejected"));
 
-    if (organizationId) {
-      q = query(q, where("organizationId", "==", organizationId));
+        const [totalSnap, pendingSnap, approvedSnap, rejectedSnap] = await Promise.all([
+            getCountFromServer(totalQuery),
+            getCountFromServer(pendingQuery),
+            getCountFromServer(approvedQuery),
+            getCountFromServer(rejectedQuery)
+        ]);
+        
+        return {
+            total: totalSnap.data().count,
+            pending: pendingSnap.data().count,
+            approved: approvedSnap.data().count,
+            rejected: rejectedSnap.data().count,
+        };
+    } catch (error) {
+        console.error("Error getting promoter stats: ", error);
+        throw new Error("Não foi possível carregar as estatísticas.");
     }
-
-    if (states && states.length > 0) {
-      q = query(q, where("state", "in", states));
-    }
-
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const promoters: Promoter[] = [];
-      querySnapshot.forEach((doc) => {
-        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
-        promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
-      });
-
-      promoters.sort((a, b) => {
-          const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-          const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-          return timeB - timeA;
-      });
-
-      callback(promoters);
-    }, (error) => {
-        console.error("Error listening to promoters: ", error);
-        onError(new Error("Não foi possível receber atualizações em tempo real."));
-    });
-
-    return unsubscribe;
-  } catch (error) {
-    console.error("Error setting up promoter listener: ", error);
-    throw new Error("Não foi possível iniciar a escuta de divulgadoras.");
-  }
 };
+
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
