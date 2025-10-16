@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate } from '../services/emailService';
@@ -15,6 +14,8 @@ const EmailTemplateEditor: React.FC = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [isOutOfSync, setIsOutOfSync] = useState(false);
+
 
     // AI State
     const [aiPrompt, setAiPrompt] = useState('');
@@ -30,9 +31,22 @@ const EmailTemplateEditor: React.FC = () => {
     const fetchTemplate = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        setIsOutOfSync(false);
         try {
-            const content = await getEmailTemplate();
-            setHtmlContent(content);
+            const [userTemplate, defaultTemplate] = await Promise.all([
+                getEmailTemplate(),
+                getDefaultEmailTemplate()
+            ]);
+            
+            setHtmlContent(userTemplate);
+
+            // Check if user template might be outdated
+            const userHasOldLink = userTemplate.includes('stingressos-e0a5f.web.app');
+            const defaultHasNewLink = defaultTemplate.includes('divulgadoras.vercel.app');
+            if (userHasOldLink && defaultHasNewLink) {
+                setIsOutOfSync(true);
+            }
+
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -92,7 +106,11 @@ const EmailTemplateEditor: React.FC = () => {
     };
     
     const handleSync = async () => {
-        if (window.confirm('Esta ação substituirá o conteúdo do seu template (a parte entre <body> e </body>) pelo conteúdo padrão do sistema, que contém as correções de link. Seus estilos e head serão mantidos. Deseja continuar?')) {
+        const confirmationMessage = isOutOfSync
+          ? 'Esta ação substituirá o conteúdo do seu template pelo conteúdo padrão do sistema, que contém as correções de link mais recentes. Deseja continuar?'
+          : 'Esta ação substituirá o conteúdo do seu template (a parte entre <body> e </body>) pelo conteúdo padrão do sistema. Seus estilos e head serão mantidos. Deseja continuar?';
+          
+        if (window.confirm(confirmationMessage)) {
             setIsSyncing(true);
             setError(null);
             try {
@@ -113,6 +131,7 @@ const EmailTemplateEditor: React.FC = () => {
                     setHtmlContent(defaultHtml);
                     showSuccessMessage('Seu template parecia estar malformado. Substituímos pelo padrão do sistema. Revise e salve.');
                 }
+                setIsOutOfSync(false); // Hide warning after sync
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -179,6 +198,21 @@ const EmailTemplateEditor: React.FC = () => {
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                  {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
                  {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
+
+                 {isOutOfSync && (
+                    <div className="bg-yellow-900/50 border-2 border-yellow-600 text-yellow-200 p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.636-1.21 2.37-1.21 3.006 0l4.312 8.225c.606 1.157-.23 2.625-1.503 2.625H5.448c-1.273 0-2.109-1.468-1.503-2.625L8.257 3.099zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                        </svg>
+                        <div className="flex-grow">
+                            <h3 className="font-bold text-lg">Ação Recomendada: Sincronize seu Template</h3>
+                            <p className="text-sm">Detectamos que seu template de e-mail pode estar usando um link de portal desatualizado. Para garantir que as divulgadoras recebam o link correto, clique para sincronizar.</p>
+                        </div>
+                         <button onClick={handleSync} disabled={isSyncing} className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 font-semibold disabled:opacity-50 text-sm w-full sm:w-auto">
+                            {isSyncing ? 'Sincronizando...' : 'Sincronizar Agora'}
+                        </button>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
