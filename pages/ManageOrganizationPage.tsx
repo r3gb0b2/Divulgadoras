@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getOrganization, updateOrganization, deleteOrganization } from '../services/organizationService';
-import { Organization, OrganizationStatus, PlanId } from '../types';
+import { getAllAdmins, setAdminUserData } from '../services/adminService';
+import { Organization, OrganizationStatus, PlanId, AdminUserData } from '../types';
 import { states } from '../constants/states';
 import { Timestamp } from 'firebase/firestore';
 import { ArrowLeftIcon } from '../components/Icons';
@@ -17,6 +18,8 @@ const ManageOrganizationPage: React.FC = () => {
     const navigate = useNavigate();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [formData, setFormData] = useState<Partial<Organization>>({});
+    const [allAdmins, setAllAdmins] = useState<AdminUserData[]>([]);
+    const [selectedAdminToAdd, setSelectedAdminToAdd] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,12 +29,17 @@ const ManageOrganizationPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const orgData = await getOrganization(orgId);
+            const [orgData, adminsData] = await Promise.all([
+                getOrganization(orgId),
+                getAllAdmins()
+            ]);
+
             if (!orgData) {
                 throw new Error("Organização não encontrada.");
             }
             setOrganization(orgData);
             setFormData(orgData);
+            setAllAdmins(adminsData);
         } catch (err: any) {
             setError(err.message || "Falha ao carregar a organização.");
         } finally {
@@ -82,6 +90,57 @@ const ManageOrganizationPage: React.FC = () => {
         setFormData(prev => ({...prev, assignedStates: newStates }));
     }
 
+    const { associatedAdmins, availableAdmins } = useMemo(() => {
+        const associated: AdminUserData[] = [];
+        const available: AdminUserData[] = [];
+
+        allAdmins.forEach(admin => {
+            if (admin.organizationId === orgId) {
+                associated.push(admin);
+            } else {
+                available.push(admin);
+            }
+        });
+
+        associated.sort((a, b) => a.email.localeCompare(b.email));
+        available.sort((a, b) => a.email.localeCompare(b.email));
+
+        return { associatedAdmins: associated, availableAdmins: available };
+    }, [allAdmins, orgId]);
+
+    const handleAddAdmin = async () => {
+        if (!selectedAdminToAdd || !orgId) return;
+        setIsSaving(true);
+        setError(null);
+        try {
+            await setAdminUserData(selectedAdminToAdd, { organizationId: orgId });
+            setSelectedAdminToAdd(''); // Reset dropdown
+            await fetchOrganization(); // Refetch all data
+            alert('Administrador associado com sucesso!');
+        } catch (err: any) {
+            setError(err.message || 'Falha ao associar administrador.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleRemoveAdmin = async (adminId: string) => {
+        if (!adminId) return;
+        if (window.confirm('Tem certeza que deseja desvincular este administrador da organização? Ele perderá o acesso ao painel desta organização.')) {
+            setIsSaving(true);
+            setError(null);
+            try {
+                await setAdminUserData(adminId, { organizationId: '' }); // Unset organizationId
+                await fetchOrganization(); // Refetch all data
+                alert('Administrador desvinculado com sucesso!');
+            } catch (err: any) {
+                setError(err.message || 'Falha ao desvincular administrador.');
+            } finally {
+                setIsSaving(false);
+            }
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!orgId) return;
@@ -126,7 +185,7 @@ const ManageOrganizationPage: React.FC = () => {
         return <div className="text-center py-10">Carregando organização...</div>;
     }
     
-    if (error) {
+    if (error && !organization) {
         return <p className="text-red-400 text-center">{error}</p>;
     }
 
@@ -142,6 +201,7 @@ const ManageOrganizationPage: React.FC = () => {
                     <span>Todas as Organizações</span>
                 </button>
                 <h1 className="text-3xl font-bold mt-1">Gerenciar: {organization.name}</h1>
+                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mt-4 text-sm font-semibold">{error}</div>}
             </div>
 
             <form onSubmit={handleSave} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
@@ -202,8 +262,57 @@ const ManageOrganizationPage: React.FC = () => {
                            ))}
                         </div>
                     </div>
-                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
-                    <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
+
+                    <div className="md:col-span-2 border-t border-gray-700 pt-6">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Administradores Associados</label>
+                        
+                        {/* List of current admins */}
+                        <div className="space-y-2 p-2 border border-gray-600 rounded-md mb-4 max-h-48 overflow-y-auto">
+                            {associatedAdmins.length > 0 ? associatedAdmins.map(admin => (
+                                <div key={admin.uid} className="flex justify-between items-center p-2 bg-gray-800 rounded">
+                                    <div>
+                                        <p className="text-sm font-medium text-white">{admin.email}</p>
+                                        <p className="text-xs text-gray-400 capitalize">{admin.role}</p>
+                                    </div>
+                                    {admin.uid !== organization.ownerUid ? (
+                                        <button type="button" onClick={() => handleRemoveAdmin(admin.uid)} disabled={isSaving} className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                                            Desvincular
+                                        </button>
+                                    ) : (
+                                        <span className="text-xs text-yellow-400 font-semibold">Proprietário</span>
+                                    )}
+                                </div>
+                            )) : <p className="text-sm text-gray-500 text-center p-2">Nenhum administrador associado.</p>}
+                        </div>
+                        
+                        {/* Add new admin */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Adicionar administrador existente</label>
+                            <div className="flex items-center gap-2 mt-1">
+                                <select
+                                    value={selectedAdminToAdd}
+                                    onChange={(e) => setSelectedAdminToAdd(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                                >
+                                    <option value="">Selecione um administrador...</option>
+                                    {availableAdmins.map(admin => (
+                                        <option key={admin.uid} value={admin.uid}>{admin.email} {admin.organizationId ? '(outra org)' : '(sem org)'}</option>
+                                    ))}
+                                </select>
+                                <button 
+                                    type="button" 
+                                    onClick={handleAddAdmin} 
+                                    disabled={!selectedAdminToAdd || isSaving}
+                                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm whitespace-nowrap disabled:opacity-50"
+                                >
+                                    Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div className="md:col-span-2 text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
                 </div>
 
                 <div className="flex justify-between items-center border-t border-gray-700 pt-4 mt-4">
