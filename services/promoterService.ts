@@ -65,8 +65,18 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         const promoterDocs = querySnapshot.docs.sort((a, b) => {
             const dataA = a.data();
             const dataB = b.data();
-            const timeA = (dataA.createdAt as Timestamp)?.toMillis() || 0;
-            const timeB = (dataB.createdAt as Timestamp)?.toMillis() || 0;
+            
+            // Safer timestamp extraction to prevent crashes on malformed data
+            let timeA = 0;
+            if (dataA.createdAt && typeof dataA.createdAt.toMillis === 'function') {
+                timeA = dataA.createdAt.toMillis();
+            }
+
+            let timeB = 0;
+            if (dataB.createdAt && typeof dataB.createdAt.toMillis === 'function') {
+                timeB = dataB.createdAt.toMillis();
+            }
+
             return timeB - timeA;
         });
 
