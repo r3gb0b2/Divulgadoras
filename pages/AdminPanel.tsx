@@ -110,7 +110,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
   }, [promoters, statusFilter, stateFilter, searchQuery, adminData]);
 
   const counts = useMemo(() => ({
-    all: promoters.length,
     pending: promoters.filter(p => p.status === 'pending').length,
     approved: promoters.filter(p => p.status === 'approved').length,
     rejected: promoters.filter(p => p.status === 'rejected').length,
@@ -214,23 +213,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
       </header>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <button onClick={() => setStatusFilter('all')} className={`p-4 rounded-lg shadow-md text-left transition-all duration-200 border-2 ${statusFilter === 'all' ? 'bg-primary/20 border-primary' : 'bg-secondary border-transparent hover:border-primary/50'}`}>
-            <div className="text-2xl font-bold">{counts.all}</div>
-            <div className="text-sm text-gray-400">Todos</div>
-        </button>
-        <button onClick={() => setStatusFilter('pending')} className={`p-4 rounded-lg shadow-md text-left transition-all duration-200 border-2 ${statusFilter === 'pending' ? 'bg-primary/20 border-primary' : 'bg-secondary border-transparent hover:border-primary/50'}`}>
-            <div className="text-2xl font-bold">{counts.pending}</div>
-            <div className="text-sm text-gray-400">Pendentes</div>
-        </button>
-        <button onClick={() => setStatusFilter('approved')} className={`p-4 rounded-lg shadow-md text-left transition-all duration-200 border-2 ${statusFilter === 'approved' ? 'bg-primary/20 border-primary' : 'bg-secondary border-transparent hover:border-primary/50'}`}>
-            <div className="text-2xl font-bold">{counts.approved}</div>
-            <div className="text-sm text-gray-400">Aprovadas</div>
-        </button>
-        <button onClick={() => setStatusFilter('rejected')} className={`p-4 rounded-lg shadow-md text-left transition-all duration-200 border-2 ${statusFilter === 'rejected' ? 'bg-primary/20 border-primary' : 'bg-secondary border-transparent hover:border-primary/50'}`}>
-            <div className="text-2xl font-bold">{counts.rejected}</div>
-            <div className="text-sm text-gray-400">Rejeitadas</div>
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-secondary p-4 rounded-lg shadow-md"><div className="text-2xl font-bold">{counts.pending}</div><div className="text-sm text-gray-400">Pendentes</div></div>
+        <div className="bg-secondary p-4 rounded-lg shadow-md"><div className="text-2xl font-bold">{counts.approved}</div><div className="text-sm text-gray-400">Aprovadas</div></div>
+        <div className="bg-secondary p-4 rounded-lg shadow-md"><div className="text-2xl font-bold">{counts.rejected}</div><div className="text-sm text-gray-400">Rejeitadas</div></div>
       </div>
 
       {/* Filters & Table */}
