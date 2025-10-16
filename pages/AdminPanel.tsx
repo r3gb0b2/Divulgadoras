@@ -147,35 +147,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
-        if (isSuperAdmin) return null; // Super Admin scope is handled differently.
-        if (!adminData.organizationId) return []; // Should not happen, but a safe guard.
+        if (isSuperAdmin) return null; // Super Admin uses different logic
+        if (!adminData.organizationId) return []; // Should not happen
 
-        // If no specific assignments, return null to filter by the admin's organizationId.
-        // This is more robust than using array-contains-any with a potentially large array of campaigns.
-        if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            return null;
-        }
-        
-        // This part correctly calculates the scope for admins with specific assignments.
-        const allowedCampaignNames = new Set<string>();
-        const statesForScope = getStatesForScope() || [];
+        const isRestrictedByCampaigns = adminData.assignedCampaigns && Object.keys(adminData.assignedCampaigns).length > 0;
 
-        for (const stateAbbr of statesForScope) {
-            const restrictedCampaigns = adminData.assignedCampaigns[stateAbbr];
-            
-            if (restrictedCampaigns) { // Restriction exists for this state
-                if (restrictedCampaigns.length > 0) {
-                    restrictedCampaigns.forEach(name => allowedCampaignNames.add(name));
+        if (isRestrictedByCampaigns) {
+            // RESTRICTED ADMIN: Calculate their exact campaign scope
+            const campaignSet = new Set<string>();
+            const statesInAdminScope = getStatesForScope() || [];
+
+            for (const stateAbbr of statesInAdminScope) {
+                const stateSpecificRestrictions = adminData.assignedCampaigns![stateAbbr];
+
+                if (stateSpecificRestrictions) { // An array exists, even if empty. This state is managed.
+                    stateSpecificRestrictions.forEach(name => campaignSet.add(name));
+                } else { // No specific restriction for this state, they can see all ORG campaigns in it.
+                    allCampaigns
+                        .filter(c => c.stateAbbr === stateAbbr && c.organizationId === adminData.organizationId)
+                        .forEach(c => campaignSet.add(c.name));
                 }
-            } else { // No restriction for this state, so they can see all campaigns in it.
-                allCampaigns
-                    .filter(c => c.stateAbbr === stateAbbr)
-                    .forEach(c => allowedCampaignNames.add(c.name));
             }
+            return Array.from(campaignSet);
+
+        } else {
+            // UNRESTRICTED ADMIN: Their scope is all campaigns of their org.
+            const orgCampaignNames = allCampaigns
+                .filter(c => c.organizationId === adminData.organizationId)
+                .map(c => c.name);
+
+            // If org has no campaigns, fall back to filtering by orgId in the service.
+            if (orgCampaignNames.length === 0) {
+                return null;
+            }
+            return orgCampaignNames;
         }
-        
-        return Array.from(allowedCampaignNames);
-    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
+    }, [isSuperAdmin, adminData, allCampaigns, getStatesForScope]);
 
     const fetchStats = useCallback(async () => {
         const orgId = isSuperAdmin ? undefined : adminData.organizationId;
@@ -215,13 +222,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
 
             const statesForScope = getStatesForScope();
-            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0) && !campaignsInScope) {
-                setPromotersOnPage([]);
-                setTotalPromotersCount(0);
-                setIsLoading(false);
-                return;
+            if (!isSuperAdmin && !campaignsInScope) {
+                 if (!statesForScope || statesForScope.length === 0) {
+                    setPromotersOnPage([]);
+                    setTotalPromotersCount(0);
+                    setIsLoading(false);
+                    return;
+                }
             }
-
+            
             try {
                 const result = await getPromotersPage({
                     organizationId: orgId,
