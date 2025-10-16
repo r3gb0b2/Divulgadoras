@@ -124,15 +124,11 @@ export const getPromotersPage = async (options: {
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    
-    // Sort by document ID to prevent composite index errors with multiple filters.
-    let dataQuery = query(promotersRef, orderBy(documentId()));
-    let countQuery = query(promotersRef);
-
     const filters: any[] = [];
     
+    // --- Step 1: Determine all filters that need to be applied ---
+
     // Only apply Super Admin's Org/State dropdown filters if a specific campaign is NOT selected.
-    // When a campaign is selected, it becomes the primary filter.
     if (options.selectedCampaign === 'all') {
         if (options.filterOrgId !== 'all') {
           filters.push(where("organizationId", "==", options.filterOrgId));
@@ -142,6 +138,7 @@ export const getPromotersPage = async (options: {
         }
     }
 
+    // Standard org/state scope for regular admins
     if (options.organizationId && options.selectedCampaign === 'all') {
       filters.push(where("organizationId", "==", options.organizationId));
     }
@@ -149,52 +146,66 @@ export const getPromotersPage = async (options: {
       filters.push(where("state", "in", options.statesForScope));
     }
 
+    // Status filter for everyone
     if (options.status !== 'all') {
       filters.push(where("status", "==", options.status));
     }
 
-    // Handle campaign permissions and filters
+    // Campaign filter logic
     let finalCampaignFilter: string[] | null = options.campaignsInScope;
-
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // Super Admin or admin with no restrictions
+        if (finalCampaignFilter === null) { // Super Admin or admin with no campaign restrictions
             finalCampaignFilter = [options.selectedCampaign];
         } else { // Admin with campaign restrictions
             if (finalCampaignFilter.includes(options.selectedCampaign)) {
                 finalCampaignFilter = [options.selectedCampaign];
             } else {
+                // Admin selected a campaign they are not scoped for, return empty
                 return { promoters: [], lastVisible: null, totalCount: 0 };
             }
         }
     }
 
+    let useArrayContainsAny = false;
     if (finalCampaignFilter) {
       if (finalCampaignFilter.length === 0) {
+        // Admin is scoped to zero campaigns, return empty
         return { promoters: [], lastVisible: null, totalCount: 0 };
       }
       
-      // If a single campaign is selected (common case), use the efficient 'allCampaigns' query.
       if (finalCampaignFilter.length === 1) {
         filters.push(where("allCampaigns", "array-contains", finalCampaignFilter[0]));
       } else {
-        // Fallback for regular admins with multiple campaigns in scope viewing "All Events".
-        // `array-contains-any` is not compatible with `orderBy`, so we must query `campaignName` only.
-        // This is a known limitation to avoid crashing.
-        console.warn("Multiple campaign filter is active. Querying on 'campaignName' only due to Firestore limitations.");
-        const slicedFilter = finalCampaignFilter.length > 30 ? finalCampaignFilter.slice(0, 30) : finalCampaignFilter;
+        useArrayContainsAny = true; // Set the flag because we need array-contains-any
+        const slicedFilter = finalCampaignFilter.slice(0, 30);
         if (finalCampaignFilter.length > 30) {
-            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
+            console.warn(`Campaign filter exceeds Firestore's limit of 30 for 'array-contains-any' queries. Results may be incomplete.`);
         }
-        filters.push(where("campaignName", "in", slicedFilter));
+        filters.push(where("allCampaigns", "array-contains-any", slicedFilter));
       }
     }
 
+    // --- Step 2 & 3: Construct queries based on the filter requirements ---
+    
+    let dataQuery;
+    let countQuery = query(promotersRef);
 
+    if (useArrayContainsAny) {
+      // orderBy is not compatible with array-contains-any.
+      dataQuery = query(promotersRef);
+      console.warn("Using 'array-contains-any' filter. Disabling server-side ordering to prevent Firestore errors.");
+    } else {
+      // For all other cases, we can safely order by documentId to get a stable, chronological-like order.
+      dataQuery = query(promotersRef, orderBy(documentId()));
+    }
+    
+    // --- Step 4: Apply all collected filters ---
     if (filters.length > 0) {
       dataQuery = query(dataQuery, ...filters);
       countQuery = query(countQuery, ...filters);
     }
     
+    // --- Step 5: Get total count and execute paginated query ---
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
@@ -210,6 +221,7 @@ export const getPromotersPage = async (options: {
     const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
 
     return { promoters, lastVisible, totalCount };
+
   } catch (error) {
     console.error("Error fetching promoter page:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {
