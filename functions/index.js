@@ -40,7 +40,7 @@ const initializeBrevo = () => {
 
 
 // Centralized and robust email sending function
-const sendEmail = async (toEmail, toName, subject, htmlContent, orgId = null) => {
+const sendEmail = async (toEmail, toName, senderName, subject, htmlContent) => {
     const brevoApi = initializeBrevo();
     if (!brevoApi) {
         throw new functions.https.HttpsError("failed-precondition", "Brevo API is not initialized.");
@@ -49,18 +49,6 @@ const sendEmail = async (toEmail, toName, subject, htmlContent, orgId = null) =>
     const senderEmail = getConfig("sender_email");
     if (!senderEmail) {
         throw new functions.https.HttpsError("failed-precondition", "Sender email is not configured.");
-    }
-    
-    let senderName = "Equipe Certa"; // Default fallback
-    if (orgId) {
-        try {
-            const orgDoc = await db.collection('organizations').doc(orgId).get();
-            if (orgDoc.exists && orgDoc.data().name) {
-                senderName = orgDoc.data().name;
-            }
-        } catch(e) {
-            console.log(`Could not fetch organization name for ${orgId}, using fallback.`, e);
-        }
     }
     
     const smtpEmail = new Brevo.SendSmtpEmail();
@@ -163,7 +151,7 @@ exports.onPromoterStatusChange = functions.region('southamerica-east1').firestor
             if (!orgDoc.exists) {
                 throw new Error(`Organization ${newValue.organizationId} not found.`);
             }
-            const orgName = orgDoc.data().name || 'Nossa Equipe';
+            const orgName = orgDoc.data().name || 'Equipe Certa';
 
             const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(newValue.email)}`;
             
@@ -181,7 +169,7 @@ exports.onPromoterStatusChange = functions.region('southamerica-east1').firestor
             const subject = replacePlaceholders(defaultTemplates.subject, placeholderData);
             const htmlContent = replacePlaceholders(template, placeholderData);
             
-            await sendEmail(newValue.email, newValue.name, subject, htmlContent, newValue.organizationId);
+            await sendEmail(newValue.email, newValue.name, orgName, subject, htmlContent);
             
             console.log(`Email successfully sent to ${newValue.email} for status ${newValue.status}.`);
             return null;
@@ -216,7 +204,7 @@ exports.manuallySendStatusEmail = functions.region('southamerica-east1').https.o
         }
         
         const orgDoc = await db.collection('organizations').doc(promoter.organizationId).get();
-        const orgName = orgDoc.exists ? orgDoc.data().name : 'Nossa Equipe';
+        const orgName = orgDoc.exists && orgDoc.data().name ? orgDoc.data().name : 'Equipe Certa';
 
         const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoter.email)}`;
 
@@ -234,7 +222,7 @@ exports.manuallySendStatusEmail = functions.region('southamerica-east1').https.o
         const subject = replacePlaceholders(defaultTemplate.subject, placeholderData);
         const htmlContent = replacePlaceholders(template, placeholderData);
 
-        await sendEmail(promoter.email, promoter.name, subject, htmlContent, promoter.organizationId);
+        await sendEmail(promoter.email, promoter.name, orgName, subject, htmlContent);
 
         return { success: true, message: 'Notificação de aprovação enviada com sucesso!' };
 
@@ -270,6 +258,7 @@ exports.sendTestEmail = functions.region('southamerica-east1').https.onCall(asyn
             orgName: 'Sua Organização (Teste)',
             portalLink: 'https://divulgadoras.vercel.app/#/status',
         };
+        const senderName = 'Sua Organização (Teste)';
 
         let subject, htmlContent;
 
@@ -294,7 +283,7 @@ exports.sendTestEmail = functions.region('southamerica-east1').https.onCall(asyn
             `;
         }
         
-        await sendEmail(adminEmail, 'Admin de Teste', subject, htmlContent);
+        await sendEmail(adminEmail, 'Admin de Teste', senderName, subject, htmlContent);
         return { success: true, message: `E-mail de teste (${testType}) enviado para ${adminEmail}.` };
     } catch (error) {
         console.error(`Failed to send test email (${testType}):`, error);
