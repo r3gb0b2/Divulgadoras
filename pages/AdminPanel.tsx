@@ -20,7 +20,6 @@ interface AdminPanelProps {
 const calculateAge = (dob: string): number | string => {
     if (!dob) return 'N/A';
     try {
-        // Handles both YYYY-MM-DD and DD/MM/YYYY
         const parts = dob.split(dob.includes('-') ? '-' : '/');
         const birthDate = dob.includes('-') 
             ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
@@ -50,6 +49,16 @@ const StatusCard: React.FC<{ count: number; label: string; onClick: () => void; 
     </button>
 );
 
+const InfoItem: React.FC<{ Icon: React.ElementType; text: string | undefined }> = ({ Icon, text }) => {
+    if (!text) return null;
+    return (
+      <div className="flex items-center gap-2 text-gray-300">
+        <Icon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        <span className="truncate" title={text}>{text}</span>
+      </div>
+    );
+};
+
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
   const navigate = useNavigate();
@@ -57,15 +66,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState<PromoterStatus | 'all'>('pending');
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Bulk selection
   const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
 
-  // Modals
   const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [photoViewerUrls, setPhotoViewerUrls] = useState<string[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -147,9 +152,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     rejected: promoters.filter(p => p.status === 'rejected').length,
   }), [promoters]);
   
-  const areAllSelected = useMemo(() => {
-    const filteredIds = new Set(filteredPromoters.map(p => p.id));
-    return filteredPromoters.length > 0 && Array.from(selectedPromoters).every(id => filteredIds.has(id)) && selectedPromoters.size === filteredPromoters.length;
+  const areAllOnPageSelected = useMemo(() => {
+      const filteredIdsOnPage = filteredPromoters.map(p => p.id);
+      if (filteredIdsOnPage.length === 0) return false;
+      return filteredIdsOnPage.every(id => selectedPromoters.has(id));
   }, [filteredPromoters, selectedPromoters]);
 
 
@@ -215,9 +221,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     });
   };
   
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) setSelectedPromoters(new Set(filteredPromoters.map(p => p.id)));
-    else clearSelection();
+  const handleSelectAllOnPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    const pageIds = filteredPromoters.map(p => p.id);
+    setSelectedPromoters(prev => {
+        const newSet = new Set(prev);
+        if(isChecked) {
+            pageIds.forEach(id => newSet.add(id));
+        } else {
+            pageIds.forEach(id => newSet.delete(id));
+        }
+        return newSet;
+    });
   };
 
   const handleSendNotifications = async () => {
@@ -289,83 +304,81 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             </select>
             <input type="text" value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); clearSelection(); }} placeholder="Buscar..." className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm" />
             
-            {selectedPromoters.size > 0 && (
-                <button onClick={handleSendNotifications} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 text-sm font-semibold rounded-md md:ml-auto">
-                    Enviar Notificação ({selectedPromoters.size})
-                </button>
-            )}
-            {adminData.role === 'admin' && selectedPromoters.size === 0 && (
-              <button onClick={() => setIsReasonsModalOpen(true)} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded-md md:ml-auto">
-                  Gerenciar Motivos
-              </button>
-            )}
+            <div className="flex-grow flex items-center justify-end gap-4">
+                 {statusFilter === 'approved' && adminData.role !== 'viewer' && filteredPromoters.length > 0 && (
+                    <label className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                        <input type="checkbox" onChange={handleSelectAllOnPage} checked={areAllOnPageSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/>
+                        <span>Selecionar Visíveis</span>
+                    </label>
+                )}
+                {selectedPromoters.size > 0 && (
+                    <button onClick={handleSendNotifications} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 text-sm font-semibold rounded-md">
+                        Enviar Notificação ({selectedPromoters.size})
+                    </button>
+                )}
+                {adminData.role === 'admin' && selectedPromoters.size === 0 && (
+                  <button onClick={() => setIsReasonsModalOpen(true)} className="bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 text-sm rounded-md">
+                      Gerenciar Motivos
+                  </button>
+                )}
+            </div>
         </div>
         
         {isLoading ? <p>Carregando...</p> : error ? <p className="text-red-400">{error}</p> : (
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
-                    <thead>
-                        <tr>
-                           {statusFilter === 'approved' && adminData.role !== 'viewer' && (
-                               <th className="px-4 py-3">
-                                   <input type="checkbox" onChange={handleSelectAll} checked={areAllSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/>
-                               </th>
-                           )}
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Divulgadora</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Contatos</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Idade</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado/Evento</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Inscrição</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {filteredPromoters.map(p => (
-                            <tr key={p.id} className={`transition-colors duration-200 ${selectedPromoters.has(p.id) ? 'bg-primary/20' : 'hover:bg-gray-800/50'}`}>
-                                {statusFilter === 'approved' && adminData.role !== 'viewer' && (
-                                    <td className="px-4 py-4"><input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handleSelectPromoter(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/></td>
-                                )}
-                                <td className="px-4 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                        <div className="flex-shrink-0 h-10 w-10">
-                                            <img className="h-10 w-10 rounded-full object-cover cursor-pointer" src={p.photoUrls[0]} alt={p.name} onClick={() => handleViewPhotos(p.photoUrls)} />
-                                        </div>
-                                        <div className="ml-4 min-w-0">
-                                            <div className="text-sm font-medium text-white truncate" title={p.name}>{p.name}</div>
-                                            <div className="text-sm text-gray-400 truncate" title={p.email}>{p.email}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                                    {p.whatsapp && <div className="flex items-center gap-1.5"><WhatsAppIcon className="w-4 h-4 text-green-400"/> {p.whatsapp}</div>}
-                                    {p.instagram && <div className="flex items-center gap-1.5 mt-1"><InstagramIcon className="w-4 h-4 text-pink-400"/> {p.instagram}</div>}
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">{calculateAge(p.dateOfBirth)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm">
-                                    <div>{stateMap[p.state] || p.state}</div>
-                                    <div className="text-gray-400">{p.campaignName || 'Geral'}</div>
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                                    {p.createdAt ? (p.createdAt as Timestamp).toDate().toLocaleDateString('pt-BR') : 'N/A'}
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap">{statusBadge(p.status)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                                    {p.status === 'pending' && adminData.role !== 'viewer' && (
-                                      <>
-                                        <button onClick={() => handleApprove(p)} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                        <button onClick={() => handleOpenRejectModal(p)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                      </>
+            <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredPromoters.map(p => (
+                    <div key={p.id} className={`rounded-lg shadow-md flex flex-col transition-all duration-200 ${selectedPromoters.has(p.id) ? 'bg-primary/20 ring-2 ring-primary' : 'bg-gray-800 hover:ring-2 hover:ring-primary/50'}`}>
+                        <div className="p-4 border-b border-gray-700 flex items-start gap-4">
+                            <img 
+                                className="h-16 w-16 rounded-full object-cover cursor-pointer flex-shrink-0" 
+                                src={p.photoUrls[0]} 
+                                alt={p.name} 
+                                onClick={() => handleViewPhotos(p.photoUrls)} 
+                            />
+                            <div className="flex-grow min-w-0">
+                                <div className="flex justify-between items-start">
+                                    <p className="font-bold text-white truncate" title={p.name}>{p.name}</p>
+                                    {statusFilter === 'approved' && adminData.role !== 'viewer' && (
+                                         <input 
+                                            type="checkbox" 
+                                            checked={selectedPromoters.has(p.id)} 
+                                            onChange={() => handleSelectPromoter(p.id)} 
+                                            className="h-5 w-5 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary ml-2 flex-shrink-0"
+                                        />
                                     )}
-                                    <button onClick={() => handleOpenEditModal(p)} className="text-indigo-400 hover:text-indigo-300">Detalhes</button>
-                                    {adminData.role === 'superadmin' && <button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-400">Excluir</button>}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                 {filteredPromoters.length === 0 && <p className="text-center text-gray-400 py-6">Nenhuma divulgadora encontrada com os filtros atuais.</p>}
+                                </div>
+                                {statusBadge(p.status)}
+                                <p className="text-xs text-gray-400 mt-1 truncate" title={p.email}>{p.email}</p>
+                            </div>
+                        </div>
+
+                        <div className="p-4 space-y-2 text-sm flex-grow">
+                            <InfoItem Icon={WhatsAppIcon} text={p.whatsapp} />
+                            <InfoItem Icon={InstagramIcon} text={p.instagram} />
+                            <p className="text-gray-300"><strong>Idade:</strong> {calculateAge(p.dateOfBirth)}</p>
+                            <p className="text-gray-300"><strong>Estado:</strong> {stateMap[p.state] || p.state}</p>
+                            <p className="text-gray-300"><strong>Evento:</strong> {p.campaignName || 'Geral'}</p>
+                            <p className="text-xs text-gray-500 pt-2 border-t border-gray-700/50 mt-2">
+                                Inscrito em: {p.createdAt ? (p.createdAt as Timestamp).toDate().toLocaleDateString('pt-BR') : 'N/A'}
+                            </p>
+                        </div>
+
+                        <div className="p-2 bg-black/20 rounded-b-lg flex justify-end items-center gap-3">
+                            {p.status === 'pending' && adminData.role !== 'viewer' && (
+                              <>
+                                <button onClick={() => handleApprove(p)} className="text-green-400 hover:text-green-300 text-xs font-bold px-2 py-1 rounded hover:bg-green-500/10">APROVAR</button>
+                                <button onClick={() => handleOpenRejectModal(p)} className="text-red-400 hover:text-red-300 text-xs font-bold px-2 py-1 rounded hover:bg-red-500/10">REJEITAR</button>
+                              </>
+                            )}
+                            <button onClick={() => handleOpenEditModal(p)} className="text-indigo-400 hover:text-indigo-300 text-xs font-bold px-2 py-1 rounded hover:bg-indigo-500/10">DETALHES</button>
+                            {adminData.role === 'superadmin' && <button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-400 text-xs font-bold px-2 py-1 rounded hover:bg-red-500/10">EXCLUIR</button>}
+                        </div>
+                    </div>
+                ))}
             </div>
+            {filteredPromoters.length === 0 && <p className="text-center text-gray-400 py-6">Nenhuma divulgadora encontrada com os filtros atuais.</p>}
+            </>
         )}
       </div>
 
