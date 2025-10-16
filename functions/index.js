@@ -102,23 +102,6 @@ const getEmailTemplateContent = async (templateType = 'approved') => {
 
 // The default hardcoded email templates
 const getDefaultEmailTemplateContent = (templateType = 'approved') => {
-    if (templateType === 'rejected') {
-        return {
-            subject: 'Agradecemos seu interesse - {{orgName}}',
-            htmlContent: `
-                <!DOCTYPE html>
-                <html>
-                <head><title>Cadastro Não Aprovado</title></head>
-                <body>
-                    <p>Olá {{promoterName}},</p>
-                    <p>Agradecemos seu interesse em fazer parte da equipe de divulgadoras da {{orgName}} para o evento/gênero "{{campaignName}}".</p>
-                    <p>No momento, não conseguimos prosseguir com seu cadastro. Mas não desanime, novas oportunidades podem surgir no futuro!</p>
-                    <p>Atenciosamente,<br>Equipe {{orgName}}</p>
-                </body>
-                </html>
-            `,
-        };
-    }
     // Default is 'approved'
     return {
         subject: 'Parabéns, você foi aprovada! - {{orgName}}',
@@ -169,7 +152,7 @@ const replacePlaceholders = (template, data) => {
 
 // --- START OF EMAIL RELATED FUNCTIONS ---
 
-// Firestore Trigger: Send email when promoter status changes to 'approved' or 'rejected'
+// Firestore Trigger: Send email when promoter status changes to 'approved'
 exports.onPromoterStatusChange = functions.region('southamerica-east1').firestore
     .document('promoters/{promoterId}')
     .onUpdate(async (change, context) => {
@@ -178,7 +161,7 @@ exports.onPromoterStatusChange = functions.region('southamerica-east1').firestor
         const promoterId = context.params.promoterId;
         
         const statusChanged = newValue.status !== oldValue.status;
-        const isValidStatus = ['approved', 'rejected'].includes(newValue.status);
+        const isValidStatus = newValue.status === 'approved';
 
         if (!statusChanged || !isValidStatus) {
             return null;
@@ -303,7 +286,7 @@ exports.sendTestEmail = functions.region('southamerica-east1').https.onCall(asyn
             const defaultTemplate = getDefaultEmailTemplateContent('approved');
             subject = replacePlaceholders(defaultTemplate.subject, placeholderData);
             htmlContent = replacePlaceholders(data.customHtmlContent, placeholderData);
-        } else if (['approved', 'rejected'].includes(testType)) {
+        } else if (testType === 'approved') {
             // Test with saved templates
             const template = await getEmailTemplateContent(testType);
             const defaultTemplate = getDefaultEmailTemplateContent(testType);
