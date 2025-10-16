@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate } from '../services/emailService';
@@ -23,6 +24,7 @@ const EmailTemplateEditor: React.FC = () => {
 
     const placeholders = [
         { variable: '{{promoterName}}', description: 'O nome completo da divulgadora.' },
+        { variable: '{{promoterEmail}}', description: 'O e-mail da divulgadora.' },
         { variable: '{{campaignName}}', description: 'O nome do evento/gênero.' },
         { variable: '{{orgName}}', description: 'O nome da sua organização.' },
         { variable: '{{portalLink}}', description: 'O link único para o portal da divulgadora.' },

@@ -180,6 +180,7 @@ exports.onPromoterStatusChange = functions.region('southamerica-east1').firestor
             
             const placeholderData = {
                 promoterName: newValue.name,
+                promoterEmail: newValue.email,
                 campaignName: newValue.campaignName || 'Geral',
                 orgName: orgName,
                 portalLink: portalLink,
@@ -232,6 +233,7 @@ exports.manuallySendStatusEmail = functions.region('southamerica-east1').https.o
 
         const placeholderData = {
             promoterName: promoter.name,
+            promoterEmail: promoter.email,
             campaignName: promoter.campaignName || 'Geral',
             orgName: orgName,
             portalLink: portalLink,
@@ -274,6 +276,7 @@ exports.sendTestEmail = functions.region('southamerica-east1').https.onCall(asyn
     try {
         const placeholderData = {
             promoterName: 'Maria da Silva (Teste)',
+            promoterEmail: 'divulgadora.teste@email.com',
             campaignName: 'Evento de Teste',
             orgName: 'Sua Organização (Teste)',
             portalLink: 'https://divulgadoras.vercel.app/#/status',
