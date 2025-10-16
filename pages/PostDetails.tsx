@@ -7,7 +7,20 @@ import { Timestamp } from 'firebase/firestore';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
-    const date = ts.toDate ? ts.toDate() : new Date(ts);
+    // Handle Firestore Timestamp object from SDK
+    if (ts.toDate) {
+        const date = ts.toDate();
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+    }
+    // Handle serialized Timestamp from cloud function or from malformed db entry
+    if (typeof ts === 'object' && ts._seconds) {
+        const date = new Date(ts._seconds * 1000);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+    }
+    // Handle string date
+    const date = new Date(ts);
     if (isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
 };
@@ -57,7 +70,7 @@ const PostDetails: React.FC = () => {
         setIsSaving(true);
         setError(null);
         try {
-            let expiryTimestamp = null;
+            let expiryTimestamp: Timestamp | null = null;
             if (expiresAt) {
                 const [year, month, day] = expiresAt.split('-').map(Number);
                 const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
@@ -98,7 +111,17 @@ const PostDetails: React.FC = () => {
 
     const formatDate = (timestamp: any): string => {
         if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        let date;
+        // Handle Firestore Timestamp object from SDK
+        if (timestamp.toDate) {
+            date = timestamp.toDate();
+        } else if (typeof timestamp === 'object' && timestamp._seconds) {
+            // Handle serialized Timestamp from cloud function or from malformed db entry
+            date = new Date(timestamp._seconds * 1000);
+        } else {
+            // Handle string date
+            date = new Date(timestamp);
+        }
         if (isNaN(date.getTime())) return 'Data inválida';
         return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };

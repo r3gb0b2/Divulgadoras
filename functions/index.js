@@ -683,6 +683,14 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
     throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
   }
 
+  // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
+  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt._seconds !== undefined) {
+      postData.expiresAt = new admin.firestore.Timestamp(
+          postData.expiresAt._seconds,
+          postData.expiresAt._nanoseconds,
+      );
+  }
+
   const batch = db.batch();
 
   // 1. Create the main Post document
@@ -756,6 +764,17 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     if (!postId || !updateData) {
         throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
     }
+
+    // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
+    if (updateData.expiresAt && typeof updateData.expiresAt === "object" && updateData.expiresAt._seconds !== undefined) {
+        updateData.expiresAt = new admin.firestore.Timestamp(
+            updateData.expiresAt._seconds,
+            updateData.expiresAt._nanoseconds,
+        );
+    } else if (updateData.expiresAt === null) {
+        updateData.expiresAt = null;
+    }
+
 
     const batch = db.batch();
 

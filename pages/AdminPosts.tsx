@@ -62,7 +62,18 @@ const AdminPosts: React.FC = () => {
 
     const formatDate = (timestamp: any): string => {
         if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        let date;
+        // Handle Firestore Timestamp object from SDK
+        if (timestamp.toDate) {
+            date = timestamp.toDate();
+        } else if (typeof timestamp === 'object' && timestamp._seconds) {
+            // Handle serialized Timestamp from cloud function or from malformed db entry
+            date = new Date(timestamp._seconds * 1000);
+        } else {
+            // Handle string date
+            date = new Date(timestamp);
+        }
+        if (isNaN(date.getTime())) return 'Data inválida';
         return date.toLocaleDateString('pt-BR');
     };
     
