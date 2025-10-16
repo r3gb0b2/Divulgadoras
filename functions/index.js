@@ -198,6 +198,68 @@ async function sendStatusChangeEmail(promoterData) {
 }
 
 /**
+ * Sends a notification email to a promoter about a new post.
+ * @param {object} promoter - The promoter object from the assigned promoters list.
+ * @param {object} postDetails - Object containing post details like campaignName and orgName.
+ */
+async function sendNewPostNotificationEmail(promoter, postDetails) {
+  if (!brevoApiInstance) {
+    console.warn(`Skipping new post email for ${promoter.email}: Brevo API is not configured.`);
+    return;
+  }
+
+  const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
+  const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>${subject}</title>
+        <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+            .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 30px; }
+            .button { display: inline-block; background-color: #e83a93; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
+            <div class="content">
+                <p>Uma nova publicação para o evento <strong>${postDetails.campaignName}</strong> está disponível para você.</p>
+                <p>Acesse o portal para ver as instruções e confirmar sua postagem.</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${portalLink}" class="button">Ver Publicação</a>
+                </p>
+                <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
+  sendSmtpEmail.sender = {
+    name: postDetails.orgName || "Equipe de Eventos",
+    email: brevoConfig.sender_email,
+  };
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+
+  try {
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`New post notification sent to ${promoter.email}`);
+  } catch (error) {
+    const detailedError = getBrevoErrorDetails(error);
+    console.error(`[Brevo API Error] Failed to send new post email to ${promoter.email}. Details: ${detailedError}`);
+    // Do not re-throw, to allow other emails to be sent.
+  }
+}
+
+
+/**
  * Fetches organization and campaign details for personalizing emails.
  * @param {string} organizationId - The ID of the organization.
  * @param {string} stateAbbr - The state abbreviation for the campaign.
@@ -608,4 +670,73 @@ exports.getPagSeguroStatus = functions.region("southamerica-east1").https.onCall
     if (status.token && status.email) status.configured = true;
   }
   return status;
+});
+
+// --- Post Management ---
+exports.createPostAndNotify = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  // You might want to add role checks here too
+  const { postData, assignedPromoters } = data;
+  if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
+  }
+
+  const batch = db.batch();
+
+  // 1. Create the main Post document
+  const postCollectionRef = db.collection("posts");
+  const postDocRef = postCollectionRef.doc();
+
+  const newPost = {
+    ...postData,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  batch.set(postDocRef, newPost);
+
+  // 2. Create assignments
+  const assignmentsCollectionRef = db.collection("postAssignments");
+  const denormalizedPostData = {
+    type: postData.type,
+    imageUrl: postData.imageUrl,
+    textContent: postData.textContent,
+    instructions: postData.instructions,
+    campaignName: postData.campaignName,
+  };
+
+  for (const promoter of assignedPromoters) {
+    const assignmentDocRef = assignmentsCollectionRef.doc();
+    const newAssignment = {
+      postId: postDocRef.id,
+      post: denormalizedPostData,
+      organizationId: promoter.organizationId,
+      promoterId: promoter.id,
+      promoterEmail: promoter.email.toLowerCase(),
+      promoterName: promoter.name,
+      status: "pending",
+      confirmedAt: null,
+    };
+    batch.set(assignmentDocRef, newAssignment);
+  }
+
+  // 3. Commit Firestore writes
+  await batch.commit();
+
+  // 4. Send notifications (after Firestore is confirmed)
+  const orgDoc = await db.collection("organizations").doc(postData.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  const emailPromises = assignedPromoters.map((promoter) =>
+    sendNewPostNotificationEmail(promoter, {
+      campaignName: postData.campaignName,
+      orgName: orgName,
+    }),
+  );
+
+  // Wait for all emails to be sent but don't fail the whole function if one fails.
+  // Log errors inside sendNewPostNotificationEmail.
+  await Promise.allSettled(emailPromises);
+
+  return { success: true, postId: postDocRef.id };
 });

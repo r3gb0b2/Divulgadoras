@@ -1,4 +1,4 @@
-import { firestore, storage } from '../firebase/config';
+import { firestore, storage, functions } from '../firebase/config';
 import {
   collection,
   addDoc,
@@ -13,6 +13,7 @@ import {
   writeBatch,
   getDoc,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter } from '../types';
 
@@ -21,11 +22,10 @@ export const createPost = async (
   imageFile: File | null,
   assignedPromoters: Promoter[]
 ): Promise<string> => {
-  const batch = writeBatch(firestore);
-  let finalImageUrl: string | undefined = undefined;
-
   try {
-    // 1. Upload image if it exists
+    let finalImageUrl: string | undefined = undefined;
+
+    // 1. Upload image on the client if it exists
     if (imageFile) {
       const fileExtension = imageFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
@@ -34,48 +34,28 @@ export const createPost = async (
       finalImageUrl = await getDownloadURL(storageRef);
     }
 
-    // 2. Create the main Post document
-    const postCollectionRef = collection(firestore, 'posts');
-    const postDocRef = doc(postCollectionRef); // Create a reference with a new ID
-
-    const newPost: Omit<Post, 'id'> = {
-      ...postData,
-      imageUrl: finalImageUrl,
-      createdAt: serverTimestamp(),
-    };
-    batch.set(postDocRef, newPost);
-
-    // 3. Create an assignment for each promoter
-    const assignmentsCollectionRef = collection(firestore, 'postAssignments');
-    const denormalizedPostData = {
-      type: postData.type,
-      imageUrl: finalImageUrl,
-      textContent: postData.textContent,
-      instructions: postData.instructions,
-      campaignName: postData.campaignName,
+    // 2. Prepare data for the cloud function
+    const finalPostData = {
+        ...postData,
+        imageUrl: finalImageUrl,
     };
 
-    for (const promoter of assignedPromoters) {
-      const assignmentDocRef = doc(assignmentsCollectionRef);
-      const newAssignment: Omit<PostAssignment, 'id'> = {
-        postId: postDocRef.id,
-        post: denormalizedPostData,
-        organizationId: promoter.organizationId,
-        promoterId: promoter.id,
-        promoterEmail: promoter.email.toLowerCase(),
-        promoterName: promoter.name,
-        status: 'pending',
-        confirmedAt: null,
-      };
-      batch.set(assignmentDocRef, newAssignment);
+    // 3. Call the cloud function to create docs and send emails
+    const createPostAndNotify = httpsCallable(functions, 'createPostAndNotify');
+    const result = await createPostAndNotify({ postData: finalPostData, assignedPromoters });
+    
+    const data = result.data as { success: boolean, postId?: string };
+    if (!data.success || !data.postId) {
+        throw new Error("A função do servidor falhou ao criar a publicação.");
     }
-
-    // 4. Commit all operations
-    await batch.commit();
-    return postDocRef.id;
+    
+    return data.postId;
 
   } catch (error) {
-    console.error("Error creating post and assignments: ", error);
+    console.error("Error creating post via cloud function: ", error);
+    if (error instanceof Error) {
+        throw error;
+    }
     throw new Error("Não foi possível criar a publicação.");
   }
 };

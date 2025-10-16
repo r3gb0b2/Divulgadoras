@@ -154,7 +154,7 @@ const CreatePost: React.FC = () => {
 
             await createPost(postData, imageFile, promotersToAssign);
             
-            alert('Publicação criada com sucesso!');
+            alert('Publicação criada e divulgadoras notificadas com sucesso!');
             navigate('/admin/posts');
 
         } catch (err: any) {
@@ -233,7 +233,7 @@ const CreatePost: React.FC = () => {
 
                 <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Enviando...' : 'Criar e Enviar Publicação'}
+                        {isSubmitting ? 'Criando e Notificando...' : 'Criar e Enviar Publicação'}
                     </button>
                 </div>
             </form>
