@@ -1,13 +1,9 @@
-
-
-
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { listenToPromoters, updatePromoter, deletePromoter, getRejectionReasons } from '../services/promoterService';
-import { getOrganizations } from '../services/organizationService';
+import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
 import { states } from '../constants/states';
@@ -54,6 +50,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isOrgLoading, setIsOrgLoading] = useState(true);
+    const [organization, setOrganization] = useState<Organization | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
@@ -116,13 +114,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setError(err.message || 'Não foi possível carregar os dados estáticos.');
         }
     }, [adminData, isSuperAdmin]);
+    
+    // Effect to fetch the organization data, which dictates the scope of the main query
+    useEffect(() => {
+        if (isSuperAdmin || !adminData?.organizationId) {
+            setIsOrgLoading(false);
+            return;
+        }
+        setIsOrgLoading(true);
+        getOrganization(adminData.organizationId)
+            .then(setOrganization)
+            .catch(() => setError("Falha ao carregar dados da organização."))
+            .finally(() => setIsOrgLoading(false));
+    }, [adminData, isSuperAdmin]);
 
 
     // Real-time listener for promoters
     useEffect(() => {
+        // Don't run until we have the organization scope for non-superadmins
+        if (!isSuperAdmin && isOrgLoading) {
+            setIsLoading(true);
+            return;
+        }
+
         setIsLoading(true);
         const orgId = isSuperAdmin ? undefined : adminData.organizationId;
-        const states = isSuperAdmin ? null : adminData.assignedStates;
+        const statesForQuery = isSuperAdmin ? null : organization?.assignedStates;
 
         if (!isSuperAdmin && !orgId) {
             setError("Administrador não está vinculado a uma organização.");
@@ -130,17 +147,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return;
         }
 
-        const unsubscribe = listenToPromoters(orgId, states, (promotersData) => {
-            if (adminData.assignedCampaigns) {
-                const filtered = promotersData.filter(p => {
-                    const campaignsForState = adminData.assignedCampaigns?.[p.state];
-                    if (!campaignsForState || campaignsForState.length === 0) return true;
-                    return p.campaignName && campaignsForState.includes(p.campaignName);
-                });
-                setPromoters(filtered);
-            } else {
-                setPromoters(promotersData);
+        // Firestore 'in' query requires a non-empty array. If there are no states, we can short-circuit.
+        if (!isSuperAdmin && (!statesForQuery || statesForQuery.length === 0)) {
+            setPromoters([]);
+            setIsLoading(false);
+            return;
+        }
+
+        const unsubscribe = listenToPromoters(orgId, statesForQuery, (promotersData) => {
+            let finalPromoters = promotersData;
+
+            // Apply secondary client-side filtering for fine-grained permissions
+            if (!isSuperAdmin) {
+                // Filter by personal state assignments, if they exist and are restrictive
+                if (adminData.assignedStates && adminData.assignedStates.length > 0) {
+                    finalPromoters = finalPromoters.filter(p => adminData.assignedStates.includes(p.state));
+                }
+                // Filter by personal campaign assignments
+                if (adminData.assignedCampaigns) {
+                    finalPromoters = finalPromoters.filter(p => {
+                        const campaignsForState = adminData.assignedCampaigns?.[p.state];
+                        if (!campaignsForState || campaignsForState.length === 0) return true; // Access to all campaigns in this state
+                        return p.campaignName && campaignsForState.includes(p.campaignName);
+                    });
+                }
             }
+            
+            setPromoters(finalPromoters);
             setIsLoading(false);
         }, (err) => {
             setError(err.message);
@@ -149,7 +182,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         // Cleanup listener on unmount
         return () => unsubscribe();
-    }, [adminData, isSuperAdmin]);
+    }, [adminData, organization, isSuperAdmin, isOrgLoading]);
     
     // Fetch static data on load and when it changes
     useEffect(() => {
@@ -308,7 +341,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     
     const renderContent = () => {
-        if (isLoading) return <div className="text-center py-10">Carregando divulgadoras...</div>;
+        if (isLoading || isOrgLoading) return <div className="text-center py-10">Carregando divulgadoras...</div>;
         if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
         if (filteredPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
