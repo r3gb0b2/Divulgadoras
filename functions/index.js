@@ -405,8 +405,13 @@ exports.getSystemStatus = functions
 
         try {
             log.push({ level: "INFO", message: "Tentando autenticar com a API da Brevo..." });
+
+            // Correct way to set the API key for @getbrevo/brevo
+            const defaultClient = Brevo.ApiClient.instance;
+            const apiKeyAuth = defaultClient.authentications["api-key"];
+            apiKeyAuth.apiKey = brevoKey;
+            
             const apiInstance = new Brevo.AccountApi();
-            apiInstance.setApiKey(Brevo.AccountApiApiKeys.apiKey, brevoKey);
             const accountInfo = await apiInstance.getAccount();
             
             log.push({ level: "SUCCESS", message: "Autenticação com a Brevo bem-sucedida." });
@@ -426,7 +431,7 @@ exports.getSystemStatus = functions
 
             log.push({ level: "ERROR", message: `Falha na autenticação. ${errorMessage}` });
             
-            if (errorMessage.toLowerCase().includes("api key is invalid")) {
+            if (String(errorMessage).toLowerCase().includes("api key is invalid")) {
                  response.message = "A chave da API da Brevo configurada é INVÁLIDA. Verifique se copiou a chave corretamente.";
             } else {
                  response.message = "A verificação com a API da Brevo falhou. Veja o log de diagnóstico para detalhes.";
