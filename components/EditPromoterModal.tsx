@@ -102,6 +102,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (primaryCampaign) {
         allCampaignsSet.add(primaryCampaign);
       }
+      allCampaignsSet.add(`org_${promoter.organizationId}`);
       dataToSave.allCampaigns = Array.from(allCampaignsSet);
 
       await onSave(promoter.id, dataToSave);

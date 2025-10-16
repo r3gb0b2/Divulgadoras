@@ -171,15 +171,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return Array.from(campaignSet);
 
         } else {
-            // UNRESTRICTED ADMIN: Their scope is all campaigns of their org.
+            // UNRESTRICTED ADMIN: Their scope is all campaigns of their org + the org itself.
             const orgCampaignNames = allCampaigns
                 .filter(c => c.organizationId === adminData.organizationId)
                 .map(c => c.name);
 
-            // If org has no campaigns, fall back to filtering by orgId in the service.
-            if (orgCampaignNames.length === 0) {
-                return null;
-            }
+            // Add the organization marker to the scope.
+            // This makes the query find promoters by org OR by associated campaign.
+            orgCampaignNames.push(`org_${adminData.organizationId}`);
+            
             return orgCampaignNames;
         }
     }, [isSuperAdmin, adminData, allCampaigns, getStatesForScope]);

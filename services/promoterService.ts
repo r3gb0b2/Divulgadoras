@@ -33,11 +33,16 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, ...rest } = promoterData;
 
+    const allCampaigns = [`org_${promoterData.organizationId}`];
+    if (promoterData.campaignName) {
+        allCampaigns.push(promoterData.campaignName);
+    }
+
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
-      allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
+      allCampaigns,
       photoUrls,
       status: 'pending' as const,
       createdAt: serverTimestamp(),
