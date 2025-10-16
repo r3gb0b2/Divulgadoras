@@ -152,38 +152,37 @@ export const getPromotersPage = async (options: {
         }
       }
     } else {
-      // --- UNIFIED REGULAR ADMIN LOGIC ---
-      if (!options.organizationId || !options.campaignsInScope) {
-        // An org admin must have an orgId and a scope. If not, they see nothing.
+      // --- REGULAR ADMIN LOGIC (NOT SuperAdmin) ---
+      if (!options.organizationId) {
+        // An org admin must have an orgId. If not, they see nothing.
         return { promoters: [], lastVisible: null, totalCount: 0 };
       }
 
-      let campaignsToQuery = options.campaignsInScope;
-
-      // If user filters by a specific campaign in the UI, narrow the query to that campaign.
       if (options.selectedCampaign !== 'all') {
-          if (options.campaignsInScope.includes(options.selectedCampaign)) {
-              campaignsToQuery = [options.selectedCampaign];
-          } else {
-              // Admin is filtering for a campaign outside their scope, return empty.
-              return { promoters: [], lastVisible: null, totalCount: 0 };
-          }
-      }
-      
-      if (campaignsToQuery.length === 0) {
-         // Admin's scope is empty. Return nothing.
-         return { promoters: [], lastVisible: null, totalCount: 0 };
-      }
-
-      if (campaignsToQuery.length === 1) {
-          // Use 'array-contains' for single-item queries, more efficient.
-          filters.push(where("allCampaigns", "array-contains", campaignsToQuery[0]));
+        // CASE 1: Admin is filtering by a SINGLE campaign in the UI.
+        // This is efficient and works for both restricted and unrestricted admins.
+        // It provides cross-org visibility for that specific campaign.
+        filters.push(where("allCampaigns", "array-contains", options.selectedCampaign));
       } else {
-          // Use 'array-contains-any' for multi-item scope.
-          // Limited to 30 items by Firestore.
-          filters.push(where("allCampaigns", "array-contains-any", campaignsToQuery.slice(0, 30)));
-          // This query cannot be ordered by a different field on the server.
+        // CASE 2: Admin is in an "ALL" view (all events in their scope).
+        const scope = options.campaignsInScope;
+        if (!scope) {
+          // Fallback: If scope isn't provided, query by the org ID to be safe.
+          filters.push(where("organizationId", "==", options.organizationId));
+        } else if (scope.length === 0) {
+          // This case can happen if an org has no campaigns. Query by orgId to show promoters without campaigns.
+          filters.push(where("organizationId", "==", options.organizationId));
+        } else if (scope.length > 30) {
+          // This is an unrestricted admin with too many campaigns for 'array-contains-any'.
+          // Revert to the simpler, robust query by organizationId.
+          // This fixes the "missing promoters" bug at the cost of cross-org visibility in this specific view.
+          filters.push(where("organizationId", "==", options.organizationId));
+        } else {
+          // This is a restricted admin OR an unrestricted admin with < 30 campaigns.
+          // The `array-contains-any` query is safe and provides full cross-org visibility.
+          filters.push(where("allCampaigns", "array-contains-any", scope));
           queryNeedsClientSideSort = true;
+        }
       }
     }
 
