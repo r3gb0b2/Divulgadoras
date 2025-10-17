@@ -249,58 +249,66 @@ export const getAllPromoters = async (options: {
       filterState,
     } = options;
 
-    let q = query(collection(firestore, "promoters"));
+    const promotersRef = collection(firestore, "promoters");
+    const constraints: any[] = [];
 
-    // 1. Status Filter (Always applied if not 'all')
+    // 1. Status Filter
     if (status !== 'all') {
-      q = query(q, where("status", "==", status));
+      constraints.push(where("status", "==", status));
     }
 
     // 2. Organization Filter
     const effectiveOrgId = filterOrgId !== 'all' ? filterOrgId : organizationId;
     if (effectiveOrgId) {
-      q = query(q, where("organizationId", "==", effectiveOrgId));
+      constraints.push(where("organizationId", "==", effectiveOrgId));
     }
 
-    // 3. Determine effective state and campaign filters
+    // 3. State & Campaign Filters
     const effectiveStates = filterState !== 'all' ? [filterState] : statesForScope;
     let effectiveCampaigns = campaignsInScope;
 
     if (selectedCampaign !== 'all') {
-        if (effectiveCampaigns === null) {
-            effectiveCampaigns = [selectedCampaign];
-        } else if (effectiveCampaigns.includes(selectedCampaign)) {
-            effectiveCampaigns = [selectedCampaign];
-        } else {
-            return []; // Selected campaign is out of scope
-        }
+      if (effectiveCampaigns === null) {
+        effectiveCampaigns = [selectedCampaign];
+      } else if (effectiveCampaigns.includes(selectedCampaign)) {
+        effectiveCampaigns = [selectedCampaign];
+      } else {
+        return []; // Selected campaign is out of scope
+      }
     }
 
-    // 4. Apply state and campaign filters, carefully checking for multiple 'in' clauses
     const statesAreInClause = effectiveStates && effectiveStates.length > 1;
     const campaignsAreInClause = effectiveCampaigns && effectiveCampaigns.length > 1;
 
     if (statesAreInClause && campaignsAreInClause) {
       throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
     }
-
+    
     if (effectiveStates) {
-      if (statesAreInClause) {
-        q = query(q, where("state", "in", effectiveStates));
-      } else if (effectiveStates.length === 1) {
-        q = query(q, where("state", "==", effectiveStates[0]));
+      if (effectiveStates.length === 1) {
+        constraints.push(where("state", "==", effectiveStates[0]));
+      } else if (effectiveStates.length > 1) {
+        constraints.push(where("state", "in", effectiveStates));
       }
     }
 
     if (effectiveCampaigns) {
-      if (campaignsAreInClause) {
-        q = query(q, where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
-      } else if (effectiveCampaigns.length === 1) {
-        q = query(q, where("campaignName", "==", effectiveCampaigns[0]));
-      } else if (effectiveCampaigns.length === 0) {
-          // Admin is scoped to zero campaigns, so return nothing.
-          return [];
+      if (effectiveCampaigns.length === 0) return [];
+      if (effectiveCampaigns.length === 1) {
+        constraints.push(where("campaignName", "==", effectiveCampaigns[0]));
+      } else if (effectiveCampaigns.length > 1) {
+        constraints.push(where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
       }
+    }
+
+    // DEFINITIVE FIX:
+    // Mirror the working `getPromotersPage` pattern by starting with `orderBy(documentId())`.
+    // This resolves subtle query processing issues in Firestore for complex, non-paginated queries,
+    // ensuring the super admin's simple initial query also executes reliably.
+    let q = query(promotersRef, orderBy(documentId()));
+
+    if (constraints.length > 0) {
+      q = query(q, ...constraints);
     }
     
     const snapshot = await getDocs(q);
