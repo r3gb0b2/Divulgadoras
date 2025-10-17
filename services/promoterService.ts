@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, deleteField } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, deleteField, QueryConstraint } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
@@ -239,64 +239,53 @@ export const getAllPromoters = async (options: {
   filterState: string | 'all';
 }): Promise<Promoter[]> => {
   try {
-    const {
-      organizationId,
-      statesForScope,
-      status,
-      campaignsInScope,
-      selectedCampaign,
-      filterOrgId,
-      filterState,
-    } = options;
-
     const promotersRef = collection(firestore, "promoters");
-    // Add orderBy(documentId()) to stabilize queries and mirror the working getPromotersPage function.
-    // This is the definitive fix for the blank list bug.
-    let q = query(promotersRef, orderBy(documentId()));
+    const constraints: QueryConstraint[] = [];
 
-    // --- Apply filters progressively ---
+    // --- Collect all constraints into an array ---
 
     // 1. Status
-    if (status !== 'all') {
-      q = query(q, where("status", "==", status));
+    if (options.status !== 'all') {
+      constraints.push(where("status", "==", options.status));
     }
 
-    // 2. Organization
-    const effectiveOrgId = filterOrgId !== 'all' ? filterOrgId : organizationId;
+    // 2. Organization (from super admin panel OR from user context)
+    const effectiveOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
     if (effectiveOrgId) {
-      q = query(q, where("organizationId", "==", effectiveOrgId));
+      constraints.push(where("organizationId", "==", effectiveOrgId));
     }
 
-    // 3. States & Campaigns
-    const effectiveStates = filterState !== 'all' ? [filterState] : statesForScope;
-    let effectiveCampaigns = campaignsInScope;
+    // 3. States
+    const effectiveStates = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
+    if (effectiveStates && effectiveStates.length > 0) {
+      constraints.push(where("state", "in", effectiveStates));
+    }
 
-    if (selectedCampaign !== 'all') {
+    // 4. Campaigns
+    let effectiveCampaigns = options.campaignsInScope;
+    if (options.selectedCampaign !== 'all') {
       if (effectiveCampaigns === null) {
-        effectiveCampaigns = [selectedCampaign];
-      } else if (effectiveCampaigns.includes(selectedCampaign)) {
-        effectiveCampaigns = [selectedCampaign];
+        effectiveCampaigns = [options.selectedCampaign];
+      } else if (effectiveCampaigns.includes(options.selectedCampaign)) {
+        effectiveCampaigns = [options.selectedCampaign];
       } else {
         return []; // Selected campaign is out of scope, return empty results immediately
       }
     }
-    
-    // Firestore limitation: you can't have `in` on two different fields.
-    if (effectiveStates && effectiveStates.length > 1 && effectiveCampaigns && effectiveCampaigns.length > 1) {
-      throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
-    }
-
-    if (effectiveStates && effectiveStates.length > 0) {
-      // Use 'in' for both single and multiple values for simplicity and consistency
-      q = query(q, where("state", "in", effectiveStates));
-    }
 
     if (effectiveCampaigns) {
       if (effectiveCampaigns.length === 0) return []; // Explicitly handle empty array
-      // Use 'in' for both single and multiple values
-      q = query(q, where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
+      constraints.push(where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
     }
 
+    // Final check for Firestore limitations (multiple 'in' queries)
+    const inQueriesCount = constraints.filter(c => (c as any)._op === 'in').length;
+    if (inQueriesCount > 1) {
+        throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
+    }
+
+    // --- Build and execute the query ---
+    const q = query(promotersRef, ...constraints);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
