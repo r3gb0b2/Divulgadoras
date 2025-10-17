@@ -31,15 +31,15 @@ const checkAdmin = async (context) => {
       "A solicitação deve ser autenticada.",
     );
   }
-  const user = await auth.getUser(context.auth.uid);
-  const role = user.customClaims?.role;
+  // Use context.auth.token which contains custom claims, instead of making a new auth call.
+  const role = context.auth.token.role;
   if (role !== "admin" && role !== "superadmin" && role !== "poster") {
     throw new functions.https.HttpsError(
       "permission-denied",
       "O usuário não tem permissão para realizar esta ação.",
     );
   }
-  return user;
+  return context.auth.token;
 };
 
 /**
@@ -54,8 +54,8 @@ const checkSuperAdmin = async (context) => {
       "A solicitação deve ser autenticada.",
     );
   }
-  const user = await auth.getUser(context.auth.uid);
-  if (user.customClaims?.role !== "superadmin") {
+  // Use context.auth.token which contains custom claims.
+  if (context.auth.token.role !== "superadmin") {
     throw new functions.https.HttpsError(
       "permission-denied",
       "Apenas Super Admins podem realizar esta ação.",
@@ -148,6 +148,56 @@ const DEFAULT_APPROVED_TEMPLATE = `
 
 
 // --- DATABASE TRIGGERS ---
+
+/**
+ * Firestore trigger that runs when an admin document is written.
+ * It synchronizes the user's role and organizationId to Firebase Auth custom claims.
+ * This serves as a general-purpose sync mechanism.
+ */
+exports.syncUserClaims = functions.region("southamerica-east1").firestore
+  .document("admins/{adminId}")
+  .onWrite(async (change, context) => {
+    const { adminId } = context.params;
+    const afterData = change.after.exists ? change.after.data() : null;
+
+    // Case 1: Document deleted. Revoke all claims.
+    if (!afterData) {
+        try {
+            await auth.setCustomUserClaims(adminId, null);
+            console.log(`Claims for user ${adminId} have been revoked because their admin document was deleted.`);
+        } catch (error) {
+            console.error(`Error revoking claims for deleted admin ${adminId}:`, error);
+        }
+        return null;
+    }
+
+    // Case 2: Document exists. Set claims based on 'role' and 'organizationId'.
+    const role = afterData.role;
+    const organizationId = afterData.organizationId || null;
+
+    // A user MUST have a role to have claims. If not, something is wrong. Revoke claims.
+    if (!role) {
+         try {
+            await auth.setCustomUserClaims(adminId, null);
+            console.warn(`User ${adminId} has an admin document but no role. Revoking claims.`);
+        } catch (error) {
+            console.error(`Error revoking claims for user ${adminId} with no role:`, error);
+        }
+        return null;
+    }
+
+    const newClaims = { role, organizationId };
+
+    try {
+        await auth.setCustomUserClaims(adminId, newClaims);
+        console.log(`Successfully synced claims for user ${adminId}:`, newClaims);
+    } catch (error) {
+        console.error(`Error setting claims for user ${adminId}:`, error);
+    }
+
+    return null;
+  });
+
 
 /**
  * Firestore trigger that runs when a promoter's status is updated.
@@ -245,6 +295,92 @@ exports.createAdminRequest = functions.region("southamerica-east1").https.onCall
         throw new functions.https.HttpsError("internal", "Não foi possível criar a solicitação.");
     }
 });
+
+
+/**
+ * Approves a new admin, enables their account, and assigns them to an organization.
+ * This is a secure replacement for the client-side approval logic.
+ */
+exports.approveAdminApplication = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await checkSuperAdmin(context); // Only superadmins can approve
+    const { userId, organizationId } = data;
+
+    if (!userId || !organizationId) {
+        throw new functions.https.HttpsError("invalid-argument", "User ID e Organization ID são obrigatórios.");
+    }
+
+    // 1. Fetch application to get email and ensure it exists
+    const appRef = db.collection("adminApplications").doc(userId);
+    const appDoc = await appRef.get();
+    if (!appDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Solicitação de admin não encontrada.");
+    }
+    const appData = appDoc.data();
+
+    // 2. Enable the user in Auth
+    await auth.updateUser(userId, { disabled: false });
+
+    const batch = db.batch();
+
+    // 3. Create the admin document in Firestore.
+    // The `syncUserClaims` onWrite trigger will handle setting the custom claims.
+    const adminRef = db.collection("admins").doc(userId);
+    batch.set(adminRef, {
+        email: appData.email,
+        role: "admin",
+        organizationId: organizationId,
+        assignedStates: [],
+        assignedCampaigns: {},
+    });
+
+    // 4. Delete the application document
+    batch.delete(appRef);
+
+    await batch.commit();
+
+    return { success: true, message: "Administrador aprovado e habilitado com sucesso." };
+});
+
+/**
+ * Creates or updates an admin user's permissions. This is the new, secure way to manage users.
+ */
+exports.updateAdminPermissions = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    await checkSuperAdmin(context);
+
+    const { targetUid, email, password, adminData } = data;
+
+    if (!targetUid && !email) {
+        throw new functions.https.HttpsError('invalid-argument', 'UID ou E-mail do alvo é obrigatório.');
+    }
+    if (!adminData || !adminData.role) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados do administrador, incluindo a role, são obrigatórios.');
+    }
+
+    let userId = targetUid;
+
+    // If it's a new user, create them first
+    if (!userId) {
+        if (!password) {
+            throw new functions.https.HttpsError('invalid-argument', 'A senha é obrigatória para novos usuários.');
+        }
+        try {
+            const userRecord = await auth.createUser({ email, password });
+            userId = userRecord.uid;
+        } catch (error) {
+            if (error.code === 'auth/email-already-exists') {
+                 throw new functions.https.HttpsError("already-exists", "Este e-mail já está em uso.");
+            }
+            throw new functions.https.HttpsError('internal', `Falha ao criar usuário de autenticação: ${error.message}`);
+        }
+    }
+    
+    // Set Firestore document (this will trigger syncUserClaims)
+    await db.collection('admins').doc(userId).set(adminData, { merge: true });
+
+    return { success: true, userId };
+});
+
+
 
 /**
  * Manually triggers the status email for a promoter.
@@ -344,9 +480,9 @@ exports.getSystemStatus = functions.region("southamerica-east1").https.onCall(as
  * Allows for testing different email scenarios.
  */
 exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const user = await checkAdmin(context); // Allow admins to test email too
-    const superAdminEmail = user.email;
-    const superAdminName = user.displayName || 'Admin Teste';
+    const adminToken = await checkAdmin(context); // Allow admins to test email too
+    const adminEmail = adminToken.email;
+    const adminName = adminToken.name || 'Admin Teste';
 
     const { testType, customHtmlContent } = data;
 
@@ -356,7 +492,7 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
 
         if (testType === 'generic') {
             subject = "Teste de Conexão - Equipe Certa";
-            htmlContent = `<p>Olá, ${superAdminName}. Se você recebeu este e-mail, a conexão com o provedor de e-mail está funcionando corretamente.</p>`;
+            htmlContent = `<p>Olá, ${adminName}. Se você recebeu este e-mail, a conexão com o provedor de e-mail está funcionando corretamente.</p>`;
         } else if (testType === 'approved' || testType === 'custom_approved') {
             const orgName = "Sua Organização (Teste)";
             const campaignName = "Evento de Teste";
@@ -381,9 +517,9 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
             throw new functions.https.HttpsError("invalid-argument", "Tipo de teste inválido.");
         }
 
-        await sendEmail(superAdminEmail, superAdminName, subject, htmlContent);
+        await sendEmail(adminEmail, adminName, subject, htmlContent);
 
-        return { success: true, message: `E-mail de teste '${testType}' enviado para ${superAdminEmail}.` };
+        return { success: true, message: `E-mail de teste '${testType}' enviado para ${adminEmail}.` };
     } catch (error) {
         console.error(`Failed to send test email type ${testType}:`, error);
         throw new functions.https.HttpsError("internal", error.message);
@@ -437,7 +573,7 @@ exports.createOrganizationAndUser = functions.region("southamerica-east1").https
     const orgRef = db.collection("organizations").doc(); // Auto-generate ID
     await orgRef.set(newOrg);
 
-    // Create the admin document and set custom claims
+    // Create the admin document. The syncUserClaims trigger will handle custom claims.
     const adminDoc = {
         email: email,
         role: "admin",
@@ -446,7 +582,6 @@ exports.createOrganizationAndUser = functions.region("southamerica-east1").https
         assignedCampaigns: {},
     };
     await db.collection("admins").doc(userRecord.uid).set(adminDoc);
-    await auth.setCustomUserClaims(userRecord.uid, { role: "admin", organizationId: orgRef.id });
 
     return { success: true, orgId: orgRef.id };
 });
