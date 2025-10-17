@@ -18,26 +18,26 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter } from '../types';
 
 export const createPost = async (
-  postData: Omit<Post, 'id' | 'createdAt' | 'imageUrl'>,
-  imageFile: File | null,
+  postData: Omit<Post, 'id' | 'createdAt' | 'mediaUrl'>,
+  mediaFile: File | null,
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    let finalImageUrl: string | undefined = undefined;
+    let finalMediaUrl: string | undefined = undefined;
 
-    // 1. Upload image on the client if it exists
-    if (imageFile) {
-      const fileExtension = imageFile.name.split('.').pop();
+    // 1. Upload image/video on the client if it exists
+    if (mediaFile) {
+      const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-      const storageRef = ref(storage, `posts-images/${fileName}`);
-      await uploadBytes(storageRef, imageFile);
-      finalImageUrl = await getDownloadURL(storageRef);
+      const storageRef = ref(storage, `posts-media/${fileName}`);
+      await uploadBytes(storageRef, mediaFile);
+      finalMediaUrl = await getDownloadURL(storageRef);
     }
 
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        imageUrl: finalImageUrl,
+        mediaUrl: finalMediaUrl,
     };
 
     // 3. Call the cloud function to create docs and send emails
@@ -294,5 +294,19 @@ export const addAssignmentsToPost = async (postId: string, promoterIds: string[]
             throw error;
         }
         throw new Error("Não foi possível atribuir a publicação.");
+    }
+};
+
+export const sendPostReminder = async (postId: string): Promise<{count: number, message: string}> => {
+    try {
+        const func = httpsCallable(functions, 'sendPostReminder');
+        const result = await func({ postId });
+        return result.data as {count: number, message: string};
+    } catch (error) {
+        console.error("Error sending post reminder:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível enviar os lembretes.");
     }
 };

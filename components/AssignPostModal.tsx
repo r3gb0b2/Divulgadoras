@@ -32,6 +32,17 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
                 const allApproved = await getApprovedPromoters(post.organizationId, post.stateAbbr, post.campaignName);
                 const assignedIds = new Set(existingAssignments.map(a => a.promoterId));
                 const filtered = allApproved.filter(p => !assignedIds.has(p.id));
+                
+                // Sort promoters: those who joined the group first, then alphabetically.
+                filtered.sort((a, b) => {
+                    const aJoined = a.hasJoinedGroup ? 1 : 0;
+                    const bJoined = b.hasJoinedGroup ? 1 : 0;
+                    if (bJoined !== aJoined) {
+                        return bJoined - aJoined; // Promoters in group come first
+                    }
+                    return a.name.localeCompare(b.name); // Then sort by name
+                });
+
                 setAssignable(filtered);
             } catch (err: any) {
                 setError(err.message || "Falha ao buscar divulgadoras.");
@@ -95,7 +106,10 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
                                 {assignable.map(p => (
                                     <label key={p.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-700/50 cursor-pointer">
                                         <input type="checkbox" checked={selected.has(p.id)} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                        <span>{p.name}</span>
+                                        <span>
+                                            {p.name}
+                                            {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
+                                        </span>
                                     </label>
                                 ))}
                             </div>

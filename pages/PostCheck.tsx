@@ -101,10 +101,13 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
             </div>
             
             <div className="border-t border-gray-700 pt-3">
-                {assignment.post.type === 'image' && assignment.post.imageUrl && (
-                    <a href={assignment.post.imageUrl} target="_blank" rel="noopener noreferrer">
-                        <img src={assignment.post.imageUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                {assignment.post.type === 'image' && assignment.post.mediaUrl && (
+                    <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer">
+                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
                     </a>
+                )}
+                {assignment.post.type === 'video' && assignment.post.mediaUrl && (
+                    <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
                 )}
                 {assignment.post.type === 'text' && (
                     <div className="bg-gray-800 p-3 rounded-md mb-4">

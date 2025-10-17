@@ -1,16 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
-import { createPost } from '../services/postService';
+import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
+const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
+    if (!ts) return '';
+    let date;
+    if (ts.toDate) { date = ts.toDate(); }
+    else if (typeof ts === 'object' && (ts.seconds || ts._seconds)) {
+        const seconds = ts.seconds || ts._seconds;
+        date = new Date(seconds * 1000);
+    } else { date = new Date(ts); }
+    if (isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+};
+
 const CreatePost: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { adminData } = useAdminAuth();
 
     // Data fetching states
@@ -22,10 +35,10 @@ const CreatePost: React.FC = () => {
     const [selectedState, setSelectedState] = useState('');
     const [selectedCampaign, setSelectedCampaign] = useState('');
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
-    const [postType, setPostType] = useState<'text' | 'image'>('text');
+    const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [textContent, setTextContent] = useState('');
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [mediaFile, setMediaFile] = useState<File | null>(null);
+    const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [instructions, setInstructions] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
@@ -53,6 +66,24 @@ const CreatePost: React.FC = () => {
                     setAssignedStates(orgData.assignedStates);
                 }
                 setCampaigns(allCampaigns);
+                
+                // Check for duplication request
+                const queryParams = new URLSearchParams(location.search);
+                const fromPostId = queryParams.get('fromPost');
+                if (fromPostId) {
+                    const { post: originalPost } = await getPostWithAssignments(fromPostId);
+                    // Pre-fill form fields, but not the target (state/campaign/promoters)
+                    setPostType(originalPost.type);
+                    setTextContent(originalPost.textContent || '');
+                    setInstructions(originalPost.instructions || '');
+                    setIsActive(originalPost.isActive);
+                    setExpiresAt(timestampToInputDate(originalPost.expiresAt));
+                    setAutoAssign(originalPost.autoAssignToNewPromoters || false);
+                    if ((originalPost.type === 'image' || originalPost.type === 'video') && originalPost.mediaUrl) {
+                        setMediaPreview(originalPost.mediaUrl);
+                        // User will have to re-upload, but we show the preview.
+                    }
+                }
 
             } catch (err: any) {
                 setError(err.message);
@@ -61,7 +92,7 @@ const CreatePost: React.FC = () => {
             }
         };
         loadInitialData();
-    }, [adminData]);
+    }, [adminData, location.search]);
     
     useEffect(() => {
         const fetchPromoters = async () => {
@@ -118,11 +149,11 @@ const CreatePost: React.FC = () => {
         }
     };
     
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setImageFile(file);
-            setImagePreview(URL.createObjectURL(file));
+            setMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
         }
     }
 
@@ -140,8 +171,8 @@ const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if (postType === 'image' && !imageFile) {
-            setError("Selecione uma imagem para o post.");
+        if ((postType === 'image' || postType === 'video') && !mediaFile && !mediaPreview) {
+            setError(`Selecione ${postType === 'image' ? 'uma imagem' : 'um vídeo'} para o post.`);
             return;
         }
         if (postType === 'text' && !textContent.trim()) {
@@ -178,7 +209,7 @@ const CreatePost: React.FC = () => {
                 autoAssignToNewPromoters: autoAssign,
             };
 
-            await createPost(postData, imageFile, promotersToAssign);
+            await createPost(postData, mediaFile, promotersToAssign);
             
             alert('Publicação criada e divulgadoras notificadas com sucesso!');
             navigate('/admin/posts');
@@ -248,13 +279,19 @@ const CreatePost: React.FC = () => {
                      <div className="flex gap-4 mb-4">
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /><span>Texto</span></label>
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label>
+                        <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo</span></label>
                      </div>
                      {postType === 'text' ? (
                         <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Digite o texto da publicação aqui..." rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                      ) : (
                         <div>
-                            <input type="file" accept="image/*" onChange={handleImageChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                            {imagePreview && <img src={imagePreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                            <input type="file" accept={postType === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                            {mediaPreview && (mediaFile?.type.startsWith('video/') || mediaPreview.includes('videos.cibort.com')) ? (
+                                <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
+                            ) : mediaPreview ? (
+                                <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />
+                            ) : null}
+                             {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />

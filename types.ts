@@ -125,8 +125,8 @@ export interface Post {
   organizationId: string;
   campaignName: string;
   stateAbbr: string;
-  type: 'image' | 'text';
-  imageUrl?: string;
+  type: 'image' | 'text' | 'video';
+  mediaUrl?: string;
   textContent?: string;
   instructions: string;
   createdAt: Timestamp | FieldValue;
@@ -140,8 +140,8 @@ export interface PostAssignment {
   id: string; // Firestore document ID
   postId: string;
   post: { // Denormalized post data
-    type: 'image' | 'text';
-    imageUrl?: string;
+    type: 'image' | 'text' | 'video';
+    mediaUrl?: string;
     textContent?: string;
     instructions: string;
     campaignName: string;

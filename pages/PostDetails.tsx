@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost, updatePost } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost, sendPostReminder } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -41,7 +41,10 @@ const PostDetails: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isSendingReminder, setIsSendingReminder] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
 
     // Stats Modal State
     const [statsModalOpen, setStatsModalOpen] = useState(false);
@@ -57,6 +60,8 @@ const PostDetails: React.FC = () => {
             return;
         }
         setIsLoading(true);
+        setError(null);
+        setSuccessMessage(null);
         try {
             const { post, assignments } = await getPostWithAssignments(postId);
             setPost(post);
@@ -73,6 +78,11 @@ const PostDetails: React.FC = () => {
     useEffect(() => {
         fetchDetails();
     }, [postId]);
+    
+    const showSuccessMessage = (message: string) => {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(null), 4000);
+    };
 
     const handleOpenStatsModal = (promoterAssignment: PostAssignment) => {
         setSelectedPromoter(promoterAssignment);
@@ -97,7 +107,7 @@ const PostDetails: React.FC = () => {
             };
 
             await updatePost(postId, updateData);
-            alert('Publicação atualizada com sucesso!');
+            showSuccessMessage('Publicação atualizada com sucesso!');
             await fetchDetails(); // Refresh data to confirm changes
         } catch (err: any) {
             setError(err.message);
@@ -123,6 +133,36 @@ const PostDetails: React.FC = () => {
         }
     };
 
+    const handleDuplicate = () => {
+        if (!postId) return;
+        navigate(`/admin/posts/new?fromPost=${postId}`);
+    };
+
+    const handleSendReminder = async () => {
+        if (!postId) return;
+        
+        const pendingCount = assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
+        if (pendingCount === 0) return;
+
+        if (window.confirm(`Isso enviará um e-mail de lembrete para ${pendingCount} divulgadora(s) que ainda não enviaram a comprovação. Deseja continuar?`)) {
+            setIsSendingReminder(true);
+            setError(null);
+            try {
+                const result = await sendPostReminder(postId);
+                showSuccessMessage(result.message || `${result.count} lembretes enviados.`);
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setIsSendingReminder(false);
+            }
+        }
+    };
+
+    const pendingProofCount = useMemo(() => {
+        return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
+    }, [assignments]);
+
+
     const formatDate = (timestamp: any): string => {
         if (!timestamp) return 'N/A';
         let date;
@@ -143,6 +183,7 @@ const PostDetails: React.FC = () => {
 
     const confirmationStats = {
         confirmed: assignments.filter(a => a.status === 'confirmed').length,
+        proofs: assignments.filter(a => a.proofSubmittedAt).length,
         total: assignments.length,
     };
 
@@ -156,10 +197,13 @@ const PostDetails: React.FC = () => {
                 {/* Post Info */}
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg self-start">
                     <h2 className="text-xl font-bold text-primary mb-4">{post.campaignName}</h2>
-                    {post.type === 'image' && post.imageUrl && (
-                        <a href={post.imageUrl} target="_blank" rel="noopener noreferrer">
-                             <img src={post.imageUrl} alt="Arte da publicação" className="w-full rounded-md mb-4" />
+                    {post.type === 'image' && post.mediaUrl && (
+                        <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer">
+                             <img src={post.mediaUrl} alt="Arte da publicação" className="w-full rounded-md mb-4" />
                         </a>
+                    )}
+                    {post.type === 'video' && post.mediaUrl && (
+                        <video src={post.mediaUrl} controls className="w-full rounded-md mb-4" />
                     )}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">
@@ -188,8 +232,16 @@ const PostDetails: React.FC = () => {
                         <button onClick={handleSaveChanges} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
                         </button>
-                        <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50">
-                            Atribuir a Novas Divulgadoras
+                        <div className="grid grid-cols-2 gap-2">
+                             <button onClick={handleDuplicate} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
+                                Duplicar
+                            </button>
+                            <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50">
+                                Atribuir
+                            </button>
+                        </div>
+                         <button onClick={handleSendReminder} disabled={isSendingReminder || pendingProofCount === 0} className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {isSendingReminder ? 'Enviando...' : `Enviar Lembrete (${pendingProofCount})`}
                         </button>
                     </div>
                 </div>
@@ -198,7 +250,10 @@ const PostDetails: React.FC = () => {
                 <div className="lg:col-span-2 bg-dark/70 p-4 rounded-lg">
                     <div className="flex justify-between items-center mb-4">
                          <h2 className="text-xl font-bold text-white">Divulgadoras Designadas</h2>
-                         <div className="text-lg font-semibold">{confirmationStats.confirmed} / {confirmationStats.total} <span className="text-sm font-normal">Confirmado</span></div>
+                         <div className="text-right">
+                            <p className="text-lg font-semibold">{confirmationStats.confirmed} / {confirmationStats.total} <span className="text-sm font-normal">Confirmaram</span></p>
+                            <p className="text-sm font-semibold">{confirmationStats.proofs} / {confirmationStats.total} <span className="text-xs font-normal">Comprovaram</span></p>
+                         </div>
                     </div>
                     <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                         <table className="min-w-full divide-y divide-gray-700">
@@ -271,6 +326,7 @@ const PostDetails: React.FC = () => {
                 </button>
             </div>
              {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
+             {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 {renderContent()}
             </div>

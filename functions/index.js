@@ -187,7 +187,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
       postId: postId,
       post: { // denormalized data
         type: post.type,
-        imageUrl: post.imageUrl || null,
+        mediaUrl: post.mediaUrl || null,
         textContent: post.textContent || null,
         instructions: post.instructions,
         campaignName: post.campaignName,
@@ -352,6 +352,68 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
     const detailedError = getBrevoErrorDetails(error);
     console.error(`[Brevo API Error] Failed to send new post email to ${promoter.email}. Details: ${detailedError}`);
     // Do not re-throw, to allow other emails to be sent.
+  }
+}
+
+
+/**
+ * Sends a reminder email to a promoter to submit proof for a post.
+ * @param {object} promoter - The promoter data object.
+ * @param {object} postDetails - Object with campaignName, orgName, etc.
+ */
+async function sendProofReminderEmail(promoter, postDetails) {
+  if (!brevoApiInstance) {
+    console.warn(`Skipping proof reminder email for ${promoter.promoterEmail}: Brevo API is not configured.`);
+    return;
+  }
+
+  const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
+  const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>${subject}</title>
+        <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+            .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 30px; }
+            .button { display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header"><h1>Olá, ${promoter.promoterName}!</h1></div>
+            <div class="content">
+                <p>Este é um lembrete amigável para você enviar a comprovação (print) da sua publicação para o evento <strong>${postDetails.campaignName}</strong>.</p>
+                <p>O prazo está se aproximando. Acesse o link abaixo para enviar seu print.</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${proofLink}" class="button">Enviar Comprovação</a>
+                </p>
+                <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.to = [{ email: promoter.promoterEmail, name: promoter.promoterName }];
+  sendSmtpEmail.sender = {
+    name: postDetails.orgName || "Equipe de Eventos",
+    email: brevoConfig.sender_email,
+  };
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+
+  try {
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`Proof reminder sent to ${promoter.promoterEmail}`);
+  } catch (error) {
+    const detailedError = getBrevoErrorDetails(error);
+    console.error(`[Brevo API Error] Failed to send proof reminder to ${promoter.promoterEmail}. Details: ${detailedError}`);
+    // Do not re-throw
   }
 }
 
@@ -810,7 +872,7 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   const assignmentsCollectionRef = db.collection("postAssignments");
   const denormalizedPostData = {
     type: postData.type,
-    imageUrl: postData.imageUrl,
+    mediaUrl: postData.mediaUrl,
     textContent: postData.textContent,
     instructions: postData.instructions,
     campaignName: postData.campaignName,
@@ -887,7 +949,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
 
   const denormalizedPostData = {
     type: post.type,
-    imageUrl: post.imageUrl || null,
+    mediaUrl: post.mediaUrl || null,
     textContent: post.textContent || null,
     instructions: post.instructions,
     campaignName: post.campaignName,
@@ -990,4 +1052,50 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     await batch.commit();
 
     return { success: true };
+});
+
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  const { postId } = data;
+  if (!postId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
+  }
+
+  const postSnap = await db.collection("posts").doc(postId).get();
+  if (!postSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  const assignmentsQuery = db.collection("postAssignments")
+      .where("postId", "==", postId)
+      .where("proofSubmittedAt", "==", null);
+
+  const snapshot = await assignmentsQuery.get();
+  if (snapshot.empty) {
+    return { success: true, count: 0, message: "Nenhuma comprovação pendente encontrada." };
+  }
+
+  const promotersToRemind = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+  const emailPromises = promotersToRemind.map((promoter) =>
+    sendProofReminderEmail(promoter, {
+      campaignName: post.campaignName,
+      orgName: orgName,
+    }),
+  );
+
+  await Promise.allSettled(emailPromises);
+
+  return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });

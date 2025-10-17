@@ -109,8 +109,11 @@ const ProofUploadPage: React.FC = () => {
                 <p className="text-center text-primary font-semibold mb-6">{assignment.post.campaignName}</p>
                 
                 <div className="bg-dark/70 p-4 rounded-lg mb-6">
-                    {assignment.post.type === 'image' && assignment.post.imageUrl && (
-                        <img src={assignment.post.imageUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                    {assignment.post.type === 'image' && assignment.post.mediaUrl && (
+                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                    )}
+                    {assignment.post.type === 'video' && assignment.post.mediaUrl && (
+                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
                     )}
                      <h4 className="font-semibold text-gray-200">Instruções Originais:</h4>
                      <p className="text-gray-400 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>
