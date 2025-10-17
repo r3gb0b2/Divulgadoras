@@ -239,64 +239,46 @@ export const getAllPromoters = async (options: {
   filterState: string | 'all';
 }): Promise<Promoter[]> => {
   try {
-    const promotersRef = collection(firestore, "promoters");
+    let q = query(collection(firestore, "promoters"));
 
-    const commonFilters: any[] = [];
-    if (options.organizationId) {
-      commonFilters.push(where("organizationId", "==", options.organizationId));
-    }
+    // Apply status filter
     if (options.status !== 'all') {
-      commonFilters.push(where("status", "==", options.status));
-    }
-    if (options.filterOrgId !== 'all') {
-      const orgFilterIndex = commonFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
-      if (orgFilterIndex > -1) commonFilters.splice(orgFilterIndex, 1);
-      commonFilters.push(where("organizationId", "==", options.filterOrgId));
+      q = query(q, where("status", "==", options.status));
     }
 
-    let campaignFilter: any = null;
-    let finalCampaigns: string[] | null = options.campaignsInScope;
+    // Determine final organization ID to filter by
+    const finalOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
+    if (finalOrgId) {
+      q = query(q, where("organizationId", "==", finalOrgId));
+    }
+    
+    // Determine final state(s) to filter by
+    const statesToFilter = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
 
+    // Determine final campaign(s) to filter by
+    let campaignsToFilter: string[] | null = options.campaignsInScope;
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaigns === null) {
-            finalCampaigns = [options.selectedCampaign];
-        } else {
-            if (finalCampaigns.includes(options.selectedCampaign)) {
-                finalCampaigns = [options.selectedCampaign];
+        if (campaignsToFilter === null) { // No scope, just use selection
+            campaignsToFilter = [options.selectedCampaign];
+        } else { // Intersect scope with selection
+            if (campaignsToFilter.includes(options.selectedCampaign)) {
+                campaignsToFilter = [options.selectedCampaign];
             } else {
-                return []; 
+                return []; // Selection is outside of scope, so no results.
             }
         }
     }
+    
+    const stateFilterIsMulti = statesToFilter && statesToFilter.length > 1;
+    const campaignFilterIsMulti = campaignsToFilter && campaignsToFilter.length > 1;
 
-    if (finalCampaigns) {
-        if (finalCampaigns.length === 0) return [];
-        if (finalCampaigns.length === 1) {
-            campaignFilter = where("campaignName", "==", finalCampaigns[0]);
-        } else if (finalCampaigns.length <= 30) {
-            campaignFilter = where("campaignName", "in", finalCampaigns);
-        } else {
-            console.warn(`Campaign filter exceeds 30 items. Slicing.`);
-            campaignFilter = where("campaignName", "in", finalCampaigns.slice(0, 30));
-        }
-    }
-
-    let statesToQuery: string[] | null = null;
-    if (options.filterState !== 'all') {
-        statesToQuery = [options.filterState];
-    } else if (options.statesForScope && options.statesForScope.length > 0) {
-        statesToQuery = options.statesForScope;
-    }
-
-    const hasCampaignInFilter = campaignFilter && campaignFilter._op === 'in';
-    const hasStateScope = statesToQuery && statesToQuery.length > 0;
-
-    if (hasCampaignInFilter && hasStateScope) {
-        const queryPromises = statesToQuery.map(state => {
-            const stateFilter = where("state", "==", state);
-            const finalFilters = [...commonFilters, campaignFilter, stateFilter];
-            const q = query(promotersRef, ...finalFilters);
-            return getDocs(q);
+    // Handle invalid Firestore query (two 'in' clauses) by splitting the query by state.
+    if (stateFilterIsMulti && campaignFilterIsMulti) {
+        const queryPromises = statesToFilter.map(state => {
+            let stateQuery = q; // Start with the query built so far
+            stateQuery = query(stateQuery, where("state", "==", state)); // Add specific state
+            stateQuery = query(stateQuery, where("campaignName", "in", campaignsToFilter!.slice(0, 30))); // Add campaign 'in'
+            return getDocs(stateQuery);
         });
 
         const snapshots = await Promise.all(queryPromises);
@@ -311,19 +293,25 @@ export const getAllPromoters = async (options: {
         return Array.from(promotersMap.values());
     }
 
-    const finalFilters = [...commonFilters];
-    if (campaignFilter) {
-        finalFilters.push(campaignFilter);
-    }
-    if (statesToQuery) {
-        if (statesToQuery.length === 1) {
-            finalFilters.push(where("state", "==", statesToQuery[0]));
+    // --- If the query is valid, continue building it ---
+
+    if (statesToFilter && statesToFilter.length > 0) {
+        if (statesToFilter.length === 1) {
+            q = query(q, where("state", "==", statesToFilter[0]));
         } else {
-            finalFilters.push(where("state", "in", statesToQuery));
+            q = query(q, where("state", "in", statesToFilter));
         }
     }
 
-    const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
+    if (campaignsToFilter) {
+        if (campaignsToFilter.length === 0) return []; // Empty scope means no results.
+        if (campaignsToFilter.length === 1) {
+            q = query(q, where("campaignName", "==", campaignsToFilter[0]));
+        } else {
+            q = query(q, where("campaignName", "in", campaignsToFilter.slice(0, 30)));
+        }
+    }
+    
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
