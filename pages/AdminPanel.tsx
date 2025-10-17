@@ -252,7 +252,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setCurrentPage(1);
         setPageCursors([null]);
         setTotalPromotersCount(0);
-    }, [filter, searchQuery, selectedOrg, selectedState, selectedCampaign]);
+    }, [filter, selectedOrg, selectedState, selectedCampaign]);
 
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
@@ -440,7 +440,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         filtered.sort((a, b) => {
             const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
             const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-            return timeA - timeB;
+            return timeB - timeA;
         });
         
         return filtered;
