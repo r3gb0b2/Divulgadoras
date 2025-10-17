@@ -151,7 +151,7 @@ const buildQueryConstraints = (options: PromoterQueryOptions): { constraints: Qu
     }
 
     // Organization filter
-    const isSuperAdminView = options.organizationId === undefined;
+    const isSuperAdminView = !options.organizationId;
 
     if (options.filterOrgId !== 'all') {
         // An explicit filter from the UI is selected (by a super admin). This takes priority.
