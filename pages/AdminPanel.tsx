@@ -414,7 +414,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
                             <div>
                                 <p className="font-bold text-lg text-white">{promoter.name}</p>
-                                {/* FIX: Replaced `organizations` with `allOrganizations` to correctly look up the organization name for a super admin. */}
                                 {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
                                 {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
                                 {promoter.associatedCampaigns?.length && <div className="mt-1"><span className="text-xs font-semibold text-gray-400">Eventos Adicionais: </span><span className="text-xs text-gray-300">{promoter.associatedCampaigns.join(', ')}</span></div>}
