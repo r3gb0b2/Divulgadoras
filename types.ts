@@ -143,6 +143,7 @@ export interface PostAssignment {
     campaignName: string;
     isActive: boolean;
     expiresAt: Timestamp | FieldValue | null;
+    createdAt: Timestamp | FieldValue;
   };
   organizationId: string;
   promoterId: string;

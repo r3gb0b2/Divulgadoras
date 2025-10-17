@@ -4,6 +4,7 @@ import { getPostWithAssignments, deletePost, updatePost } from '../services/post
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -41,6 +42,10 @@ const PostDetails: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Stats Modal State
+    const [statsModalOpen, setStatsModalOpen] = useState(false);
+    const [selectedPromoter, setSelectedPromoter] = useState<PostAssignment | null>(null);
+
     const fetchDetails = async () => {
         if (!postId) {
             setError("ID da publicação não encontrado.");
@@ -64,6 +69,11 @@ const PostDetails: React.FC = () => {
     useEffect(() => {
         fetchDetails();
     }, [postId]);
+
+    const handleOpenStatsModal = (promoterAssignment: PostAssignment) => {
+        setSelectedPromoter(promoterAssignment);
+        setStatsModalOpen(true);
+    };
 
     const handleSaveChanges = async () => {
         if (!postId) return;
@@ -196,7 +206,14 @@ const PostDetails: React.FC = () => {
                              <tbody className="divide-y divide-gray-700">
                                 {assignments.map(a => (
                                     <tr key={a.id}>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-200">{a.promoterName}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                            <button
+                                                onClick={() => handleOpenStatsModal(a)}
+                                                className="text-gray-200 hover:text-primary hover:underline font-medium"
+                                            >
+                                                {a.promoterName}
+                                            </button>
+                                        </td>
                                         <td className="px-4 py-2 whitespace-nowrap text-sm">
                                             {a.status === 'confirmed' ? (
                                                 <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
@@ -250,6 +267,11 @@ const PostDetails: React.FC = () => {
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 {renderContent()}
             </div>
+            <PromoterPostStatsModal
+                isOpen={statsModalOpen}
+                onClose={() => setStatsModalOpen(false)}
+                promoter={selectedPromoter}
+            />
         </div>
     );
 };

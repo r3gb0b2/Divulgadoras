@@ -197,6 +197,56 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
     }
 };
 
+export const getStatsForPromoter = async (promoterId: string): Promise<{
+  stats: { assigned: number; completed: number; missed: number; pending: number };
+  assignments: PostAssignment[];
+}> => {
+  try {
+    const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
+    const snapshot = await getDocs(q);
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+
+    let completed = 0;
+    let missed = 0;
+    let pending = 0;
+    const now = new Date();
+
+    assignments.forEach(assignment => {
+      if (assignment.proofSubmittedAt) {
+        completed++;
+      } else {
+        const expiresAt = assignment.post.expiresAt;
+        if (expiresAt && (expiresAt as Timestamp).toDate() < now) {
+          missed++;
+        } else {
+          pending++;
+        }
+      }
+    });
+
+    // Sort assignments by date for display (most recent first)
+    assignments.sort((a, b) => {
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
+
+
+    return {
+      stats: {
+        assigned: assignments.length,
+        completed,
+        missed,
+        pending,
+      },
+      assignments,
+    };
+  } catch (error) {
+    console.error("Error getting promoter stats: ", error);
+    throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
+  }
+};
+
 export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
     try {
         const updatePostStatus = httpsCallable(functions, 'updatePostStatus');

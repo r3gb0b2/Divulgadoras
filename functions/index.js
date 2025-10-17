@@ -696,10 +696,11 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   // 1. Create the main Post document
   const postCollectionRef = db.collection("posts");
   const postDocRef = postCollectionRef.doc();
+  const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
 
   const newPost = {
     ...postData,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: postCreatedAt,
   };
   batch.set(postDocRef, newPost);
 
@@ -713,6 +714,7 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
     campaignName: postData.campaignName,
     isActive: postData.isActive,
     expiresAt: postData.expiresAt,
+    createdAt: postCreatedAt,
   };
 
   for (const promoter of assignedPromoters) {
