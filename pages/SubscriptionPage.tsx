@@ -2,11 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization, updateOrganization } from '../services/organizationService';
-import { createPagSeguroOrder } from '../services/credentialsService';
+import { getStripePublishableKey, createStripeCheckoutSession } from '../services/credentialsService';
 import { Organization } from '../types';
 import { Timestamp } from 'firebase/firestore';
 import { plans } from './PricingPage';
 import { ArrowLeftIcon, CreditCardIcon, UserIcon, PhoneIcon } from '../components/Icons';
+
+declare global {
+  interface Window {
+    Stripe: any;
+  }
+}
 
 // Reusable Input component from other pages
 const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Icon: React.ElementType }> = ({ Icon, ...props }) => (
@@ -99,8 +105,17 @@ const SubscriptionPage: React.FC = () => {
         setIsProcessingPayment(true);
         setError('');
         try {
-            const { payLink } = await createPagSeguroOrder(organization.id, organization.planId);
-            window.location.href = payLink;
+            const publishableKey = await getStripePublishableKey();
+            const stripe = window.Stripe(publishableKey);
+
+            const { sessionId } = await createStripeCheckoutSession(organization.id, organization.planId);
+
+            const { error } = await stripe.redirectToCheckout({ sessionId });
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
         } catch (err: any) {
             setError(err.message || 'Não foi possível iniciar o pagamento.');
         } finally {
@@ -125,7 +140,7 @@ const SubscriptionPage: React.FC = () => {
             return (
                 <div className="mt-8 border-t border-gray-600 pt-6">
                     <h3 className="text-lg font-semibold text-white mb-2">Complete seus Dados para Pagar</h3>
-                    <p className="text-gray-400 text-sm mb-4">O PagSeguro exige seu nome completo, telefone e CPF/CNPJ para processar a assinatura. Por favor, preencha abaixo.</p>
+                    <p className="text-gray-400 text-sm mb-4">O processador de pagamentos exige seu nome completo, telefone e CPF/CNPJ para processar a assinatura. Por favor, preencha abaixo.</p>
                     <form onSubmit={handleUpdateInfo} className="space-y-4">
                         <InputWithIcon Icon={UserIcon} type="text" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Seu Nome Completo (Responsável)" required />
                         <InputWithIcon Icon={PhoneIcon} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Telefone (com DDD)" required />
@@ -148,7 +163,7 @@ const SubscriptionPage: React.FC = () => {
                     className="inline-flex items-center gap-3 px-6 py-3 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 disabled:opacity-50"
                 >
                     <CreditCardIcon className="w-5 h-5" />
-                    {isProcessingPayment ? 'Processando...' : `Pagar ${planDetails?.priceFormatted} com PagSeguro`}
+                    {isProcessingPayment ? 'Processando...' : `Pagar ${planDetails?.priceFormatted} com Cartão`}
                 </button>
             </div>
         );

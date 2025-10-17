@@ -11,7 +11,7 @@ import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
 import ManageUsersPage from './ManageUsersPage';
 import SubscriptionPage from './SubscriptionPage';
-import PagSeguroSettingsPage from './PagSeguroSettingsPage';
+import StripeSettingsPage from './StripeSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
 import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import the new page
@@ -214,7 +214,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
-                    <Route path="settings/pagseguro" element={<ProtectedRoute><PagSeguroSettingsPage /></ProtectedRoute>} />
+                    <Route path="settings/stripe" element={<ProtectedRoute><StripeSettingsPage /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                     <Route path="settings/email" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
                     <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />

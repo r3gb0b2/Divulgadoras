@@ -7,8 +7,8 @@ const functions = require("firebase-functions");
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
 
-// xml2js for parsing PagSeguro responses
-const xml2js = require("xml2js");
+// Stripe SDK for payments
+const stripe = require("stripe")(functions.config().stripe.secret_key);
 
 
 // Initialize Firebase Admin SDK
@@ -767,73 +767,135 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 });
 
 
-// --- PagSeguro Integration ---
-const pagseguroConfig = functions.config().pagseguro;
+// --- Stripe Integration ---
+const stripeConfig = functions.config().stripe;
 
-exports.createPagSeguroOrder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  const { orgId, planId } = data;
-  if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
-  if (!pagseguroConfig || !pagseguroConfig.email || !pagseguroConfig.token) {
-    throw new functions.https.HttpsError("failed-precondition", "Credenciais do PagSeguro não configuradas no servidor.");
-  }
-  const plans = {
-    "basic": { id: "basic", description: "Plano Básico - Equipe Certa", amount: "49.00" },
-    "professional": { id: "professional", description: "Plano Profissional - Equipe Certa", amount: "99.00" },
-  };
-  const plan = plans[planId];
-  if (!plan) throw new functions.https.HttpsError("not-found", "Plano não encontrado.");
-  const orgDoc = await db.collection("organizations").doc(orgId).get();
-  if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
-  const orgData = orgDoc.data();
-  const checkoutData = {
-    checkout: {
-      currency: "BRL",
-      items: { item: { id: plan.id, description: plan.description, amount: plan.amount, quantity: "1" } },
-      sender: {
-        name: orgData.ownerName, email: orgData.ownerEmail,
-        phone: { areaCode: orgData.ownerPhone.substring(0, 2), number: orgData.ownerPhone.substring(2) },
-        documents: { document: { type: orgData.ownerTaxId.length === 11 ? "CPF" : "CNPJ", value: orgData.ownerTaxId } },
-      },
-      redirectURL: `https://divulgadoras.vercel.app/`,
-      reference: `EC_${orgId}_${Date.now()}`,
-    },
-  };
-  const builder = new xml2js.Builder({ cdata: true, rootName: "checkout" });
-  const xml = builder.buildObject(checkoutData.checkout);
-  try {
-    const response = await fetch(`https://ws.pagseguro.uol.com.br/v2/checkout?email=${pagseguroConfig.email}&token=${pagseguroConfig.token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/xml; charset=ISO-8859-1" },
-      body: xml,
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("PagSeguro API Error Response:", errorText);
-      throw new Error(`Erro na API do PagSeguro: Status ${response.status}. Detalhe: ${errorText}`);
+exports.getStripePublishableKey = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
-    const responseText = await response.text();
-    const parsedResponse = await xml2js.parseStringPromise(responseText, { explicitArray: false });
-    const checkoutCode = parsedResponse.checkout.code;
-    if (!checkoutCode) throw new Error("Código de checkout não retornado pelo PagSeguro.");
-    const payLink = `https://pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
-    return { payLink };
-  } catch (error) {
-    console.error("Error creating PagSeguro order:", error);
-    throw new functions.https.HttpsError("internal", "Falha ao criar o pedido no PagSeguro.", { message: error.message });
-  }
+    if (!stripeConfig || !stripeConfig.publishable_key) {
+        throw new functions.https.HttpsError("failed-precondition", "A chave publicável do Stripe não está configurada no servidor.");
+    }
+    return { publishableKey: stripeConfig.publishable_key };
+});
+
+exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    const { orgId, planId } = data;
+    if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
+
+    const plans = {
+        "basic": stripeConfig.basic_price_id,
+        "professional": stripeConfig.professional_price_id,
+    };
+    const priceId = plans[planId];
+    if (!priceId) throw new functions.https.HttpsError("not-found", "ID de preço do Stripe não encontrado para este plano.");
+
+    const orgDoc = await db.collection("organizations").doc(orgId).get();
+    if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
+    const orgData = orgDoc.data();
+
+    const successUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription`;
+
+    try {
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            mode: "subscription",
+            line_items: [{
+                price: priceId,
+                quantity: 1,
+            }],
+            customer_email: orgData.ownerEmail,
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            metadata: {
+                orgId: orgId,
+                planId: planId,
+            },
+        });
+
+        return { sessionId: session.id };
+    } catch (error) {
+        console.error("Stripe Checkout Session Error:", error);
+        throw new functions.https.HttpsError("internal", "Falha ao criar a sessão de checkout do Stripe.", { message: error.message });
+    }
+});
+
+exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const webhookSecret = stripeConfig.webhook_secret;
+    let event;
+
+    try {
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    } catch (err) {
+        console.error("Webhook signature verification failed.", err.message);
+        res.status(400).send(`Webhook Error: ${err.message}`);
+        return;
+    }
+
+    // Handle the checkout.session.completed event
+    if (event.type === "checkout.session.completed") {
+        const session = event.data.object;
+        const { orgId, planId } = session.metadata;
+
+        if (!orgId || !planId) {
+            console.error("Webhook received with missing metadata:", session.id);
+            res.status(400).send("Metadata (orgId, planId) is missing.");
+            return;
+        }
+
+        try {
+            const orgRef = db.collection("organizations").doc(orgId);
+            const oneMonthFromNow = new Date();
+            oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+
+            await orgRef.update({
+                status: "active",
+                planExpiresAt: admin.firestore.Timestamp.fromDate(oneMonthFromNow),
+            });
+
+            console.log(`Successfully updated organization ${orgId} to active plan.`);
+        } catch (error) {
+            console.error(`Error updating organization ${orgId} from webhook:`, error);
+            // Don't send 400, because Stripe will retry. This is an internal server error.
+            res.status(500).send("Internal server error while updating organization.");
+            return;
+        }
+    }
+
+    res.status(200).send();
 });
 
 
-exports.getPagSeguroStatus = functions.region("southamerica-east1").https.onCall((data, context) => {
-  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  const status = { configured: false, token: false, email: false };
-  if (pagseguroConfig) {
-    if (pagseguroConfig.token) status.token = true;
-    if (pagseguroConfig.email) status.email = true;
-    if (status.token && status.email) status.configured = true;
-  }
-  return status;
+exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+
+    const status = {
+        configured: false,
+        secretKey: false,
+        publishableKey: false,
+        webhookSecret: false,
+        basicPriceId: false,
+        professionalPriceId: false,
+    };
+
+    if (stripeConfig) {
+        if (stripeConfig.secret_key) status.secretKey = true;
+        if (stripeConfig.publishable_key) status.publishableKey = true;
+        if (stripeConfig.webhook_secret) status.webhookSecret = true;
+        if (stripeConfig.basic_price_id) status.basicPriceId = true;
+        if (stripeConfig.professional_price_id) status.professionalPriceId = true;
+        
+        if (status.secretKey && status.publishableKey && status.basicPriceId && status.professionalPriceId) {
+            status.configured = true;
+        }
+    }
+    return status;
 });
 
 // --- Post Management ---

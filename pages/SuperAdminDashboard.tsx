@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
@@ -255,12 +256,12 @@ const SuperAdminDashboard: React.FC = () => {
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
 
-                    <Link to="/admin/settings/pagseguro" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                    <Link to="/admin/settings/stripe" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
                             <CreditCardIcon className="w-8 h-8 text-primary" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Pagamentos</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Configurar a integração de pagamentos com PagSeguro.</p>
+                        <p className="mt-2 text-gray-400">Configurar a integração de pagamentos com Stripe.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Configurar &rarr;</div>
                     </Link>
 
