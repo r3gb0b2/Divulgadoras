@@ -71,6 +71,17 @@ const CreatePost: React.FC = () => {
                     const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
                     if (campaignDetails) {
                         const promoterData = await getApprovedPromoters(adminData.organizationId, selectedState, campaignDetails.name);
+                        
+                        // Sort promoters: those who joined the group first, then alphabetically.
+                        promoterData.sort((a, b) => {
+                            const aJoined = a.hasJoinedGroup ? 1 : 0;
+                            const bJoined = b.hasJoinedGroup ? 1 : 0;
+                            if (bJoined !== aJoined) {
+                                return bJoined - aJoined; // Promoters in group come first (descending order of joined status)
+                            }
+                            return a.name.localeCompare(b.name); // Then sort by name alphabetically
+                        });
+
                         setPromoters(promoterData);
                     }
                 } catch(err:any) {
@@ -219,7 +230,10 @@ const CreatePost: React.FC = () => {
                                     {promoters.map(p => (
                                         <label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
                                             <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                            <span className="truncate" title={p.name}>{p.name}</span>
+                                            <span className="truncate" title={`${p.name}${p.hasJoinedGroup ? ' (está no grupo)' : ''}`}>
+                                                {p.name}
+                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
+                                            </span>
                                         </label>
                                     ))}
                                 </div>
