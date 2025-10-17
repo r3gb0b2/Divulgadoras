@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { submitAdminApplication } from '../services/adminService';
@@ -131,7 +131,8 @@ const AdminLogin: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            // FIX: Use compat signInWithEmailAndPassword method.
+            await auth.signInWithEmailAndPassword(email, password);
             navigate('/admin');
         } catch (error) {
             console.error(error);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { signOut } from 'firebase/auth';
+// FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
@@ -368,7 +368,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            // FIX: Use compat signOut method.
+            await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
         }

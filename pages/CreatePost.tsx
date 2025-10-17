@@ -8,7 +8,7 @@ import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+// FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -131,7 +131,8 @@ const CreatePost: React.FC = () => {
     
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            // FIX: Use compat signOut method.
+            await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
         }

@@ -6,7 +6,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { getOrganizations } from '../services/organizationService';
 import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+// FIX: Removed modular createUserWithEmailAndPassword import to use compat syntax.
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -159,7 +159,8 @@ const ManageUsersPage: React.FC = () => {
             if (editingTarget) {
                 targetUid = editingTarget.uid;
             } else {
-                const { user } = await createUserWithEmailAndPassword(auth, email, password);
+                // FIX: Use compat createUserWithEmailAndPassword method.
+                const { user } = await auth.createUserWithEmailAndPassword(email, password);
                 targetUid = user.uid;
                 alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
             }

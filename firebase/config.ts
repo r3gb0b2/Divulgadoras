@@ -2,7 +2,8 @@
 import firebase from "firebase/compat/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth";
+// FIX: Switched from modular to compat auth to resolve export errors.
+import "firebase/compat/auth";
 import { getFunctions } from "firebase/functions";
 
 // TODO: Add your own Firebase configuration from your Firebase console
@@ -28,7 +29,8 @@ export const firestore = getFirestore(app);
 export const storage = getStorage(app);
 
 // Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+// FIX: Use the compat auth() method instead of modular getAuth().
+export const auth = firebase.auth();
 
 // Initialize Firebase Functions and get a reference to the service
 export const functions = getFunctions(app, 'southamerica-east1');

@@ -6,7 +6,7 @@ import { Post, Organization } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+// FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 
 const AdminPosts: React.FC = () => {
@@ -55,7 +55,8 @@ const AdminPosts: React.FC = () => {
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            // FIX: Use compat signOut method.
+            await auth.signOut();
             // The auth context listener will handle navigation
         } catch (error) {
             console.error("Logout failed", error);
@@ -139,7 +140,7 @@ const AdminPosts: React.FC = () => {
                             <span>Voltar ao Painel</span>
                         </button>
                     )}
-                    {(adminData?.role === 'admin' || adminData?.role === 'poster') && (
+                    {(adminData?.role === 'admin' || adminData?.role === 'poster' || adminData?.role === 'superadmin') && (
                         <button 
                             onClick={() => navigate('/admin/posts/new')}
                             className="px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"

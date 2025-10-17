@@ -898,6 +898,15 @@ exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(as
     return status;
 });
 
+exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+    // Return the stripe config object so the frontend can display it for debugging.
+    return functions.config().stripe || {};
+});
+
+
 // --- Post Management ---
 exports.createPostAndNotify = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {

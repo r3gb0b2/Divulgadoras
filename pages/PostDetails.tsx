@@ -10,7 +10,7 @@ import EditPostModal from '../components/EditPostModal'; // Import new modal
 import { storage } from '../firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { signOut } from 'firebase/auth';
+// FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 
 
@@ -92,7 +92,8 @@ const PostDetails: React.FC = () => {
     
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            // FIX: Use compat signOut method.
+            await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
         }

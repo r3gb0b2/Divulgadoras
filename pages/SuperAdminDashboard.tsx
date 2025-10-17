@@ -1,9 +1,6 @@
-
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
+// FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon } from '../components/Icons';
@@ -56,7 +53,8 @@ const SuperAdminDashboard: React.FC = () => {
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
+            // FIX: Use compat signOut method.
+            await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
         }

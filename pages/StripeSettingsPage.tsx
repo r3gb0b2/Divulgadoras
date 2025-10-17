@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStripeStatus } from '../services/credentialsService';
+import { getStripeStatus, getEnvironmentConfig } from '../services/credentialsService';
 import { ArrowLeftIcon, CreditCardIcon } from '../components/Icons';
 
 interface Status {
@@ -34,6 +34,12 @@ const StripeSettingsPage: React.FC = () => {
     const [status, setStatus] = useState<Status | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    
+    // Debug state
+    const [debugInfo, setDebugInfo] = useState<any>(null);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [debugError, setDebugError] = useState('');
+
 
     useEffect(() => {
         const fetchStatus = async () => {
@@ -49,6 +55,20 @@ const StripeSettingsPage: React.FC = () => {
         };
         fetchStatus();
     }, []);
+
+    const handleVerifyConfig = async () => {
+        setIsVerifying(true);
+        setDebugError('');
+        setDebugInfo(null);
+        try {
+            const config = await getEnvironmentConfig();
+            setDebugInfo(config);
+        } catch(err: any) {
+            setDebugError(err.message || "Falha ao buscar configuração.");
+        } finally {
+            setIsVerifying(false);
+        }
+    }
 
   return (
     <div>
@@ -105,6 +125,29 @@ const StripeSettingsPage: React.FC = () => {
                     <p><strong>6.</strong> Atualize esta página para ver o novo status.</p>
                 </div>
              </div>
+        </div>
+
+        {/* Debug Section */}
+        <div className="mt-8 border-t border-gray-700 pt-6">
+            <h2 className="text-xl font-semibold text-white">Debug</h2>
+            <p className="text-sm text-gray-400 mt-2 mb-4">Se os pagamentos continuam falhando mesmo com o status acima parecendo correto, use esta ferramenta para ver os valores exatos que o servidor está usando. Isso ajuda a confirmar se o deploy da configuração foi bem-sucedido.</p>
+            <button
+                onClick={handleVerifyConfig}
+                disabled={isVerifying}
+                className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            >
+                {isVerifying ? "Verificando..." : "Verificar Configuração do Servidor"}
+            </button>
+            {debugError && <p className="text-red-400 text-sm mt-4">{debugError}</p>}
+            {debugInfo && (
+                <div className="mt-4">
+                    <h3 className="text-lg font-semibold text-white">Informações de Debug do Servidor</h3>
+                    <p className="text-xs text-yellow-400 mb-2">Verifique se os valores de `basic_price_id` e `professional_price_id` começam com `price_` e não `prod_`.</p>
+                    <pre className="bg-black/50 p-4 rounded-md text-white text-xs whitespace-pre-wrap">
+                        {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
+                </div>
+            )}
         </div>
 
       </div>

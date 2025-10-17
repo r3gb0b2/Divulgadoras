@@ -1,6 +1,3 @@
-
-
-
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 
@@ -45,5 +42,16 @@ export const getStripeStatus = async (): Promise<any> => {
             detailMessage = `Detalhes: ${error.message}`;
         }
         throw new Error(`Não foi possível verificar o status da integração com Stripe. ${detailMessage}`);
+    }
+};
+
+export const getEnvironmentConfig = async (): Promise<any> => {
+    try {
+        const getConfig = httpsCallable(functions, 'getEnvironmentConfig');
+        const result = await getConfig();
+        return result.data;
+    } catch (error: any) {
+        console.error("Error getting environment config:", error);
+        throw new Error(`Não foi possível buscar a configuração do servidor. Detalhes: ${error.message}`);
     }
 };
