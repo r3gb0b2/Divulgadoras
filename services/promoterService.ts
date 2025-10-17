@@ -239,79 +239,57 @@ export const getAllPromoters = async (options: {
   filterState: string | 'all';
 }): Promise<Promoter[]> => {
   try {
+    // Base query
     let q = query(collection(firestore, "promoters"));
+    const constraints: any[] = [];
 
-    // Apply status filter
+    // 1. Status Filter (Always applicable)
     if (options.status !== 'all') {
-      q = query(q, where("status", "==", options.status));
+      constraints.push(where("status", "==", options.status));
     }
 
-    // Determine final organization ID to filter by
+    // 2. Organization Filter (Super Admin vs Admin)
     const finalOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
     if (finalOrgId) {
-      q = query(q, where("organizationId", "==", finalOrgId));
+      constraints.push(where("organizationId", "==", finalOrgId));
     }
-    
-    // Determine final state(s) to filter by
-    const statesToFilter = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
 
-    // Determine final campaign(s) to filter by
+    // 3. State Filter (Super Admin vs Admin)
+    const statesToFilter = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
+    if (statesToFilter && statesToFilter.length > 0) {
+      constraints.push(where("state", statesToFilter.length > 1 ? "in" : "==", statesToFilter.length > 1 ? statesToFilter : statesToFilter[0]));
+    }
+
+    // 4. Campaign Filter (most complex due to permissions)
     let campaignsToFilter: string[] | null = options.campaignsInScope;
     if (options.selectedCampaign !== 'all') {
-        if (campaignsToFilter === null) { // No scope, just use selection
-            campaignsToFilter = [options.selectedCampaign];
-        } else { // Intersect scope with selection
-            if (campaignsToFilter.includes(options.selectedCampaign)) {
-                campaignsToFilter = [options.selectedCampaign];
-            } else {
-                return []; // Selection is outside of scope, so no results.
-            }
+      if (campaignsToFilter === null) { // Super Admin or admin with no restrictions
+        campaignsToFilter = [options.selectedCampaign];
+      } else { // Intersect scope with selection
+        if (campaignsToFilter.includes(options.selectedCampaign)) {
+          campaignsToFilter = [options.selectedCampaign];
+        } else {
+          return []; // Selection is outside of scope, so no results.
         }
+      }
     }
     
-    const stateFilterIsMulti = statesToFilter && statesToFilter.length > 1;
-    const campaignFilterIsMulti = campaignsToFilter && campaignsToFilter.length > 1;
-
-    // Handle invalid Firestore query (two 'in' clauses) by splitting the query by state.
-    if (stateFilterIsMulti && campaignFilterIsMulti) {
-        const queryPromises = statesToFilter.map(state => {
-            let stateQuery = q; // Start with the query built so far
-            stateQuery = query(stateQuery, where("state", "==", state)); // Add specific state
-            stateQuery = query(stateQuery, where("campaignName", "in", campaignsToFilter!.slice(0, 30))); // Add campaign 'in'
-            return getDocs(stateQuery);
-        });
-
-        const snapshots = await Promise.all(queryPromises);
-        const promotersMap = new Map<string, Promoter>();
-        snapshots.forEach(snapshot => {
-            snapshot.docs.forEach(doc => {
-                if (!promotersMap.has(doc.id)) {
-                    promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
-                }
-            });
-        });
-        return Array.from(promotersMap.values());
-    }
-
-    // --- If the query is valid, continue building it ---
-
-    if (statesToFilter && statesToFilter.length > 0) {
-        if (statesToFilter.length === 1) {
-            q = query(q, where("state", "==", statesToFilter[0]));
-        } else {
-            q = query(q, where("state", "in", statesToFilter));
-        }
-    }
-
     if (campaignsToFilter) {
-        if (campaignsToFilter.length === 0) return []; // Empty scope means no results.
-        if (campaignsToFilter.length === 1) {
-            q = query(q, where("campaignName", "==", campaignsToFilter[0]));
-        } else {
-            q = query(q, where("campaignName", "in", campaignsToFilter.slice(0, 30)));
-        }
+      if (campaignsToFilter.length === 0) return []; // Empty scope means no results.
+      constraints.push(where("campaignName", campaignsToFilter.length > 1 ? "in" : "==", campaignsToFilter.length > 1 ? campaignsToFilter.slice(0, 30) : campaignsToFilter[0]));
     }
-    
+
+    // Check for multiple 'in' clauses, which is an invalid query
+    const inClauses = constraints.filter(c => (c as any)._op === 'in').length;
+    if (inClauses > 1) {
+      console.warn("Multiple 'in' clauses detected. This query might fail without a composite index.", constraints);
+    }
+
+    // Apply all constraints to the query
+    if (constraints.length > 0) {
+      q = query(q, ...constraints);
+    }
+
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
