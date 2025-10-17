@@ -44,6 +44,7 @@ const checkAdmin = async (context) => {
 
 /**
  * Validates if the user making the call is a superadmin.
+ * Includes a bootstrap check for the initial superadmin email.
  * Throws an error if not authorized.
  * @param {object} context - The function context.
  */
@@ -54,13 +55,25 @@ const checkSuperAdmin = async (context) => {
       "A solicitação deve ser autenticada.",
     );
   }
-  // Use context.auth.token which contains custom claims.
-  if (context.auth.token.role !== "superadmin") {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Apenas Super Admins podem realizar esta ação.",
-    );
+
+  // Primary check: Fast path for users who already have the claim.
+  if (context.auth.token.role === "superadmin") {
+    return; // Authorized
   }
+
+  // Bootstrap check: Special one-time-use case for the initial super admin.
+  // This allows them to set their own claims for the first time.
+  const bootstrapSuperAdminEmail = "r3gb0b@gmail.com";
+  if (context.auth.token.email === bootstrapSuperAdminEmail) {
+    console.log(`Authorizing bootstrap super admin via email: ${context.auth.token.email}`);
+    return; // Authorized via backdoor
+  }
+
+  // If neither check passes, deny permission.
+  throw new functions.https.HttpsError(
+    "permission-denied",
+    "Apenas Super Admins podem realizar esta ação.",
+  );
 };
 
 let isBrevoInitialized = false;
