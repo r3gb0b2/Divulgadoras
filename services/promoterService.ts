@@ -459,7 +459,8 @@ export const getApprovedPromoters = async (organizationId: string, state: string
       where("organizationId", "==", organizationId),
       where("state", "==", state),
       where("campaignName", "==", campaignName),
-      where("status", "==", "approved")
+      where("status", "==", "approved"),
+      where("leftGroup", "!=", true) // Exclude promoters who have left
     );
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];

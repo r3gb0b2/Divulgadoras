@@ -247,6 +247,28 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
   }
 };
 
+export const cancelPendingAssignmentsForPromoter = async (promoterId: string): Promise<void> => {
+    const batch = writeBatch(firestore);
+    try {
+        const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
+        const snapshot = await getDocs(q);
+        
+        snapshot.forEach(doc => {
+            const assignment = doc.data() as PostAssignment;
+            // Cancel if it's pending, OR if it's confirmed but no proof has been submitted yet.
+            if (assignment.status === 'pending' || (assignment.status === 'confirmed' && !assignment.proofSubmittedAt)) {
+                batch.update(doc.ref, { status: 'cancelled' });
+            }
+        });
+
+        await batch.commit();
+    } catch (error) {
+        console.error("Error cancelling assignments for promoter: ", error);
+        throw new Error("Não foi possível cancelar as publicações pendentes da divulgadora.");
+    }
+};
+
+
 export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
     try {
         const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
