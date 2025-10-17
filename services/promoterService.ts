@@ -459,15 +459,19 @@ export const getApprovedPromoters = async (organizationId: string, state: string
       where("organizationId", "==", organizationId),
       where("state", "==", state),
       where("campaignName", "==", campaignName),
-      where("status", "==", "approved"),
-      where("leftGroup", "!=", true) // Exclude promoters who have left
+      where("status", "==", "approved")
     );
     const querySnapshot = await getDocs(q);
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
       promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
     });
-    return promoters.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Filter out promoters who have left on the client-side
+    // This is more robust as it includes promoters where `leftGroup` is not set (i.e., undefined)
+    const activePromoters = promoters.filter(p => p.leftGroup !== true);
+    
+    return activePromoters.sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Error getting approved promoters: ", error);
     throw new Error("Não foi possível buscar as divulgadoras aprovadas.");
