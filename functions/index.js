@@ -153,7 +153,7 @@ const DEFAULT_APPROVED_TEMPLATE = `
  * Firestore trigger that runs when a promoter's status is updated.
  * It sends an email notification if the status changes to 'approved'.
  */
-exports.onPromoterStatusChange = functions.firestore
+exports.onPromoterStatusChange = functions.region("southamerica-east1").firestore
   .document("promoters/{promoterId}")
   .onUpdate(async (change, context) => {
     const newValue = change.after.data();
@@ -210,7 +210,7 @@ exports.onPromoterStatusChange = functions.firestore
  * Creates a Firebase Auth user and a corresponding application document in Firestore.
  * This function should be called by an unauthenticated user submitting a request.
  */
-exports.createAdminRequest = functions.https.onCall(async (data, context) => {
+exports.createAdminRequest = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { email, password, name, phone, message } = data;
 
     if (!email || !password || !name || !phone) {
@@ -250,7 +250,7 @@ exports.createAdminRequest = functions.https.onCall(async (data, context) => {
  * Manually triggers the status email for a promoter.
  * Useful if the automatic trigger failed or needs to be resent.
  */
-exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) => {
+exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context); // Ensure only admins can call this
 
     const { promoterId } = data;
@@ -309,7 +309,7 @@ exports.manuallySendStatusEmail = functions.https.onCall(async (data, context) =
  * Checks the system's configuration status, especially for email sending.
  * Only callable by a superadmin.
  */
-exports.getSystemStatus = functions.https.onCall(async (data, context) => {
+exports.getSystemStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
 
     let log = [];
@@ -343,7 +343,7 @@ exports.getSystemStatus = functions.https.onCall(async (data, context) => {
  * Sends a test email to the superadmin who called the function.
  * Allows for testing different email scenarios.
  */
-exports.sendTestEmail = functions.https.onCall(async (data, context) => {
+exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const user = await checkAdmin(context); // Allow admins to test email too
     const superAdminEmail = user.email;
     const superAdminName = user.displayName || 'Admin Teste';
@@ -396,7 +396,7 @@ exports.sendTestEmail = functions.https.onCall(async (data, context) => {
 /**
  * Creates a new organization, a corresponding owner admin user, and sets up a trial period.
  */
-exports.createOrganizationAndUser = functions.https.onCall(async (data, context) => {
+exports.createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { orgName, ownerName, phone, taxId, email, password, planId } = data;
 
     if (!orgName || !ownerName || !email || !password || !planId) {
@@ -458,7 +458,7 @@ exports.createOrganizationAndUser = functions.https.onCall(async (data, context)
  * A callable function to proxy requests to the Google Gemini AI.
  * Requires the Gemini API key to be set in Firebase config.
  */
-exports.askGemini = functions.https.onCall(async (data, context) => {
+exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context);
     
     const { prompt } = data;
@@ -489,22 +489,22 @@ exports.askGemini = functions.https.onCall(async (data, context) => {
 
 // --- EMAIL TEMPLATE MANAGEMENT ---
 
-exports.getEmailTemplate = functions.https.onCall(async (data, context) => {
+exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
     const docRef = db.collection("settings").doc("emailTemplate_approved");
-    const doc = await doc.get();
+    const doc = await docRef.get();
     if (doc.exists) {
         return { htmlContent: doc.data().htmlContent };
     }
     return { htmlContent: DEFAULT_APPROVED_TEMPLATE };
 });
 
-exports.getDefaultEmailTemplate = functions.https.onCall(async(data, context) => {
+exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async(data, context) => {
     await checkSuperAdmin(context);
     return { htmlContent: DEFAULT_APPROVED_TEMPLATE };
 });
 
-exports.setEmailTemplate = functions.https.onCall(async (data, context) => {
+exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
     const { htmlContent } = data;
     if (typeof htmlContent !== 'string') {
@@ -514,7 +514,7 @@ exports.setEmailTemplate = functions.https.onCall(async (data, context) => {
     return { success: true };
 });
 
-exports.resetEmailTemplate = functions.https.onCall(async (data, context) => {
+exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
     await db.collection("settings").doc("emailTemplate_approved").delete();
     return { success: true };
@@ -522,7 +522,7 @@ exports.resetEmailTemplate = functions.https.onCall(async (data, context) => {
 
 // --- POSTS MANAGEMENT ---
 
-exports.createPostAndNotify = functions.https.onCall(async (data, context) => {
+exports.createPostAndNotify = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context);
     const { postData, assignedPromoters } = data;
 
@@ -591,7 +591,7 @@ exports.createPostAndNotify = functions.https.onCall(async (data, context) => {
     return { success: true, postId: postRef.id };
 });
 
-exports.updatePostStatus = functions.https.onCall(async (data, context) => {
+exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context);
     const { postId, updateData } = data;
     if (!postId || !updateData) {
@@ -623,7 +623,7 @@ exports.updatePostStatus = functions.https.onCall(async (data, context) => {
     return { success: true };
 });
 
-exports.addAssignmentsToPost = functions.https.onCall(async (data, context) => {
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context);
     const { postId, promoterIds } = data;
     if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
@@ -692,7 +692,7 @@ exports.addAssignmentsToPost = functions.https.onCall(async (data, context) => {
     return { success: true };
 });
 
-exports.sendPostReminder = functions.https.onCall(async (data, context) => {
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context);
     const { postId } = data;
     if (!postId) {
@@ -741,7 +741,7 @@ exports.sendPostReminder = functions.https.onCall(async (data, context) => {
 
 // --- STRIPE INTEGRATION ---
 
-exports.getStripePublishableKey = functions.https.onCall((data, context) => {
+exports.getStripePublishableKey = functions.region("southamerica-east1").https.onCall((data, context) => {
     // No auth check needed, this key is public
     try {
         const key = functions.config().stripe.publishable_key;
@@ -754,7 +754,7 @@ exports.getStripePublishableKey = functions.https.onCall((data, context) => {
     }
 });
 
-exports.createStripeCheckoutSession = functions.https.onCall(async (data, context) => {
+exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkAdmin(context); // Only admins can create a session for their org
     const { orgId, planId } = data;
     if (!orgId || !planId) {
@@ -803,7 +803,7 @@ exports.createStripeCheckoutSession = functions.https.onCall(async (data, contex
 });
 
 
-exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const stripeConfig = functions.config().stripe;
     if (!stripeConfig || !stripeConfig.secret_key || !stripeConfig.webhook_secret) {
         console.error("Stripe config missing.");
@@ -848,7 +848,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 });
 
 
-exports.getStripeStatus = functions.https.onCall(async (data, context) => {
+exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
     const config = functions.config().stripe || {};
     return {
@@ -861,7 +861,7 @@ exports.getStripeStatus = functions.https.onCall(async (data, context) => {
     };
 });
 
-exports.getEnvironmentConfig = functions.https.onCall(async (data, context) => {
+exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await checkSuperAdmin(context);
     // This securely returns the config as seen by the functions environment
     return {
