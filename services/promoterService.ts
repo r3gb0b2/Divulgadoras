@@ -206,6 +206,86 @@ export const getPromotersPage = async (options: {
   }
 };
 
+export const getAllPromoters = async (options: {
+  organizationId?: string;
+  statesForScope?: string[] | null;
+  status: PromoterStatus | 'all';
+  campaignsInScope: string[] | null;
+  selectedCampaign: string | 'all';
+  filterOrgId: string | 'all';
+  filterState: string | 'all';
+}): Promise<Promoter[]> => {
+  try {
+    const promotersRef = collection(firestore, "promoters");
+    
+    let dataQuery = query(promotersRef, orderBy(documentId()));
+
+    const filters: any[] = [];
+    
+    if (options.organizationId) {
+      filters.push(where("organizationId", "==", options.organizationId));
+    }
+    if (options.statesForScope && options.statesForScope.length > 0) {
+      filters.push(where("state", "in", options.statesForScope));
+    }
+
+    if (options.status !== 'all') {
+      filters.push(where("status", "==", options.status));
+    }
+
+    // Handle campaign permissions and filters
+    let finalCampaignFilter: string[] | null = options.campaignsInScope;
+
+    if (options.selectedCampaign !== 'all') {
+        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
+            finalCampaignFilter = [options.selectedCampaign];
+        } else { // Has restrictions, so intersection is needed
+            if (finalCampaignFilter.includes(options.selectedCampaign)) {
+                finalCampaignFilter = [options.selectedCampaign];
+            } else {
+                // User selected a campaign they can't see, so return nothing
+                return [];
+            }
+        }
+    }
+
+    if (finalCampaignFilter) { // if it's an array (not null)
+        if (finalCampaignFilter.length === 0) {
+             return [];
+        }
+        // Firestore 'in' query has a limit of 30 items. 
+        if (finalCampaignFilter.length > 30) {
+            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
+            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
+        } else {
+            filters.push(where("campaignName", "in", finalCampaignFilter));
+        }
+    }
+
+    if (options.filterOrgId !== 'all') {
+      filters.push(where("organizationId", "==", options.filterOrgId));
+    }
+    if (options.filterState !== 'all') {
+      filters.push(where("state", "==", options.filterState));
+    }
+
+    if (filters.length > 0) {
+      dataQuery = query(dataQuery, ...filters);
+    }
+    
+    const querySnapshot = await getDocs(dataQuery);
+    const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    
+    return promoters;
+  } catch (error) {
+    console.error("Error fetching all promoters:", error);
+    if (error instanceof Error && error.message.includes("requires an index")) {
+        throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice composto no Firebase Console.");
+    }
+    throw new Error("Não foi possível buscar as divulgadoras.");
+  }
+};
+
 export const getPromoterStats = async (options: {
   organizationId?: string;
   statesForScope?: string[] | null;

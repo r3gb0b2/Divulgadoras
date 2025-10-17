@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { getPromotersPage, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
+import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
@@ -14,7 +14,7 @@ import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
-import { serverTimestamp, Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -48,7 +48,7 @@ const formatDate = (timestamp: any): string => {
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
-    const [promotersOnPage, setPromotersOnPage] = useState<Promoter[]>([]);
+    const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -58,10 +58,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
-    // Pagination state
+    // Pagination state (client-side)
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
-    const [totalPromotersCount, setTotalPromotersCount] = useState(0);
     const PROMOTERS_PER_PAGE = 20;
 
     // State for super admin filters
@@ -201,9 +199,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         fetchStats();
     }, [fetchStats]);
 
-    // Fetch paginated promoters
+    // Fetch all promoters based on filters
     useEffect(() => {
-        const fetchPromoterPage = async () => {
+        const fetchAllPromoters = async () => {
             setIsLoading(true);
             setError(null);
             
@@ -211,13 +209,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (!isSuperAdmin && !orgId) {
                  setError("Administrador não está vinculado a uma organização.");
                  setIsLoading(false);
+                 setAllPromoters([]);
                  return;
             }
 
             const statesForScope = getStatesForScope();
 
             try {
-                const result = await getPromotersPage({
+                const result = await getAllPromoters({
                     organizationId: orgId,
                     statesForScope,
                     status: filter,
@@ -225,16 +224,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     selectedCampaign: selectedCampaign,
                     filterOrgId: selectedOrg,
                     filterState: selectedState,
-                    limitPerPage: PROMOTERS_PER_PAGE,
-                    cursor: pageCursors[currentPage - 1]
                 });
                 
-                setPromotersOnPage(result.promoters);
-                setTotalPromotersCount(result.totalCount);
-
-                if (result.lastVisible && pageCursors.length === currentPage) {
-                    setPageCursors(prev => [...prev, result.lastVisible]);
-                }
+                setAllPromoters(result);
 
             } catch(err: any) {
                 setError(err.message);
@@ -243,24 +235,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
         };
 
-        fetchPromoterPage();
-    }, [adminData, organization, isSuperAdmin, currentPage, filter, selectedOrg, selectedState, selectedCampaign, pageCursors, getStatesForScope, campaignsInScope]);
+        fetchAllPromoters();
+    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope]);
 
 
-    // Reset page number whenever filters change
+    // Reset page number whenever filters or search query change
     useEffect(() => {
         setCurrentPage(1);
-        setPageCursors([null]);
-        setTotalPromotersCount(0);
-    }, [filter, selectedOrg, selectedState, selectedCampaign]);
+    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery]);
 
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
         try {
-            const currentPromoter = promotersOnPage.find(p => p.id === id);
+            const currentPromoter = allPromoters.find(p => p.id === id);
             if (!currentPromoter) {
-                console.error("Promoter to update not found in current page list.");
+                console.error("Promoter to update not found.");
                 return;
             }
 
@@ -277,14 +267,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             alert("Divulgadora atualizada com sucesso.");
 
-            // Optimistic UI update: Remove from list if it no longer matches the filter
+            // Optimistic UI update
             if (data.status && filter !== 'all' && data.status !== filter) {
-                setPromotersOnPage(prev => prev.filter(p => p.id !== id));
-                setTotalPromotersCount(prev => prev > 0 ? prev - 1 : 0);
+                setAllPromoters(prev => prev.filter(p => p.id !== id));
             } else {
-                // Otherwise, update the promoter's data in the list
-                setPromotersOnPage(prev => prev.map(p => 
-                    p.id === id ? { ...p, ...data } as Promoter : p
+                setAllPromoters(prev => prev.map(p => 
+                    p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
                 ));
             }
             
@@ -324,7 +312,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             await updatePromoter(promoter.id, updateData);
             
             // Optimistic UI update for the timestamp
-            setPromotersOnPage(prev => prev.map(p => 
+            setAllPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
                 ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
                 : p
@@ -345,10 +333,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
             try {
                 await deletePromoter(id);
-                // Refresh current page to show changes
-                const tempPage = currentPage;
-                setCurrentPage(0); // Force useEffect to re-run
-                setTimeout(() => setCurrentPage(tempPage), 0);
+                setAllPromoters(prev => prev.filter(p => p.id !== id));
+                fetchStats(); // Also refetch stats in the background
             } catch (error) {
                 alert("Falha ao excluir a inscrição.");
             }
@@ -422,32 +408,38 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsLookupModalOpen(false);
     };
 
-    const displayPromoters = useMemo(() => {
-        // Create a mutable copy to sort
-        const promotersToSort = [...promotersOnPage];
-
-        // Apply client-side text search filter
-        const lowercasedQuery = searchQuery.toLowerCase().trim();
-        
-        const filtered = lowercasedQuery === '' ? promotersToSort : promotersToSort.filter(p => {
-            return p.name.toLowerCase().includes(lowercasedQuery) ||
-                p.email.toLowerCase().includes(lowercasedQuery) ||
-                (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
-                (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
-        });
-
-        // Sort the final list
-        filtered.sort((a, b) => {
+    // Memoized calculation for filtering and pagination
+    const processedPromoters = useMemo(() => {
+        // Sort all promoters by date first
+        const sorted = [...allPromoters].sort((a, b) => {
             const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
             const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
-        
-        return filtered;
-    }, [promotersOnPage, searchQuery]);
+
+        // Apply search filter
+        const lowercasedQuery = searchQuery.toLowerCase().trim();
+        const filtered = lowercasedQuery === '' ? sorted : sorted.filter(p => {
+            return (p.name && p.name.toLowerCase().includes(lowercasedQuery)) ||
+                (p.email && p.email.toLowerCase().includes(lowercasedQuery)) ||
+                (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
+                (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+        });
+
+        // Apply pagination
+        const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
+        const paginated = filtered.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
+
+        return {
+            displayPromoters: paginated,
+            totalFilteredCount: filtered.length,
+        };
+    }, [allPromoters, searchQuery, currentPage]);
+    
+    const { displayPromoters, totalFilteredCount } = processedPromoters;
     
     // Pagination Calculations
-    const pageCount = Math.ceil(totalPromotersCount / PROMOTERS_PER_PAGE);
+    const pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
 
     const handleNextPage = () => {
         if (currentPage < pageCount) {
@@ -471,7 +463,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     
     const renderContent = () => {
-        if (isLoading && promotersOnPage.length === 0) return <div className="text-center py-10">Carregando divulgadoras...</div>;
+        if (isLoading && allPromoters.length === 0) return <div className="text-center py-10">Carregando divulgadoras...</div>;
         if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
         if (displayPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
@@ -687,7 +679,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 {pageCount > 0 && (
                     <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-700 gap-4">
                         <span className="text-sm text-gray-400">
-                            Mostrando {displayPromoters.length} de {totalPromotersCount} resultados
+                            Mostrando {displayPromoters.length} de {totalFilteredCount} resultados
                         </span>
                         {pageCount > 1 && (
                             <div className="flex items-center">
