@@ -52,6 +52,7 @@ const PostDetails: React.FC = () => {
     const [isSendingReminder, setIsSendingReminder] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [filterStatus, setFilterStatus] = useState<'all' | 'submitted' | 'pending_proof'>('all');
 
 
     // Stats Modal State
@@ -209,6 +210,17 @@ const PostDetails: React.FC = () => {
     const pendingProofCount = useMemo(() => {
         return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
     }, [assignments]);
+    
+    const filteredAssignments = useMemo(() => {
+        if (filterStatus === 'all') {
+            return assignments;
+        }
+        if (filterStatus === 'submitted') {
+            return assignments.filter(a => a.proofSubmittedAt);
+        }
+        // 'pending_proof'
+        return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt);
+    }, [assignments, filterStatus]);
 
 
     const formatDate = (timestamp: any): string => {
@@ -302,13 +314,35 @@ const PostDetails: React.FC = () => {
 
                 {/* Assignments List */}
                 <div className="lg:col-span-2 bg-dark/70 p-4 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
                          <h2 className="text-xl font-bold text-white">Divulgadoras Designadas</h2>
                          <div className="text-right">
                             <p className="text-lg font-semibold">{confirmationStats.confirmed} / {confirmationStats.total} <span className="text-sm font-normal">Confirmaram</span></p>
                             <p className="text-sm font-semibold">{confirmationStats.proofs} / {confirmationStats.total} <span className="text-xs font-normal">Comprovaram</span></p>
                          </div>
                     </div>
+
+                    <div className="flex space-x-1 p-1 bg-dark rounded-lg mb-4">
+                        <button
+                            onClick={() => setFilterStatus('all')}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50 ${filterStatus === 'all' ? 'bg-primary text-white shadow' : 'text-gray-300 hover:bg-primary/20'}`}
+                        >
+                            Todas ({assignments.length})
+                        </button>
+                        <button
+                            onClick={() => setFilterStatus('submitted')}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50 ${filterStatus === 'submitted' ? 'bg-primary text-white shadow' : 'text-gray-300 hover:bg-primary/20'}`}
+                        >
+                            Comprovaram ({confirmationStats.proofs})
+                        </button>
+                        <button
+                            onClick={() => setFilterStatus('pending_proof')}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50 ${filterStatus === 'pending_proof' ? 'bg-primary text-white shadow' : 'text-gray-300 hover:bg-primary/20'}`}
+                        >
+                            Pendentes ({pendingProofCount})
+                        </button>
+                    </div>
+
                     <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
                         <table className="min-w-full divide-y divide-gray-700">
                              <thead className="bg-gray-800 sticky top-0">
@@ -320,7 +354,7 @@ const PostDetails: React.FC = () => {
                                 </tr>
                              </thead>
                              <tbody className="divide-y divide-gray-700">
-                                {assignments.map(a => (
+                                {filteredAssignments.map(a => (
                                     <tr key={a.id}>
                                         <td className="px-4 py-2 whitespace-nowrap text-sm">
                                             <button
@@ -355,6 +389,9 @@ const PostDetails: React.FC = () => {
                                 ))}
                              </tbody>
                         </table>
+                        {filteredAssignments.length === 0 && assignments.length > 0 && (
+                            <p className="text-center text-gray-400 py-6">Nenhuma divulgadora encontrada para este filtro.</p>
+                        )}
                     </div>
                 </div>
             </div>

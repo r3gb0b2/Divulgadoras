@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, deleteField } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, deleteField, QueryConstraint } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
@@ -240,91 +240,50 @@ export const getAllPromoters = async (options: {
 }): Promise<Promoter[]> => {
   try {
     const promotersRef = collection(firestore, "promoters");
+    // Start with the base query and a stable ordering
+    let q = query(promotersRef, orderBy(documentId()));
 
-    const commonFilters: any[] = [];
-    if (options.organizationId) {
-      commonFilters.push(where("organizationId", "==", options.organizationId));
-    }
+    // 1. Apply status filter
     if (options.status !== 'all') {
-      commonFilters.push(where("status", "==", options.status));
-    }
-    if (options.filterOrgId !== 'all') {
-      const orgFilterIndex = commonFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
-      if (orgFilterIndex > -1) commonFilters.splice(orgFilterIndex, 1);
-      commonFilters.push(where("organizationId", "==", options.filterOrgId));
+      q = query(q, where("status", "==", options.status));
     }
 
-    let campaignFilter: any = null;
-    let finalCampaigns: string[] | null = options.campaignsInScope;
+    // 2. Apply organization filter (from super admin panel OR from user context)
+    const effectiveOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
+    if (effectiveOrgId) {
+      q = query(q, where("organizationId", "==", effectiveOrgId));
+    }
 
+    // 3. Apply state filter
+    const effectiveStates = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
+    if (effectiveStates && effectiveStates.length > 0) {
+      // Note: Firestore only allows one 'in' filter per query.
+      // We will let Firestore throw the error if multiple 'in' filters are attempted.
+      q = query(q, where("state", "in", effectiveStates));
+    }
+
+    // 4. Apply campaign filter
+    let effectiveCampaigns = options.campaignsInScope;
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaigns === null) {
-            finalCampaigns = [options.selectedCampaign];
-        } else {
-            if (finalCampaigns.includes(options.selectedCampaign)) {
-                finalCampaigns = [options.selectedCampaign];
-            } else {
-                return []; 
-            }
-        }
+      if (effectiveCampaigns === null) {
+        effectiveCampaigns = [options.selectedCampaign];
+      } else if (effectiveCampaigns.includes(options.selectedCampaign)) {
+        effectiveCampaigns = [options.selectedCampaign];
+      } else {
+        // Selected campaign is out of scope, return empty results immediately
+        return [];
+      }
     }
-
-    if (finalCampaigns) {
-        if (finalCampaigns.length === 0) return [];
-        if (finalCampaigns.length === 1) {
-            campaignFilter = where("campaignName", "==", finalCampaigns[0]);
-        } else if (finalCampaigns.length <= 30) {
-            campaignFilter = where("campaignName", "in", finalCampaigns);
-        } else {
-            console.warn(`Campaign filter exceeds 30 items. Slicing.`);
-            campaignFilter = where("campaignName", "in", finalCampaigns.slice(0, 30));
-        }
+    
+    if (effectiveCampaigns) {
+      if (effectiveCampaigns.length === 0) return []; // Explicitly handle empty array to avoid errors
+      // Use slice to protect against Firestore's 30-item limit for 'in' queries.
+      q = query(q, where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
     }
-
-    let statesToQuery: string[] | null = null;
-    if (options.filterState !== 'all') {
-        statesToQuery = [options.filterState];
-    } else if (options.statesForScope && options.statesForScope.length > 0) {
-        statesToQuery = options.statesForScope;
-    }
-
-    const hasCampaignInFilter = campaignFilter && campaignFilter._op === 'in';
-    const hasStateScope = statesToQuery && statesToQuery.length > 0;
-
-    if (hasCampaignInFilter && hasStateScope) {
-        const queryPromises = statesToQuery.map(state => {
-            const stateFilter = where("state", "==", state);
-            const finalFilters = [...commonFilters, campaignFilter, stateFilter];
-            const q = query(promotersRef, ...finalFilters);
-            return getDocs(q);
-        });
-
-        const snapshots = await Promise.all(queryPromises);
-        const promotersMap = new Map<string, Promoter>();
-        snapshots.forEach(snapshot => {
-            snapshot.docs.forEach(doc => {
-                if (!promotersMap.has(doc.id)) {
-                    promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
-                }
-            });
-        });
-        return Array.from(promotersMap.values());
-    }
-
-    const finalFilters = [...commonFilters];
-    if (campaignFilter) {
-        finalFilters.push(campaignFilter);
-    }
-    if (statesToQuery) {
-        if (statesToQuery.length === 1) {
-            finalFilters.push(where("state", "==", statesToQuery[0]));
-        } else {
-            finalFilters.push(where("state", "in", statesToQuery));
-        }
-    }
-
-    const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
+    
+    // Now execute the fully constructed query
     const snapshot = await getDocs(q);
+    
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
   } catch (error) {
@@ -332,9 +291,13 @@ export const getAllPromoters = async (options: {
     if (error instanceof Error && error.message.includes("requires an index")) {
         throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice composto no Firebase Console.");
     }
+    if (error instanceof Error && error.message.includes("Invalid query. You cannot have more than one 'in' filter.")) {
+        throw new Error("Busca inválida. Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo.");
+    }
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
+
 
 export const getPromoterStats = async (options: {
   organizationId?: string;
@@ -466,7 +429,12 @@ export const getApprovedPromoters = async (organizationId: string, state: string
     querySnapshot.forEach((doc) => {
       promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
     });
-    return promoters.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Filter out promoters who have left on the client-side
+    // This is more robust as it includes promoters where `leftGroup` is not set (i.e., undefined)
+    const activePromoters = promoters.filter(p => p.leftGroup !== true);
+    
+    return activePromoters.sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Error getting approved promoters: ", error);
     throw new Error("Não foi possível buscar as divulgadoras aprovadas.");
