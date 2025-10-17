@@ -150,11 +150,16 @@ const buildQueryConstraints = (options: PromoterQueryOptions): { constraints: Qu
         constraints.push(where("status", "==", options.status));
     }
 
-    // Organization filter (super admin filter takes precedence over user context)
-    const effectiveOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
-    if (effectiveOrgId) {
-        constraints.push(where("organizationId", "==", effectiveOrgId));
+    // Organization filter
+    if (options.filterOrgId !== 'all') {
+        // A super admin is filtering by a specific org
+        constraints.push(where("organizationId", "==", options.filterOrgId));
+    } else if (options.organizationId) {
+        // A regular admin is seeing their own org
+        constraints.push(where("organizationId", "==", options.organizationId));
     }
+    // If neither of the above, it's a super admin with no org filter, so do nothing.
+
 
     // State filter (super admin filter takes precedence)
     const effectiveStates = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
