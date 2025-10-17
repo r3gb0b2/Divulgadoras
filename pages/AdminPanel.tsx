@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
+import { getPromotersPage, getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
@@ -14,7 +14,7 @@ import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, ExclamationCircleIcon } from '../components/Icons';
-import { serverTimestamp, Timestamp } from 'firebase/firestore';
+import { serverTimestamp, Timestamp, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -48,7 +48,7 @@ const formatDate = (timestamp: any): string => {
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
-    const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
+    const [displayPromoters, setDisplayPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -58,8 +58,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
-    // Pagination state (client-side)
+    // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const [pageCursors, setPageCursors] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
     const PROMOTERS_PER_PAGE = 20;
 
     // State for super admin filters
@@ -199,56 +201,79 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         fetchStats();
     }, [fetchStats]);
 
-    // Fetch all promoters based on filters
+    // Main data fetching logic (dual mode: paginated or search)
     useEffect(() => {
-        const fetchAllPromoters = async () => {
+        if (!isSuperAdmin && !organization) return; // Wait for org data for regular admins
+
+        const fetchData = async () => {
             setIsLoading(true);
             setError(null);
             
             const orgId = isSuperAdmin ? undefined : adminData.organizationId;
-            if (!isSuperAdmin && !orgId) {
-                 setError("Administrador não está vinculado a uma organização.");
-                 setIsLoading(false);
-                 setAllPromoters([]);
-                 return;
-            }
-
             const statesForScope = getStatesForScope();
-
+            
             try {
-                const result = await getAllPromoters({
-                    organizationId: orgId,
-                    statesForScope,
-                    status: filter,
-                    campaignsInScope: campaignsInScope,
-                    selectedCampaign: selectedCampaign,
-                    filterOrgId: selectedOrg,
-                    filterState: selectedState,
-                });
-                
-                setAllPromoters(result);
+                // SEARCH MODE: Fetch all results and filter client-side
+                if (searchQuery.trim() !== '') {
+                    const allResults = await getAllPromoters({
+                        organizationId: orgId, statesForScope, status: filter,
+                        campaignsInScope, selectedCampaign, filterOrgId: selectedOrg, filterState: selectedState,
+                    });
 
+                    const lowercasedQuery = searchQuery.toLowerCase().trim();
+                    const searchDigits = lowercasedQuery.replace(/\D/g, '');
+                    const filtered = allResults.filter(p => {
+                        const textSearch = (p.name?.toLowerCase().includes(lowercasedQuery)) || (p.email?.toLowerCase().includes(lowercasedQuery)) || (p.campaignName?.toLowerCase().includes(lowercasedQuery));
+                        const phoneSearch = searchDigits.length > 0 && p.whatsapp?.replace(/\D/g, '').includes(searchDigits);
+                        return textSearch || phoneSearch;
+                    });
+                    
+                    setDisplayPromoters(filtered);
+                    setTotalCount(filtered.length);
+                } else {
+                // PAGINATION MODE: Fetch one page from server
+                    const cursor = pageCursors[currentPage - 1];
+                    const result = await getPromotersPage({
+                        organizationId: orgId, statesForScope, status: filter,
+                        campaignsInScope, selectedCampaign, filterOrgId: selectedOrg, filterState: selectedState,
+                        limitPerPage: PROMOTERS_PER_PAGE,
+                        cursor: cursor || undefined,
+                    });
+                    
+                    setDisplayPromoters(result.promoters);
+                    setTotalCount(result.totalCount);
+                    if (result.lastVisible) {
+                        setPageCursors(prev => {
+                            const newCursors = [...prev];
+                            newCursors[currentPage] = result.lastVisible;
+                            return newCursors;
+                        });
+                    }
+                }
             } catch(err: any) {
                 setError(err.message);
+                setDisplayPromoters([]);
+                setTotalCount(0);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchAllPromoters();
-    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope]);
+        fetchData();
+    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, currentPage, searchQuery, getStatesForScope, campaignsInScope]);
 
 
-    // Reset page number whenever filters or search query change
+    // Reset page number whenever filters change (but not when just typing a search query)
     useEffect(() => {
         setCurrentPage(1);
-    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery]);
+        setPageCursors([null]);
+    }, [filter, selectedOrg, selectedState, selectedCampaign]);
 
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
         try {
-            const currentPromoter = allPromoters.find(p => p.id === id);
+            const currentPromoter = displayPromoters.find(p => p.id === id);
             if (!currentPromoter) {
                 console.error("Promoter to update not found.");
                 return;
@@ -256,7 +281,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
             const updatedData = { ...data };
 
-            // Only add audit fields if status is actually changing
             if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
@@ -267,16 +291,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             alert("Divulgadora atualizada com sucesso.");
 
-            // Optimistic UI update
             if (data.status && filter !== 'all' && data.status !== filter) {
-                setAllPromoters(prev => prev.filter(p => p.id !== id));
+                setDisplayPromoters(prev => prev.filter(p => p.id !== id));
+                setTotalCount(prev => prev - 1);
             } else {
-                setAllPromoters(prev => prev.map(p => 
-                    p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
+                setDisplayPromoters(prev => prev.map(p => 
+                    p.id === id ? { ...currentPromoter, ...updatedData, statusChangedAt: Timestamp.now() } as Promoter : p
                 ));
             }
             
-            // Refetch dashboard stats in the background
             fetchStats();
 
         } catch (error) {
@@ -314,12 +337,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
             
-            // On success, update the timestamp
             const updateData = { lastManualNotificationAt: serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
             
-            // Optimistic UI update for the timestamp
-            setAllPromoters(prev => prev.map(p => 
+            setDisplayPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
                 ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
                 : p
@@ -340,8 +361,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
             try {
                 await deletePromoter(id);
-                setAllPromoters(prev => prev.filter(p => p.id !== id));
-                fetchStats(); // Also refetch stats in the background
+                setDisplayPromoters(prev => prev.filter(p => p.id !== id));
+                setTotalCount(prev => prev - 1);
+                fetchStats();
             } catch (error) {
                 alert("Falha ao excluir a inscrição.");
             }
@@ -375,7 +397,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const handleLogout = async () => {
         try {
-            // FIX: Use compat signOut method.
             await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
@@ -416,55 +437,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsLookupModalOpen(false);
     };
 
-    // Memoized calculation for filtering and pagination
-    const processedPromoters = useMemo(() => {
-        // Sort all promoters by date first
-        const sorted = [...allPromoters].sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-            return timeB - timeA;
-        });
-
-        const lowercasedQuery = searchQuery.toLowerCase().trim();
-        if (lowercasedQuery === '') {
-            const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
-            return {
-                displayPromoters: sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE),
-                totalFilteredCount: sorted.length,
-            };
-        }
-
-        const filtered = sorted.filter(p => {
-            // Standard text search on name, email, campaign
-            const textSearch =
-                (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
-                (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
-                (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
-
-            // Phone number search, only triggered if the search query contains digits
-            const searchDigits = lowercasedQuery.replace(/\D/g, '');
-            const phoneSearch =
-                searchDigits.length > 0 &&
-                p.whatsapp &&
-                String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
-
-            return textSearch || phoneSearch;
-        });
-
-        // Apply pagination to the filtered results
-        const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
-        const paginated = filtered.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
-
-        return {
-            displayPromoters: paginated,
-            totalFilteredCount: filtered.length,
-        };
-    }, [allPromoters, searchQuery, currentPage]);
-    
-    const { displayPromoters, totalFilteredCount } = processedPromoters;
-    
-    // Pagination Calculations
-    const pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
+    const pageCount = Math.ceil(totalCount / PROMOTERS_PER_PAGE);
 
     const handleNextPage = () => {
         if (currentPage < pageCount) {
@@ -477,7 +450,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
-    const getStatusBadge = (status: PromoterStatus) => {
+    const getStatusBadge = (status: PromoterStatus, leftGroup?: boolean) => {
+        if (leftGroup) {
+            return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300`}>Saiu do Grupo</span>;
+        }
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
             approved: "bg-green-900/50 text-green-300",
@@ -488,7 +464,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     
     const renderContent = () => {
-        if (isLoading && allPromoters.length === 0) return <div className="text-center py-10">Carregando divulgadoras...</div>;
+        if (isLoading && displayPromoters.length === 0) return <div className="text-center py-10">Carregando divulgadoras...</div>;
         if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
         if (displayPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
@@ -512,7 +488,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <p className="text-sm text-gray-400">{promoter.email}</p>
                                 <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             </div>
-                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
+                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status, promoter.leftGroup)}</div>
                         </div>
 
                         {promoter.leftGroup && (
@@ -698,10 +674,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 
                 {renderContent()}
 
-                 {pageCount > 1 && (
+                 {searchQuery.trim() === '' && pageCount > 1 && (
                     <div className="flex justify-between items-center mt-6">
                         <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50">Anterior</button>
-                        <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                        <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalCount} resultados)</span>
                         <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50">Próxima</button>
                     </div>
                 )}
@@ -748,5 +724,4 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         </div>
     );
 };
-// FIX: Add default export for AdminPanel component.
 export default AdminPanel;
