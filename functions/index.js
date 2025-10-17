@@ -1035,12 +1035,16 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     const assignmentsQuery = db.collection("postAssignments").where("postId", "==", postId);
     const assignmentsSnapshot = await assignmentsQuery.get();
 
+    // Build the denormalized update object dynamically
     const denormalizedUpdateData = {};
-    if (Object.prototype.hasOwnProperty.call(updateData, "isActive")) {
-        denormalizedUpdateData["post.isActive"] = updateData.isActive;
-    }
-    if (Object.prototype.hasOwnProperty.call(updateData, "expiresAt")) {
-        denormalizedUpdateData["post.expiresAt"] = updateData.expiresAt;
+    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl"];
+
+    for (const field of fieldsToSync) {
+      // Check if the property exists in updateData, even if its value is null or undefined
+      if (Object.prototype.hasOwnProperty.call(updateData, field)) {
+        // Firestore needs dot notation for nested objects
+        denormalizedUpdateData[`post.${field}`] = updateData[field];
+      }
     }
 
     if (Object.keys(denormalizedUpdateData).length > 0) {

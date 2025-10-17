@@ -6,6 +6,10 @@ import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
+import EditPostModal from '../components/EditPostModal'; // Import new modal
+import { storage } from '../firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -52,6 +56,9 @@ const PostDetails: React.FC = () => {
 
     // Assign Modal State
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+
+    // Edit Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     const fetchDetails = async () => {
         if (!postId) {
@@ -109,6 +116,34 @@ const PostDetails: React.FC = () => {
             await updatePost(postId, updateData);
             showSuccessMessage('Publicação atualizada com sucesso!');
             await fetchDetails(); // Refresh data to confirm changes
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveContent = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
+        if (!postId) return;
+        setIsSaving(true);
+        setError(null);
+        try {
+            let dataToUpdate: Partial<Post> = { ...updatedData };
+    
+            if (newMediaFile) {
+                const fileExtension = newMediaFile.name.split('.').pop();
+                const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = ref(storage, fileName);
+                await uploadBytes(storageRef, newMediaFile);
+                const finalMediaUrl = await getDownloadURL(storageRef);
+                dataToUpdate.mediaUrl = finalMediaUrl;
+            }
+    
+            await updatePost(postId, dataToUpdate);
+            
+            showSuccessMessage('Conteúdo da publicação atualizado com sucesso!');
+            await fetchDetails();
+            setIsEditModalOpen(false);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -220,28 +255,34 @@ const PostDetails: React.FC = () => {
                     </div>
 
                     <div className="mt-4 border-t border-gray-600 pt-4 space-y-4">
-                        <h4 className="font-semibold text-gray-200">Gerenciamento</h4>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Post Ativo</span>
-                        </label>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
-                            <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                        <h4 className="font-semibold text-gray-200">Gerenciamento Rápido</h4>
+                        <div className="space-y-4 p-3 border border-gray-600 rounded-md">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                                <span>Post Ativo</span>
+                            </label>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
+                            <button onClick={handleSaveChanges} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                                {isSaving ? 'Salvando...' : 'Salvar Status/Data'}
+                            </button>
                         </div>
-                        <button onClick={handleSaveChanges} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                    </div>
+                     <div className="mt-4 border-t border-gray-600 pt-4 space-y-2">
+                        <h4 className="font-semibold text-gray-200">Ações do Post</h4>
+                         <button onClick={() => setIsEditModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50">
+                            Editar Conteúdo e Instruções
                         </button>
-                        <div className="grid grid-cols-2 gap-2">
-                             <button onClick={handleDuplicate} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
-                                Duplicar
-                            </button>
-                            <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50">
-                                Atribuir
-                            </button>
-                        </div>
-                         <button onClick={handleSendReminder} disabled={isSendingReminder || pendingProofCount === 0} className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50">
-                            {isSendingReminder ? 'Enviando...' : `Enviar Lembrete (${pendingProofCount})`}
+                        <button onClick={handleDuplicate} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
+                            Duplicar Publicação
+                        </button>
+                        <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
+                            Atribuir a Novas Divulgadoras
+                        </button>
+                        <button onClick={handleSendReminder} disabled={isSendingReminder || pendingProofCount === 0} className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {isSendingReminder ? 'Enviando...' : `Enviar Lembrete de Comprovação (${pendingProofCount})`}
                         </button>
                     </div>
                 </div>
@@ -341,6 +382,12 @@ const PostDetails: React.FC = () => {
                 post={post}
                 existingAssignments={assignments}
                 onSuccess={fetchDetails}
+            />
+            <EditPostModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                post={post}
+                onSave={handleSaveContent}
             />
         </div>
     );
