@@ -1,5 +1,4 @@
 
-
 import { firestore, functions } from '../firebase/config';
 import {
   collection,
@@ -57,32 +56,19 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
 };
 
 /**
- * Calls a cloud function to securely set or update an admin's data and permissions.
- * @param targetUid - The UID of the admin to update. Can be null if creating a new user.
- * @param adminData - The data to set or merge for the admin document.
- * @param email - Required if creating a new user.
- * @param password - Required if creating a new user.
+ * Sets or updates admin user data in Firestore.
+ * @param uid - The UID of the admin user.
+ * @param data - The data to set or merge.
  */
-export const setAdminUserData = async (
-    targetUid: string | null,
-    adminData: Partial<Omit<AdminUserData, 'uid'>>,
-    email?: string,
-    password?: string
-): Promise<void> => {
-    try {
-        const updateAdminFunc = httpsCallable(functions, 'updateAdminPermissions');
-        await updateAdminFunc({
-            targetUid,
-            email,
-            password,
-            adminData
-        });
-    } catch (error: any) {
-        console.error('Error setting admin user data via function:', error);
-        throw new Error(error.message || 'Não foi possível salvar os dados do administrador.');
-    }
+export const setAdminUserData = async (uid: string, data: Partial<Omit<AdminUserData, 'uid'>>): Promise<void> => {
+  try {
+    const docRef = doc(firestore, 'admins', uid);
+    await setDoc(docRef, data, { merge: true });
+  } catch (error) {
+    console.error('Error setting admin user data:', error);
+    throw new Error('Não foi possível salvar os dados do administrador.');
+  }
 };
-
 
 /**
  * Fetches all admin users, optionally filtered by organization.
@@ -150,17 +136,33 @@ export const deleteAdminApplication = async (id: string): Promise<void> => {
 };
 
 /**
- * Calls a cloud function to approve an admin application.
- * This enables the auth user, creates an admin record, and deletes the application.
+ * Approves an admin application. This creates an admin record and deletes the application.
+ * This should ideally be a single transaction in a cloud function.
  * @param app - The application to approve.
  * @param orgId - The organization ID to assign the new admin to.
  */
 export const acceptAdminApplication = async (app: AdminApplication, orgId: string): Promise<void> => {
   try {
-    const approveFunc = httpsCallable(functions, 'approveAdminApplication');
-    await approveFunc({ userId: app.id, organizationId: orgId });
-  } catch (error: any) {
-    console.error('Error accepting admin application via function:', error);
-    throw new Error(error.message || 'Não foi possível aprovar a solicitação de acesso.');
+    const batch = writeBatch(firestore);
+
+    // Create the new admin document
+    const adminDocRef = doc(firestore, 'admins', app.id);
+    const newAdminData: Omit<AdminUserData, 'uid'> = {
+      email: app.email,
+      role: 'admin', // Default role on approval
+      organizationId: orgId,
+      assignedStates: [],
+      assignedCampaigns: {},
+    };
+    batch.set(adminDocRef, newAdminData);
+
+    // Delete the application document
+    const appDocRef = doc(firestore, 'adminApplications', app.id);
+    batch.delete(appDocRef);
+
+    await batch.commit();
+  } catch (error) {
+    console.error('Error accepting admin application:', error);
+    throw new Error('Não foi possível aprovar a solicitação de acesso.');
   }
 };

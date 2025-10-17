@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useContext, ReactNode } from
 // FIX: Switched from modular to compat auth to resolve export errors.
 import firebase from 'firebase/compat/app';
 import { auth } from '../firebase/config';
-import { getAdminUserData } from '../services/adminService';
+import { getAdminUserData, setAdminUserData } from '../services/adminService';
 import { AdminUserData } from '../types';
 
 interface AdminAuthContextType {
@@ -25,10 +25,7 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
         const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
             setLoading(true);
             if (firebaseUser) {
-                // Force a token refresh to get latest custom claims on load
-                await firebaseUser.getIdToken(true);
                 setUser(firebaseUser);
-                
                 sessionStorage.setItem('isAdminAuthenticated', 'true');
                 try {
                     // Use UID for secure data retrieval
@@ -38,13 +35,14 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                     // If so, create their admin record on the fly for the first login.
                     // This superadmin has no organizationId and can see everything.
                     if (!data && firebaseUser.email === 'r3gb0b@gmail.com') {
-                        // This initial creation is now handled by a secure cloud function.
-                        // For simplicity in this context, we assume the document will be created
-                        // and we re-fetch it. A more robust solution might call a function here.
-                        // The user will need to have their claims set by a Super Admin.
-                        // For first time ever, this might need manual setup in Firestore.
-                        // The user will be stuck without a role until one is set.
-                        console.warn("Superadmin document not found in Firestore. It must be created, and claims set.");
+                        const superAdminPayload: Omit<AdminUserData, 'uid'> = {
+                            email: firebaseUser.email,
+                            role: 'superadmin',
+                            assignedStates: [], // Superadmin has access to all states implicitly
+                        };
+                        await setAdminUserData(firebaseUser.uid, superAdminPayload);
+                        // Set the data for the current session after creating it
+                        data = { uid: firebaseUser.uid, ...superAdminPayload };
                     }
 
                     setAdminData(data);

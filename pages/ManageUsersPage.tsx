@@ -6,6 +6,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { getOrganizations } from '../services/organizationService';
 import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
+// FIX: Removed modular createUserWithEmailAndPassword import to use compat syntax.
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -153,7 +154,18 @@ const ManageUsersPage: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const targetUid = editingTarget ? editingTarget.uid : null;
+            let targetUid: string | null = null;
+            
+            if (editingTarget) {
+                targetUid = editingTarget.uid;
+            } else {
+                // FIX: Use compat createUserWithEmailAndPassword method.
+                const { user } = await auth.createUserWithEmailAndPassword(email, password);
+                targetUid = user.uid;
+                alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
+            }
+
+            if (!targetUid) throw new Error("Não foi possível encontrar o UID do usuário.");
 
             const dataToSave: Omit<AdminUserData, 'uid'> = { 
                 email, 
@@ -165,17 +177,14 @@ const ManageUsersPage: React.FC = () => {
                     : currentAdmin?.organizationId,
             };
             
-            await setAdminUserData(targetUid, dataToSave, email, password);
-            
-            // If the user just updated their own permissions, force a token refresh
-            if (currentAdmin && targetUid === currentAdmin.uid) {
-                await auth.currentUser?.getIdToken(true);
-            }
+            await setAdminUserData(targetUid, dataToSave);
             
             resetForm();
             await fetchData();
         } catch (err: any) {
-             setError(err.message || 'Ocorreu um erro ao salvar o administrador.');
+             if (err.code === 'auth/email-already-in-use') setError("Este e-mail já está em uso.");
+             else if (err.code === 'auth/weak-password') setError("A senha deve ter pelo menos 6 caracteres.");
+             else setError(err.message || 'Ocorreu um erro ao salvar o administrador.');
         } finally {
             setIsLoading(false);
         }
