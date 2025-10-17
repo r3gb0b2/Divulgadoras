@@ -417,16 +417,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return timeB - timeA;
         });
 
-        // Apply search filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
-        const filtered = lowercasedQuery === '' ? sorted : sorted.filter(p => {
-            return (p.name && p.name.toLowerCase().includes(lowercasedQuery)) ||
-                (p.email && p.email.toLowerCase().includes(lowercasedQuery)) ||
-                (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
-                (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
+        if (lowercasedQuery === '') {
+            const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
+            return {
+                displayPromoters: sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE),
+                totalFilteredCount: sorted.length,
+            };
+        }
+
+        const filtered = sorted.filter(p => {
+            // Standard text search on name, email, campaign
+            const textSearch =
+                (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
+                (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
+                (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
+
+            // Phone number search, only triggered if the search query contains digits
+            const searchDigits = lowercasedQuery.replace(/\D/g, '');
+            const phoneSearch =
+                searchDigits.length > 0 &&
+                p.whatsapp &&
+                String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
+
+            return textSearch || phoneSearch;
         });
 
-        // Apply pagination
+        // Apply pagination to the filtered results
         const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
         const paginated = filtered.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
 
