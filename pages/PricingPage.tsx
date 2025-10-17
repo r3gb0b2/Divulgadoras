@@ -25,7 +25,7 @@ export const plans: Plan[] = [
         priceFormatted: 'R$ 49',
         description: 'Ideal para quem está começando e precisa de uma solução profissional.',
         features: [
-            'Até 5 eventos/gêneros ativos',
+            'Até 2 eventos/gêneros ativos',
             'Cadastro de até 500 divulgadoras',
             'Painel de gerenciamento individual',
             'Página de status para candidatas',
@@ -39,7 +39,7 @@ export const plans: Plan[] = [
         priceFormatted: 'R$ 99',
         description: 'Recursos avançados para agências e grandes eventos que buscam escala.',
         features: [
-            'Eventos/gêneros ilimitados',
+            'Até 10 eventos/gêneros ativos',
             'Divulgadoras ilimitadas',
             'Adicione múltiplos administradores',
             'URL personalizada (opcional)',
