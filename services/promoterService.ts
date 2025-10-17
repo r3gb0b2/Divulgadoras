@@ -1,23 +1,11 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
-export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
+export const addPromoter = async (promoterData: PromoterApplicationData, promoterIdToUpdate: string | null = null): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
-    // Check for existing registration for the same email, state, campaign and organization
-    const q = query(
-      collection(firestore, "promoters"),
-      where("email", "==", normalizedEmail),
-      where("state", "==", promoterData.state),
-      where("campaignName", "==", promoterData.campaignName || null),
-      where("organizationId", "==", promoterData.organizationId)
-    );
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      throw new Error("Você já se cadastrou para este evento/gênero.");
-    }
 
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
@@ -32,19 +20,54 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     );
 
     const { photos, ...rest } = promoterData;
+    
+    if (promoterIdToUpdate) {
+      const dataToUpdate = {
+        ...rest,
+        email: normalizedEmail,
+        campaignName: promoterData.campaignName || null,
+        photoUrls,
+        status: 'pending' as const,
+        rejectionReason: deleteField(),
+        canReapply: deleteField(),
+        statusChangedAt: deleteField(),
+        actionTakenByEmail: deleteField(),
+        actionTakenByUid: deleteField(),
+        lastManualNotificationAt: deleteField(),
+        hasJoinedGroup: false,
+        updatedAt: serverTimestamp(),
+      };
+      
+      const promoterDoc = doc(firestore, 'promoters', promoterIdToUpdate);
+      await updateDoc(promoterDoc, dataToUpdate);
 
-    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
-      ...rest,
-      email: normalizedEmail, // Save the normalized email
-      campaignName: promoterData.campaignName || null,
-      photoUrls,
-      status: 'pending' as const,
-      createdAt: serverTimestamp(),
-    };
+    } else {
+      // Check for existing registration for the same email, state, campaign and organization
+      const q = query(
+        collection(firestore, "promoters"),
+        where("email", "==", normalizedEmail),
+        where("state", "==", promoterData.state),
+        where("campaignName", "==", promoterData.campaignName || null),
+        where("organizationId", "==", promoterData.organizationId)
+      );
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        throw new Error("Você já se cadastrou para este evento/gênero.");
+      }
 
-    await addDoc(collection(firestore, 'promoters'), newPromoter);
+      const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
+        ...rest,
+        email: normalizedEmail,
+        campaignName: promoterData.campaignName || null,
+        photoUrls,
+        status: 'pending' as const,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(firestore, 'promoters'), newPromoter);
+    }
   } catch (error) {
-    console.error("Error adding promoter: ", error);
+    console.error("Error in submit promoter process: ", error);
     if (error instanceof Error) {
         throw error; // Re-throw the specific error
     }

@@ -170,6 +170,7 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
 
 // This component displays the status for a single registration
 const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = ({ promoter, organizationName }) => {
+    const navigate = useNavigate();
     const [primaryCampaign, setPrimaryCampaign] = useState<Campaign | null>(null);
     const [associatedCampaignsDetails, setAssociatedCampaignsDetails] = useState<Campaign[]>([]);
 
@@ -229,6 +230,11 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
     const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
         ? promoter.rejectionReason
         : statusInfo.message;
+    
+    const handleResubmit = () => {
+        const path = `/${promoter.organizationId}/register/${promoter.state}${promoter.campaignName ? `/${encodeURIComponent(promoter.campaignName)}` : ''}`;
+        navigate(path, { state: { promoterToEdit: promoter } });
+    };
 
     return (
         <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
@@ -244,6 +250,18 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             </div>
 
             <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
+
+            {promoter.status === 'rejected' && promoter.canReapply && (
+                <div className="mt-4 border-t border-gray-600/50 pt-4">
+                    <p className="text-sm text-gray-200 mb-3">Detectamos que seu cadastro foi rejeitado por falta de informações. Você pode corrigir os dados e reenviar para uma nova análise.</p>
+                    <button
+                        onClick={handleResubmit}
+                        className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                    >
+                        Corrigir e Reenviar Cadastro
+                    </button>
+                </div>
+            )}
             
             {promoter.status === 'approved' && (
                 <>

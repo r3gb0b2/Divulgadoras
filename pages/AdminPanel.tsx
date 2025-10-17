@@ -287,7 +287,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const handleConfirmReject = async (reason: string) => {
         if (rejectingPromoter && canManage) {
-            await handleUpdatePromoter(rejectingPromoter.id, { status: 'rejected', rejectionReason: reason });
+            const updateData: Partial<Omit<Promoter, 'id'>> = {
+                status: 'rejected',
+                rejectionReason: reason,
+            };
+            if (reason.includes("Informações incompletas ou inválidas (Permitir reenvio)")) {
+                updateData.canReapply = true;
+            }
+            await handleUpdatePromoter(rejectingPromoter.id, updateData);
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
@@ -618,143 +625,104 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                         {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
-                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
+                            <button
+                                key={f}
+                                onClick={() => setFilter(f)}
+                                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50 ${
+                                    filter === f 
+                                    ? 'bg-primary text-white shadow' 
+                                    : 'text-gray-300 hover:bg-primary/20'
+                                }`}
+                            >
+                                {f === 'pending' && `Pendentes (${stats.pending})`}
+                                {f === 'approved' && `Aprovados (${stats.approved})`}
+                                {f === 'rejected' && `Rejeitados (${stats.rejected})`}
+                                {f === 'all' && `Todos (${stats.total})`}
                             </button>
                         ))}
                     </div>
                     
-                    {isSuperAdmin && (
-                        <div className="flex flex-wrap gap-2 flex-grow">
-                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todas Organizações</option>
-                                {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                            </select>
-                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todos Estados</option>
-                                {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
-                            </select>
-                             <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todos Eventos</option>
-                                {[...new Set(allCampaigns.map(c => c.name))].sort().map(name => (
-                                    <option key={name} value={name}>{name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                     <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
-                        <input 
+                    <div className="flex-grow flex items-center gap-2 max-w-lg">
+                        <input
                             type="text"
-                            placeholder="Buscar por nome, e-mail, telefone, evento..."
+                            placeholder="Buscar por nome, email, evento ou WhatsApp..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={e => setSearchQuery(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                         />
+                         {isSuperAdmin && (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="email"
+                                    placeholder="Buscar por e-mail (global)"
+                                    value={lookupEmail}
+                                    onChange={e => setLookupEmail(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                                />
+                                <button onClick={handleLookupPromoter} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm">Buscar</button>
+                            </div>
+                         )}
                     </div>
                 </div>
 
-                 <div className={`flex flex-wrap items-center ${isSuperAdmin ? 'justify-between' : 'justify-end'} gap-4 mb-4 border-t border-gray-700 pt-4`}>
-                    {isSuperAdmin && (
-                         <div className="flex-grow">
-                            <label className="text-sm font-medium text-gray-300">Diagnóstico Rápido</label>
-                             <div className="flex gap-2 mt-1 w-full sm:w-auto sm:max-w-sm">
-                                <input 
-                                    type="email"
-                                    placeholder="Buscar por e-mail exato..."
-                                    value={lookupEmail}
-                                    onChange={(e) => setLookupEmail(e.target.value)}
-                                    className="flex-grow px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                                />
-                                <button 
-                                    type="button" 
-                                    onClick={handleLookupPromoter}
-                                    disabled={isLookingUp}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-semibold disabled:opacity-50"
-                                >
-                                    {isLookingUp ? '...' : 'Buscar'}
-                                </button>
-                            </div>
-                         </div>
-                    )}
-                     {canManage && (
-                        <button
-                            onClick={() => {
-                                if (organizationIdForReasons) {
-                                    setIsReasonsModalOpen(true);
-                                }
-                            }}
-                            disabled={!organizationIdForReasons}
-                            className="text-sm text-primary hover:underline flex-shrink-0 disabled:text-gray-500 disabled:cursor-not-allowed disabled:no-underline"
-                            title={isSuperAdmin && !organizationIdForReasons ? "Selecione uma organização para gerenciar os motivos" : "Gerenciar Motivos de Rejeição"}
-                        >
-                            Gerenciar Motivos
-                        </button>
-                    )}
-                 </div>
+                {isSuperAdmin && (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 p-3 bg-dark/50 rounded-lg">
+                        <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="all">Todas as Organizações</option>
+                            {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                        </select>
+                         <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="all">Todos os Estados</option>
+                            {Object.entries(states).map(([abbr, name]) => <option key={abbr} value={abbr}>{name}</option>)}
+                        </select>
+                        <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="all">Todos os Eventos</option>
+                            {allCampaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                    </div>
+                )}
+                
                 {renderContent()}
 
-                {pageCount > 0 && (
-                    <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-700 gap-4">
-                        <span className="text-sm text-gray-400">
-                            Mostrando {displayPromoters.length} de {totalFilteredCount} resultados
-                        </span>
-                        {pageCount > 1 && (
-                            <div className="flex items-center">
-                                <button
-                                    onClick={handlePrevPage}
-                                    disabled={currentPage === 1}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                >
-                                    Anterior
-                                </button>
-                                <span className="mx-4 text-gray-300 text-sm">
-                                    Página {currentPage} de {pageCount}
-                                </span>
-                                <button
-                                    onClick={handleNextPage}
-                                    disabled={currentPage === pageCount}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                >
-                                    Próxima
-                                </button>
-                            </div>
-                        )}
+                 {pageCount > 1 && (
+                    <div className="flex justify-between items-center mt-6">
+                        <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50">Anterior</button>
+                        <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                        <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50">Próxima</button>
                     </div>
                 )}
             </div>
 
             {/* Modals */}
-            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
-            
-            {canManage && editingPromoter && (
-                <EditPromoterModal
-                    isOpen={isEditModalOpen}
-                    onClose={() => setIsEditModalOpen(false)}
-                    onSave={handleUpdatePromoter}
-                    promoter={editingPromoter}
-                />
-            )}
-
-            {canManage && rejectingPromoter && (
-                <RejectionModal
-                    isOpen={isRejectionModalOpen}
-                    onClose={() => setIsRejectionModalOpen(false)}
-                    onConfirm={handleConfirmReject}
-                    reasons={rejectionReasons}
-                />
-            )}
-            
-            {canManage && organizationIdForReasons && (
-                <ManageReasonsModal
-                    isOpen={isReasonsModalOpen}
-                    onClose={() => setIsReasonsModalOpen(false)}
-                    organizationId={organizationIdForReasons}
-                    onReasonsUpdated={() => getRejectionReasons(organizationIdForReasons).then(setRejectionReasons)}
-                />
-            )}
-
-            <PromoterLookupModal 
+            <PhotoViewerModal
+                isOpen={isPhotoViewerOpen}
+                onClose={() => setIsPhotoViewerOpen(false)}
+                imageUrls={photoViewerUrls}
+                startIndex={photoViewerStartIndex}
+            />
+             <EditPromoterModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                promoter={editingPromoter}
+                onSave={handleUpdatePromoter}
+            />
+            <RejectionModal
+                isOpen={isRejectionModalOpen}
+                onClose={() => setIsRejectionModalOpen(false)}
+                onConfirm={handleConfirmReject}
+                reasons={rejectionReasons}
+            />
+            <ManageReasonsModal 
+                isOpen={isReasonsModalOpen}
+                onClose={() => setIsReasonsModalOpen(false)}
+                onReasonsUpdated={() => {
+                    if (organizationIdForReasons) {
+                        getRejectionReasons(organizationIdForReasons).then(setRejectionReasons);
+                    }
+                }}
+                organizationId={organizationIdForReasons || ''}
+            />
+            <PromoterLookupModal
                 isOpen={isLookupModalOpen}
                 onClose={() => setIsLookupModalOpen(false)}
                 isLoading={isLookingUp}
@@ -763,9 +731,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 onGoToPromoter={handleGoToPromoter}
                 organizationsMap={organizationsMap}
             />
-
         </div>
     );
 };
-
+// FIX: Add default export for AdminPanel component.
 export default AdminPanel;

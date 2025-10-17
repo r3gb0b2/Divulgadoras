@@ -25,6 +25,8 @@ export interface Promoter {
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
+  canReapply?: boolean;
+  updatedAt?: Timestamp | FieldValue;
 }
 
 export interface PromoterApplicationData {
