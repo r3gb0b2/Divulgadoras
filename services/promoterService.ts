@@ -249,7 +249,10 @@ export const getAllPromoters = async (options: {
       filterState,
     } = options;
 
-    let q = query(collection(firestore, "promoters"));
+    const promotersRef = collection(firestore, "promoters");
+    // Add orderBy(documentId()) to stabilize queries and mirror the working getPromotersPage function.
+    // This is the definitive fix for the blank list bug.
+    let q = query(promotersRef, orderBy(documentId()));
 
     // --- Apply filters progressively ---
 
