@@ -148,8 +148,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
         if (isSuperAdmin) return null; // null means no campaign filter
+        if (!adminData.organizationId) return []; // No org, no campaigns
+
+        const orgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationId);
+        
+        // If admin has no specific campaign assignments, they can see all campaigns from their org's assigned states
         if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            return null; // No specific campaign assignments means access to all within assigned states.
+            return orgCampaigns.map(c => c.name);
         }
 
         const allowedCampaignNames = new Set<string>();
@@ -159,18 +164,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const restrictedCampaigns = adminData.assignedCampaigns[stateAbbr];
             
             if (restrictedCampaigns) { // Restriction exists for this state
-                // If there are specific campaigns, add them
                 if (restrictedCampaigns.length > 0) {
                     restrictedCampaigns.forEach(name => allowedCampaignNames.add(name));
                 }
-                // If restrictedCampaigns is an empty array [], they can't see any campaigns in this state, so we add nothing.
-            } else { // No restriction for this state, so they can see all campaigns in it.
-                allCampaigns
+            } else { // No restriction for this state, so they can see all campaigns in it from their org.
+                orgCampaigns
                     .filter(c => c.stateAbbr === stateAbbr)
                     .forEach(c => allowedCampaignNames.add(c.name));
             }
         }
-        
+
         return Array.from(allowedCampaignNames);
     }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
 
@@ -212,12 +215,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
 
             const statesForScope = getStatesForScope();
-            if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
-                setPromotersOnPage([]);
-                setTotalPromotersCount(0);
-                setIsLoading(false);
-                return;
-            }
 
             try {
                 const result = await getPromotersPage({
@@ -308,19 +305,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setRejectingPromoter(null);
     };
 
-    const handleManualNotify = async (promoterId: string) => {
+    const handleManualNotify = async (promoter: Promoter) => {
         if (notifyingId) return;
         if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado). Deseja continuar?")) {
             return;
         }
         
-        setNotifyingId(promoterId);
+        setNotifyingId(promoter.id);
         try {
             const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
-            const result = await manuallySendStatusEmail({ promoterId });
+            const result = await manuallySendStatusEmail({ promoterId: promoter.id });
             const data = result.data as { success: boolean, message: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
+            
+            // On success, update the timestamp
+            const updateData = { lastManualNotificationAt: serverTimestamp() };
+            await updatePromoter(promoter.id, updateData);
+            
+            // Optimistic UI update for the timestamp
+            setPromotersOnPage(prev => prev.map(p => 
+                p.id === promoter.id 
+                ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
+                : p
+            ));
+
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
             const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
@@ -417,27 +426,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         // Create a mutable copy to sort
         const promotersToSort = [...promotersOnPage];
 
-        // Sort by creation date ascending (oldest first)
-        promotersToSort.sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
-            return timeA - timeB;
-        });
-
         // Apply client-side text search filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         
-        if (lowercasedQuery === '') {
-            return promotersToSort; // Return the sorted list if no search query
-        }
-        
-        // Filter the sorted list
-        return promotersToSort.filter(p => {
+        const filtered = lowercasedQuery === '' ? promotersToSort : promotersToSort.filter(p => {
             return p.name.toLowerCase().includes(lowercasedQuery) ||
                 p.email.toLowerCase().includes(lowercasedQuery) ||
                 (p.whatsapp && p.whatsapp.replace(/\D/g, '').includes(lowercasedQuery.replace(/\D/g, ''))) ||
                 (p.campaignName && p.campaignName.toLowerCase().includes(lowercasedQuery));
         });
+
+        // Sort the final list
+        filtered.sort((a, b) => {
+            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            return timeA - timeB;
+        });
+        
+        return filtered;
     }, [promotersOnPage, searchQuery]);
     
     // Pagination Calculations
@@ -539,7 +545,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     )}
                                 </div>
                                 
-                                <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end">
+                                <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end items-center">
                                     {promoter.status === 'pending' && (
                                         <>
                                             <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
@@ -547,13 +553,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                         </>
                                     )}
                                     {promoter.status === 'approved' && (
-                                        <button
-                                            onClick={() => handleManualNotify(promoter.id)}
-                                            disabled={notifyingId === promoter.id}
-                                            className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
-                                        >
-                                            {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
-                                        </button>
+                                        <div className="flex items-center gap-x-4">
+                                            {promoter.lastManualNotificationAt && (
+                                                <span className="text-xs text-gray-500 italic" title={formatDate(promoter.lastManualNotificationAt)}>
+                                                    Último envio: {formatDate(promoter.lastManualNotificationAt)}
+                                                </span>
+                                            )}
+                                            <button
+                                                onClick={() => handleManualNotify(promoter)}
+                                                disabled={notifyingId === promoter.id}
+                                                className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
+                                            >
+                                                {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
+                                            </button>
+                                        </div>
                                     )}
                                     <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
                                     {isSuperAdmin && (

@@ -560,15 +560,20 @@ exports.createOrganizationAndUser = functions.region("southamerica-east1").https
 // --- Gemini AI assistant function ---
 const { GoogleGenAI } = require("@google/genai");
 
+// Configure Gemini using Firebase Functions config, similar to Brevo.
+// Use the command:
+// firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+const geminiConfig = functions.config().gemini;
 let ai;
 try {
-  if (!process.env.API_KEY) {
-    console.warn("API_KEY environment variable not set for Gemini. The askGemini function will not work.");
+  if (geminiConfig && geminiConfig.key) {
+    ai = new GoogleGenAI({ apiKey: geminiConfig.key });
   } else {
-    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    console.warn("Gemini API Key not configured in Firebase Functions config. Run: firebase functions:config:set gemini.key=\"YOUR_API_KEY\"");
   }
 } catch (e) {
   console.error("Could not initialize GoogleGenAI.", e);
+  ai = null; // Ensure ai is null on initialization error
 }
 
 exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
@@ -580,8 +585,8 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
     throw new functions.https.HttpsError("invalid-argument", "O prompt é obrigatório e deve ser um texto.");
   }
   if (!ai) {
-    const errorMessage = "A IA do Gemini não está configurada no servidor. Verifique se a variável de ambiente API_KEY está definida nas configurações da função.";
-    console.error(errorMessage);
+    const errorMessage = "A IA do Gemini não está configurada no servidor. Para configurar, execute no terminal: firebase functions:config:set gemini.key=\"SUA_CHAVE_DE_API\"";
+    console.error("Gemini API Key is not set in Firebase config. Run 'firebase functions:config:set gemini.key=\"YOUR_API_KEY\"' and redeploy functions.");
     throw new functions.https.HttpsError("failed-precondition", errorMessage);
   }
   try {

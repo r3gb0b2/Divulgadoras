@@ -16,6 +16,7 @@ export interface Promoter {
   state: string;
   campaignName: string | null;
   associatedCampaigns?: string[];
+  allCampaigns?: string[];
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
@@ -23,6 +24,7 @@ export interface Promoter {
   actionTakenByEmail?: string;
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
+  lastManualNotificationAt?: Timestamp | FieldValue | null;
 }
 
 export interface PromoterApplicationData {
@@ -53,6 +55,7 @@ export interface Campaign {
   rules: string;
   stateAbbr: string;
   organizationId: string;
+  associatedAdmins?: string[];
   // Guest List Feature
   isGuestListActive?: boolean;
   guestAllowance?: number;

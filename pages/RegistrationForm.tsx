@@ -156,6 +156,21 @@ const PromoterForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Age validation
+    if (formData.dateOfBirth) {
+        const birthDate = new Date(formData.dateOfBirth);
+        // Adjust for timezone offset to get the correct local date
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        
+        const today = new Date();
+        const fourteenYearsAgo = new Date(today.getFullYear() - 14, today.getMonth(), today.getDate());
+
+        if (birthDate > fourteenYearsAgo) {
+            setSubmitError("Você precisa ter pelo menos 14 anos para se cadastrar.");
+            return;
+        }
+    }
+
     if (!organizationId) {
         setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
         return;
