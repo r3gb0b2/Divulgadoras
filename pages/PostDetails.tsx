@@ -190,6 +190,7 @@ const PostDetails: React.FC = () => {
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Nome</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Data Confirmação</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Comprovação</th>
                                 </tr>
                              </thead>
                              <tbody className="divide-y divide-gray-700">
@@ -204,6 +205,19 @@ const PostDetails: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-400">{formatDate(a.confirmedAt)}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap">
+                                            {a.proofImageUrls && a.proofImageUrls.length > 0 ? (
+                                                <div className="flex gap-1">
+                                                    {a.proofImageUrls.map((url, index) => (
+                                                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={url} alt={`Prova ${index + 1}`} className="w-10 h-10 object-cover rounded-md" />
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-gray-500">N/A</span>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                              </tbody>

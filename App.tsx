@@ -12,6 +12,7 @@ import { LogoIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
+import ProofUploadPage from './pages/ProofUploadPage';
 
 const App: React.FC = () => {
   return (
@@ -40,6 +41,7 @@ const App: React.FC = () => {
               <Route path="/admin/*" element={<AdminAuth />} />
               <Route path="/status" element={<StatusCheck />} />
               <Route path="/posts" element={<PostCheck />} />
+              <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
               <Route path="/lista/:organizationId?/:campaignId?" element={<GuestListCheck />} />
               <Route path="/planos" element={<PricingPage />} />
               <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />

@@ -150,6 +150,8 @@ export interface PostAssignment {
   promoterName: string;
   status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
+  proofImageUrls?: string[];
+  proofSubmittedAt?: Timestamp | FieldValue | null;
 }
 
 export interface GuestListConfirmation {

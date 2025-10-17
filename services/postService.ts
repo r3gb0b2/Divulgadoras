@@ -152,6 +152,51 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
     }
 }
 
+export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting assignment by ID: ", error);
+        throw new Error("Não foi possível buscar os dados da tarefa.");
+    }
+};
+
+export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
+    if (imageFiles.length === 0 || imageFiles.length > 2) {
+        throw new Error("Você deve enviar 1 ou 2 imagens.");
+    }
+
+    try {
+        // 1. Upload images
+        const proofImageUrls = await Promise.all(
+            imageFiles.map(async (photo) => {
+                const fileExtension = photo.name.split('.').pop();
+                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = ref(storage, `posts-proofs/${fileName}`);
+                await uploadBytes(storageRef, photo);
+                return await getDownloadURL(storageRef);
+            })
+        );
+        
+        // 2. Update Firestore document
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            proofImageUrls: proofImageUrls,
+            proofSubmittedAt: serverTimestamp(),
+        });
+        
+        return proofImageUrls;
+    } catch (error) {
+        console.error("Error submitting proof: ", error);
+        throw new Error("Não foi possível enviar a comprovação.");
+    }
+};
+
 export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
     try {
         const updatePostStatus = httpsCallable(functions, 'updatePostStatus');

@@ -1,9 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+
+const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
+    const navigate = useNavigate();
+    const [timeLeft, setTimeLeft] = useState('');
+    const [isButtonEnabled, setIsButtonEnabled] = useState(false);
+
+    useEffect(() => {
+        if (!assignment.confirmedAt) return;
+
+        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
+        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+        const timer = setInterval(() => {
+            const now = new Date();
+
+            if (now > expireTime) {
+                setTimeLeft('Tempo esgotado');
+                setIsButtonEnabled(false);
+                clearInterval(timer);
+                return;
+            }
+
+            if (now < enableTime) {
+                const diff = enableTime.getTime() - now.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                setTimeLeft(`Disponível em: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+                setIsButtonEnabled(false);
+            } else {
+                const diff = expireTime.getTime() - now.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                setTimeLeft(`Expira em: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+                setIsButtonEnabled(true);
+            }
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [assignment.confirmedAt]);
+
+    if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
+        return (
+            <div className="mt-4 text-center">
+                <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
+                <div className="flex justify-center gap-2">
+                    {assignment.proofImageUrls.map((url, index) => (
+                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" />
+                        </a>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-4 text-center">
+            <button
+                onClick={() => navigate(`/proof/${assignment.id}`)}
+                disabled={!isButtonEnabled}
+                className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Comprovação de Postagem
+            </button>
+            <p className="text-xs text-gray-400 mt-2">{timeLeft}</p>
+        </div>
+    );
+};
+
 
 const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
     const [isConfirming, setIsConfirming] = useState(false);
@@ -15,13 +87,6 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
         } finally {
             setIsConfirming(false);
         }
-    };
-
-    const formatDate = (timestamp: any): string => {
-        if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        if (isNaN(date.getTime())) return 'Data inválida';
-        return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     return (
@@ -61,7 +126,7 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
                             {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
                         </button>
                     ) : (
-                        <p className="text-sm text-green-400">Confirmado em: {formatDate(assignment.confirmedAt)}</p>
+                        <ProofSection assignment={assignment} />
                     )}
                 </div>
             </div>

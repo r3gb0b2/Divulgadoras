@@ -237,6 +237,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
+                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                 </>
             )}
             

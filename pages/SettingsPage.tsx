@@ -1,9 +1,25 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { getOrganization } from '../services/organizationService';
+import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { adminData } = useAdminAuth();
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (adminData?.organizationId) {
+      getOrganization(adminData.organizationId).then(orgData => {
+        if (orgData && adminData.uid === orgData.ownerUid) {
+          setIsOwner(true);
+        }
+      }).catch(err => console.error("Could not fetch organization data for owner check:", err));
+    }
+  }, [adminData]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -18,6 +34,24 @@ const SettingsPage: React.FC = () => {
           Gerencie os usuários, localidades, eventos e sua assinatura na plataforma.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isOwner && (
+            <Link
+              to={`/admin/organization/${adminData?.organizationId}`}
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <BuildingOfficeIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Dados da Organização</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Edite o nome da sua organização, localidades, administradores associados e outras configurações gerais.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Gerenciar &rarr;
+              </div>
+            </Link>
+          )}
+
            {/* Gerenciar Localidades e Eventos */}
           <Link
             to="/admin/states"
