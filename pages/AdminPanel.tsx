@@ -13,7 +13,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, ExclamationCircleIcon } from '../components/Icons';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface AdminPanelProps {
@@ -514,20 +514,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             </div>
                             <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
                         </div>
-
-                        {promoter.leftGroup && (
-                            <div className="my-3 p-3 bg-gray-800/60 border-l-4 border-gray-500 text-gray-300 rounded-r-md">
-                                <div className="flex items-center gap-2">
-                                <ExclamationCircleIcon className="w-6 h-6 text-gray-400 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm font-semibold">Divulgadora saiu do grupo.</p>
-                                    <p className="text-xs text-gray-400">
-                                    Não aparecerá em novas listas e teve suas tarefas pendentes canceladas.
-                                    </p>
-                                </div>
-                                </div>
-                            </div>
-                        )}
 
                         <div className="text-xs text-gray-500 mb-3 space-y-1">
                             <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>

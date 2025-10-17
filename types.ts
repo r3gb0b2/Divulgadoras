@@ -20,7 +20,6 @@ export interface Promoter {
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
-  leftGroup?: boolean; // New field
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
   statusChangedAt?: Timestamp | FieldValue;
@@ -156,7 +155,7 @@ export interface PostAssignment {
   promoterId: string;
   promoterEmail: string; // lowercase
   promoterName: string;
-  status: 'pending' | 'confirmed' | 'cancelled'; // Added 'cancelled'
+  status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
   proofSubmittedAt?: Timestamp | FieldValue | null;
