@@ -1081,16 +1081,26 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
   const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
 
+  // CORRECTED QUERY: Find promoters who have CONFIRMED their post.
+  // We will filter for missing proof in the next step.
   const assignmentsQuery = db.collection("postAssignments")
       .where("postId", "==", postId)
-      .where("proofSubmittedAt", "==", null);
+      .where("status", "==", "confirmed");
 
   const snapshot = await assignmentsQuery.get();
   if (snapshot.empty) {
-    return { success: true, count: 0, message: "Nenhuma comprovação pendente encontrada." };
+    return { success: true, count: 0, message: "Nenhuma divulgação confirmada foi encontrada para este post." };
   }
 
-  const promotersToRemind = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  // In-memory filter to find those who confirmed but have not submitted proof yet.
+  // The 'proofSubmittedAt' field does not exist on these documents.
+  const promotersToRemind = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((assignment) => !assignment.proofSubmittedAt);
+
+  if (promotersToRemind.length === 0) {
+    return { success: true, count: 0, message: "Todas as divulgadoras que confirmaram já enviaram a comprovação." };
+  }
 
   const emailPromises = promotersToRemind.map((promoter) =>
     sendProofReminderEmail(promoter, {
