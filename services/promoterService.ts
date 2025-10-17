@@ -240,8 +240,8 @@ export const getAllPromoters = async (options: {
 }): Promise<Promoter[]> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    // Start with the base query
-    let q = query(promotersRef);
+    // Start with the base query and a stable ordering
+    let q = query(promotersRef, orderBy(documentId()));
 
     // 1. Apply status filter
     if (options.status !== 'all') {
