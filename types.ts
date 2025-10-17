@@ -133,6 +133,7 @@ export interface Post {
   createdByEmail: string;
   isActive: boolean;
   expiresAt: Timestamp | FieldValue | null;
+  autoAssignToNewPromoters?: boolean;
 }
 
 export interface PostAssignment {

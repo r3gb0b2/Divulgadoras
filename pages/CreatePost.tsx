@@ -29,6 +29,7 @@ const CreatePost: React.FC = () => {
     const [instructions, setInstructions] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
+    const [autoAssign, setAutoAssign] = useState(false);
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
@@ -163,6 +164,7 @@ const CreatePost: React.FC = () => {
                 instructions,
                 isActive,
                 expiresAt: expiryTimestamp,
+                autoAssignToNewPromoters: autoAssign,
             };
 
             await createPost(postData, imageFile, promotersToAssign);
@@ -252,6 +254,12 @@ const CreatePost: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
                             <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                         </div>
+                    </div>
+                    <div className="mt-4">
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
+                            <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Atribuir automaticamente para novas divulgadoras</span>
+                        </label>
                     </div>
                 </fieldset>
 

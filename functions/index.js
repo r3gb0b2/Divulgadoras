@@ -104,6 +104,7 @@ const isSuperAdmin = async (uid) => {
 /**
  * Triggered when a promoter's status is updated.
  * If the new status is 'approved' or 'rejected', it sends a notification email.
+ * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
 exports.onPromoterStatusChange = functions
     .region("southamerica-east1")
@@ -111,8 +112,19 @@ exports.onPromoterStatusChange = functions
     .onUpdate(async (change, context) => {
       const newValue = change.after.data();
       const oldValue = change.before.data();
+      const promoterId = context.params.promoterId;
 
-      // Check if status has changed to 'approved' or 'rejected' from another state
+      // 1. Check for new approvals to auto-assign posts
+      const isNewApproval = oldValue.status !== "approved" && newValue.status === "approved";
+      if (isNewApproval) {
+        try {
+          await assignPostsToNewPromoter(newValue, promoterId);
+        } catch (error) {
+          console.error(`[Auto-Assign Trigger] Failed for promoter ${promoterId}:`, error);
+        }
+      }
+
+      // 2. Check for status changes to send notification emails
       const statusChanged = newValue.status !== oldValue.status;
       const isApprovalOrRejection =
       newValue.status === "approved" || newValue.status === "rejected";
@@ -121,12 +133,97 @@ exports.onPromoterStatusChange = functions
         try {
           await sendStatusChangeEmail(newValue);
         } catch (error) {
-          console.error(`[Email Trigger] Failed to send status change email for promoter ${context.params.promoterId}:`, error);
-          // We log the error but don't re-throw, as we don't want to
-          // fail the entire Firestore update if the email fails.
+          console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
         }
       }
     });
+
+
+/**
+ * Queries for posts that should be auto-assigned to a newly approved promoter
+ * and creates the assignments and notifications.
+ * @param {object} promoterData The promoter document data for the new promoter.
+ * @param {string} promoterId The ID of the promoter document.
+ */
+async function assignPostsToNewPromoter(promoterData, promoterId) {
+  const { organizationId, stateAbbr, campaignName } = promoterData;
+  if (!organizationId || !stateAbbr || !campaignName) {
+    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign.`);
+    return;
+  }
+
+  const now = admin.firestore.Timestamp.now();
+
+  // Find matching posts that are active and set to auto-assign
+  const postsQuery = db.collection("posts")
+      .where("organizationId", "==", organizationId)
+      .where("stateAbbr", "==", stateAbbr)
+      .where("campaignName", "==", campaignName)
+      .where("autoAssignToNewPromoters", "==", true)
+      .where("isActive", "==", true);
+
+  const snapshot = await postsQuery.get();
+  if (snapshot.empty) {
+    console.log(`[Auto-Assign] No auto-assign posts found for campaign ${campaignName}.`);
+    return;
+  }
+
+  const batch = db.batch();
+  const assignmentsCollectionRef = db.collection("postAssignments");
+  const postsToNotify = [];
+
+  for (const doc of snapshot.docs) {
+    const post = doc.data();
+    const postId = doc.id;
+
+    // Filter out expired posts (client-side since we can't have two range filters)
+    if (post.expiresAt && post.expiresAt.toDate() < now.toDate()) {
+      continue;
+    }
+
+    // Create assignment document
+    const assignmentDocRef = assignmentsCollectionRef.doc();
+    const newAssignment = {
+      postId: postId,
+      post: { // denormalized data
+        type: post.type,
+        imageUrl: post.imageUrl || null,
+        textContent: post.textContent || null,
+        instructions: post.instructions,
+        campaignName: post.campaignName,
+        isActive: post.isActive,
+        expiresAt: post.expiresAt || null,
+        createdAt: post.createdAt,
+      },
+      organizationId: promoterData.organizationId,
+      promoterId: promoterId,
+      promoterEmail: promoterData.email.toLowerCase(),
+      promoterName: promoterData.name,
+      status: "pending",
+      confirmedAt: null,
+    };
+    batch.set(assignmentDocRef, newAssignment);
+    postsToNotify.push({ post, promoterData });
+  }
+
+  if (postsToNotify.length === 0) return; // No un-expired posts found
+
+  await batch.commit();
+  console.log(`[Auto-Assign] Created ${postsToNotify.length} new assignments for promoter ${promoterId}.`);
+
+  // Send notifications for the newly created assignments
+  const orgDoc = await db.collection("organizations").doc(organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  const emailPromises = postsToNotify.map(({ post, promoterData: pd }) =>
+    sendNewPostNotificationEmail(pd, {
+      campaignName: post.campaignName,
+      orgName: orgName,
+    }),
+  );
+  await Promise.allSettled(emailPromises);
+}
+
 
 /**
  * Sends a status change email to a promoter.
