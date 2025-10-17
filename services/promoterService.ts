@@ -249,21 +249,22 @@ export const getAllPromoters = async (options: {
       filterState,
     } = options;
 
-    const promotersRef = collection(firestore, "promoters");
-    const constraints: any[] = [];
+    let q = query(collection(firestore, "promoters"));
 
-    // 1. Status Filter
+    // --- Apply filters progressively ---
+
+    // 1. Status
     if (status !== 'all') {
-      constraints.push(where("status", "==", status));
+      q = query(q, where("status", "==", status));
     }
 
-    // 2. Organization Filter
+    // 2. Organization
     const effectiveOrgId = filterOrgId !== 'all' ? filterOrgId : organizationId;
     if (effectiveOrgId) {
-      constraints.push(where("organizationId", "==", effectiveOrgId));
+      q = query(q, where("organizationId", "==", effectiveOrgId));
     }
 
-    // 3. State & Campaign Filters
+    // 3. States & Campaigns
     const effectiveStates = filterState !== 'all' ? [filterState] : statesForScope;
     let effectiveCampaigns = campaignsInScope;
 
@@ -273,44 +274,26 @@ export const getAllPromoters = async (options: {
       } else if (effectiveCampaigns.includes(selectedCampaign)) {
         effectiveCampaigns = [selectedCampaign];
       } else {
-        return []; // Selected campaign is out of scope
+        return []; // Selected campaign is out of scope, return empty results immediately
       }
-    }
-
-    const statesAreInClause = effectiveStates && effectiveStates.length > 1;
-    const campaignsAreInClause = effectiveCampaigns && effectiveCampaigns.length > 1;
-
-    if (statesAreInClause && campaignsAreInClause) {
-      throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
     }
     
-    if (effectiveStates) {
-      if (effectiveStates.length === 1) {
-        constraints.push(where("state", "==", effectiveStates[0]));
-      } else if (effectiveStates.length > 1) {
-        constraints.push(where("state", "in", effectiveStates));
-      }
+    // Firestore limitation: you can't have `in` on two different fields.
+    if (effectiveStates && effectiveStates.length > 1 && effectiveCampaigns && effectiveCampaigns.length > 1) {
+      throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
+    }
+
+    if (effectiveStates && effectiveStates.length > 0) {
+      // Use 'in' for both single and multiple values for simplicity and consistency
+      q = query(q, where("state", "in", effectiveStates));
     }
 
     if (effectiveCampaigns) {
-      if (effectiveCampaigns.length === 0) return [];
-      if (effectiveCampaigns.length === 1) {
-        constraints.push(where("campaignName", "==", effectiveCampaigns[0]));
-      } else if (effectiveCampaigns.length > 1) {
-        constraints.push(where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
-      }
+      if (effectiveCampaigns.length === 0) return []; // Explicitly handle empty array
+      // Use 'in' for both single and multiple values
+      q = query(q, where("campaignName", "in", effectiveCampaigns.slice(0, 30)));
     }
 
-    // DEFINITIVE FIX:
-    // Mirror the working `getPromotersPage` pattern by starting with `orderBy(documentId())`.
-    // This resolves subtle query processing issues in Firestore for complex, non-paginated queries,
-    // ensuring the super admin's simple initial query also executes reliably.
-    let q = query(promotersRef, orderBy(documentId()));
-
-    if (constraints.length > 0) {
-      q = query(q, ...constraints);
-    }
-    
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
