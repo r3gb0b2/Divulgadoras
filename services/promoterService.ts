@@ -151,14 +151,17 @@ const buildQueryConstraints = (options: PromoterQueryOptions): { constraints: Qu
     }
 
     // Organization filter
+    const isSuperAdminView = options.organizationId === undefined;
+
     if (options.filterOrgId !== 'all') {
-        // A super admin is filtering by a specific org
+        // An explicit filter from the UI is selected (by a super admin). This takes priority.
         constraints.push(where("organizationId", "==", options.filterOrgId));
-    } else if (options.organizationId) {
-        // A regular admin is seeing their own org
+    } else if (!isSuperAdminView) {
+        // This is a regular admin view (their org ID is passed), so filter by their organization.
         constraints.push(where("organizationId", "==", options.organizationId));
     }
-    // If neither of the above, it's a super admin with no org filter, so do nothing.
+    // If it is a super admin view (`isSuperAdminView` is true) AND no filter is selected (`filterOrgId` is 'all'),
+    // then no organization filter is applied, which allows them to see all promoters.
 
 
     // State filter (super admin filter takes precedence)
