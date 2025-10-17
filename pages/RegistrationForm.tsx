@@ -8,6 +8,18 @@ import { Campaign } from '../types';
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
+// Lista de nomes masculinos para o aviso de gênero
+const MALE_NAMES = [
+    'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
+    'marcos', 'paulo', 'rodrigo', 'fernando', 'daniel', 'diego', 'thiago', 'tiago', 'andré', 
+    'antonio', 'francisco', 'josé', 'luiz', 'ricardo', 'vinicius', 'guilherme', 'gustavo', 
+    'leonardo', 'eduardo', 'marcelo', 'juliano', 'cesar', 'renato', 'adriano', 'leandro', 
+    'alexandre', 'fábio', 'sérgio', 'claudio', 'mauricio', 'cristiano', 'heitor', 'davi', 
+    'arthur', 'bernardo', 'miguel', 'enzo', 'nicolas', 'lorenzo', 'samuel', 'benjamin', 
+    'joaquim', 'augusto', 'caio', 'breno', 'vitor', 'igor', 'yuri', 'henrique', 'otávio'
+].map(name => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "")); // Normaliza para remover acentos
+
+
 // Helper function to resize and compress images and return a Blob
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -79,6 +91,7 @@ const PromoterForm: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [showGenderWarning, setShowGenderWarning] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -86,6 +99,17 @@ const PromoterForm: React.FC = () => {
       ...prev,
       [name]: value,
     }));
+
+    // Check for male name when name input changes
+    if (name === 'name') {
+        const firstName = value.trim().split(' ')[0].toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Normalize for comparison
+        if (firstName && MALE_NAMES.includes(firstName)) {
+            setShowGenderWarning(true);
+        } else {
+            setShowGenderWarning(false);
+        }
+    }
   };
   
   const handleCheckEmail = async () => {
@@ -197,6 +221,7 @@ const PromoterForm: React.FC = () => {
       setPhotoFiles([]);
       setPhotoPreviews([]);
       setProfileLoaded(false);
+      setShowGenderWarning(false);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -263,7 +288,14 @@ const PromoterForm: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
+                    <div>
+                        <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
+                        {showGenderWarning && (
+                            <div className="bg-yellow-900/50 border-l-4 border-yellow-500 text-yellow-300 p-3 mt-2 rounded-md text-sm" role="alert">
+                                <p><strong className="font-semibold">Aviso:</strong> Nossos grupos de divulgação são primariamente destinados ao público feminino. Você pode continuar com o cadastro, mas esteja ciente desta preferência.</p>
+                            </div>
+                        )}
+                    </div>
                     <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
                 </div>
                 <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
