@@ -6,6 +6,8 @@ import { Post, Organization } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
 
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
@@ -50,6 +52,15 @@ const AdminPosts: React.FC = () => {
 
         fetchPosts();
     }, [adminData, isSuperAdmin]);
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            // The auth context listener will handle navigation
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
 
     const orgNameMap = useMemo(() => {
         if (!isSuperAdmin) return {};
@@ -122,16 +133,23 @@ const AdminPosts: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Gerenciamento de Posts</h1>
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                        <ArrowLeftIcon className="w-4 h-4" />
-                        <span>Voltar ao Painel</span>
-                    </button>
-                    {!isSuperAdmin && (
+                    {adminData?.role !== 'poster' && (
+                        <button onClick={() => navigate('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                            <ArrowLeftIcon className="w-4 h-4" />
+                            <span>Voltar ao Painel</span>
+                        </button>
+                    )}
+                    {(adminData?.role === 'admin' || adminData?.role === 'poster') && (
                         <button 
                             onClick={() => navigate('/admin/posts/new')}
                             className="px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"
                         >
                             + Nova Publicação
+                        </button>
+                    )}
+                     {adminData?.role === 'poster' && (
+                        <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
+                            Sair
                         </button>
                     )}
                 </div>

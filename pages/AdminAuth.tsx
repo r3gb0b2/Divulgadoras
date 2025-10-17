@@ -200,7 +200,11 @@ const AdminAuth: React.FC = () => {
 
             <Route path="/" element={
                 <ProtectedRoute>
-                    {adminData?.role === 'superadmin' ? <SuperAdminDashboard /> : <AdminPanel adminData={adminData!} />}
+                    {
+                        adminData?.role === 'superadmin' ? <SuperAdminDashboard /> :
+                        adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
+                        <AdminPanel adminData={adminData!} />
+                    }
                 </ProtectedRoute>
             } />
             
@@ -238,6 +242,15 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
+                </>
+            )}
+
+            {/* Routes for Posters */}
+            {adminData?.role === 'poster' && (
+                <>
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                 </>
             )}
             

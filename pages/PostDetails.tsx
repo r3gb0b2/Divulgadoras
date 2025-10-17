@@ -9,6 +9,9 @@ import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
 import { storage } from '../firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
 
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -34,6 +37,7 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
 const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
+    const { adminData } = useAdminAuth();
     const [post, setPost] = useState<Post | null>(null);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     
@@ -86,6 +90,14 @@ const PostDetails: React.FC = () => {
         fetchDetails();
     }, [postId]);
     
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
+
     const showSuccessMessage = (message: string) => {
         setSuccessMessage(message);
         setTimeout(() => setSuccessMessage(null), 4000);
@@ -205,7 +217,7 @@ const PostDetails: React.FC = () => {
         if (timestamp.toDate) {
             date = timestamp.toDate();
         } else if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
-            // Handle serialized Timestamp from cloud function OR from malformed db entry
+            // Handle serialized Timestamp from cloud function or from malformed db entry
             const seconds = timestamp.seconds || timestamp._seconds;
             date = new Date(seconds * 1000);
         } else {
@@ -358,13 +370,22 @@ const PostDetails: React.FC = () => {
                     </button>
                     <h1 className="text-3xl font-bold mt-1">Detalhes da Publicação</h1>
                 </div>
-                <button
-                    onClick={handleDelete}
-                    disabled={isDeleting || isSaving}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                    {isDeleting ? 'Deletando...' : 'Deletar Publicação'}
-                </button>
+                <div className="flex items-center gap-4">
+                    {(adminData?.role === 'admin' || adminData?.role === 'superadmin') && (
+                        <button
+                            onClick={handleDelete}
+                            disabled={isDeleting || isSaving}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                        >
+                            {isDeleting ? 'Deletando...' : 'Deletar Publicação'}
+                        </button>
+                    )}
+                    {adminData?.role === 'poster' && (
+                        <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
+                            Sair
+                        </button>
+                    )}
+                </div>
             </div>
              {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
              {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}

@@ -61,7 +61,7 @@ export interface Campaign {
   guestAllowance?: number;
 }
 
-export type AdminRole = 'superadmin' | 'admin' | 'viewer';
+export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';
 
 export interface AdminUserData {
   uid: string;

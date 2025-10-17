@@ -8,6 +8,8 @@ import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -127,6 +129,14 @@ const CreatePost: React.FC = () => {
         fetchPromoters();
     }, [selectedCampaign, selectedState, adminData?.organizationId, campaigns]);
     
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
+
     const filteredCampaigns = useMemo(() => {
         return campaigns.filter(c => c.stateAbbr === selectedState);
     }, [campaigns, selectedState]);
@@ -223,10 +233,17 @@ const CreatePost: React.FC = () => {
 
     return (
         <div>
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                <ArrowLeftIcon className="w-5 h-5" />
-                <span>Voltar</span>
-            </button>
+            <div className="flex justify-between items-center">
+                <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Voltar</span>
+                </button>
+                {adminData?.role === 'poster' && (
+                    <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
+                        Sair
+                    </button>
+                )}
+            </div>
             <h1 className="text-3xl font-bold mb-6">Nova Publicação</h1>
 
             <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
