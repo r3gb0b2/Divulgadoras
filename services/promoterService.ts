@@ -239,64 +239,60 @@ export const getAllPromoters = async (options: {
   filterState: string | 'all';
 }): Promise<Promoter[]> => {
   try {
-    let q = query(collection(firestore, "promoters"));
+    const constraints: any[] = [];
 
-    // --- Apply filters progressively for robustness ---
-
-    // 1. Status Filter (Always applicable)
+    // 1. Status Filter
     if (options.status !== 'all') {
-      q = query(q, where("status", "==", options.status));
+      constraints.push(where("status", "==", options.status));
     }
 
     // 2. Organization Filter
-    const effectiveOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
-    if (effectiveOrgId) {
-        q = query(q, where("organizationId", "==", effectiveOrgId));
+    const finalOrgId = options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
+    if (finalOrgId) {
+      constraints.push(where("organizationId", "==", finalOrgId));
     }
     
-    // 3. State Filter (can create an 'in' query)
-    const effectiveStates = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
-    if (effectiveStates && effectiveStates.length > 0) {
-        if (effectiveStates.length === 1) {
-            q = query(q, where("state", "==", effectiveStates[0]));
+    // 3. State Filter
+    const finalStates = options.filterState !== 'all' ? [options.filterState] : options.statesForScope;
+    let hasStateInClause = false;
+    if (finalStates && finalStates.length > 0) {
+        if (finalStates.length === 1) {
+            constraints.push(where("state", "==", finalStates[0]));
         } else {
-            q = query(q, where("state", "in", effectiveStates));
+            constraints.push(where("state", "in", finalStates));
+            hasStateInClause = true;
         }
     }
 
-    // 4. Campaign Filter (most complex, can also create an 'in' query)
-    let finalCampaignsToFilter: string[] | null = options.campaignsInScope;
-
+    // 4. Campaign Filter
+    let finalCampaigns = options.campaignsInScope;
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaignsToFilter === null) { // Super admin or admin with no scope restrictions
-            finalCampaignsToFilter = [options.selectedCampaign];
-        } else { // Admin with scope restrictions
-            if (finalCampaignsToFilter.includes(options.selectedCampaign)) {
-                finalCampaignsToFilter = [options.selectedCampaign];
-            } else {
-                return []; // Selection is outside of scope, so no results.
-            }
+        if (finalCampaigns === null) { // Super admin or no scope
+            finalCampaigns = [options.selectedCampaign];
+        } else if (finalCampaigns.includes(options.selectedCampaign)) { // Admin with scope, selection is valid
+            finalCampaigns = [options.selectedCampaign];
+        } else {
+            return []; // Campaign selection is outside of admin's scope
         }
     }
-
-    if (finalCampaignsToFilter) {
-        if (finalCampaignsToFilter.length === 0) {
-             return []; // Empty scope means no results.
+    
+    if (finalCampaigns) {
+        if (finalCampaigns.length === 0) {
+            return []; // Admin is scoped to zero campaigns
         }
         
-        if (finalCampaignsToFilter.length > 1) {
-            // Firestore does not support multiple 'in' clauses. Check if we already have one for states.
-            const hasStateInQuery = effectiveStates && effectiveStates.length > 1;
-            if (hasStateInQuery) {
+        if (finalCampaigns.length === 1) {
+            constraints.push(where("campaignName", "==", finalCampaigns[0]));
+        } else {
+            if (hasStateInClause) {
                 console.error("Firestore query error: Cannot use 'in' filter on both 'state' and 'campaignName'.");
                 throw new Error("Não é possível filtrar por múltiplos estados e múltiplos eventos ao mesmo tempo. Refine sua busca.");
             }
-             q = query(q, where("campaignName", "in", finalCampaignsToFilter.slice(0, 30)));
-        } else { // finalCampaignsToFilter.length === 1
-             q = query(q, where("campaignName", "==", finalCampaignsToFilter[0]));
+            constraints.push(where("campaignName", "in", finalCampaigns.slice(0, 30)));
         }
     }
-
+    
+    const q = query(collection(firestore, "promoters"), ...constraints);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
@@ -308,6 +304,7 @@ export const getAllPromoters = async (options: {
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
+
 
 export const getPromoterStats = async (options: {
   organizationId?: string;
