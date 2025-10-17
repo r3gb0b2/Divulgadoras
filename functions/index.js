@@ -855,6 +855,89 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   return { success: true, postId: postDocRef.id };
 });
 
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  const { postId, promoterIds } = data;
+  if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
+  }
+
+  // 1. Fetch post and organization
+  const postDocRef = db.collection("posts").doc(postId);
+  const postSnap = await postDocRef.get();
+  if (!postSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  // 2. Prepare batch write for new assignments
+  const batch = db.batch();
+  const assignmentsCollectionRef = db.collection("postAssignments");
+  const promotersToNotify = [];
+
+  const denormalizedPostData = {
+    type: post.type,
+    imageUrl: post.imageUrl || null,
+    textContent: post.textContent || null,
+    instructions: post.instructions,
+    campaignName: post.campaignName,
+    isActive: post.isActive,
+    expiresAt: post.expiresAt || null,
+    createdAt: post.createdAt,
+  };
+
+  // 3. Fetch promoters and create assignment docs
+  for (const promoterId of promoterIds) {
+    const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+    if (promoterDoc.exists) {
+      const promoterData = promoterDoc.data();
+      const assignmentDocRef = assignmentsCollectionRef.doc();
+      const newAssignment = {
+        postId: postId,
+        post: denormalizedPostData,
+        organizationId: promoterData.organizationId,
+        promoterId: promoterId,
+        promoterEmail: promoterData.email.toLowerCase(),
+        promoterName: promoterData.name,
+        status: "pending",
+        confirmedAt: null,
+      };
+      batch.set(assignmentDocRef, newAssignment);
+      promotersToNotify.push(promoterData);
+    }
+  }
+
+  if (promotersToNotify.length === 0) {
+    console.log("Nenhuma divulgadora válida encontrada para atribuir.");
+    return { success: true, message: "Nenhuma divulgadora válida foi encontrada." };
+  }
+
+  // 4. Commit batch
+  await batch.commit();
+  console.log(`[Manual Assign] Created ${promotersToNotify.length} new assignments for post ${postId}.`);
+
+  // 5. Send notifications
+  const emailPromises = promotersToNotify.map((promoter) =>
+    sendNewPostNotificationEmail(promoter, {
+      campaignName: post.campaignName,
+      orgName: orgName,
+    }),
+  );
+  await Promise.allSettled(emailPromises);
+
+  return { success: true, message: `${promotersToNotify.length} atribuições criadas e notificadas.` };
+});
+
 exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");

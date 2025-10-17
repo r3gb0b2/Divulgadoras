@@ -5,6 +5,7 @@ import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
+import AssignPostModal from '../components/AssignPostModal';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -45,6 +46,9 @@ const PostDetails: React.FC = () => {
     // Stats Modal State
     const [statsModalOpen, setStatsModalOpen] = useState(false);
     const [selectedPromoter, setSelectedPromoter] = useState<PostAssignment | null>(null);
+
+    // Assign Modal State
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
     const fetchDetails = async () => {
         if (!postId) {
@@ -184,6 +188,9 @@ const PostDetails: React.FC = () => {
                         <button onClick={handleSaveChanges} disabled={isSaving} className="w-full px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
                         </button>
+                        <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50">
+                            Atribuir a Novas Divulgadoras
+                        </button>
                     </div>
                 </div>
 
@@ -271,6 +278,13 @@ const PostDetails: React.FC = () => {
                 isOpen={statsModalOpen}
                 onClose={() => setStatsModalOpen(false)}
                 promoter={selectedPromoter}
+            />
+            <AssignPostModal
+                isOpen={isAssignModalOpen}
+                onClose={() => setIsAssignModalOpen(false)}
+                post={post}
+                existingAssignments={assignments}
+                onSuccess={fetchDetails}
             />
         </div>
     );

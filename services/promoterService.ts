@@ -217,66 +217,93 @@ export const getAllPromoters = async (options: {
 }): Promise<Promoter[]> => {
   try {
     const promotersRef = collection(firestore, "promoters");
-    
-    let dataQuery = query(promotersRef, orderBy(documentId()));
 
-    const filters: any[] = [];
-    
+    const commonFilters: any[] = [];
     if (options.organizationId) {
-      filters.push(where("organizationId", "==", options.organizationId));
+      commonFilters.push(where("organizationId", "==", options.organizationId));
     }
-    if (options.statesForScope && options.statesForScope.length > 0) {
-      filters.push(where("state", "in", options.statesForScope));
-    }
-
     if (options.status !== 'all') {
-      filters.push(where("status", "==", options.status));
+      commonFilters.push(where("status", "==", options.status));
+    }
+    if (options.filterOrgId !== 'all') {
+      const orgFilterIndex = commonFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
+      if (orgFilterIndex > -1) commonFilters.splice(orgFilterIndex, 1);
+      commonFilters.push(where("organizationId", "==", options.filterOrgId));
     }
 
-    // Handle campaign permissions and filters
-    let finalCampaignFilter: string[] | null = options.campaignsInScope;
+    let campaignFilter: any = null;
+    let finalCampaigns: string[] | null = options.campaignsInScope;
 
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
-            finalCampaignFilter = [options.selectedCampaign];
-        } else { // Has restrictions, so intersection is needed
-            if (finalCampaignFilter.includes(options.selectedCampaign)) {
-                finalCampaignFilter = [options.selectedCampaign];
+        if (finalCampaigns === null) {
+            finalCampaigns = [options.selectedCampaign];
+        } else {
+            if (finalCampaigns.includes(options.selectedCampaign)) {
+                finalCampaigns = [options.selectedCampaign];
             } else {
-                // User selected a campaign they can't see, so return nothing
-                return [];
+                return []; 
             }
         }
     }
 
-    if (finalCampaignFilter) { // if it's an array (not null)
-        if (finalCampaignFilter.length === 0) {
-             return [];
-        }
-        // Firestore 'in' query has a limit of 30 items. 
-        if (finalCampaignFilter.length > 30) {
-            console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
-            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
+    if (finalCampaigns) {
+        if (finalCampaigns.length === 0) return [];
+        if (finalCampaigns.length === 1) {
+            campaignFilter = where("campaignName", "==", finalCampaigns[0]);
+        } else if (finalCampaigns.length <= 30) {
+            campaignFilter = where("campaignName", "in", finalCampaigns);
         } else {
-            filters.push(where("campaignName", "in", finalCampaignFilter));
+            console.warn(`Campaign filter exceeds 30 items. Slicing.`);
+            campaignFilter = where("campaignName", "in", finalCampaigns.slice(0, 30));
         }
     }
 
-    if (options.filterOrgId !== 'all') {
-      filters.push(where("organizationId", "==", options.filterOrgId));
-    }
+    let statesToQuery: string[] | null = null;
     if (options.filterState !== 'all') {
-      filters.push(where("state", "==", options.filterState));
+        statesToQuery = [options.filterState];
+    } else if (options.statesForScope && options.statesForScope.length > 0) {
+        statesToQuery = options.statesForScope;
     }
 
-    if (filters.length > 0) {
-      dataQuery = query(dataQuery, ...filters);
+    const hasCampaignInFilter = campaignFilter && campaignFilter._op === 'in';
+    const hasStateScope = statesToQuery && statesToQuery.length > 0;
+
+    if (hasCampaignInFilter && hasStateScope) {
+        const queryPromises = statesToQuery.map(state => {
+            const stateFilter = where("state", "==", state);
+            const finalFilters = [...commonFilters, campaignFilter, stateFilter];
+            const q = query(promotersRef, ...finalFilters);
+            return getDocs(q);
+        });
+
+        const snapshots = await Promise.all(queryPromises);
+        const promotersMap = new Map<string, Promoter>();
+        snapshots.forEach(snapshot => {
+            snapshot.docs.forEach(doc => {
+                if (!promotersMap.has(doc.id)) {
+                    promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
+                }
+            });
+        });
+        return Array.from(promotersMap.values());
     }
-    
-    const querySnapshot = await getDocs(dataQuery);
-    const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-    
-    return promoters;
+
+    const finalFilters = [...commonFilters];
+    if (campaignFilter) {
+        finalFilters.push(campaignFilter);
+    }
+    if (statesToQuery) {
+        if (statesToQuery.length === 1) {
+            finalFilters.push(where("state", "==", statesToQuery[0]));
+        } else {
+            finalFilters.push(where("state", "in", statesToQuery));
+        }
+    }
+
+    const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+
   } catch (error) {
     console.error("Error fetching all promoters:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {

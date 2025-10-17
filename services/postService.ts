@@ -283,3 +283,16 @@ export const deletePost = async (postId: string): Promise<void> => {
         throw new Error("Não foi possível deletar a publicação.");
     }
 }
+
+export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
+    try {
+        const func = httpsCallable(functions, 'addAssignmentsToPost');
+        await func({ postId, promoterIds });
+    } catch (error) {
+        console.error("Error adding assignments to post: ", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível atribuir a publicação.");
+    }
+};
