@@ -9,8 +9,8 @@ import {
   serverTimestamp,
   limit,
   writeBatch,
-  // FIX: Added missing 'doc' import from firestore.
   doc,
+  runTransaction,
 } from 'firebase/firestore';
 import { GuestListConfirmation } from '../types';
 
@@ -86,5 +86,47 @@ export const getGuestListForCampaign = async (
   } catch (error) {
     console.error('Error fetching guest list for campaign: ', error);
     throw new Error('Não foi possível buscar a lista de convidados.');
+  }
+};
+
+/**
+ * Checks in a person (promoter or guest) for a specific event confirmation.
+ * Uses a transaction to ensure data integrity.
+ * @param confirmationId The ID of the GuestListConfirmation document.
+ * @param personName The name of the person to check in.
+ */
+export const checkInPerson = async (confirmationId: string, personName: string): Promise<void> => {
+  const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
+  try {
+    await runTransaction(firestore, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) {
+        throw new Error("Confirmação não encontrada.");
+      }
+
+      const data = docSnap.data() as GuestListConfirmation;
+      const now = serverTimestamp();
+
+      if (personName === data.promoterName) {
+        if (data.promoterCheckedInAt) {
+          console.warn("Divulgadora já tem check-in.");
+          return; // Already checked in
+        }
+        transaction.update(docRef, { promoterCheckedInAt: now });
+      } else {
+        const guestsCheckedIn = data.guestsCheckedIn || [];
+        if (guestsCheckedIn.some(g => g.name === personName)) {
+          console.warn(`Convidado ${personName} já tem check-in.`);
+          return; // Guest already checked in
+        }
+        
+        // Add the new guest to the array of checked-in guests
+        const newGuestsCheckedIn = [...guestsCheckedIn, { name: personName, checkedInAt: now }];
+        transaction.update(docRef, { guestsCheckedIn: newGuestsCheckedIn });
+      }
+    });
+  } catch (error) {
+    console.error("Erro durante a transação de check-in: ", error);
+    throw new Error("Não foi possível realizar o check-in.");
   }
 };

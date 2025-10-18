@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { GuestListConfirmation, Campaign } from '../types';
@@ -213,6 +213,12 @@ const GuestListPage: React.FC = () => {
                     <h1 className="text-3xl font-bold mt-1">Lista de Convidados: {campaignName}</h1>
                 </div>
                 <div className="flex items-center gap-4">
+                     <Link
+                        to={`/admin/checkin/${campaignId}`}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
+                    >
+                        Controlar Entrada
+                    </Link>
                      <button
                         onClick={handleDownloadCSV}
                         disabled={confirmations.length === 0 || isLoading}

@@ -173,4 +173,6 @@ export interface GuestListConfirmation {
     isPromoterAttending: boolean;
     guestNames: string[];
     confirmedAt: Timestamp | FieldValue;
+    promoterCheckedInAt?: Timestamp | FieldValue | null;
+    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; }[];
 }

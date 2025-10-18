@@ -108,6 +108,23 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
     }
 };
 
+export const getPromotersByIds = async (promoterIds: string[]): Promise<Promoter[]> => {
+    if (promoterIds.length === 0) return [];
+    const promoters: Promoter[] = [];
+    
+    // Firestore 'in' query supports up to 30 elements. Chunk the requests.
+    const CHUNK_SIZE = 30;
+    for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
+        const chunk = promoterIds.slice(i, i + CHUNK_SIZE);
+        const q = query(collection(firestore, 'promoters'), where(documentId(), 'in', chunk));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+            promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+        });
+    }
+    return promoters;
+};
+
 
 export const getPromotersPage = async (options: {
   organizationId?: string;
