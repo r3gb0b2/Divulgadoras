@@ -57,7 +57,7 @@ export interface Campaign {
   organizationId: string;
   associatedAdmins?: string[];
   // Guest List Feature
-  isGuestListActive?: boolean;
+  guestListTypes?: string[];
   guestAllowance?: number;
 }
 
@@ -169,6 +169,7 @@ export interface GuestListConfirmation {
     promoterId: string;
     promoterName: string;
     promoterEmail: string;
+    listName: string;
     isPromoterAttending: boolean;
     guestNames: string[];
     confirmedAt: Timestamp | FieldValue;

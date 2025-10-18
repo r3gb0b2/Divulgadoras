@@ -6,12 +6,13 @@ import { addGuestListConfirmation } from '../services/guestListService';
 import { Promoter, Campaign } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 
-interface EventWithCampaign extends Promoter {
+interface EventWithCampaignAndList extends Promoter {
     campaignDetails: Campaign;
+    listName: string;
 }
 
-const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ event }) => {
-    const { campaignDetails } = event;
+const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> = ({ event }) => {
+    const { campaignDetails, listName } = event;
     const [isAttending, setIsAttending] = useState(true);
     const [guestNames, setGuestNames] = useState<string[]>(Array(campaignDetails.guestAllowance || 0).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,6 +38,7 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ eve
                 promoterId: event.id,
                 promoterName: event.name,
                 promoterEmail: event.email,
+                listName: listName,
                 isPromoterAttending: isAttending,
                 guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
             });
@@ -52,14 +54,14 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaign }> = ({ eve
         return (
              <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
                 <p className="font-bold">Presença Confirmada!</p>
-                <p>Sua lista para o evento <strong>{campaignDetails.name}</strong> foi enviada com sucesso.</p>
+                <p>Sua lista para <strong>{listName}</strong> no evento <strong>{campaignDetails.name}</strong> foi enviada com sucesso.</p>
             </div>
         );
     }
 
     return (
         <form onSubmit={handleSubmit} className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
-            <h3 className="font-bold text-lg text-primary">{campaignDetails.name}</h3>
+            <h3 className="font-bold text-lg text-primary">{campaignDetails.name} - <span className="text-gray-200">{listName}</span></h3>
             {error && <p className="text-red-400 text-sm">{error}</p>}
             
             <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
@@ -110,7 +112,7 @@ const GuestListCheck: React.FC = () => {
     const { organizationId, campaignId } = useParams<{ organizationId: string; campaignId: string }>();
 
     const [email, setEmail] = useState('');
-    const [events, setEvents] = useState<EventWithCampaign[] | null>(null);
+    const [events, setEvents] = useState<EventWithCampaignAndList[] | null>(null);
     const [directCampaign, setDirectCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -124,7 +126,7 @@ const GuestListCheck: React.FC = () => {
                     const allCampaignsForOrg = await getAllCampaigns(organizationId);
                     const foundCampaign = allCampaignsForOrg.find(c => c.id === campaignId);
 
-                    if (foundCampaign && foundCampaign.isGuestListActive) {
+                    if (foundCampaign && foundCampaign.guestListTypes && foundCampaign.guestListTypes.length > 0) {
                         setDirectCampaign(foundCampaign);
                     } else {
                         setError("Evento não encontrado ou a lista de presença não está ativa para ele.");
@@ -162,21 +164,26 @@ const GuestListCheck: React.FC = () => {
                     )
                 );
 
-                if (entryForThisEvent) {
-                    setEvents([{ ...entryForThisEvent, campaignDetails: directCampaign }]);
+                if (entryForThisEvent && directCampaign.guestListTypes) {
+                    const eventsWithLists = directCampaign.guestListTypes.map(listName => ({
+                        ...entryForThisEvent,
+                        campaignDetails: directCampaign,
+                        listName
+                    }));
+                    setEvents(eventsWithLists);
                 } else {
                     setEvents([]);
                     setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
                 }
             } else {
-                const eventsWithDetails: EventWithCampaign[] = [];
+                const eventsWithDetails: EventWithCampaignAndList[] = [];
                 const uniqueOrgIds = [...new Set(approvedPromoterEntries.map(p => p.organizationId))];
 
                 const allCampaignsPromises = uniqueOrgIds.map(orgId => getAllCampaigns(orgId));
                 const campaignsByOrgArrays = await Promise.all(allCampaignsPromises);
                 const allCampaignsFlat = campaignsByOrgArrays.flat();
                 
-                const activeGuestListCampaigns = allCampaignsFlat.filter(c => c.isGuestListActive);
+                const activeGuestListCampaigns = allCampaignsFlat.filter(c => c.guestListTypes && c.guestListTypes.length > 0);
                 const campaignMap = new Map<string, Campaign>();
                 activeGuestListCampaigns.forEach(c => campaignMap.set(`${c.organizationId}-${c.name}`, c));
 
@@ -191,9 +198,14 @@ const GuestListCheck: React.FC = () => {
                     for (const campaignName of potentialCampaignNames) {
                         const campaignDetails = campaignMap.get(`${entry.organizationId}-${campaignName}`);
                         
-                        if (campaignDetails && !addedCampaignIds.has(campaignDetails.id)) {
-                            eventsWithDetails.push({ ...entry, campaignDetails });
-                            addedCampaignIds.add(campaignDetails.id);
+                        if (campaignDetails && campaignDetails.guestListTypes) {
+                            for (const listName of campaignDetails.guestListTypes) {
+                                const uniqueKey = `${campaignDetails.id}-${listName}`;
+                                if (!addedCampaignIds.has(uniqueKey)) { // Prevent duplicates if promoter is in multiple source campaigns that point to the same destination
+                                    eventsWithDetails.push({ ...entry, campaignDetails, listName });
+                                    addedCampaignIds.add(uniqueKey);
+                                }
+                            }
                         }
                     }
                 }
@@ -226,7 +238,7 @@ const GuestListCheck: React.FC = () => {
         }
         return (
             <div className="space-y-4">
-                {events.map(event => <GuestListConfirmationCard key={event.campaignDetails.id} event={event} />)}
+                {events.map(event => <GuestListConfirmationCard key={`${event.campaignDetails.id}-${event.listName}`} event={event} />)}
             </div>
         );
     };

@@ -30,6 +30,7 @@ export const addGuestListConfirmation = async (
       confirmationsRef,
       where('promoterId', '==', confirmationData.promoterId),
       where('campaignId', '==', confirmationData.campaignId),
+      where('listName', '==', confirmationData.listName),
       limit(1)
     );
     

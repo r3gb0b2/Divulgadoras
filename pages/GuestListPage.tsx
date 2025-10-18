@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -14,6 +14,7 @@ const GuestListPage: React.FC = () => {
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeList, setActiveList] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -59,6 +60,25 @@ const GuestListPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    const groupedConfirmations = useMemo(() => {
+        return confirmations.reduce((acc, conf) => {
+            const listName = conf.listName || 'Lista Padrão';
+            if (!acc[listName]) {
+                acc[listName] = [];
+            }
+            acc[listName].push(conf);
+            return acc;
+        }, {} as Record<string, GuestListConfirmation[]>);
+    }, [confirmations]);
+
+    useEffect(() => {
+        // Set the first list as active by default
+        const listNames = Object.keys(groupedConfirmations);
+        if (listNames.length > 0 && !activeList) {
+            setActiveList(listNames[0]);
+        }
+    }, [groupedConfirmations, activeList]);
+
     const handleDownloadCSV = () => {
         if (confirmations.length === 0) return;
 
@@ -67,13 +87,13 @@ const GuestListPage: React.FC = () => {
             return result;
         };
 
-        const headers = ["Nome da Divulgadora", "Status Presença", "Convidados"];
-        
+        const headers = ["Tipo da Lista", "Nome da Divulgadora", "Status Presença", "Convidados"];
         const rows = confirmations.map(conf => {
+            const listName = formatCSVCell(conf.listName);
             const promoterName = formatCSVCell(conf.promoterName);
             const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
             const guests = formatCSVCell(conf.guestNames.filter(name => name.trim() !== '').join('\n'));
-            return [promoterName, promoterStatus, guests].join(',');
+            return [listName, promoterName, promoterStatus, guests].join(',');
         });
 
         const csvContent = [headers.join(','), ...rows].join('\n');
@@ -101,6 +121,18 @@ const GuestListPage: React.FC = () => {
         return acc + count;
     }, 0);
     
+    const listNames = Object.keys(groupedConfirmations);
+
+    const totalByList = (listName: string) => {
+        if (!groupedConfirmations[listName]) return 0;
+        return groupedConfirmations[listName].reduce((acc, curr) => {
+            let count = 0;
+            if (curr.isPromoterAttending) count++;
+            count += curr.guestNames.filter(name => name.trim() !== '').length;
+            return acc + count;
+        }, 0);
+    };
+
     const renderContent = () => {
         if (isLoading) {
             return (
@@ -118,29 +150,52 @@ const GuestListPage: React.FC = () => {
             return <p className="text-gray-400 text-center py-8">Nenhuma confirmação na lista para este evento ainda.</p>;
         }
 
+        const currentListConfirmations = activeList ? groupedConfirmations[activeList] : [];
+
         return (
-            <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700/50">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Divulgadora</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Convidados</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700">
-                        {confirmations.map(conf => (
-                            <tr key={conf.id} className="hover:bg-gray-700/40">
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-sm font-medium text-white">{conf.promoterName}</div>
-                                    <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
-                                    {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
-                                </td>
+            <div>
+                {listNames.length > 1 && (
+                    <div className="border-b border-gray-700 mb-4">
+                        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+                            {listNames.map(name => (
+                                <button
+                                    key={name}
+                                    onClick={() => setActiveList(name)}
+                                    className={`${
+                                        activeList === name
+                                            ? 'border-primary text-primary'
+                                            : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                                    } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm`}
+                                >
+                                    {name} ({totalByList(name)})
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+                )}
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Divulgadora</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Convidados</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {currentListConfirmations.map(conf => (
+                                <tr key={conf.id} className="hover:bg-gray-700/40">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-white">{conf.promoterName}</div>
+                                        <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
+                                        {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         );
     };

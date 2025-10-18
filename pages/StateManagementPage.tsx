@@ -19,9 +19,10 @@ const CampaignModal: React.FC<{
         whatsappLink: '', 
         rules: '', 
         isActive: true,
-        isGuestListActive: false,
+        guestListTypes: [] as string[],
         guestAllowance: 0,
     });
+    const [newListName, setNewListName] = useState('');
 
     useEffect(() => {
         if (campaign) {
@@ -31,15 +32,26 @@ const CampaignModal: React.FC<{
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
-                isGuestListActive: campaign.isGuestListActive || false,
+                guestListTypes: campaign.guestListTypes || [],
                 guestAllowance: campaign.guestAllowance || 0,
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, isGuestListActive: false, guestAllowance: 0 });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: 0 });
         }
     }, [campaign, isOpen]);
     
     if (!isOpen) return null;
+
+    const handleAddListType = () => {
+        if (newListName.trim() && !formData.guestListTypes.includes(newListName.trim())) {
+            setFormData(prev => ({ ...prev, guestListTypes: [...prev.guestListTypes, newListName.trim()] }));
+            setNewListName('');
+        }
+    };
+
+    const handleRemoveListType = (nameToRemove: string) => {
+        setFormData(prev => ({ ...prev, guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove) }));
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -60,11 +72,21 @@ const CampaignModal: React.FC<{
                     
                     <div className="border-t border-gray-700 pt-4 space-y-3">
                         <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
-                         <label className="flex items-center space-x-2 text-white">
-                             <input type="checkbox" checked={formData.isGuestListActive} onChange={e => setFormData({...formData, isGuestListActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                             <span>Ativar lista de presença para este evento</span>
-                         </label>
-                         {formData.isGuestListActive && (
+                         <p className="text-sm text-gray-400">Adicione os tipos de lista de convidados para este evento (ex: "Lista VIP", "Aniversariante"). Se nenhuma lista for adicionada, o recurso de lista de convidados ficará desativado.</p>
+                         <div className="flex gap-2">
+                            <input type="text" placeholder="Nome do tipo de lista" value={newListName} onChange={e => setNewListName(e.target.value)} className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
+                            <button type="button" onClick={handleAddListType} className="px-4 py-2 bg-primary text-white rounded-md">Adicionar</button>
+                         </div>
+                         <div className="space-y-2">
+                            {formData.guestListTypes.map(name => (
+                                <div key={name} className="flex justify-between items-center p-2 bg-gray-800 rounded">
+                                    <span className="text-gray-200">{name}</span>
+                                    <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300">&times;</button>
+                                </div>
+                            ))}
+                         </div>
+
+                         {formData.guestListTypes.length > 0 && (
                              <div>
                                  <label className="block text-sm font-medium text-gray-300">Nº de convidados por divulgadora</label>
                                  <input type="number" min="0" value={formData.guestAllowance} onChange={e => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
@@ -254,8 +276,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 </div>
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
-                                        {c.isGuestListActive && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
-                                        {c.isGuestListActive && <button 
+                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
+                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button 
                                             onClick={() => handleCopyGuestListLink(c)}
                                             className="text-green-400 hover:text-green-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
                                             disabled={copiedGuestListLink === c.id}
