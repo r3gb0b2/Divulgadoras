@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { GuestListConfirmation, Campaign } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
@@ -58,6 +58,41 @@ const GuestListPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleDownloadCSV = () => {
+        if (confirmations.length === 0) return;
+
+        const formatCSVCell = (text: string) => {
+            const result = '"' + text.replace(/"/g, '""') + '"';
+            return result;
+        };
+
+        const headers = ["Nome da Divulgadora", "Status Presença", "Convidados"];
+        
+        const rows = confirmations.map(conf => {
+            const promoterName = formatCSVCell(conf.promoterName);
+            const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
+            const guests = formatCSVCell(conf.guestNames.filter(name => name.trim() !== '').join('\n'));
+            return [promoterName, promoterStatus, guests].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            const campaignNameSlug = campaign?.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'evento';
+            link.setAttribute("href", url);
+            link.setAttribute("download", `lista_convidados_${campaignNameSlug}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
 
     const totalConfirmed = confirmations.reduce((acc, curr) => {
         let count = 0;
@@ -114,7 +149,7 @@ const GuestListPage: React.FC = () => {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                  <div>
                     <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
                         <ArrowLeftIcon className="w-5 h-5" />
@@ -122,9 +157,19 @@ const GuestListPage: React.FC = () => {
                     </button>
                     <h1 className="text-3xl font-bold mt-1">Lista de Convidados: {campaignName}</h1>
                 </div>
-                <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
-                    <div className="text-3xl">{totalConfirmed}</div>
-                    <div className="text-sm uppercase">Confirmados</div>
+                <div className="flex items-center gap-4">
+                     <button
+                        onClick={handleDownloadCSV}
+                        disabled={confirmations.length === 0 || isLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                    >
+                        <DownloadIcon className="w-4 h-4" />
+                        <span>Baixar Excel (CSV)</span>
+                    </button>
+                    <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
+                        <div className="text-3xl">{totalConfirmed}</div>
+                        <div className="text-sm uppercase">Confirmados</div>
+                    </div>
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
