@@ -17,7 +17,6 @@ const timestampToInputDate = (ts: Timestamp | undefined): string => {
 const ManageOrganizationPage: React.FC = () => {
     const { orgId } = useParams<{ orgId: string }>();
     const navigate = useNavigate();
-    // FIX: Destructure selectedOrganizationId to use in authorization check
     const { adminData, selectedOrganizationId } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [formData, setFormData] = useState<Partial<Organization>>({});
@@ -64,9 +63,11 @@ const ManageOrganizationPage: React.FC = () => {
     useEffect(() => {
         // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
-            const isOwner = adminData.uid === organization.ownerUid;
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Use selectedOrganizationId from auth context.
-            if (isSuperAdmin || (isOwner && selectedOrganizationId === organization.id)) {
+            // Superadmin can access any organization page.
+            // An Admin can only access the page for the organization they have currently selected.
+            const isAdminForSelectedOrg = adminData.role === 'admin' && selectedOrganizationId === orgId;
+
+            if (isSuperAdmin || isAdminForSelectedOrg) {
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -75,7 +76,7 @@ const ManageOrganizationPage: React.FC = () => {
             // If org doesn't exist or there was an error, don't show auth error yet
             setIsAuthorized(false);
         }
-    }, [isLoading, organization, adminData, isSuperAdmin, selectedOrganizationId]);
+    }, [isLoading, organization, adminData, isSuperAdmin, selectedOrganizationId, orgId]);
     
     const associatedAdmins = useMemo(() => {
         if (!organization) return [];

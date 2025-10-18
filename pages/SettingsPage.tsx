@@ -1,24 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getOrganization } from '../services/organizationService';
-import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { adminData, selectedOrganizationId } = useAdminAuth();
-  const [isOwner, setIsOwner] = useState(false);
 
-  useEffect(() => {
-    if (selectedOrganizationId) {
-      getOrganization(selectedOrganizationId).then(orgData => {
-        if (orgData && adminData?.uid === orgData.ownerUid) {
-          setIsOwner(true);
-        }
-      }).catch(err => console.error("Could not fetch organization data for owner check:", err));
-    }
-  }, [adminData, selectedOrganizationId]);
+  // An admin or superadmin can manage the organization's core data.
+  const canManageOrganization = adminData?.role === 'admin' || adminData?.role === 'superadmin';
 
   return (
     <div>
@@ -34,7 +24,7 @@ const SettingsPage: React.FC = () => {
           Gerencie os usuários, localidades, eventos e sua assinatura na plataforma.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {isOwner && (
+          {canManageOrganization && (
             <Link
               to={`/admin/organization/${selectedOrganizationId}`}
               className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
