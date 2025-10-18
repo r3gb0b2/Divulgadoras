@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
+import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -77,10 +78,32 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
 };
 
 
-const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
+const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     
+    if (!assignment.promoterHasJoinedGroup) {
+        return (
+            <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500">
+                <h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>
+                <p className="mt-2 text-yellow-300">
+                    Você tem uma nova publicação para este evento!
+                </p>
+                <p className="mt-2 text-gray-300 text-sm">
+                    Para visualizar, primeiro você precisa confirmar a leitura das regras e entrar no grupo do WhatsApp.
+                </p>
+                <div className="mt-4 text-center">
+                    <Link 
+                        to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`}
+                        className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                    >
+                        Verificar Status e Aceitar Regras
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     const handleConfirm = async () => {
         setIsConfirming(true);
         try {
@@ -197,7 +220,7 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
 const PostCheck: React.FC = () => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
-    const [assignments, setAssignments] = useState<PostAssignment[] | null>(null);
+    const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
@@ -209,8 +232,30 @@ const PostCheck: React.FC = () => {
         setAssignments(null);
         setSearched(true);
         try {
-            const result = await getAssignmentsForPromoterByEmail(searchEmail);
-            setAssignments(result);
+            const [assignmentsResult, promoterProfiles] = await Promise.all([
+                getAssignmentsForPromoterByEmail(searchEmail),
+                findPromotersByEmail(searchEmail),
+            ]);
+
+            const campaignStatusMap = new Map<string, boolean>();
+            if (promoterProfiles) {
+                for (const profile of promoterProfiles) {
+                    // We only care about the status for campaigns they have been approved for
+                    if (profile.campaignName && profile.status === 'approved') {
+                        // The latest registration for a campaign will be first due to sorting in findPromotersByEmail
+                        if (!campaignStatusMap.has(profile.campaignName)) {
+                            campaignStatusMap.set(profile.campaignName, profile.hasJoinedGroup || false);
+                        }
+                    }
+                }
+            }
+
+            const assignmentsWithStatus = assignmentsResult.map(assignment => ({
+                ...assignment,
+                promoterHasJoinedGroup: campaignStatusMap.get(assignment.post.campaignName) || false,
+            }));
+
+            setAssignments(assignmentsWithStatus);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
         } finally {
