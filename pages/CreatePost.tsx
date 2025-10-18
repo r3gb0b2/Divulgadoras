@@ -279,10 +279,19 @@ const CreatePost: React.FC = () => {
                                     {promoters.map(p => (
                                         <label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
                                             <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                            <span className="truncate" title={`${p.name}${p.hasJoinedGroup ? ' (está no grupo)' : ''}`}>
-                                                {p.name}
-                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
-                                            </span>
+                                            <div className="truncate flex items-center">
+                                                <a 
+                                                    href={`https://instagram.com/${p.instagram.replace('@', '')}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="text-white hover:text-primary hover:underline"
+                                                    title={p.name}
+                                                >
+                                                    @{p.instagram.replace('@', '')}
+                                                </a>
+                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(no grupo)</span>}
+                                            </div>
                                         </label>
                                     ))}
                                 </div>
