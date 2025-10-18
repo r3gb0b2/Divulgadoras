@@ -44,13 +44,10 @@ const GuestListPage: React.FC = () => {
                  setConfirmations(confirmationData);
             }
 
-
-            // Fetch campaign details to show its name (robustly)
             let orgId: string | undefined;
             if (confirmationData.length > 0) {
                 orgId = confirmationData[0].organizationId;
             } else if (adminData?.organizationId) {
-                // If list is empty, get orgId from logged-in admin
                 orgId = adminData.organizationId;
             }
 
@@ -59,7 +56,6 @@ const GuestListPage: React.FC = () => {
                 const camp = allCampaigns.find(c => c.id === campaignId);
                 setCampaign(camp || null);
             } else if (adminData?.role === 'superadmin' && confirmationData.length === 0) {
-                 // Fallback for Superadmin viewing an empty list for an org they don't belong to.
                 const allCampaignsEver = await getAllCampaigns();
                 const camp = allCampaignsEver.find(c => c.id === campaignId);
                 setCampaign(camp || null);

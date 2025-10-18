@@ -123,6 +123,14 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
     const fetchData = useCallback(async () => {
         if (!stateAbbr) return;
+
+        // Guard against calling API without orgId for non-superadmins
+        if (!isSuperAdmin && !adminData.organizationId) {
+            setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         setError('');
         try {
