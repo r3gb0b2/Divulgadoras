@@ -213,7 +213,7 @@ const getAndRenderTemplate = async (templatePath, defaultHtml, replacements) => 
 
 /**
  * Triggered when a promoter's status is updated.
- * If the new status is 'approved' or 'rejected', it sends a notification email.
+ * If the new status is 'approved', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
 exports.onPromoterStatusChange = functions
@@ -236,10 +236,10 @@ exports.onPromoterStatusChange = functions
 
       // 2. Check for status changes to send notification emails
       const statusChanged = newValue.status !== oldValue.status;
-      const isApprovalOrRejection =
-      newValue.status === "approved" || newValue.status === "rejected";
+      // Only send emails for approvals, not rejections.
+      const isApproval = newValue.status === "approved";
 
-      if (statusChanged && isApprovalOrRejection) {
+      if (statusChanged && isApproval) {
         try {
           await sendStatusChangeEmail(newValue);
         } catch (error) {
@@ -337,8 +337,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
 
 /**
  * Sends a status change email to a promoter.
- * For 'approved' status, it uses the custom HTML template from Firestore.
- * For 'rejected' status, it uses a fixed template ID from Brevo.
+ * This is now only intended for 'approved' status.
  * @param {object} promoterData The promoter document data.
  */
 async function sendStatusChangeEmail(promoterData) {
@@ -348,6 +347,13 @@ async function sendStatusChangeEmail(promoterData) {
   }
   if (!promoterData || !promoterData.email) {
     console.error("Promoter data or email is missing.");
+    return;
+  }
+
+  // This function should now only be called for approved promoters,
+  // but this guard clause prevents accidental sends for other statuses.
+  if (promoterData.status !== "approved") {
+    console.log(`Skipping status change email for non-approved status: '${promoterData.status}'`);
     return;
   }
 
@@ -375,14 +381,8 @@ async function sendStatusChangeEmail(promoterData) {
     portalLink: portalLink,
   };
 
-  if (promoterData.status === "approved") {
-    sendSmtpEmail.subject = `Parabéns, seu cadastro para ${replacements.campaignName} foi aprovado!`;
-    sendSmtpEmail.htmlContent = await getAndRenderTemplate(APPROVED_EMAIL_TEMPLATE_PATH, DEFAULT_APPROVED_TEMPLATE_HTML, replacements);
-  } else { // 'rejected'
-    sendSmtpEmail.subject = `Atualização sobre seu cadastro para ${replacements.campaignName}`;
-    sendSmtpEmail.htmlContent = await getAndRenderTemplate(REJECTED_EMAIL_TEMPLATE_PATH, DEFAULT_REJECTED_TEMPLATE_HTML, replacements);
-  }
-
+  sendSmtpEmail.subject = `Parabéns, seu cadastro para ${replacements.campaignName} foi aprovado!`;
+  sendSmtpEmail.htmlContent = await getAndRenderTemplate(APPROVED_EMAIL_TEMPLATE_PATH, DEFAULT_APPROVED_TEMPLATE_HTML, replacements);
 
   try {
     await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
@@ -542,8 +542,8 @@ exports.manuallySendStatusEmail = functions
           throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
         }
         const promoterData = promoterDoc.data();
-        if (promoterData.status !== "approved" && promoterData.status !== "rejected") {
-          throw new functions.https.HttpsError("failed-precondition", `Não é possível enviar notificação para status '${promoterData.status}'. Apenas 'approved' ou 'rejected'.`);
+        if (promoterData.status !== "approved") {
+          throw new functions.https.HttpsError("failed-precondition", `Não é possível enviar notificação para status '${promoterData.status}'. Apenas 'approved'.`);
         }
         await sendStatusChangeEmail(promoterData);
         return {
