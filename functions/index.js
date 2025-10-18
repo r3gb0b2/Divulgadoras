@@ -138,6 +138,41 @@ exports.onPromoterStatusChange = functions
       }
     });
 
+/**
+ * Triggered when a new PostAssignment document is created.
+ * This function is responsible for sending the notification email to the promoter in the background.
+ */
+exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
+    .document("postAssignments/{assignmentId}")
+    .onCreate(async (snap, context) => {
+        const assignmentData = snap.data();
+        if (!assignmentData) {
+            console.error(`No data for new assignment ${context.params.assignmentId}`);
+            return;
+        }
+
+        const { organizationId, promoterEmail, promoterName, post } = assignmentData;
+        if (!organizationId || !promoterEmail || !promoterName || !post) {
+            console.error(`Incomplete data for assignment ${context.params.assignmentId}, cannot send notification.`);
+            return;
+        }
+
+        try {
+            const orgDoc = await db.collection("organizations").doc(organizationId).get();
+            const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+            await sendNewPostNotificationEmail(
+                { email: promoterEmail, name: promoterName },
+                {
+                    campaignName: post.campaignName,
+                    orgName: orgName,
+                }
+            );
+        } catch (error) {
+            console.error(`Failed to send notification for assignment ${context.params.assignmentId}:`, error);
+        }
+    });
+
 
 /**
  * Queries for posts that should be auto-assigned to a newly approved promoter
@@ -170,8 +205,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
 
   const batch = db.batch();
   const assignmentsCollectionRef = db.collection("postAssignments");
-  const postsToNotify = [];
-
+  
   for (const doc of snapshot.docs) {
     const post = doc.data();
     const postId = doc.id;
@@ -204,25 +238,11 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
       confirmedAt: null,
     };
     batch.set(assignmentDocRef, newAssignment);
-    postsToNotify.push({ post, promoterData });
   }
 
-  if (postsToNotify.length === 0) return; // No un-expired posts found
-
   await batch.commit();
-  console.log(`[Auto-Assign] Created ${postsToNotify.length} new assignments for promoter ${promoterId}.`);
-
-  // Send notifications for the newly created assignments
-  const orgDoc = await db.collection("organizations").doc(organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  const emailPromises = postsToNotify.map(({ post, promoterData: pd }) =>
-    sendNewPostNotificationEmail(pd, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-  await Promise.allSettled(emailPromises);
+  // Note: Emails are now sent by the onPostAssignmentCreated trigger, so no email logic is needed here.
+  console.log(`[Auto-Assign] Created new assignments for promoter ${promoterId}.`);
 }
 
 
@@ -997,17 +1017,21 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
 
 
 // --- Post Management ---
-exports.createPostAndNotify = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
-  // You might want to add role checks here too
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas usuários autorizados podem criar posts.");
+  }
+
   const { postData, assignedPromoters } = data;
   if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
     throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
   }
 
-  // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
+  // Convert serialized timestamp from client back to a real Timestamp object
   if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
       postData.expiresAt = new admin.firestore.Timestamp(
           postData.expiresAt.seconds,
@@ -1047,7 +1071,7 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
     const newAssignment = {
       postId: postDocRef.id,
       post: denormalizedPostData,
-      organizationId: promoter.organizationId,
+      organizationId: postData.organizationId,
       promoterId: promoter.id,
       promoterEmail: promoter.email.toLowerCase(),
       promoterName: promoter.name,
@@ -1060,25 +1084,11 @@ exports.createPostAndNotify = functions.region("southamerica-east1").https.onCal
   // 3. Commit Firestore writes
   await batch.commit();
 
-  // 4. Send notifications (after Firestore is confirmed)
-  const orgDoc = await db.collection("organizations").doc(postData.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  const emailPromises = assignedPromoters.map((promoter) =>
-    sendNewPostNotificationEmail(promoter, {
-      campaignName: postData.campaignName,
-      orgName: orgName,
-    }),
-  );
-
-  // Wait for all emails to be sent but don't fail the whole function if one fails.
-  // Log errors inside sendNewPostNotificationEmail.
-  await Promise.allSettled(emailPromises);
-
+  // 4. Return immediately. Emails will be sent by the onPostAssignmentCreated trigger.
   return { success: true, postId: postDocRef.id };
 });
 
-exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+exports.addAssignmentsToPost = functions.region("southamerica-east1").onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
@@ -1092,7 +1102,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
     throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
   }
 
-  // 1. Fetch post and organization
+  // 1. Fetch post
   const postDocRef = db.collection("posts").doc(postId);
   const postSnap = await postDocRef.get();
   if (!postSnap.exists) {
@@ -1100,13 +1110,10 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
   }
   const post = postSnap.data();
 
-  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
   // 2. Prepare batch write for new assignments
   const batch = db.batch();
   const assignmentsCollectionRef = db.collection("postAssignments");
-  const promotersToNotify = [];
+  const promotersToCreate = [];
 
   const denormalizedPostData = {
     type: post.type,
@@ -1137,29 +1144,21 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
         confirmedAt: null,
       };
       batch.set(assignmentDocRef, newAssignment);
-      promotersToNotify.push(promoterData);
+      promotersToCreate.push(promoterData);
     }
   }
 
-  if (promotersToNotify.length === 0) {
+  if (promotersToCreate.length === 0) {
     console.log("Nenhuma divulgadora válida encontrada para atribuir.");
     return { success: true, message: "Nenhuma divulgadora válida foi encontrada." };
   }
 
   // 4. Commit batch
   await batch.commit();
-  console.log(`[Manual Assign] Created ${promotersToNotify.length} new assignments for post ${postId}.`);
+  console.log(`[Manual Assign] Created ${promotersToCreate.length} new assignments for post ${postId}.`);
 
-  // 5. Send notifications
-  const emailPromises = promotersToNotify.map((promoter) =>
-    sendNewPostNotificationEmail(promoter, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-  await Promise.allSettled(emailPromises);
-
-  return { success: true, message: `${promotersToNotify.length} atribuições criadas e notificadas.` };
+  // 5. Return. Notifications will be sent by the trigger.
+  return { success: true, message: `${promotersToCreate.length} atribuições criadas. As notificações estão sendo enviadas em segundo plano.` };
 });
 
 exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {

@@ -40,9 +40,9 @@ export const createPost = async (
         mediaUrl: finalMediaUrl,
     };
 
-    // 3. Call the cloud function to create docs and send emails
-    const createPostAndNotify = httpsCallable(functions, 'createPostAndNotify');
-    const result = await createPostAndNotify({ postData: finalPostData, assignedPromoters });
+    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
+    const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     
     const data = result.data as { success: boolean, postId?: string };
     if (!data.success || !data.postId) {
