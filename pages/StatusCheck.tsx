@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
@@ -217,6 +217,11 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             title: 'Cadastro Não Aprovado',
             message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
             styles: 'bg-red-900/50 border-red-500 text-red-300'
+        },
+        rejected_editable: {
+            title: 'Correção Necessária',
+            message: 'Seu cadastro precisa de correções. Por favor, revise as informações abaixo e clique no botão para editar e reenviar seu cadastro.',
+            styles: 'bg-orange-900/50 border-orange-500 text-orange-300'
         }
     };
 
@@ -226,9 +231,11 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
          return <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md"><p>Ocorreu um erro ao verificar o status deste cadastro.</p></div>;
     }
 
-    const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
+    const finalMessage = (promoter.status === 'rejected' || promoter.status === 'rejected_editable') && promoter.rejectionReason
         ? promoter.rejectionReason
         : statusInfo.message;
+    
+    const editLink = `/${promoter.organizationId}/register/${promoter.state}/${promoter.campaignName ? encodeURIComponent(promoter.campaignName) : ''}?edit_id=${promoter.id}`;
 
     return (
         <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
@@ -252,6 +259,17 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
                         <ApprovedPromoterSteps key={assocCampaign.id} campaign={assocCampaign} promoter={promoter} isPrimary={false} />
                     ))}
                 </>
+            )}
+
+            {promoter.status === 'rejected_editable' && (
+                 <div className="mt-4 text-center">
+                    <Link
+                        to={editLink}
+                        className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                    >
+                        Editar Cadastro
+                    </Link>
+                </div>
             )}
         </div>
     );

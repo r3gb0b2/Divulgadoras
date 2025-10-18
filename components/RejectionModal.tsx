@@ -4,7 +4,7 @@ import { RejectionReason } from '../types';
 interface RejectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string, allowEdit: boolean) => void;
   reasons: RejectionReason[];
 }
 
@@ -20,6 +20,7 @@ const defaultRejectionReasons: Omit<RejectionReason, 'organizationId'>[] = [
 const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConfirm, reasons }) => {
   const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
   const [customReason, setCustomReason] = useState('');
+  const [allowEdit, setAllowEdit] = useState(false);
 
   const combinedReasons = useMemo(() => {
     const reasonMap = new Map<string, RejectionReason>();
@@ -66,10 +67,11 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
         ? `- ${finalReasons.join('\n- ')}` 
         : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.';
 
-    onConfirm(reasonMessage);
+    onConfirm(reasonMessage, allowEdit);
     // Reset state for next use
     setSelectedReasons(new Set());
     setCustomReason('');
+    setAllowEdit(false);
   };
 
   return (
@@ -106,6 +108,18 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
                     placeholder="Adicione uma observação ou motivo personalizado..."
                     className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary min-h-[80px]"
                 />
+            </div>
+            
+            <div className="border-t border-gray-700 pt-4">
+                <label className="flex items-center p-2 bg-yellow-900/30 rounded-md cursor-pointer hover:bg-yellow-900/50">
+                    <input
+                        type="checkbox"
+                        checked={allowEdit}
+                        onChange={(e) => setAllowEdit(e.target.checked)}
+                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
+                    />
+                    <span className="ml-3 text-yellow-200 text-sm font-medium">Permitir que a divulgadora edite e reenvie o cadastro</span>
+                </label>
             </div>
         </div>
 

@@ -97,8 +97,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (isSuperAdmin) {
             return selectedOrg !== 'all' ? selectedOrg : null;
         }
-        return adminData.organizationId || null;
-    }, [isSuperAdmin, selectedOrg, adminData.organizationId]);
+        return adminData.organizationIds?.[0] || null;
+    }, [isSuperAdmin, selectedOrg, adminData.organizationIds]);
 
 
     // Fetch static data (reasons, orgs, campaigns) once
@@ -110,11 +110,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     campaignsPromise = getAllCampaigns();
                     const orgsData = await getOrganizations();
                     setAllOrganizations(orgsData.sort((a, b) => a.name.localeCompare(b.name)));
-                } else if (adminData.organizationId) {
-                    campaignsPromise = getAllCampaigns(adminData.organizationId);
+                } else if (adminData.organizationIds?.[0]) {
+                    campaignsPromise = getAllCampaigns(adminData.organizationIds?.[0]);
                     const [reasonsData, orgData] = await Promise.all([
-                        getRejectionReasons(adminData.organizationId),
-                        getOrganization(adminData.organizationId),
+                        getRejectionReasons(adminData.organizationIds?.[0]),
+                        getOrganization(adminData.organizationIds?.[0]),
                     ]);
                     setRejectionReasons(reasonsData);
                     setOrganization(orgData);
@@ -146,9 +146,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
         if (isSuperAdmin) return null; // null means no campaign filter
-        if (!adminData.organizationId) return []; // No org, no campaigns
+        if (!adminData.organizationIds?.[0]) return []; // No org, no campaigns
 
-        const orgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationId);
+        const orgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationIds?.[0]);
         
         // If admin has no specific campaign assignments, they can see all campaigns from their org's assigned states
         if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
@@ -176,7 +176,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
 
     const fetchStats = useCallback(async () => {
-        const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+        const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
         if (!isSuperAdmin && !orgId) return;
 
         const statesForScope = getStatesForScope();
@@ -205,7 +205,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setIsLoading(true);
             setError(null);
             
-            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+            const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
             if (!isSuperAdmin && !orgId) {
                  setError("Administrador não está vinculado a uma organização.");
                  setIsLoading(false);
@@ -269,7 +269,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
             // Optimistic UI update
             if (data.status && filter !== 'all' && data.status !== filter) {
-                setAllPromoters(prev => prev.filter(p => p.id !== id));
+                // If filter is 'pending' and we change status to 'approved', it should be removed.
+                // If filter is 'pending' and status is now 'rejected_editable', it should STAY.
+                if (filter === 'pending' && data.status === 'rejected_editable') {
+                     setAllPromoters(prev => prev.map(p => 
+                        p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
+                    ));
+                } else {
+                    setAllPromoters(prev => prev.filter(p => p.id !== id));
+                }
             } else {
                 setAllPromoters(prev => prev.map(p => 
                     p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
@@ -313,9 +321,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
     
-    const handleConfirmReject = async (reason: string) => {
+    const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
         if (rejectingPromoter && canManage) {
-            await handleUpdatePromoter(rejectingPromoter.id, { status: 'rejected', rejectionReason: reason });
+            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
+            await handleUpdatePromoter(rejectingPromoter.id, { status: newStatus, rejectionReason: reason });
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
@@ -503,8 +512,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             pending: "bg-yellow-900/50 text-yellow-300",
             approved: "bg-green-900/50 text-green-300",
             rejected: "bg-red-900/50 text-red-300",
+            rejected_editable: "bg-orange-900/50 text-orange-300",
         };
-        const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado" };
+        const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada" };
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
     
@@ -584,7 +594,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 </div>
                                 
                                 <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end items-center">
-                                    {promoter.status === 'pending' && (
+                                    {(promoter.status === 'pending' || promoter.status === 'rejected_editable') && (
                                         <>
                                             <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
                                             <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>

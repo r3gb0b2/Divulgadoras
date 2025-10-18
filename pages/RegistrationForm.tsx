@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
 // FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase/config';
 
 // Lista de nomes masculinos para o aviso de gênero
 const MALE_NAMES = [
@@ -72,8 +74,11 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
 
 const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
+  const location = useLocation();
   const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   const navigate = useNavigate();
+
+  const [editId, setEditId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -85,6 +90,7 @@ const PromoterForm: React.FC = () => {
   });
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -92,6 +98,29 @@ const PromoterForm: React.FC = () => {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [showGenderWarning, setShowGenderWarning] = useState(false);
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams(location.search);
+    const idToEdit = queryParams.get('edit_id');
+    if (idToEdit) {
+        setEditId(idToEdit);
+        getPromoterById(idToEdit).then(profile => {
+            if (profile) {
+                setFormData({
+                    email: profile.email,
+                    name: profile.name,
+                    whatsapp: profile.whatsapp,
+                    instagram: profile.instagram,
+                    tiktok: profile.tiktok || '',
+                    dateOfBirth: profile.dateOfBirth,
+                });
+                setPhotoPreviews(profile.photoUrls);
+                setOriginalPhotoUrls(profile.photoUrls);
+                setProfileLoaded(true);
+            }
+        }).catch(err => setSubmitError(err.message));
+    }
+  }, [location.search]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -113,6 +142,9 @@ const PromoterForm: React.FC = () => {
   };
   
   const handleCheckEmail = async () => {
+    // Don't auto-fill if we are in edit mode
+    if (editId) return;
+
     const email = formData.email.trim();
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return; // Don't search for invalid or empty emails
@@ -204,7 +236,7 @@ const PromoterForm: React.FC = () => {
         return;
     }
 
-    if (photoFiles.length === 0) {
+    if (photoFiles.length === 0 && originalPhotoUrls.length === 0) {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
@@ -214,14 +246,42 @@ const PromoterForm: React.FC = () => {
     
     try {
       const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
-      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
+      
+      if (editId) {
+        // Update existing promoter
+        let finalPhotoUrls = originalPhotoUrls;
+        if (photoFiles.length > 0) {
+            finalPhotoUrls = await Promise.all(
+                photoFiles.map(async (photo) => {
+                    const fileExtension = photo.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = ref(storage, `promoters-photos/${fileName}`);
+                    await uploadBytes(storageRef, photo);
+                    return await getDownloadURL(storageRef);
+                })
+            );
+        }
+
+        await updatePromoter(editId, {
+            ...formData,
+            photoUrls: finalPhotoUrls,
+            status: 'pending', // Reset status to pending for re-evaluation
+            rejectionReason: '', // Clear previous rejection reason
+        });
+      } else {
+        // Create new promoter
+        await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
+      }
+
       setSubmitSuccess(true);
       
       setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
+      setOriginalPhotoUrls([]);
       setProfileLoaded(false);
       setShowGenderWarning(false);
+      setEditId(null);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -239,8 +299,10 @@ const PromoterForm: React.FC = () => {
   const getButtonText = () => {
       if (isSubmitting) return 'Enviando Cadastro...';
       if (isProcessingPhoto) return 'Processando fotos...';
-      return 'Finalizar Cadastro';
+      return editId ? 'Reenviar Cadastro' : 'Finalizar Cadastro';
   }
+
+  const formTitle = editId ? "Corrigir Cadastro" : `Seja uma Divulgadora - ${stateFullName} (${state?.toUpperCase()})`;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -249,9 +311,9 @@ const PromoterForm: React.FC = () => {
             <span>Voltar</span>
         </button>
         <div className="bg-secondary shadow-2xl rounded-lg p-8">
-            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
+            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{formTitle}</h1>
             {campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(campaignName)}</p>}
-            <p className="text-center text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
+            <p className="text-center text-gray-400 mb-8">{editId ? "Verifique e corrija os dados do seu cadastro abaixo." : "Preencha o formulário abaixo para fazer parte do nosso time."}</p>
             
             {submitSuccess && (
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 mb-6 rounded-md" role="alert">
@@ -277,6 +339,7 @@ const PromoterForm: React.FC = () => {
                         value={formData.email} 
                         onChange={handleChange} 
                         onBlur={handleCheckEmail}
+                        disabled={!!editId}
                         required 
                     />
                      {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
@@ -324,6 +387,7 @@ const PromoterForm: React.FC = () => {
                             )}
                         </div>
                     </div>
+                     {editId && photoFiles.length === 0 && <p className="text-xs text-yellow-400 mt-2">As fotos atuais serão mantidas. Para alterá-las, clique em 'Trocar fotos'.</p>}
                 </div>
 
                 <button
@@ -421,7 +485,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
-                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:text-gray-400"
                 style={props.type === 'date' ? { colorScheme: 'dark' } : undefined}
             />
         </div>

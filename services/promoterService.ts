@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
@@ -50,6 +50,20 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     }
     throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
   }
+};
+
+export const getPromoterById = async (id: string): Promise<Promoter | null> => {
+    try {
+        const docRef = doc(firestore, 'promoters', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Promoter;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting promoter by ID: ", error);
+        throw new Error("Não foi possível buscar os dados da divulgadora.");
+    }
 };
 
 export const getLatestPromoterProfileByEmail = async (email: string): Promise<Promoter | null> => {
@@ -154,7 +168,11 @@ export const getPromotersPage = async (options: {
     }
 
     if (options.status !== 'all') {
-      filters.push(where("status", "==", options.status));
+      if (options.status === 'pending') {
+        filters.push(where("status", "in", ["pending", "rejected_editable"]));
+      } else {
+        filters.push(where("status", "==", options.status));
+      }
     }
 
     // Handle campaign permissions and filters
@@ -240,7 +258,11 @@ export const getAllPromoters = async (options: {
       commonFilters.push(where("organizationId", "==", options.organizationId));
     }
     if (options.status !== 'all') {
-      commonFilters.push(where("status", "==", options.status));
+        if (options.status === 'pending') {
+            commonFilters.push(where("status", "in", ["pending", "rejected_editable"]));
+        } else {
+            commonFilters.push(where("status", "==", options.status));
+        }
     }
     if (options.filterOrgId !== 'all') {
       const orgFilterIndex = commonFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
@@ -346,7 +368,7 @@ export const getPromoterStats = async (options: {
         }
 
         const totalQuery = baseFilters.length > 0 ? query(promotersRef, ...baseFilters) : query(promotersRef);
-        const pendingQuery = query(totalQuery, where("status", "==", "pending"));
+        const pendingQuery = query(totalQuery, where("status", "in", ["pending", "rejected_editable"]));
         const approvedQuery = query(totalQuery, where("status", "==", "approved"));
         const rejectedQuery = query(totalQuery, where("status", "==", "rejected"));
 

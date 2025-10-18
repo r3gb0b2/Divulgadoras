@@ -1,6 +1,6 @@
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
-export type PromoterStatus = 'pending' | 'approved' | 'rejected';
+export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable';
 
 export interface Promoter {
   id: string;
