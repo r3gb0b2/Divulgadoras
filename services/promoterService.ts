@@ -300,7 +300,9 @@ export const getAllPromoters = async (options: {
     }
     // If campaignsToQuery is an empty array, it means no campaigns in scope, so return early
     if (Array.isArray(campaignsToQuery) && campaignsToQuery.length === 0) {
-        return [];
+        // This is a special case: an admin might have scope for a state, but that state has 0 campaigns.
+        // They should still see general applicants (campaignName: null) for that state.
+        // So, we don't return early here. The logic below will handle it.
     }
 
 
@@ -318,46 +320,50 @@ export const getAllPromoters = async (options: {
         });
     };
 
-    // Case 1: Filter by states and campaigns
-    if (statesToQuery && campaignsToQuery) {
-        // Iterate over the smaller list to reduce queries
-        if (statesToQuery.length <= campaignsToQuery.length) {
-            for (const state of statesToQuery) {
-                const stateFilter = where("state", "==", state);
-                for (let i = 0; i < campaignsToQuery.length; i += CHUNK_SIZE) {
-                    const campaignChunk = campaignsToQuery.slice(i, i + CHUNK_SIZE);
-                    const campaignFilter = where("campaignName", "in", campaignChunk);
-                    await executeQuery([...baseFilters, stateFilter, campaignFilter]);
+    // Case 1: Filter by states and (potentially) campaigns
+    if (statesToQuery) {
+        // Query for named campaigns
+        if (campaignsToQuery && campaignsToQuery.length > 0) {
+            // Iterate over the smaller list to reduce queries
+            if (statesToQuery.length <= campaignsToQuery.length) {
+                for (const state of statesToQuery) {
+                    const stateFilter = where("state", "==", state);
+                    for (let i = 0; i < campaignsToQuery.length; i += CHUNK_SIZE) {
+                        const campaignChunk = campaignsToQuery.slice(i, i + CHUNK_SIZE);
+                        const campaignFilter = where("campaignName", "in", campaignChunk);
+                        await executeQuery([...baseFilters, stateFilter, campaignFilter]);
+                    }
                 }
-            }
-        } else {
-            for (const campaign of campaignsToQuery) {
-                const campaignFilter = where("campaignName", "==", campaign);
-                for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
-                    const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
-                    const stateFilter = where("state", "in", stateChunk);
-                    await executeQuery([...baseFilters, campaignFilter, stateFilter]);
+            } else {
+                for (const campaign of campaignsToQuery) {
+                    const campaignFilter = where("campaignName", "==", campaign);
+                    for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
+                        const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
+                        const stateFilter = where("state", "in", stateChunk);
+                        await executeQuery([...baseFilters, campaignFilter, stateFilter]);
+                    }
                 }
             }
         }
-    } 
-    // Case 2: Filter by states only
-    else if (statesToQuery) {
+        
+        // Also fetch promoters with null campaignName for all scoped states.
+        // This ensures general applicants are always included when filtering by state.
+        const nullCampaignFilter = where("campaignName", "==", null);
         for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
             const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
             const stateFilter = where("state", "in", stateChunk);
-            await executeQuery([...baseFilters, stateFilter]);
+            await executeQuery([...baseFilters, nullCampaignFilter, stateFilter]);
         }
     } 
-    // Case 3: Filter by campaigns only
-    else if (campaignsToQuery) {
+    // Case 2: Filter by campaigns only (no state filter)
+    else if (campaignsToQuery && campaignsToQuery.length > 0) {
         for (let i = 0; i < campaignsToQuery.length; i += CHUNK_SIZE) {
             const campaignChunk = campaignsToQuery.slice(i, i + CHUNK_SIZE);
             const campaignFilter = where("campaignName", "in", campaignChunk);
             await executeQuery([...baseFilters, campaignFilter]);
         }
     } 
-    // Case 4: No state or campaign filter (e.g., superadmin with 'all' selected)
+    // Case 3: No state or campaign filter (e.g., superadmin with 'all' selected)
     else {
         await executeQuery(baseFilters);
     }
