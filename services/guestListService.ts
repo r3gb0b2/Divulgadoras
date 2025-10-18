@@ -1,4 +1,3 @@
-
 import { firestore } from '../firebase/config';
 import {
   collection,
@@ -11,6 +10,7 @@ import {
   writeBatch,
   doc,
   runTransaction,
+  Timestamp,
 } from 'firebase/firestore';
 import { GuestListConfirmation } from '../types';
 
@@ -105,7 +105,7 @@ export const checkInPerson = async (confirmationId: string, personName: string):
       }
 
       const data = docSnap.data() as GuestListConfirmation;
-      const now = serverTimestamp();
+      const now = Timestamp.now();
 
       if (personName === data.promoterName) {
         if (data.promoterCheckedInAt) {
