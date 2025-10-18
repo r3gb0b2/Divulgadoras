@@ -145,38 +145,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
-    // Calculate the exact list of campaigns the admin is allowed to see.
-    const campaignsInScope = useMemo(() => {
-        if (isSuperAdmin) return null; // null means no campaign filter
-        if (!selectedOrgId) return []; // No org, no campaigns
-
-        const orgCampaigns = allCampaigns.filter(c => c.organizationId === selectedOrgId);
-        
-        // If admin has no specific campaign assignments, they can see all campaigns from their org's assigned states
-        if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
-            return orgCampaigns.map(c => c.name);
-        }
-
-        const allowedCampaignNames = new Set<string>();
-        const statesForScope = getStatesForScope() || [];
-
-        for (const stateAbbr of statesForScope) {
-            const restrictedCampaigns = adminData.assignedCampaigns[stateAbbr];
-            
-            if (restrictedCampaigns) { // Restriction exists for this state
-                if (restrictedCampaigns.length > 0) {
-                    restrictedCampaigns.forEach(name => allowedCampaignNames.add(name));
-                }
-            } else { // No restriction for this state, so they can see all campaigns in it from their org.
-                orgCampaigns
-                    .filter(c => c.stateAbbr === stateAbbr)
-                    .forEach(c => allowedCampaignNames.add(c.name));
-            }
-        }
-
-        return Array.from(allowedCampaignNames);
-    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns, selectedOrgId]);
-
     const fetchStats = useCallback(async () => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) return;
@@ -222,7 +190,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     organizationId: orgId,
                     statesForScope,
                     status: filter,
-                    campaignsInScope: campaignsInScope,
+                    assignedCampaignsForScope: isSuperAdmin ? undefined : adminData.assignedCampaigns,
                     selectedCampaign: selectedCampaign,
                     filterOrgId: selectedOrg,
                     filterState: selectedState,
@@ -238,7 +206,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         };
 
         fetchAllPromoters();
-    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope, selectedOrgId]);
+    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
 
 
     // Reset page number whenever filters or search query change
