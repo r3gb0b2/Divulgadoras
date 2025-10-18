@@ -464,22 +464,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 totalFilteredCount: sorted.length,
             };
         }
+        
+        const searchTerms = lowercasedQuery.split(' ').filter(term => term.length > 0);
 
         const filtered = sorted.filter(p => {
-            // Standard text search on name, email, campaign
-            const textSearch =
-                (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
-                (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
-                (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
+            // For a promoter to be a match, ALL search terms must be found somewhere in their data.
+            return searchTerms.every(term => {
+                const textMatch =
+                    (p.name && String(p.name).toLowerCase().includes(term)) ||
+                    (p.email && String(p.email).toLowerCase().includes(term)) ||
+                    (p.campaignName && String(p.campaignName).toLowerCase().includes(term));
 
-            // Phone number search, only triggered if the search query contains digits
-            const searchDigits = lowercasedQuery.replace(/\D/g, '');
-            const phoneSearch =
-                searchDigits.length > 0 &&
-                p.whatsapp &&
-                String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
+                // Also check against phone number if the term could be part of one
+                const searchDigits = term.replace(/\D/g, '');
+                const phoneMatch =
+                    searchDigits.length > 0 &&
+                    p.whatsapp &&
+                    String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
 
-            return textSearch || phoneSearch;
+                return textMatch || phoneMatch;
+            });
         });
 
         // Apply pagination to the filtered results
