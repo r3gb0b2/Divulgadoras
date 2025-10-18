@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
@@ -11,7 +12,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 const GuestListPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
     const [confirmations, setConfirmations] = useState<(GuestListConfirmation & { promoterDetails?: Promoter })[]>([]);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -48,10 +49,8 @@ const GuestListPage: React.FC = () => {
             let orgId: string | undefined;
             if (confirmationData.length > 0) {
                 orgId = confirmationData[0].organizationId;
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-            } else if (adminData?.organizationIds?.[0]) {
-                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-                orgId = adminData.organizationIds[0];
+            } else if (selectedOrgId) {
+                orgId = selectedOrgId;
             }
 
             if (orgId) {
@@ -69,7 +68,7 @@ const GuestListPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [campaignId, adminData]);
+    }, [campaignId, adminData, selectedOrgId]);
 
     useEffect(() => {
         fetchData();

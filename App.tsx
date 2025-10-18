@@ -7,12 +7,36 @@ import StateSelection from './pages/StateSelection';
 import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
-import { AdminAuthProvider } from './contexts/AdminAuthContext';
+import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
 import ProofUploadPage from './pages/ProofUploadPage';
+
+const OrganizationSwitcher: React.FC = () => {
+    const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
+
+    if (loading || !adminData || adminData.role === 'superadmin' || !organizationsForAdmin || organizationsForAdmin.length <= 1 || !selectedOrgId) {
+        return null;
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-300 hidden sm:inline">Organização:</span>
+            <select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
+                className="px-3 py-1.5 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200"
+            >
+                {organizationsForAdmin.map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+            </select>
+        </div>
+    );
+};
+
 
 const App: React.FC = () => {
   return (
@@ -24,7 +48,8 @@ const App: React.FC = () => {
               <Link to="/" className="flex items-center">
                 <LogoIcon className="h-8 w-auto text-white" />
               </Link>
-              <div className='space-x-4'>
+              <div className='flex items-center space-x-4'>
+                <OrganizationSwitcher />
                 <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
                 <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Verificar Status</Link>
                 <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>

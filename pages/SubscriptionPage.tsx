@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -27,7 +28,7 @@ const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Ic
 
 const SubscriptionPage: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -40,12 +41,10 @@ const SubscriptionPage: React.FC = () => {
     const [taxId, setTaxId] = useState('');
 
     const fetchOrg = async () => {
-        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-        if (adminData?.organizationIds?.[0]) {
+        if (selectedOrgId) {
             setIsLoading(true);
             try {
-                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-                const orgData = await getOrganization(adminData.organizationIds[0]);
+                const orgData = await getOrganization(selectedOrgId);
                 setOrganization(orgData);
                 if (orgData) {
                     // Pre-fill form if data exists
@@ -59,14 +58,14 @@ const SubscriptionPage: React.FC = () => {
                 setIsLoading(false);
             }
         } else {
-            setError(adminData ? "Este administrador não está vinculado a uma organização." : "Dados do administrador não encontrados.");
+            setError(adminData ? "Nenhuma organização selecionada." : "Dados do administrador não encontrados.");
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
         fetchOrg();
-    }, [adminData]);
+    }, [adminData, selectedOrgId]);
 
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();

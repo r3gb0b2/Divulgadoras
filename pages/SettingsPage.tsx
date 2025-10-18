@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
@@ -8,20 +9,25 @@ import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { adminData } = useAdminAuth();
+  const { adminData, selectedOrgId } = useAdminAuth();
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-    if (adminData?.organizationIds?.[0]) {
-      // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-      getOrganization(adminData.organizationIds[0]).then(orgData => {
-        if (orgData && adminData.uid === orgData.ownerUid) {
+    if (selectedOrgId) {
+      getOrganization(selectedOrgId).then(orgData => {
+        if (orgData && adminData?.uid === orgData.ownerUid) {
           setIsOwner(true);
+        } else {
+          setIsOwner(false);
         }
-      }).catch(err => console.error("Could not fetch organization data for owner check:", err));
+      }).catch(err => {
+        console.error("Could not fetch organization data for owner check:", err);
+        setIsOwner(false);
+      });
+    } else {
+      setIsOwner(false);
     }
-  }, [adminData]);
+  }, [adminData, selectedOrgId]);
 
   return (
     <div>
@@ -39,8 +45,7 @@ const SettingsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {isOwner && (
             <Link
-              // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-              to={`/admin/organization/${adminData?.organizationIds?.[0]}`}
+              to={`/admin/organization/${selectedOrgId}`}
               className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
             >
               <div className="flex items-center">

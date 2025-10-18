@@ -15,6 +15,7 @@ import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -48,6 +49,7 @@ const formatDate = (timestamp: any): string => {
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
+    const { selectedOrgId } = useAdminAuth();
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
@@ -97,8 +99,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (isSuperAdmin) {
             return selectedOrg !== 'all' ? selectedOrg : null;
         }
-        return adminData.organizationIds?.[0] || null;
-    }, [isSuperAdmin, selectedOrg, adminData.organizationIds]);
+        return selectedOrgId || null;
+    }, [isSuperAdmin, selectedOrg, selectedOrgId]);
 
 
     // Fetch static data (reasons, orgs, campaigns) once
@@ -110,11 +112,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     campaignsPromise = getAllCampaigns();
                     const orgsData = await getOrganizations();
                     setAllOrganizations(orgsData.sort((a, b) => a.name.localeCompare(b.name)));
-                } else if (adminData.organizationIds?.[0]) {
-                    campaignsPromise = getAllCampaigns(adminData.organizationIds?.[0]);
+                } else if (selectedOrgId) {
+                    campaignsPromise = getAllCampaigns(selectedOrgId);
                     const [reasonsData, orgData] = await Promise.all([
-                        getRejectionReasons(adminData.organizationIds?.[0]),
-                        getOrganization(adminData.organizationIds?.[0]),
+                        getRejectionReasons(selectedOrgId),
+                        getOrganization(selectedOrgId),
                     ]);
                     setRejectionReasons(reasonsData);
                     setOrganization(orgData);
@@ -128,7 +130,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
         };
         fetchStaticData();
-    }, [adminData, isSuperAdmin]);
+    }, [adminData, isSuperAdmin, selectedOrgId]);
 
     const getStatesForScope = useCallback(() => {
         let statesForScope: string[] | null = null;
@@ -146,9 +148,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
         if (isSuperAdmin) return null; // null means no campaign filter
-        if (!adminData.organizationIds?.[0]) return []; // No org, no campaigns
+        if (!selectedOrgId) return []; // No org, no campaigns
 
-        const orgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationIds?.[0]);
+        const orgCampaigns = allCampaigns.filter(c => c.organizationId === selectedOrgId);
         
         // If admin has no specific campaign assignments, they can see all campaigns from their org's assigned states
         if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
@@ -173,10 +175,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
 
         return Array.from(allowedCampaignNames);
-    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
+    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns, selectedOrgId]);
 
     const fetchStats = useCallback(async () => {
-        const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
+        const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) return;
 
         const statesForScope = getStatesForScope();
@@ -191,7 +193,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // Avoid overwriting a more specific error from the main fetch
             if (!error) setError(err.message);
         }
-    }, [adminData, organization, isSuperAdmin, getStatesForScope, error]);
+    }, [adminData, organization, isSuperAdmin, getStatesForScope, error, selectedOrgId]);
 
 
     // Fetch stats
@@ -205,9 +207,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setIsLoading(true);
             setError(null);
             
-            const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
+            const orgId = isSuperAdmin ? undefined : selectedOrgId;
             if (!isSuperAdmin && !orgId) {
-                 setError("Administrador não está vinculado a uma organização.");
+                 setError("Nenhuma organização selecionada.");
                  setIsLoading(false);
                  setAllPromoters([]);
                  return;
@@ -236,7 +238,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         };
 
         fetchAllPromoters();
-    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope]);
+    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope, selectedOrgId]);
 
 
     // Reset page number whenever filters or search query change

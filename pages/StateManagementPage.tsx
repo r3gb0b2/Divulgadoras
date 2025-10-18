@@ -5,6 +5,7 @@ import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesCon
 import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
@@ -109,6 +110,7 @@ interface StateManagementPageProps {
 
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
     const { stateAbbr } = useParams<{ stateAbbr: string }>();
+    const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
@@ -120,12 +122,13 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
 
     const isSuperAdmin = adminData.role === 'superadmin';
+    const orgIdForOps = isSuperAdmin ? undefined : selectedOrgId;
 
     const fetchData = useCallback(async () => {
         if (!stateAbbr) return;
 
         // Guard against calling API without orgId for non-superadmins
-        if (!isSuperAdmin && !adminData.organizationIds?.[0]) {
+        if (!isSuperAdmin && !selectedOrgId) {
             setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
             setIsLoading(false);
             return;
@@ -134,7 +137,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignData = await getCampaigns(stateAbbr, adminData.organizationIds?.[0]);
+            const campaignData = await getCampaigns(stateAbbr, orgIdForOps);
             setCampaigns(campaignData);
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
@@ -145,7 +148,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         } finally {
             setIsLoading(false);
         }
-    }, [stateAbbr, adminData.organizationIds, isSuperAdmin]);
+    }, [stateAbbr, isSuperAdmin, selectedOrgId, orgIdForOps]);
 
     useEffect(() => {
         fetchData();
@@ -157,8 +160,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
     
     const handleCopyLink = (campaign: Campaign) => {
-        if (!stateAbbr || !adminData?.organizationIds?.[0]) return;
-        const link = `${window.location.origin}/#/${adminData.organizationIds[0]}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
+        if (!stateAbbr || !orgIdForOps) return;
+        const link = `${window.location.origin}/#/${orgIdForOps}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedLink(campaign.id);
             setTimeout(() => setCopiedLink(null), 2500);
@@ -169,8 +172,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
 
     const handleCopyGuestListLink = (campaign: Campaign) => {
-        if (!adminData?.organizationIds?.[0]) return;
-        const link = `${window.location.origin}/#/lista/${adminData.organizationIds[0]}/${campaign.id}`;
+        if (!orgIdForOps) return;
+        const link = `${window.location.origin}/#/lista/${orgIdForOps}/${campaign.id}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedGuestListLink(campaign.id);
             setTimeout(() => setCopiedGuestListLink(null), 2500);
@@ -181,9 +184,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
 
     const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
-        if (!stateAbbr || (!adminData.organizationIds?.[0] && !isSuperAdmin)) return;
+        if (!stateAbbr || !orgIdForOps) return;
 
-        if (isSuperAdmin && !adminData.organizationIds?.[0]) {
+        if (isSuperAdmin) {
              setError("Super Admins devem gerenciar campanhas no painel da organização.");
              return;
         }
@@ -197,7 +200,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 await addCampaign({
                     ...(campaignData as Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'>),
                     stateAbbr,
-                    organizationId: adminData.organizationIds![0],
+                    organizationId: orgIdForOps,
                 });
 
                 // Auto-assign the new campaign to the creating admin if they have restrictions for this state.

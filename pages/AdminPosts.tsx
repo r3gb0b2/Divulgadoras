@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg } from '../services/postService';
@@ -12,7 +13,7 @@ import { auth } from '../firebase/config';
 
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
     const [posts, setPosts] = useState<Post[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -27,8 +28,7 @@ const AdminPosts: React.FC = () => {
             setIsLoading(true);
             setError(null);
             
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-            const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
+            const orgId = isSuperAdmin ? undefined : selectedOrgId;
 
             if (!isSuperAdmin && !orgId) {
                 setError("Organização não encontrada para este admin.");
@@ -53,7 +53,7 @@ const AdminPosts: React.FC = () => {
         };
 
         fetchPosts();
-    }, [adminData, isSuperAdmin]);
+    }, [adminData, isSuperAdmin, selectedOrgId]);
 
     const handleLogout = async () => {
         try {

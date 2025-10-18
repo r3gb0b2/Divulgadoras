@@ -9,7 +9,7 @@ import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
 const GuestListAccessPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
 
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -26,8 +26,7 @@ const GuestListAccessPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-            const orgId = adminData.organizationIds?.[0];
+            const orgId = adminData.role === 'superadmin' ? undefined : selectedOrgId;
             if (!orgId && adminData.role !== 'superadmin') {
                 throw new Error("Organização não encontrada.");
             }
@@ -57,7 +56,7 @@ const GuestListAccessPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [campaignId, adminData]);
+    }, [campaignId, adminData, selectedOrgId]);
 
     useEffect(() => {
         fetchData();
