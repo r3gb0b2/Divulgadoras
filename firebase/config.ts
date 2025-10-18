@@ -1,10 +1,11 @@
 // Import the functions you need from the SDKs you need
 import firebase from "firebase/compat/app";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-// FIX: Switched from modular to compat auth to resolve export errors.
+// Import compat services
 import "firebase/compat/auth";
-import { getFunctions } from "firebase/functions";
+import "firebase/compat/firestore";
+import "firebase/compat/storage";
+import "firebase/compat/functions";
+
 
 // TODO: Add your own Firebase configuration from your Firebase console
 // ATENÇÃO: Substitua os valores abaixo pelas credenciais do SEU projeto no Firebase
@@ -22,15 +23,14 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = firebase.initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore and get a reference to the service
-export const firestore = getFirestore(app);
+// Initialize Cloud Firestore and get a reference to the service using compat syntax
+export const firestore = firebase.firestore();
 
-// Initialize Cloud Storage and get a reference to the service
-export const storage = getStorage(app);
+// Initialize Cloud Storage and get a reference to the service using compat syntax
+export const storage = firebase.storage();
 
 // Initialize Firebase Authentication and get a reference to the service
-// FIX: Use the compat auth() method instead of modular getAuth().
 export const auth = firebase.auth();
 
-// Initialize Firebase Functions and get a reference to the service
-export const functions = getFunctions(app, 'southamerica-east1');
+// Initialize Firebase Functions and get a reference to the service using compat syntax
+export const functions = app.functions('southamerica-east1');

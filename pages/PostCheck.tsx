@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
 import { PostAssignment } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
@@ -114,12 +114,32 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
             
             <div className="border-t border-gray-700 pt-3">
                 {assignment.post.type === 'image' && assignment.post.mediaUrl && (
-                    <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer">
-                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
-                    </a>
+                    <div className="mb-4">
+                        <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md" />
+                        </a>
+                        <div className="flex justify-center items-center gap-4 mt-2">
+                            <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                                <EyeIcon className="w-4 h-4" /> Ver
+                            </a>
+                            <a href={assignment.post.mediaUrl} download className="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                                <DownloadIcon className="w-4 h-4" /> Baixar
+                            </a>
+                        </div>
+                    </div>
                 )}
                 {assignment.post.type === 'video' && assignment.post.mediaUrl && (
-                    <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                    <div className="mb-4">
+                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                        <div className="flex justify-center items-center gap-4 mt-2">
+                             <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                                <EyeIcon className="w-4 h-4" /> Ver
+                            </a>
+                            <a href={assignment.post.mediaUrl} download className="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                                <DownloadIcon className="w-4 h-4" /> Baixar
+                            </a>
+                        </div>
+                    </div>
                 )}
                 {assignment.post.type === 'text' && (
                     <div className="bg-gray-800 p-3 rounded-md mb-4">
