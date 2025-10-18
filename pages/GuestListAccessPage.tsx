@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { Campaign, Promoter } from '../types';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAllCampaigns, updateCampaign } from '../services/settingsService';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
 
 const GuestListAccessPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
@@ -15,6 +15,7 @@ const GuestListAccessPage: React.FC = () => {
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [accessMode, setAccessMode] = useState<'all' | 'specific'>('all');
     const [assignments, setAssignments] = useState<{ [promoterId: string]: string[] }>({});
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -44,6 +45,8 @@ const GuestListAccessPage: React.FC = () => {
             );
 
             setCampaign(currentCampaign);
+            // Sort promoters alphabetically by name or instagram handle
+            approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
             setPromoters(approvedPromoters);
             setAccessMode(currentCampaign.guestListAccess || 'all');
             setAssignments(currentCampaign.guestListAssignments || {});
@@ -58,6 +61,17 @@ const GuestListAccessPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+    
+    const filteredPromoters = useMemo(() => {
+        if (!searchQuery.trim()) {
+            return promoters;
+        }
+        const lowerQuery = searchQuery.toLowerCase();
+        return promoters.filter(p => 
+            p.name.toLowerCase().includes(lowerQuery) || 
+            (p.instagram && p.instagram.toLowerCase().includes(lowerQuery))
+        );
+    }, [promoters, searchQuery]);
 
     const handleAssignmentToggle = (promoterId: string, listName: string) => {
         setAssignments(prev => {
@@ -75,6 +89,32 @@ const GuestListAccessPage: React.FC = () => {
             return newAssignments;
         });
     };
+
+    const handleToggleAllForList = (listName: string) => {
+        const promoterIds = filteredPromoters.map(p => p.id);
+        const areAllSelected = promoterIds.every(id => assignments[id]?.includes(listName));
+
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            promoterIds.forEach(id => {
+                const currentLists = newAssignments[id] || [];
+                if (areAllSelected) {
+                    // Unselect all: remove the listName
+                    newAssignments[id] = currentLists.filter(l => l !== listName);
+                    if (newAssignments[id].length === 0) {
+                        delete newAssignments[id];
+                    }
+                } else {
+                    // Select all: add the listName if not present
+                    if (!currentLists.includes(listName)) {
+                        newAssignments[id] = [...currentLists, listName];
+                    }
+                }
+            });
+            return newAssignments;
+        });
+    };
+
 
     const handleSave = async () => {
         if (!campaignId) return;
@@ -134,27 +174,62 @@ const GuestListAccessPage: React.FC = () => {
                 {accessMode === 'specific' && (
                     <div>
                         <h2 className="text-lg font-semibold text-white">Atribuir Listas</h2>
-                        {promoters.length > 0 && (campaign?.guestListTypes?.length ?? 0) > 0 ? (
-                            <div className="mt-2 border border-gray-700 rounded-lg p-2 max-h-[60vh] overflow-y-auto space-y-3">
-                                {promoters.map(p => (
-                                    <div key={p.id} className="p-3 bg-gray-800/50 rounded-md">
-                                        <p className={`font-semibold ${p.hasJoinedGroup ? 'text-green-400' : 'text-gray-200'}`} title={p.name}>{p.instagram || p.name}</p>
-                                        <div className="pl-4 mt-2 space-y-1 border-l-2 border-gray-600">
-                                            {(campaign?.guestListTypes || []).map(listName => (
-                                                <label key={listName} className="flex items-center space-x-2 cursor-pointer">
-                                                    <input 
-                                                        type="checkbox"
-                                                        checked={(assignments[p.id] || []).includes(listName)}
-                                                        onChange={() => handleAssignmentToggle(p.id, listName)}
-                                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
-                                                    />
-                                                    <span className="text-sm text-gray-300">{listName}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                         {(promoters.length > 0 && (campaign?.guestListTypes?.length ?? 0) > 0) ? (
+                            <>
+                                <div className="relative my-4">
+                                     <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                        <SearchIcon className="h-5 w-5 text-gray-400" />
+                                    </span>
+                                    <input 
+                                        type="text"
+                                        placeholder="Buscar divulgadora por nome ou @..."
+                                        value={searchQuery}
+                                        onChange={e => setSearchQuery(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 focus:ring-primary focus:border-primary"
+                                    />
+                                </div>
+                                <div className="space-y-4">
+                                    {(campaign?.guestListTypes || []).map(listName => {
+                                        const selectedCount = filteredPromoters.filter(p => (assignments[p.id] || []).includes(listName)).length;
+                                        return (
+                                            <div key={listName} className="border border-gray-700 rounded-lg p-4">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <h3 className="text-xl font-semibold text-primary">{listName}</h3>
+                                                    <label className="flex items-center space-x-2 cursor-pointer text-sm font-medium">
+                                                        <input 
+                                                            type="checkbox"
+                                                            onChange={() => handleToggleAllForList(listName)}
+                                                            checked={filteredPromoters.length > 0 && selectedCount === filteredPromoters.length}
+                                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
+                                                        />
+                                                        <span>
+                                                            Marcar/Desmarcar Todos ({selectedCount}/{filteredPromoters.length})
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border-t border-gray-700">
+                                                     {filteredPromoters.map(p => (
+                                                        <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-800/50 cursor-pointer">
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={(assignments[p.id] || []).includes(listName)}
+                                                                onChange={() => handleAssignmentToggle(p.id, listName)}
+                                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
+                                                            />
+                                                            <span 
+                                                                className={`truncate text-sm ${p.hasJoinedGroup ? 'text-green-400' : 'text-gray-300'}`}
+                                                                title={p.name}
+                                                            >
+                                                                {p.instagram || p.name}
+                                                            </span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
                         ) : (
                             <p className="text-gray-400 text-center mt-4">
                                 {promoters.length === 0 ? "Nenhuma divulgadora aprovada para este evento." : "Nenhum tipo de lista foi criado para este evento."}
