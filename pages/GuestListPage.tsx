@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
-import { GuestListConfirmation, Campaign } from '../types';
+import { getPromotersByIds } from '../services/promoterService';
+import { GuestListConfirmation, Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
@@ -10,11 +11,12 @@ const GuestListPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
     const { adminData } = useAdminAuth();
-    const [confirmations, setConfirmations] = useState<GuestListConfirmation[]>([]);
+    const [confirmations, setConfirmations] = useState<(GuestListConfirmation & { promoterDetails?: Promoter })[]>([]);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeList, setActiveList] = useState<string | null>(null);
+    const [filterInGroupOnly, setFilterInGroupOnly] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -27,7 +29,21 @@ const GuestListPage: React.FC = () => {
         setError(null);
         try {
             const confirmationData = await getGuestListForCampaign(campaignId);
-            setConfirmations(confirmationData);
+            
+            // Fetch promoter details to check `hasJoinedGroup` status
+            const promoterIds = [...new Set(confirmationData.map((c) => c.promoterId))];
+            if (promoterIds.length > 0) {
+                const promotersData = await getPromotersByIds(promoterIds);
+                const promotersMap = new Map(promotersData.map((p) => [p.id, p]));
+                const confirmationsWithDetails = confirmationData.map((conf) => ({
+                    ...conf,
+                    promoterDetails: promotersMap.get(conf.promoterId),
+                }));
+                setConfirmations(confirmationsWithDetails);
+            } else {
+                 setConfirmations(confirmationData);
+            }
+
 
             // Fetch campaign details to show its name (robustly)
             let orgId: string | undefined;
@@ -60,27 +76,34 @@ const GuestListPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    const filteredConfirmations = useMemo(() => {
+        if (!filterInGroupOnly) {
+            return confirmations;
+        }
+        return confirmations.filter(c => c.promoterDetails?.hasJoinedGroup);
+    }, [confirmations, filterInGroupOnly]);
+
     const groupedConfirmations = useMemo(() => {
-        return confirmations.reduce((acc, conf) => {
+        return filteredConfirmations.reduce((acc, conf) => {
             const listName = conf.listName || 'Lista Padrão';
             if (!acc[listName]) {
                 acc[listName] = [];
             }
             acc[listName].push(conf);
             return acc;
-        }, {} as Record<string, GuestListConfirmation[]>);
-    }, [confirmations]);
+        }, {} as Record<string, (GuestListConfirmation & { promoterDetails?: Promoter })[]>);
+    }, [filteredConfirmations]);
 
     useEffect(() => {
         // Set the first list as active by default
         const listNames = Object.keys(groupedConfirmations);
-        if (listNames.length > 0 && !activeList) {
+        if (listNames.length > 0 && (!activeList || !groupedConfirmations[activeList])) {
             setActiveList(listNames[0]);
         }
     }, [groupedConfirmations, activeList]);
 
     const handleDownloadCSV = () => {
-        if (confirmations.length === 0) return;
+        if (filteredConfirmations.length === 0) return;
 
         const formatCSVCell = (text: string) => {
             const result = '"' + text.replace(/"/g, '""') + '"';
@@ -88,7 +111,7 @@ const GuestListPage: React.FC = () => {
         };
 
         const headers = ["Tipo da Lista", "Nome da Divulgadora", "Status Presença", "Convidados"];
-        const rows = confirmations.map(conf => {
+        const rows = filteredConfirmations.map(conf => {
             const listName = formatCSVCell(conf.listName);
             const promoterName = formatCSVCell(conf.promoterName);
             const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
@@ -114,7 +137,7 @@ const GuestListPage: React.FC = () => {
         }
     };
 
-    const totalConfirmed = confirmations.reduce((acc, curr) => {
+    const totalConfirmed = filteredConfirmations.reduce((acc, curr) => {
         let count = 0;
         if (curr.isPromoterAttending) count++;
         count += curr.guestNames.filter(name => name.trim() !== '').length;
@@ -149,6 +172,10 @@ const GuestListPage: React.FC = () => {
         if (confirmations.length === 0) {
             return <p className="text-gray-400 text-center py-8">Nenhuma confirmação na lista para este evento ainda.</p>;
         }
+        
+        if (filteredConfirmations.length === 0) {
+             return <p className="text-gray-400 text-center py-8">Nenhuma confirmação encontrada com o filtro aplicado.</p>;
+        }
 
         const currentListConfirmations = activeList ? groupedConfirmations[activeList] : [];
 
@@ -156,7 +183,7 @@ const GuestListPage: React.FC = () => {
             <div>
                 {listNames.length > 1 && (
                     <div className="border-b border-gray-700 mb-4">
-                        <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+                        <nav className="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
                             {listNames.map(name => (
                                 <button
                                     key={name}
@@ -185,7 +212,9 @@ const GuestListPage: React.FC = () => {
                             {currentListConfirmations.map(conf => (
                                 <tr key={conf.id} className="hover:bg-gray-700/40">
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-white">{conf.promoterName}</div>
+                                        <div className={`text-sm font-medium ${conf.promoterDetails?.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-white'}`}>
+                                            {conf.promoterName}
+                                        </div>
                                         <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
@@ -212,24 +241,35 @@ const GuestListPage: React.FC = () => {
                     </button>
                     <h1 className="text-3xl font-bold mt-1">Lista de Convidados: {campaignName}</h1>
                 </div>
-                <div className="flex items-center gap-4">
-                     <Link
-                        to={`/admin/checkin/${campaignId}`}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
-                    >
-                        Controlar Entrada
-                    </Link>
-                     <button
-                        onClick={handleDownloadCSV}
-                        disabled={confirmations.length === 0 || isLoading}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
-                    >
-                        <DownloadIcon className="w-4 h-4" />
-                        <span>Baixar Excel (CSV)</span>
-                    </button>
-                    <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
-                        <div className="text-3xl">{totalConfirmed}</div>
-                        <div className="text-sm uppercase">Confirmados</div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                     <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer flex-shrink-0">
+                        <input
+                            type="checkbox"
+                            checked={filterInGroupOnly}
+                            onChange={(e) => setFilterInGroupOnly(e.target.checked)}
+                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                        />
+                        <span>Mostrar apenas quem está no grupo</span>
+                    </label>
+                    <div className="flex items-center gap-4">
+                        <Link
+                            to={`/admin/checkin/${campaignId}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
+                        >
+                            Controlar Entrada
+                        </Link>
+                        <button
+                            onClick={handleDownloadCSV}
+                            disabled={filteredConfirmations.length === 0 || isLoading}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            <span>Baixar Excel (CSV)</span>
+                        </button>
+                        <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
+                            <div className="text-3xl">{totalConfirmed}</div>
+                            <div className="text-sm uppercase">Confirmados</div>
+                        </div>
                     </div>
                 </div>
             </div>
