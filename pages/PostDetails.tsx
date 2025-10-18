@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup } from '../services/postService';
 import { Post, PostAssignment } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, ArrowDownTrayIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -166,6 +166,44 @@ export const PostDetails: React.FC = () => {
         }
     };
 
+    const handleDownload = async (url: string) => {
+        if (!url) return;
+        try {
+            // Fetch the media file as a blob
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const blob = await response.blob();
+
+            // Create a temporary URL for the blob
+            const objectUrl = window.URL.createObjectURL(blob);
+
+            // Create a temporary link element to trigger the download
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            // Extract a filename from the URL
+            const urlParts = url.split('/');
+            const lastPart = urlParts[urlParts.length - 1];
+            const filename = lastPart.split('?')[0]; // Remove query params
+            const decodedFilename = decodeURIComponent(filename);
+
+            link.setAttribute('download', decodedFilename || 'download');
+            document.body.appendChild(link);
+            link.click();
+
+            // Clean up: remove the link and revoke the object URL
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+
+        } catch (error) {
+            console.error('Download failed:', error);
+            // If download fails, fall back to opening in a new tab
+            window.open(url, '_blank');
+        }
+    };
+
 
     const handleDelete = async () => {
         if (!postId || !post) return;
@@ -274,12 +312,34 @@ export const PostDetails: React.FC = () => {
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg self-start">
                     <h2 className="text-xl font-bold text-primary mb-4">{post.campaignName}</h2>
                     {post.type === 'image' && post.mediaUrl && (
-                        <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer">
-                             <img src={post.mediaUrl} alt="Arte da publicação" className="w-full rounded-md mb-4" />
-                        </a>
+                        <div className="mb-4">
+                            <img src={post.mediaUrl} alt="Arte da publicação" className="w-full rounded-md" />
+                            <div className="flex items-center justify-center gap-4 mt-2">
+                                <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
+                                    <EyeIcon className="w-6 h-6" />
+                                    <span className="text-sm">Visualizar</span>
+                                </a>
+                                <button onClick={() => handleDownload(post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
+                                    <ArrowDownTrayIcon className="w-6 h-6" />
+                                    <span className="text-sm">Baixar</span>
+                                </button>
+                            </div>
+                        </div>
                     )}
                     {post.type === 'video' && post.mediaUrl && (
-                        <video src={post.mediaUrl} controls className="w-full rounded-md mb-4" />
+                        <div className="mb-4">
+                            <video src={post.mediaUrl} controls className="w-full rounded-md" />
+                            <div className="flex items-center justify-center gap-4 mt-2">
+                                <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
+                                    <EyeIcon className="w-6 h-6" />
+                                    <span className="text-sm">Visualizar</span>
+                                </a>
+                                <button onClick={() => handleDownload(post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
+                                    <ArrowDownTrayIcon className="w-6 h-6" />
+                                    <span className="text-sm">Baixar</span>
+                                </button>
+                            </div>
+                        </div>
                     )}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">

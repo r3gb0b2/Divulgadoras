@@ -53,7 +53,10 @@ const getBrevoErrorDetails = (error) => {
 
 
 // --- Email Template Management ---
-const EMAIL_TEMPLATE_DOC_PATH = "settings/approvedEmailTemplate";
+const APPROVED_EMAIL_TEMPLATE_PATH = "settings/approvedEmailTemplate";
+const REJECTED_EMAIL_TEMPLATE_PATH = "settings/rejectedEmailTemplate";
+const NEW_POST_EMAIL_TEMPLATE_PATH = "settings/newPostEmailTemplate";
+const PROOF_REMINDER_EMAIL_TEMPLATE_PATH = "settings/proofReminderEmailTemplate";
 
 const DEFAULT_APPROVED_TEMPLATE_HTML = `
 <!DOCTYPE html>
@@ -86,6 +89,94 @@ const DEFAULT_APPROVED_TEMPLATE_HTML = `
 </body>
 </html>`;
 
+const DEFAULT_REJECTED_TEMPLATE_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Atualização sobre seu Cadastro</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #4a4a4a; color: #ffffff; padding: 20px; text-align: center; }
+        .content { padding: 30px; }
+        .reason { background-color: #eeeeee; padding: 15px; border-left: 4px solid #d9534f; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Olá, {{promoterName}}</h1></div>
+        <div class="content">
+            <p>Agradecemos seu interesse em fazer parte do time de divulgadoras da <strong>{{orgName}}</strong> para o evento <strong>{{campaignName}}</strong>.</p>
+            <p>Após uma análise do seu perfil, informamos que no momento seu cadastro não foi aprovado pelos seguintes motivos:</p>
+            <div class="reason">
+                <p>{{rejectionReason}}</p>
+            </div>
+            <p>Agradecemos a sua compreensão.</p>
+            <p>Atenciosamente,<br>Equipe {{orgName}}</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+const DEFAULT_NEW_POST_TEMPLATE_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nova Publicação Disponível</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+        .content { padding: 30px; }
+        .button { display: inline-block; background-color: #e83a93; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Olá, {{promoterName}}!</h1></div>
+        <div class="content">
+            <p>Uma nova publicação para o evento <strong>{{campaignName}}</strong> está disponível para você.</p>
+            <p>Acesse o portal para ver as instruções e confirmar sua postagem.</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="{{portalLink}}" class="button">Ver Publicação</a>
+            </p>
+            <p>Atenciosamente,<br>Equipe {{orgName}}</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+const DEFAULT_PROOF_REMINDER_TEMPLATE_HTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Lembrete de Comprovação de Post</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+        .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+        .content { padding: 30px; }
+        .button { display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header"><h1>Olá, {{promoterName}}!</h1></div>
+        <div class="content">
+            <p>Este é um lembrete amigável para você enviar a comprovação (print) da sua publicação para o evento <strong>{{campaignName}}</strong>.</p>
+            <p>O prazo está se aproximando. Acesse o link abaixo para enviar seu print.</p>
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="{{proofLink}}" class="button">Enviar Comprovação</a>
+            </p>
+            <p>Atenciosamente,<br>Equipe {{orgName}}</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
 
 /**
  * Helper to check if a user is a super admin.
@@ -96,6 +187,25 @@ const isSuperAdmin = async (uid) => {
   if (!uid) return false;
   const adminDoc = await db.collection("admins").doc(uid).get();
   return adminDoc.exists && adminDoc.data().role === "superadmin";
+};
+
+/**
+ * Helper function to get a template from Firestore, render it with replacements,
+ * and fall back to a default if it doesn't exist.
+ * @param {string} templatePath - The path to the template document in Firestore.
+ * @param {string} defaultHtml - The default HTML string to use as a fallback.
+ * @param {object} replacements - Key-value pairs for placeholder replacement.
+ * @return {Promise<string>} The rendered HTML content.
+ */
+const getAndRenderTemplate = async (templatePath, defaultHtml, replacements) => {
+    const templateDoc = await db.doc(templatePath).get();
+    let htmlTemplate = templateDoc.exists ? templateDoc.data().htmlContent : defaultHtml;
+
+    for (const key in replacements) {
+        const placeholder = new RegExp(`{{${key}}}`, "g");
+        htmlTemplate = htmlTemplate.replace(placeholder, replacements[key]);
+    }
+    return htmlTemplate;
 };
 
 
@@ -267,20 +377,10 @@ async function sendStatusChangeEmail(promoterData) {
 
   if (promoterData.status === "approved") {
     sendSmtpEmail.subject = `Parabéns, seu cadastro para ${replacements.campaignName} foi aprovado!`;
-    const templateDoc = await db.doc(EMAIL_TEMPLATE_DOC_PATH).get();
-    let htmlTemplate = templateDoc.exists ? templateDoc.data().htmlContent : DEFAULT_APPROVED_TEMPLATE_HTML;
-
-    // Manually replace placeholders because `params` is ignored when `htmlContent` is used
-    for (const key in replacements) {
-      const placeholder = new RegExp(`{{${key}}}`, "g");
-      htmlTemplate = htmlTemplate.replace(placeholder, replacements[key]);
-    }
-    sendSmtpEmail.htmlContent = htmlTemplate;
+    sendSmtpEmail.htmlContent = await getAndRenderTemplate(APPROVED_EMAIL_TEMPLATE_PATH, DEFAULT_APPROVED_TEMPLATE_HTML, replacements);
   } else { // 'rejected'
-    sendSmtpEmail.subject = "Atualização sobre seu cadastro";
-    sendSmtpEmail.templateId = 11; // Assumes Brevo template ID 11 for rejections
-    // For templateId, Brevo will use the params object
-    sendSmtpEmail.params = replacements;
+    sendSmtpEmail.subject = `Atualização sobre seu cadastro para ${replacements.campaignName}`;
+    sendSmtpEmail.htmlContent = await getAndRenderTemplate(REJECTED_EMAIL_TEMPLATE_PATH, DEFAULT_REJECTED_TEMPLATE_HTML, replacements);
   }
 
 
@@ -307,34 +407,14 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
 
   const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
   const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>${subject}</title>
-        <style>
-            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
-            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
-            .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
-            .content { padding: 30px; }
-            .button { display: inline-block; background-color: #e83a93; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
-            <div class="content">
-                <p>Uma nova publicação para o evento <strong>${postDetails.campaignName}</strong> está disponível para você.</p>
-                <p>Acesse o portal para ver as instruções e confirmar sua postagem.</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <a href="${portalLink}" class="button">Ver Publicação</a>
-                </p>
-                <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
-            </div>
-        </div>
-    </body>
-    </html>`;
+  const replacements = {
+      promoterName: promoter.name,
+      campaignName: postDetails.campaignName,
+      portalLink: portalLink,
+      orgName: postDetails.orgName,
+  };
+  const htmlContent = await getAndRenderTemplate(NEW_POST_EMAIL_TEMPLATE_PATH, DEFAULT_NEW_POST_TEMPLATE_HTML, replacements);
+
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
@@ -369,34 +449,13 @@ async function sendProofReminderEmail(promoter, postDetails) {
 
   const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
   const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>${subject}</title>
-        <style>
-            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
-            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
-            .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
-            .content { padding: 30px; }
-            .button { display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header"><h1>Olá, ${promoter.promoterName}!</h1></div>
-            <div class="content">
-                <p>Este é um lembrete amigável para você enviar a comprovação (print) da sua publicação para o evento <strong>${postDetails.campaignName}</strong>.</p>
-                <p>O prazo está se aproximando. Acesse o link abaixo para enviar seu print.</p>
-                <p style="text-align: center; margin: 30px 0;">
-                    <a href="${proofLink}" class="button">Enviar Comprovação</a>
-                </p>
-                <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
-            </div>
-        </div>
-    </body>
-    </html>`;
+  const replacements = {
+      promoterName: promoter.promoterName,
+      campaignName: postDetails.campaignName,
+      proofLink: proofLink,
+      orgName: postDetails.orgName,
+  };
+  const htmlContent = await getAndRenderTemplate(PROOF_REMINDER_EMAIL_TEMPLATE_PATH, DEFAULT_PROOF_REMINDER_TEMPLATE_HTML, replacements);
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoter.promoterEmail, name: promoter.promoterName }];
@@ -566,13 +625,15 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
     campaignName: "Evento de Teste",
     orgName: "Sua Organização",
     portalLink: portalLink,
+    rejectionReason: "- Motivo de teste 1\n- Motivo de teste 2",
+    proofLink: "#",
   };
 
   if (testType === "approved" || testType === "custom_approved") {
     let htmlTemplate;
     if (testType === "approved") {
       sendSmtpEmail.subject = "Teste de E-mail de Aprovação";
-      const templateDoc = await db.doc(EMAIL_TEMPLATE_DOC_PATH).get();
+      const templateDoc = await db.doc(APPROVED_EMAIL_TEMPLATE_PATH).get();
       htmlTemplate = templateDoc.exists ? templateDoc.data().htmlContent : DEFAULT_APPROVED_TEMPLATE_HTML;
     } else { // custom_approved
       if (!customHtmlContent) {
@@ -604,46 +665,65 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
 
 
 // --- NEW Email Template Management Callables ---
-exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
-  }
-  const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
-  const docSnap = await docRef.get();
-  if (docSnap.exists) {
-    return { htmlContent: docSnap.data().htmlContent };
-  }
-  return { htmlContent: DEFAULT_APPROVED_TEMPLATE_HTML };
-});
+const createTemplateFunctions = (docPath, defaultHtml) => {
+    const get = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+        if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+            throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+        }
+        const docRef = db.doc(docPath);
+        const docSnap = await docRef.get();
+        return { htmlContent: docSnap.exists ? docSnap.data().htmlContent : defaultHtml };
+    });
+    const set = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+        if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+            throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+        }
+        const { htmlContent } = data;
+        if (typeof htmlContent !== "string") {
+            throw new functions.https.HttpsError("invalid-argument", "O conteúdo HTML é obrigatório.");
+        }
+        await db.doc(docPath).set({ htmlContent });
+        return { success: true };
+    });
+    const reset = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+        if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+            throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+        }
+        await db.doc(docPath).delete();
+        return { success: true };
+    });
+    const getDefault = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+        if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+            throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+        }
+        return { htmlContent: defaultHtml };
+    });
+    return { get, set, reset, getDefault };
+};
 
-exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
-  }
-  return { htmlContent: DEFAULT_APPROVED_TEMPLATE_HTML };
-});
+const approvedTemplateFunctions = createTemplateFunctions(APPROVED_EMAIL_TEMPLATE_PATH, DEFAULT_APPROVED_TEMPLATE_HTML);
+exports.getEmailTemplate = approvedTemplateFunctions.get;
+exports.setEmailTemplate = approvedTemplateFunctions.set;
+exports.resetEmailTemplate = approvedTemplateFunctions.reset;
+exports.getDefaultEmailTemplate = approvedTemplateFunctions.getDefault;
 
-exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
-  }
-  const { htmlContent } = data;
-  if (typeof htmlContent !== "string") {
-    throw new functions.https.HttpsError("invalid-argument", "O conteúdo HTML é obrigatório.");
-  }
-  const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
-  await docRef.set({ htmlContent });
-  return { success: true };
-});
+const rejectedTemplateFunctions = createTemplateFunctions(REJECTED_EMAIL_TEMPLATE_PATH, DEFAULT_REJECTED_TEMPLATE_HTML);
+exports.getRejectedEmailTemplate = rejectedTemplateFunctions.get;
+exports.setRejectedEmailTemplate = rejectedTemplateFunctions.set;
+exports.resetRejectedEmailTemplate = rejectedTemplateFunctions.reset;
+exports.getDefaultRejectedEmailTemplate = rejectedTemplateFunctions.getDefault;
 
-exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
-    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
-  }
-  const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
-  await docRef.delete();
-  return { success: true };
-});
+const newPostTemplateFunctions = createTemplateFunctions(NEW_POST_EMAIL_TEMPLATE_PATH, DEFAULT_NEW_POST_TEMPLATE_HTML);
+exports.getNewPostEmailTemplate = newPostTemplateFunctions.get;
+exports.setNewPostEmailTemplate = newPostTemplateFunctions.set;
+exports.resetNewPostEmailTemplate = newPostTemplateFunctions.reset;
+exports.getDefaultNewPostEmailTemplate = newPostTemplateFunctions.getDefault;
+
+const proofReminderTemplateFunctions = createTemplateFunctions(PROOF_REMINDER_EMAIL_TEMPLATE_PATH, DEFAULT_PROOF_REMINDER_TEMPLATE_HTML);
+exports.getProofReminderEmailTemplate = proofReminderTemplateFunctions.get;
+exports.setProofReminderEmailTemplate = proofReminderTemplateFunctions.set;
+exports.resetProofReminderEmailTemplate = proofReminderTemplateFunctions.reset;
+exports.getDefaultProofReminderEmailTemplate = proofReminderTemplateFunctions.getDefault;
 
 
 // --- User and Organization Management ---

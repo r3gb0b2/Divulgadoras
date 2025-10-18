@@ -1,14 +1,90 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate } from '../services/emailService';
+import { 
+    getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate,
+    getRejectedEmailTemplate, setRejectedEmailTemplate, resetRejectedEmailTemplate, getDefaultRejectedEmailTemplate,
+    getNewPostEmailTemplate, setNewPostEmailTemplate, resetNewPostEmailTemplate, getDefaultNewPostEmailTemplate,
+    getProofReminderEmailTemplate, setProofReminderEmailTemplate, resetProofReminderEmailTemplate, getDefaultProofReminderEmailTemplate
+} from '../services/emailService';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+
+type TemplateKey = 'approved' | 'rejected' | 'newPost' | 'proofReminder';
+
+const templateConfig: Record<TemplateKey, {
+    title: string;
+    get: () => Promise<string>;
+    set: (html: string) => Promise<void>;
+    reset: () => Promise<void>;
+    getDefault: () => Promise<string>;
+    placeholders: { variable: string, description: string }[];
+}> = {
+    approved: {
+        title: 'Aprovação de Divulgadora',
+        get: getEmailTemplate,
+        set: setEmailTemplate,
+        reset: resetEmailTemplate,
+        getDefault: getDefaultEmailTemplate,
+        placeholders: [
+            { variable: '{{promoterName}}', description: 'O nome completo da divulgadora.' },
+            { variable: '{{promoterEmail}}', description: 'O e-mail da divulgadora.' },
+            { variable: '{{campaignName}}', description: 'O nome do evento/gênero.' },
+            { variable: '{{orgName}}', description: 'O nome da sua organização.' },
+            { variable: '{{portalLink}}', description: 'O link único para o portal de status da divulgadora.' },
+        ]
+    },
+    rejected: {
+        title: 'Rejeição de Divulgadora',
+        get: getRejectedEmailTemplate,
+        set: setRejectedEmailTemplate,
+        reset: resetRejectedEmailTemplate,
+        getDefault: getDefaultRejectedEmailTemplate,
+        placeholders: [
+            { variable: '{{promoterName}}', description: 'O nome completo da divulgadora.' },
+            { variable: '{{campaignName}}', description: 'O nome do evento/gênero.' },
+            { variable: '{{orgName}}', description: 'O nome da sua organização.' },
+            { variable: '{{rejectionReason}}', description: 'O motivo da rejeição (definido no painel).' },
+        ]
+    },
+    newPost: {
+        title: 'Notificação de Novo Post',
+        get: getNewPostEmailTemplate,
+        set: setNewPostEmailTemplate,
+        reset: resetNewPostEmailTemplate,
+        getDefault: getDefaultNewPostEmailTemplate,
+        placeholders: [
+            { variable: '{{promoterName}}', description: 'O nome da divulgadora.' },
+            { variable: '{{campaignName}}', description: 'O nome do evento do post.' },
+            { variable: '{{orgName}}', description: 'O nome da sua organização.' },
+            { variable: '{{portalLink}}', description: 'O link para a página de posts da divulgadora.' },
+        ]
+    },
+    proofReminder: {
+        title: 'Lembrete de Comprovação',
+        get: getProofReminderEmailTemplate,
+        set: setProofReminderEmailTemplate,
+        reset: resetProofReminderEmailTemplate,
+        getDefault: getDefaultProofReminderEmailTemplate,
+        placeholders: [
+            { variable: '{{promoterName}}', description: 'O nome da divulgadora.' },
+            { variable: '{{campaignName}}', description: 'O nome do evento do post.' },
+            { variable: '{{orgName}}', description: 'O nome da sua organização.' },
+            { variable: '{{proofLink}}', description: 'O link direto para a página de envio de comprovação.' },
+        ]
+    }
+};
 
 const EmailTemplateEditor: React.FC = () => {
     const navigate = useNavigate();
+    const { adminData } = useAdminAuth();
+
+    const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>('approved');
     const [htmlContent, setHtmlContent] = useState('');
+    
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
@@ -22,31 +98,28 @@ const EmailTemplateEditor: React.FC = () => {
     const [aiPrompt, setAiPrompt] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
 
-    const placeholders = [
-        { variable: '{{promoterName}}', description: 'O nome completo da divulgadora.' },
-        { variable: '{{promoterEmail}}', description: 'O e-mail da divulgadora.' },
-        { variable: '{{campaignName}}', description: 'O nome do evento/gênero.' },
-        { variable: '{{orgName}}', description: 'O nome da sua organização.' },
-        { variable: '{{portalLink}}', description: 'O link único para o portal da divulgadora.' },
-    ];
+    const activeConfig = templateConfig[selectedTemplate];
 
     const fetchTemplate = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        setSuccessMessage(null);
         setIsOutOfSync(false);
         try {
             const [userTemplate, defaultTemplate] = await Promise.all([
-                getEmailTemplate(),
-                getDefaultEmailTemplate()
+                activeConfig.get(),
+                activeConfig.getDefault()
             ]);
             
             setHtmlContent(userTemplate);
 
-            // Check if user template might be outdated
-            const userHasOldLink = userTemplate.includes('stingressos-e0a5f.web.app');
-            const defaultHasNewLink = defaultTemplate.includes('divulgadoras.vercel.app');
-            if (userHasOldLink && defaultHasNewLink) {
-                setIsOutOfSync(true);
+            // Check if user template might be outdated (only applies to approved template)
+            if (selectedTemplate === 'approved') {
+                const userHasOldLink = userTemplate.includes('stingressos-e0a5f.web.app');
+                const defaultHasNewLink = defaultTemplate.includes('divulgadoras.vercel.app');
+                if (userHasOldLink && defaultHasNewLink) {
+                    setIsOutOfSync(true);
+                }
             }
 
         } catch (err: any) {
@@ -54,7 +127,7 @@ const EmailTemplateEditor: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [activeConfig, selectedTemplate]);
 
     useEffect(() => {
         fetchTemplate();
@@ -69,7 +142,7 @@ const EmailTemplateEditor: React.FC = () => {
         setIsSaving(true);
         setError(null);
         try {
-            await setEmailTemplate(htmlContent);
+            await activeConfig.set(htmlContent);
             showSuccessMessage('Template salvo com sucesso!');
         } catch (err: any) {
             setError(err.message);
@@ -83,8 +156,9 @@ const EmailTemplateEditor: React.FC = () => {
             setIsSaving(true);
             setError(null);
             try {
-                await resetEmailTemplate();
-                await fetchTemplate(); // Reload the default template
+                await activeConfig.reset();
+                const defaultHtml = await activeConfig.getDefault();
+                setHtmlContent(defaultHtml);
                 showSuccessMessage('Template redefinido para o padrão.');
             } catch (err: any) {
                 setError(err.message);
@@ -116,7 +190,7 @@ const EmailTemplateEditor: React.FC = () => {
             setIsSyncing(true);
             setError(null);
             try {
-                const defaultHtml = await getDefaultEmailTemplate();
+                const defaultHtml = await activeConfig.getDefault();
                 
                 const bodyContentRegex = /<body[^>]*>([\s\S]*?)<\/body>/i;
                 const defaultBodyMatch = defaultHtml.match(bodyContentRegex);
@@ -158,7 +232,8 @@ const EmailTemplateEditor: React.FC = () => {
 
                 Solicitação do Usuário: "${aiPrompt}"
 
-                Template HTML atual (modifique a partir dele, se existir. Se a solicitação for para criar um novo, ignore este):
+                Template de referência (modifique a partir dele, se existir. Se a solicitação for para criar um novo, ignore este):
+                Contexto do Template: ${activeConfig.title}
                 \`\`\`html
                 ${htmlContent}
                 \`\`\`
@@ -195,11 +270,27 @@ const EmailTemplateEditor: React.FC = () => {
                     <ArrowLeftIcon className="w-5 h-5" />
                     <span>Voltar ao Dashboard</span>
                 </button>
-                <h1 className="text-3xl font-bold mt-1">Editor de Template de E-mail (Aprovação)</h1>
+                <h1 className="text-3xl font-bold mt-1">Editor de Templates de E-mail</h1>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                  {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
                  {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
+
+                <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Selecione o template para editar:</label>
+                    <div className="flex flex-wrap gap-2 p-1 bg-dark/70 rounded-lg">
+                        {(Object.keys(templateConfig) as TemplateKey[]).map(key => (
+                            <button
+                                key={key}
+                                onClick={() => setSelectedTemplate(key)}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${selectedTemplate === key ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                            >
+                                {templateConfig[key].title}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
 
                  {isOutOfSync && (
                     <div className="bg-yellow-900/50 border-2 border-yellow-600 text-yellow-200 p-4 rounded-lg mb-6 flex flex-col sm:flex-row items-center gap-4">
@@ -241,7 +332,7 @@ const EmailTemplateEditor: React.FC = () => {
                             <h3 className="text-lg font-semibold text-white mb-2">Variáveis Disponíveis</h3>
                             <p className="text-sm text-gray-400 mb-4">Use estas variáveis no seu HTML. Elas serão substituídas pelos dados reais da divulgadora.</p>
                             <div className="space-y-3">
-                                {placeholders.map(p => (
+                                {activeConfig.placeholders.map(p => (
                                     <div key={p.variable} className="p-3 bg-gray-700/50 rounded-md">
                                         <code className="font-semibold text-primary">{p.variable}</code>
                                         <p className="text-xs text-gray-300 mt-1">{p.description}</p>
@@ -253,7 +344,7 @@ const EmailTemplateEditor: React.FC = () => {
                         <div className="border-t border-gray-700 pt-6">
                             <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
                                 <SparklesIcon className="w-6 h-6 text-primary" />
-                                Opção de Desenvolvedor (IA)
+                                Assistente IA (Gemini)
                             </h3>
                             <p className="text-sm text-gray-400 mb-4">
                                 Peça para a IA criar um novo template ou melhorar o atual.
@@ -261,7 +352,7 @@ const EmailTemplateEditor: React.FC = () => {
                             <textarea
                                 value={aiPrompt}
                                 onChange={(e) => setAiPrompt(e.target.value)}
-                                placeholder="Ex: Crie um template moderno e elegante para um festival de música eletrônica..."
+                                placeholder={`Ex: Crie um template moderno e elegante para o e-mail de ${activeConfig.title.toLowerCase()}...`}
                                 rows={4}
                                 className="w-full p-2 font-sans text-sm border border-gray-600 rounded-md bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary"
                             />
