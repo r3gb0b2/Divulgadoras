@@ -30,7 +30,8 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, currentIndex]); // Re-add listener if state changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, currentIndex, onClose]); 
 
   if (!isOpen || !imageUrls || imageUrls.length === 0) {
     return null;
@@ -62,13 +63,11 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
       role="dialog"
     >
       <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col justify-center">
-        <button
-          onClick={onClose}
-          className="absolute -top-8 right-0 text-white text-4xl font-bold hover:text-gray-300 z-50"
-          aria-label="Fechar"
-        >
-          &times;
-        </button>
+        {imageUrls.length > 1 && (
+            <div className="absolute top-0 right-0 m-2 p-1 px-3 text-white text-sm font-mono bg-black/50 rounded-full z-10">
+                {currentIndex + 1} / {imageUrls.length}
+            </div>
+        )}
 
         <div className="flex-grow flex items-center justify-center min-h-0">
           <img
@@ -78,8 +77,8 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
           />
         </div>
         
-        {imageUrls.length > 1 && (
-            <div className="flex-shrink-0 flex items-center justify-center w-full gap-8 mt-4">
+        <div className="flex-shrink-0 flex items-center justify-center w-full gap-8 mt-4">
+            {imageUrls.length > 1 && (
                 <button
                     onClick={goToPrevious}
                     className="bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
@@ -89,9 +88,19 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
-                <div className="text-center text-white text-sm font-mono">
-                    {currentIndex + 1} / {imageUrls.length}
-                </div>
+            )}
+
+            <button
+                onClick={onClose}
+                className="bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
+                aria-label="Fechar"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            {imageUrls.length > 1 && (
                 <button
                     onClick={goToNext}
                     className="bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all"
@@ -101,8 +110,8 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                 </button>
-            </div>
-        )}
+            )}
+        </div>
       </div>
     </div>
   );
