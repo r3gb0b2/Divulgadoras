@@ -125,7 +125,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         if (!stateAbbr) return;
 
         // Guard against calling API without orgId for non-superadmins
-        if (!isSuperAdmin && !adminData.organizationId) {
+        if (!isSuperAdmin && !adminData.organizationIds?.[0]) {
             setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
             setIsLoading(false);
             return;
@@ -134,7 +134,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignData = await getCampaigns(stateAbbr, adminData.organizationId);
+            const campaignData = await getCampaigns(stateAbbr, adminData.organizationIds?.[0]);
             setCampaigns(campaignData);
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
@@ -145,7 +145,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         } finally {
             setIsLoading(false);
         }
-    }, [stateAbbr, adminData.organizationId, isSuperAdmin]);
+    }, [stateAbbr, adminData.organizationIds, isSuperAdmin]);
 
     useEffect(() => {
         fetchData();
@@ -157,8 +157,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
     
     const handleCopyLink = (campaign: Campaign) => {
-        if (!stateAbbr || !adminData?.organizationId) return;
-        const link = `${window.location.origin}/#/${adminData.organizationId}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
+        if (!stateAbbr || !adminData?.organizationIds?.[0]) return;
+        const link = `${window.location.origin}/#/${adminData.organizationIds[0]}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedLink(campaign.id);
             setTimeout(() => setCopiedLink(null), 2500);
@@ -169,8 +169,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
 
     const handleCopyGuestListLink = (campaign: Campaign) => {
-        if (!adminData?.organizationId) return;
-        const link = `${window.location.origin}/#/lista/${adminData.organizationId}/${campaign.id}`;
+        if (!adminData?.organizationIds?.[0]) return;
+        const link = `${window.location.origin}/#/lista/${adminData.organizationIds[0]}/${campaign.id}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedGuestListLink(campaign.id);
             setTimeout(() => setCopiedGuestListLink(null), 2500);
@@ -181,9 +181,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
 
     const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
-        if (!stateAbbr || (!adminData.organizationId && !isSuperAdmin)) return;
+        if (!stateAbbr || (!adminData.organizationIds?.[0] && !isSuperAdmin)) return;
 
-        if (isSuperAdmin && !adminData.organizationId) {
+        if (isSuperAdmin && !adminData.organizationIds?.[0]) {
              setError("Super Admins devem gerenciar campanhas no painel da organização.");
              return;
         }
@@ -197,7 +197,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 await addCampaign({
                     ...(campaignData as Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'>),
                     stateAbbr,
-                    organizationId: adminData.organizationId!,
+                    organizationId: adminData.organizationIds![0],
                 });
 
                 // Auto-assign the new campaign to the creating admin if they have restrictions for this state.
