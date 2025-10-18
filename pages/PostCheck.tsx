@@ -147,32 +147,34 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
                     </div>
                 )}
 
-                <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-200">Instruções e Links:</h4>
-                    <div className="space-y-3 bg-gray-800/50 p-3 rounded-md">
+                <div className="space-y-2">
+                    <h4 className="font-semibold text-gray-200">Instruções:</h4>
+                    <div className="bg-gray-800/50 p-3 rounded-md">
                         <p className="text-gray-300 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>
-                        
-                        {assignment.post.postLink && (
-                            <div className="pt-3 border-t border-gray-700">
-                                <p className="text-gray-300 text-sm font-semibold mb-1">Link para usar na postagem:</p>
-                                <div className="flex items-center gap-2">
-                                    <input 
-                                        type="text" 
-                                        readOnly 
-                                        value={assignment.post.postLink}
-                                        className="flex-grow w-full px-3 py-1.5 border border-gray-600 rounded-md bg-gray-900 text-gray-400 text-sm"
-                                    />
-                                    <button 
-                                        onClick={handleCopyLink}
-                                        className="flex-shrink-0 px-3 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold w-24"
-                                    >
-                                        {linkCopied ? 'Copiado!' : 'Copiar'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                {assignment.post.postLink && (
+                    <div className="space-y-2 mt-4">
+                        <h4 className="font-semibold text-gray-200">Link para Postagem:</h4>
+                        <div className="bg-gray-800/50 p-3 rounded-md">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={assignment.post.postLink}
+                                    className="flex-grow w-full px-3 py-1.5 border border-gray-600 rounded-md bg-gray-900 text-gray-400 text-sm"
+                                />
+                                <button
+                                    onClick={handleCopyLink}
+                                    className="flex-shrink-0 px-3 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold w-24"
+                                >
+                                    {linkCopied ? 'Copiado!' : 'Copiar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="mt-4 border-t border-gray-700 pt-4 text-center">
                     {assignment.status === 'pending' ? (

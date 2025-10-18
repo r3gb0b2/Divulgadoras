@@ -293,10 +293,12 @@ const CreatePost: React.FC = () => {
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-600 rounded-md">
                                     {promoters.map(p => (
                                         <label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
-                                            <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                            <span className="truncate" title={`${p.name}${p.hasJoinedGroup ? ' (está no grupo)' : ''}`}>
-                                                {p.name}
-                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
+                                            <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded flex-shrink-0" />
+                                            <span 
+                                                className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : ''}`}
+                                                title={`${p.name} (${p.instagram})${p.hasJoinedGroup ? ' - no grupo' : ''}`}
+                                            >
+                                                {p.instagram || p.name}
                                             </span>
                                         </label>
                                     ))}
