@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -34,6 +34,75 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
+const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+    const [textColor, setTextColor] = useState('text-gray-400');
+
+    useEffect(() => {
+        // Only run timer for confirmed posts without proof
+        if (assignment.status !== 'confirmed' || !!assignment.proofSubmittedAt || !assignment.confirmedAt) {
+            setTimeLeft('');
+            return;
+        }
+
+        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
+        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+        const calculateTime = () => {
+            const now = new Date();
+
+            if (now > expireTime) {
+                setTimeLeft('Tempo esgotado');
+                setTextColor('text-red-400');
+                return false; // stop timer
+            }
+
+            if (now < enableTime) {
+                const diff = enableTime.getTime() - now.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                setTimeLeft(`Envio liberado em ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+                setTextColor('text-yellow-400');
+            } else {
+                const diff = expireTime.getTime() - now.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                setTimeLeft(`Envio expira em ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+                // Change color if less than an hour left
+                if(diff < 60 * 60 * 1000) {
+                    setTextColor('text-orange-400');
+                } else {
+                    setTextColor('text-gray-400');
+                }
+            }
+            return true; // continue timer
+        };
+
+        if (calculateTime()) {
+            const timer = setInterval(() => {
+                if (!calculateTime()) {
+                    clearInterval(timer);
+                }
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+
+    }, [assignment]);
+
+    if (!timeLeft) {
+        return null;
+    }
+
+    return (
+        <div className={`text-xs font-mono mt-1 ${textColor}`}>
+            {timeLeft}
+        </div>
+    );
+};
+
 // FIX: Changed to a named export to resolve a module resolution error.
 export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
@@ -52,6 +121,7 @@ export const PostDetails: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSendingReminder, setIsSendingReminder] = useState(false);
+    const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -205,6 +275,21 @@ export const PostDetails: React.FC = () => {
             } finally {
                 setIsSendingReminder(false);
             }
+        }
+    };
+
+     const handleSendSingleReminder = async (assignmentId: string, promoterName: string) => {
+        if (!window.confirm(`Enviar um lembrete manual para ${promoterName}?`)) return;
+
+        setSendingReminderId(assignmentId);
+        setError(null);
+        try {
+            const result = await sendSinglePostReminder(assignmentId);
+            showSuccessMessage(result.message);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSendingReminderId(null);
         }
     };
 
@@ -375,6 +460,11 @@ export const PostDetails: React.FC = () => {
                                             )}
                                         </div>
                                     </div>
+                                    
+                                    <div className="min-h-[16px]">
+                                        <ProofTimer assignment={a} />
+                                    </div>
+
                                     {hasProof && a.proofImageUrls && (
                                         <div className="mt-3 border-t border-gray-700 pt-3">
                                             <p className="text-xs font-semibold text-gray-400 mb-2">Comprovação:</p>
@@ -388,6 +478,15 @@ export const PostDetails: React.FC = () => {
                                         </div>
                                     )}
                                      <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium">
+                                        {!hasProof && hasConfirmed && (
+                                            <button
+                                                onClick={() => handleSendSingleReminder(a.id, a.promoterName)}
+                                                disabled={sendingReminderId === a.id}
+                                                className="text-yellow-400 hover:text-yellow-300 disabled:text-gray-500 disabled:cursor-wait"
+                                            >
+                                                {sendingReminderId === a.id ? 'Enviando...' : 'Lembrete Manual'}
+                                            </button>
+                                        )}
                                         <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Ver Stats</button>
                                         <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover do Grupo</button>
                                     </div>

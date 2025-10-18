@@ -457,6 +457,56 @@ async function getOrgAndCampaignDetails(organizationId, stateAbbr, campaignName)
   return { orgName, campaignRules, campaignLink };
 }
 
+exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  const { assignmentId } = data;
+  if (!assignmentId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da atribuição (assignmentId) é obrigatório.");
+  }
+
+  const assignmentSnap = await db.collection("postAssignments").doc(assignmentId).get();
+  if (!assignmentSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Atribuição não encontrada.");
+  }
+  const assignment = { id: assignmentSnap.id, ...assignmentSnap.data() };
+
+  if (assignment.proofSubmittedAt) {
+    throw new functions.https.HttpsError("failed-precondition", "Esta divulgadora já enviou a comprovação.");
+  }
+  if (assignment.status !== "confirmed") {
+    throw new functions.https.HttpsError("failed-precondition", "A divulgadora ainda não confirmou a postagem.");
+  }
+
+  const postSnap = await db.collection("posts").doc(assignment.postId).get();
+  if (!postSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Publicação relacionada não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  // Send email using helper
+  await sendProofReminderEmail(assignment, {
+    campaignName: post.campaignName,
+    orgName: orgName,
+  });
+
+  // Update a timestamp on the assignment
+  await db.collection("postAssignments").doc(assignmentId).update({
+    lastManualReminderAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, message: `Lembrete enviado para ${assignment.promoterName}.` };
+});
+
 
 // --- Callable Functions ---
 

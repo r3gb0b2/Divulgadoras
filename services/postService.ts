@@ -311,6 +311,20 @@ export const sendPostReminder = async (postId: string): Promise<{count: number, 
     }
 };
 
+export const sendSinglePostReminder = async (assignmentId: string): Promise<{message: string}> => {
+    try {
+        const func = httpsCallable(functions, 'sendSingleProofReminder');
+        const result = await func({ assignmentId });
+        return result.data as {message: string};
+    } catch (error) {
+        console.error("Error sending single post reminder:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível enviar o lembrete.");
+    }
+};
+
 export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
     try {
         const batch = writeBatch(firestore);
