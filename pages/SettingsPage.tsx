@@ -7,18 +7,18 @@ import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { adminData } = useAdminAuth();
+  const { adminData, selectedOrganizationId } = useAdminAuth();
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    if (adminData?.organizationId) {
-      getOrganization(adminData.organizationId).then(orgData => {
-        if (orgData && adminData.uid === orgData.ownerUid) {
+    if (selectedOrganizationId) {
+      getOrganization(selectedOrganizationId).then(orgData => {
+        if (orgData && adminData?.uid === orgData.ownerUid) {
           setIsOwner(true);
         }
       }).catch(err => console.error("Could not fetch organization data for owner check:", err));
     }
-  }, [adminData]);
+  }, [adminData, selectedOrganizationId]);
 
   return (
     <div>
@@ -36,7 +36,7 @@ const SettingsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {isOwner && (
             <Link
-              to={`/admin/organization/${adminData?.organizationId}`}
+              to={`/admin/organization/${selectedOrganizationId}`}
               className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
             >
               <div className="flex items-center">

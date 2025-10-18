@@ -8,7 +8,8 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
 const StatesListPage: React.FC = () => {
-  const { adminData } = useAdminAuth();
+  // FIX: Destructure selectedOrganizationId from useAdminAuth
+  const { adminData, selectedOrganizationId } = useAdminAuth();
   const [statesConfig, setStatesConfig] = useState<StatesConfig>({});
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,8 +23,10 @@ const StatesListPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        if (!isSuperAdmin && adminData?.organizationId) {
-          const orgData = await getOrganization(adminData.organizationId);
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+        // Use selectedOrganizationId from context instead.
+        if (!isSuperAdmin && selectedOrganizationId) {
+          const orgData = await getOrganization(selectedOrganizationId);
           setOrganization(orgData);
         }
         // Superadmin needs this to show global status (active/inactive)
@@ -37,7 +40,7 @@ const StatesListPage: React.FC = () => {
     };
 
     fetchConfig();
-  }, [adminData, isSuperAdmin]);
+  }, [adminData, isSuperAdmin, selectedOrganizationId]);
   
   const statesToDisplay = useMemo(() => {
     const sortedList = [...allStatesList].sort((a,b) => a.name.localeCompare(b.name));

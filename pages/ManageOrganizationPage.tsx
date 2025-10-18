@@ -17,7 +17,8 @@ const timestampToInputDate = (ts: Timestamp | undefined): string => {
 const ManageOrganizationPage: React.FC = () => {
     const { orgId } = useParams<{ orgId: string }>();
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    // FIX: Destructure selectedOrganizationId to use in authorization check
+    const { adminData, selectedOrganizationId } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [formData, setFormData] = useState<Partial<Organization>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -64,7 +65,8 @@ const ManageOrganizationPage: React.FC = () => {
         // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
             const isOwner = adminData.uid === organization.ownerUid;
-            if (isSuperAdmin || (isOwner && adminData.organizationId === organization.id)) {
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Use selectedOrganizationId from auth context.
+            if (isSuperAdmin || (isOwner && selectedOrganizationId === organization.id)) {
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -73,17 +75,19 @@ const ManageOrganizationPage: React.FC = () => {
             // If org doesn't exist or there was an error, don't show auth error yet
             setIsAuthorized(false);
         }
-    }, [isLoading, organization, adminData, isSuperAdmin]);
+    }, [isLoading, organization, adminData, isSuperAdmin, selectedOrganizationId]);
     
     const associatedAdmins = useMemo(() => {
         if (!organization) return [];
-        return allAdmins.filter(admin => admin.organizationId === organization.id);
+        // FIX: Property 'organizationId' does not exist. Using 'organizationIds' array.
+        return allAdmins.filter(admin => admin.organizationIds?.includes(organization.id));
     }, [allAdmins, organization]);
 
     const availableAdmins = useMemo(() => {
         if (!organization) return [];
-        // Available admins are those with no orgId or a different one
-        return allAdmins.filter(admin => !admin.organizationId || admin.organizationId !== organization.id)
+        // Available admins are those not yet associated with this org.
+        // FIX: Property 'organizationId' does not exist. Check against 'organizationIds' array.
+        return allAdmins.filter(admin => !admin.organizationIds?.includes(organization.id))
             .sort((a, b) => a.email.localeCompare(b.email));
     }, [allAdmins, organization]);
 
@@ -91,7 +95,8 @@ const ManageOrganizationPage: React.FC = () => {
         if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            await setAdminUserData(adminUid, { organizationId: orgId });
+            // FIX: The property is 'organizationIds' (an array), not 'organizationId'.
+            await setAdminUserData(adminUid, { organizationIds: [orgId] });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao associar administrador.");
@@ -103,8 +108,9 @@ const ManageOrganizationPage: React.FC = () => {
     const handleDisassociateAdmin = async (adminUid: string) => {
         setIsProcessingAdmin(adminUid);
         try {
-            // Setting to an empty string effectively removes them from the organization scope
-            await setAdminUserData(adminUid, { organizationId: "" });
+            // Setting to an empty array effectively removes them from the organization scope
+            // FIX: The property is 'organizationIds' (an array), not 'organizationId'.
+            await setAdminUserData(adminUid, { organizationIds: [] });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao desvincular administrador.");

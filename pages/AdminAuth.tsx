@@ -23,6 +23,8 @@ import CreatePost from './CreatePost';
 // FIX: Changed to a named import to resolve module export issue.
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page
+import OrganizationSelection from './OrganizationSelection';
+import NoOrganizationAssigned from './NoOrganizationAssigned';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -194,74 +196,90 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 
 
 const AdminAuth: React.FC = () => {
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrganizationId, loading } = useAdminAuth();
+
+    // This component now acts as the main router for the /admin section after login
+    const AdminContentRouter = () => {
+        if (loading) {
+            return <div className="text-center py-10">Carregando dados do administrador...</div>;
+        }
+
+        if (!adminData) {
+            // Should be caught by ProtectedRoute, but as a safeguard
+            return <Navigate to="/admin/login" replace />;
+        }
+        
+        // Superadmin has a unique view and set of routes
+        if (adminData.role === 'superadmin') {
+            return (
+                <Routes>
+                    <Route path="/" element={<SuperAdminDashboard />} />
+                    <Route path="promoters" element={<AdminPanel adminData={adminData} />} />
+                    <Route path="states" element={<StatesListPage />} />
+                    <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                    <Route path="users" element={<ManageUsersPage />} />
+                    <Route path="organizations" element={<OrganizationsListPage />} />
+                    <Route path="organization/:orgId" element={<ManageOrganizationPage />} />
+                    <Route path="applications" element={<AdminApplicationsListPage />} />
+                    <Route path="settings/stripe" element={<StripeSettingsPage />} />
+                    <Route path="gemini" element={<GeminiPage />} />
+                    <Route path="settings/email" element={<EmailTemplateEditor />} />
+                    <Route path="posts" element={<AdminPosts />} />
+                    <Route path="posts/new" element={<CreatePost />} />
+                    <Route path="posts/:postId" element={<PostDetails />} />
+                    <Route path="guestlist/:campaignId" element={<GuestListPage />} />
+                    <Route path="*" element={<Navigate to="/admin" replace />} />
+                </Routes>
+            );
+        }
+
+        // For all other roles, check organization assignment
+        const hasOrgs = adminData.organizationIds && adminData.organizationIds.length > 0;
+
+        if (hasOrgs) {
+            // If more than one org, but none is selected, show the selection screen.
+            if (adminData.organizationIds.length > 1 && !selectedOrganizationId) {
+                return <OrganizationSelection />;
+            }
+            
+            // If an organization is selected (or auto-selected), show the relevant routes.
+            if (selectedOrganizationId) {
+                 return (
+                    <Routes>
+                        <Route path="/" element={adminData.role === 'poster' ? <Navigate to="/admin/posts" /> : <AdminPanel adminData={adminData} />} />
+                        {adminData.role === 'admin' && (
+                            <>
+                                <Route path="settings" element={<SettingsPage />} />
+                                <Route path="users" element={<ManageUsersPage />} />
+                                <Route path="settings/subscription" element={<SubscriptionPage />} />
+                                <Route path="states" element={<StatesListPage />} />
+                                <Route path="state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
+                                <Route path="gemini" element={<GeminiPage />} />
+                                <Route path="organization/:orgId" element={<ManageOrganizationPage />} />
+                                <Route path="guestlist/:campaignId" element={<GuestListPage />} />
+                            </>
+                        )}
+                        {(adminData.role === 'admin' || adminData.role === 'poster') && (
+                            <>
+                                <Route path="posts" element={<AdminPosts />} />
+                                <Route path="posts/new" element={<CreatePost />} />
+                                <Route path="posts/:postId" element={<PostDetails />} />
+                            </>
+                        )}
+                        <Route path="*" element={<Navigate to="/admin" replace />} />
+                    </Routes>
+                 );
+            }
+        }
+
+        // If not a superadmin and has no orgs assigned
+        return <NoOrganizationAssigned />;
+    };
 
     return (
         <Routes>
             <Route path="login" element={<AdminLogin />} />
-
-            <Route path="/" element={
-                <ProtectedRoute>
-                    {
-                        adminData?.role === 'superadmin' ? <SuperAdminDashboard /> :
-                        adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
-                        <AdminPanel adminData={adminData!} />
-                    }
-                </ProtectedRoute>
-            } />
-            
-             {/* Routes for SuperAdmins */}
-            {adminData?.role === 'superadmin' && (
-                <>
-                    <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
-                    <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
-                    <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
-                    <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
-                    <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
-                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
-                    <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
-                    <Route path="settings/stripe" element={<ProtectedRoute><StripeSettingsPage /></ProtectedRoute>} />
-                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
-                    <Route path="settings/email" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
-                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
-                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
-                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
-                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
-                </>
-            )}
-
-            {/* Routes for regular Admins */}
-            {adminData?.role === 'admin' && (
-                <>
-                    <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                    <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
-                    <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
-                    <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
-                    <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
-                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
-                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
-                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
-                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
-                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
-                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
-                </>
-            )}
-
-            {/* Routes for Posters */}
-            {adminData?.role === 'poster' && (
-                <>
-                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
-                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
-                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
-                </>
-            )}
-            
-            {/* Catch-all for any other /admin routes, redirect to the appropriate dashboard */}
-            <Route path="*" element={
-                <ProtectedRoute>
-                    <Navigate to="/admin" replace />
-                </ProtectedRoute>
-            } />
+            <Route path="*" element={<ProtectedRoute><AdminContentRouter /></ProtectedRoute>} />
         </Routes>
     );
 };

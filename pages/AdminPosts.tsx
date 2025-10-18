@@ -11,7 +11,8 @@ import { auth } from '../firebase/config';
 
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    // FIX: Destructure selectedOrganizationId from useAdminAuth
+    const { adminData, selectedOrganizationId } = useAdminAuth();
     const [posts, setPosts] = useState<Post[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +27,9 @@ const AdminPosts: React.FC = () => {
             setIsLoading(true);
             setError(null);
             
-            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            // Use selectedOrganizationId from context instead.
+            const orgId = isSuperAdmin ? undefined : selectedOrganizationId;
 
             if (!isSuperAdmin && !orgId) {
                 setError("Organização não encontrada para este admin.");
@@ -51,7 +54,7 @@ const AdminPosts: React.FC = () => {
         };
 
         fetchPosts();
-    }, [adminData, isSuperAdmin]);
+    }, [adminData, isSuperAdmin, selectedOrganizationId]);
 
     const handleLogout = async () => {
         try {

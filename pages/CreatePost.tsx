@@ -26,7 +26,7 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
 const CreatePost: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrganizationId } = useAdminAuth();
 
     // Data fetching states
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -53,15 +53,15 @@ const CreatePost: React.FC = () => {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            if (!adminData?.organizationId) {
-                setError("Admin não está vinculado a uma organização.");
+            if (!selectedOrganizationId) {
+                setError("Nenhuma organização selecionada.");
                 setIsLoading(false);
                 return;
             }
             try {
                 const [orgData, allCampaigns] = await Promise.all([
-                    getOrganization(adminData.organizationId),
-                    getAllCampaigns(adminData.organizationId)
+                    getOrganization(selectedOrganizationId),
+                    getAllCampaigns(selectedOrganizationId)
                 ]);
 
                 if (orgData?.assignedStates) {
@@ -94,16 +94,16 @@ const CreatePost: React.FC = () => {
             }
         };
         loadInitialData();
-    }, [adminData, location.search]);
+    }, [selectedOrganizationId, location.search]);
     
     useEffect(() => {
         const fetchPromoters = async () => {
-            if (selectedCampaign && selectedState && adminData?.organizationId) {
+            if (selectedCampaign && selectedState && selectedOrganizationId) {
                 setIsLoading(true);
                 try {
                     const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
                     if (campaignDetails) {
-                        const promoterData = await getApprovedPromoters(adminData.organizationId, selectedState, campaignDetails.name);
+                        const promoterData = await getApprovedPromoters(selectedOrganizationId, selectedState, campaignDetails.name);
                         
                         // Sort promoters: those who joined the group first, then alphabetically.
                         promoterData.sort((a, b) => {
@@ -127,7 +127,7 @@ const CreatePost: React.FC = () => {
             }
         };
         fetchPromoters();
-    }, [selectedCampaign, selectedState, adminData?.organizationId, campaigns]);
+    }, [selectedCampaign, selectedState, selectedOrganizationId, campaigns]);
     
     const handleLogout = async () => {
         try {
@@ -170,7 +170,7 @@ const CreatePost: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!adminData?.organizationId || !adminData.email) {
+        if (!selectedOrganizationId || !adminData?.email) {
             setError("Dados do administrador inválidos.");
             return;
         }
@@ -208,7 +208,7 @@ const CreatePost: React.FC = () => {
             }
 
             const postData = {
-                organizationId: adminData.organizationId,
+                organizationId: selectedOrganizationId,
                 createdByEmail: adminData.email,
                 campaignName: campaignDetails.name,
                 stateAbbr: selectedState,

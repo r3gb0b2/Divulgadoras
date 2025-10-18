@@ -26,7 +26,7 @@ const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Ic
 
 const SubscriptionPage: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrganizationId } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -39,10 +39,10 @@ const SubscriptionPage: React.FC = () => {
     const [taxId, setTaxId] = useState('');
 
     const fetchOrg = async () => {
-        if (adminData?.organizationId) {
+        if (selectedOrganizationId) {
             setIsLoading(true);
             try {
-                const orgData = await getOrganization(adminData.organizationId);
+                const orgData = await getOrganization(selectedOrganizationId);
                 setOrganization(orgData);
                 if (orgData) {
                     // Pre-fill form if data exists
@@ -56,14 +56,14 @@ const SubscriptionPage: React.FC = () => {
                 setIsLoading(false);
             }
         } else {
-            setError(adminData ? "Este administrador não está vinculado a uma organização." : "Dados do administrador não encontrados.");
+            setError(adminData ? "Nenhuma organização selecionada." : "Dados do administrador não encontrados.");
             setIsLoading(false);
         }
     };
 
     useEffect(() => {
         fetchOrg();
-    }, [adminData]);
+    }, [adminData, selectedOrganizationId]);
 
     const handleUpdateInfo = async (e: React.FormEvent) => {
         e.preventDefault();

@@ -10,6 +10,9 @@ interface AdminAuthContextType {
     user: firebase.User | null;
     adminData: AdminUserData | null;
     loading: boolean;
+    selectedOrganizationId: string | null;
+    selectOrganization: (orgId: string) => void;
+    clearSelectedOrganization: () => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
@@ -19,6 +22,20 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
     const [user, setUser] = useState<firebase.User | null>(null);
     const [adminData, setAdminData] = useState<AdminUserData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(
+        () => sessionStorage.getItem('selectedOrganizationId') || null
+    );
+
+    const selectOrganization = (orgId: string) => {
+        sessionStorage.setItem('selectedOrganizationId', orgId);
+        setSelectedOrganizationId(orgId);
+    };
+
+    const clearSelectedOrganization = () => {
+        sessionStorage.removeItem('selectedOrganizationId');
+        setSelectedOrganizationId(null);
+    };
+
 
     useEffect(() => {
         // FIX: Use compat onAuthStateChanged method.
@@ -26,7 +43,6 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
             setLoading(true);
             if (firebaseUser) {
                 setUser(firebaseUser);
-                sessionStorage.setItem('isAdminAuthenticated', 'true');
                 try {
                     // Use UID for secure data retrieval
                     let data = await getAdminUserData(firebaseUser.uid);
@@ -46,6 +62,18 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                     }
 
                     setAdminData(data);
+
+                    if (data) {
+                        // If the currently selected org is no longer in the user's list, clear it.
+                        if (selectedOrganizationId && !data.organizationIds?.includes(selectedOrganizationId)) {
+                            clearSelectedOrganization();
+                        } 
+                        // If the user has exactly one org, auto-select it.
+                        else if (data.organizationIds?.length === 1 && selectedOrganizationId !== data.organizationIds[0]) {
+                            selectOrganization(data.organizationIds[0]);
+                        }
+                    }
+
                 } catch (error) {
                     console.error("Failed to fetch admin data", error);
                     setAdminData(null); // Ensure no stale data on error
@@ -53,16 +81,16 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
             } else {
                 setUser(null);
                 setAdminData(null);
-                sessionStorage.removeItem('isAdminAuthenticated');
+                clearSelectedOrganization();
             }
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [selectedOrganizationId]); // Rerun effect if selectedOrganizationId changes to handle edge cases
 
     return (
-        <AdminAuthContext.Provider value={{ user, adminData, loading }}>
+        <AdminAuthContext.Provider value={{ user, adminData, loading, selectedOrganizationId, selectOrganization, clearSelectedOrganization }}>
             {children}
         </AdminAuthContext.Provider>
     );

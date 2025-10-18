@@ -12,7 +12,7 @@ import { ArrowLeftIcon } from '../components/Icons';
 
 
 const ManageUsersPage: React.FC = () => {
-    const { adminData: currentAdmin } = useAdminAuth();
+    const { adminData: currentAdmin, selectedOrganizationId } = useAdminAuth();
     const [admins, setAdmins] = useState<AdminUserData[]>([]);
     const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -27,7 +27,7 @@ const ManageUsersPage: React.FC = () => {
     const [role, setRole] = useState<AdminRole>('viewer');
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
     const [assignedCampaigns, setAssignedCampaigns] = useState<{ [stateAbbr: string]: string[] }>({});
-    const [selectedOrg, setSelectedOrg] = useState('');
+    const [selectedOrgForNewUser, setSelectedOrgForNewUser] = useState('');
     
     const isSuperAdmin = currentAdmin?.role === 'superadmin';
 
@@ -35,8 +35,8 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const adminDataPromise = getAllAdmins(currentAdmin?.organizationId);
-            const campaignDataPromise = getAllCampaigns(currentAdmin?.organizationId);
+            const adminDataPromise = getAllAdmins(selectedOrganizationId || undefined);
+            const campaignDataPromise = getAllCampaigns(selectedOrganizationId || undefined);
             const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
 
             const [adminData, campaignData, orgData] = await Promise.all([
@@ -53,7 +53,7 @@ const ManageUsersPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentAdmin, isSuperAdmin]);
+    }, [isSuperAdmin, selectedOrganizationId]);
 
     useEffect(() => {
         fetchData();
@@ -76,7 +76,7 @@ const ManageUsersPage: React.FC = () => {
         setRole('viewer');
         setAssignedStates([]);
         setAssignedCampaigns({});
-        setSelectedOrg('');
+        setSelectedOrgForNewUser('');
     };
 
     const handleStateToggle = (stateAbbr: string) => {
@@ -138,7 +138,7 @@ const ManageUsersPage: React.FC = () => {
         setRole(target.role);
         setAssignedStates(target.assignedStates || []);
         setAssignedCampaigns(target.assignedCampaigns || {});
-        setSelectedOrg(target.organizationId || '');
+        setSelectedOrgForNewUser(target.organizationIds?.[0] || '');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -147,11 +147,12 @@ const ManageUsersPage: React.FC = () => {
         if (!email) return setError("O campo de e-mail é obrigatório.");
         if (!editingTarget && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário.");
         
-        if (isSuperAdmin && role !== 'superadmin' && !selectedOrg) {
+        const finalOrgId = isSuperAdmin ? selectedOrgForNewUser : selectedOrganizationId;
+
+        if (role !== 'superadmin' && !finalOrgId) {
             return setError("Por favor, selecione uma organização para este usuário.");
         }
-        if (!isSuperAdmin && !currentAdmin?.organizationId) return setError("Você não está associado a uma organização.");
-
+        
         setIsLoading(true);
         try {
             let targetUid: string | null = null;
@@ -172,9 +173,7 @@ const ManageUsersPage: React.FC = () => {
                 role, 
                 assignedStates, 
                 assignedCampaigns,
-                organizationId: isSuperAdmin 
-                    ? (role === 'superadmin' ? undefined : selectedOrg)
-                    : currentAdmin?.organizationId,
+                organizationIds: role === 'superadmin' ? [] : (finalOrgId ? [finalOrgId] : []),
             };
             
             await setAdminUserData(targetUid, dataToSave);
@@ -256,7 +255,7 @@ const ManageUsersPage: React.FC = () => {
                         {isSuperAdmin && role !== 'superadmin' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Organização</label>
-                                <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                                <select value={selectedOrgForNewUser} onChange={e => setSelectedOrgForNewUser(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
                                     <option value="" disabled>Selecione uma organização</option>
                                     {organizations.map(org => (
                                         <option key={org.id} value={org.id}>{org.name}</option>
@@ -321,8 +320,9 @@ const ManageUsersPage: React.FC = () => {
                              {isLoading ? <p>Carregando...</p> : (
                                 <div className="space-y-3">
                                     {admins.map(admin => {
+                                        const orgId = admin.organizationIds?.[0];
                                         const orgName = isSuperAdmin 
-                                            ? organizations.find(o => o.id === admin.organizationId)?.name || 'N/A (Global)'
+                                            ? (orgId ? organizations.find(o => o.id === orgId)?.name : null) || 'N/A (Global)'
                                             : '';
                                         return (
                                             <div key={admin.uid} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
