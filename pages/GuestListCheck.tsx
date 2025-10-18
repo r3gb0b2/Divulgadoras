@@ -165,22 +165,27 @@ const GuestListCheck: React.FC = () => {
                 );
 
                 if (entryForThisEvent) {
-                    // Check for specific access control
-                    if (directCampaign.guestListAccess === 'specific' && !(directCampaign.guestListAssignedPromoters || []).includes(entryForThisEvent.id)) {
-                        setEvents([]);
-                        setError("Você não tem permissão para acessar a lista deste evento.");
-                        setIsLoading(false);
-                        return;
+                    let allowedListNames: string[] = [];
+                    if (directCampaign.guestListAccess === 'specific') {
+                        allowedListNames = directCampaign.guestListAssignments?.[entryForThisEvent.id] || [];
+                    } else {
+                        allowedListNames = directCampaign.guestListTypes || [];
                     }
 
-                    if (directCampaign.guestListTypes) {
-                        const eventsWithLists = directCampaign.guestListTypes.map(listName => ({
-                            ...entryForThisEvent,
-                            campaignDetails: directCampaign,
-                            listName
-                        }));
-                        setEvents(eventsWithLists);
+                    if (allowedListNames.length === 0) {
+                         setEvents([]);
+                         setError("Você não tem permissão para acessar a lista deste evento.");
+                         setIsLoading(false);
+                         return;
                     }
+
+                    const eventsWithLists = allowedListNames.map(listName => ({
+                        ...entryForThisEvent,
+                        campaignDetails: directCampaign,
+                        listName
+                    }));
+                    setEvents(eventsWithLists);
+
                 } else {
                     setEvents([]);
                     setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
@@ -209,16 +214,18 @@ const GuestListCheck: React.FC = () => {
                         const campaignDetails = campaignMap.get(`${entry.organizationId}-${campaignName}`);
                         
                         if (campaignDetails && campaignDetails.guestListTypes) {
-                            // Check for specific access control
+                            let allowedListNames: string[] = [];
                             if (campaignDetails.guestListAccess === 'specific') {
-                                if (!(campaignDetails.guestListAssignedPromoters || []).includes(entry.id)) {
-                                    continue; // Skip, promoter not assigned to this list
-                                }
+                                allowedListNames = campaignDetails.guestListAssignments?.[entry.id] || [];
+                            } else {
+                                allowedListNames = campaignDetails.guestListTypes || [];
                             }
 
-                            for (const listName of campaignDetails.guestListTypes) {
+                            if (allowedListNames.length === 0) continue;
+
+                            for (const listName of allowedListNames) {
                                 const uniqueKey = `${campaignDetails.id}-${listName}`;
-                                if (!addedCampaignIds.has(uniqueKey)) { // Prevent duplicates if promoter is in multiple source campaigns that point to the same destination
+                                if (!addedCampaignIds.has(uniqueKey)) {
                                     eventsWithDetails.push({ ...entry, campaignDetails, listName });
                                     addedCampaignIds.add(uniqueKey);
                                 }

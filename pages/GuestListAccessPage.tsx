@@ -14,7 +14,7 @@ const GuestListAccessPage: React.FC = () => {
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [accessMode, setAccessMode] = useState<'all' | 'specific'>('all');
-    const [assignedPromoters, setAssignedPromoters] = useState<Set<string>>(new Set());
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: string[] }>({});
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -30,7 +30,6 @@ const GuestListAccessPage: React.FC = () => {
                 throw new Error("Organização não encontrada.");
             }
 
-            // Fetch campaign details and all approved promoters in parallel
             const allOrgCampaigns = await getAllCampaigns(orgId);
             const currentCampaign = allOrgCampaigns.find(c => c.id === campaignId);
 
@@ -47,7 +46,7 @@ const GuestListAccessPage: React.FC = () => {
             setCampaign(currentCampaign);
             setPromoters(approvedPromoters);
             setAccessMode(currentCampaign.guestListAccess || 'all');
-            setAssignedPromoters(new Set(currentCampaign.guestListAssignedPromoters || []));
+            setAssignments(currentCampaign.guestListAssignments || {});
 
         } catch (err: any) {
             setError(err.message || "Falha ao carregar dados.");
@@ -60,26 +59,22 @@ const GuestListAccessPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
-    const handlePromoterToggle = (promoterId: string) => {
-        setAssignedPromoters(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(promoterId)) {
-                newSet.delete(promoterId);
+    const handleAssignmentToggle = (promoterId: string, listName: string) => {
+        setAssignments(prev => {
+            const currentLists = prev[promoterId] || [];
+            const newLists = currentLists.includes(listName)
+                ? currentLists.filter(l => l !== listName)
+                : [...currentLists, listName];
+
+            const newAssignments = { ...prev };
+            if (newLists.length > 0) {
+                newAssignments[promoterId] = newLists;
             } else {
-                newSet.add(promoterId);
+                delete newAssignments[promoterId]; // clean up empty arrays
             }
-            return newSet;
+            return newAssignments;
         });
     };
-    
-    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            setAssignedPromoters(new Set(promoters.map(p => p.id)));
-        } else {
-            setAssignedPromoters(new Set());
-        }
-    };
-
 
     const handleSave = async () => {
         if (!campaignId) return;
@@ -88,12 +83,13 @@ const GuestListAccessPage: React.FC = () => {
         try {
             const updateData: Partial<Campaign> = {
                 guestListAccess: accessMode,
-                guestListAssignedPromoters: accessMode === 'specific' ? Array.from(assignedPromoters) : [],
+                guestListAssignments: accessMode === 'specific' ? assignments : {},
             };
             await updateCampaign(campaignId, updateData);
             alert("Configurações de acesso salvas!");
             navigate(-1);
-        } catch (err: any) {
+        } catch (err: any)
+{
             setError(err.message || "Falha ao salvar.");
         } finally {
             setIsSaving(false);
@@ -122,14 +118,14 @@ const GuestListAccessPage: React.FC = () => {
                             <input type="radio" name="accessMode" value="all" checked={accessMode === 'all'} onChange={() => setAccessMode('all')} className="h-4 w-4 text-primary bg-gray-800 border-gray-600 focus:ring-primary" />
                             <div>
                                 <span className="font-medium text-gray-200">Todas as Divulgadoras</span>
-                                <p className="text-sm text-gray-400">Permitir que qualquer divulgadora aprovada para este evento confirme presença na lista.</p>
+                                <p className="text-sm text-gray-400">Permitir que qualquer divulgadora aprovada para este evento confirme presença em <strong className="text-gray-300">todas</strong> as listas.</p>
                             </div>
                         </label>
                          <label className="flex items-center space-x-3 p-3 bg-gray-700/50 rounded-lg cursor-pointer">
                             <input type="radio" name="accessMode" value="specific" checked={accessMode === 'specific'} onChange={() => setAccessMode('specific')} className="h-4 w-4 text-primary bg-gray-800 border-gray-600 focus:ring-primary" />
                             <div>
                                 <span className="font-medium text-gray-200">Divulgadoras Específicas</span>
-                                <p className="text-sm text-gray-400">Apenas as divulgadoras que você selecionar abaixo poderão confirmar presença na lista.</p>
+                                <p className="text-sm text-gray-400">Apenas as divulgadoras que você selecionar abaixo poderão confirmar presença nas listas <strong className="text-gray-300">designadas</strong>.</p>
                             </div>
                         </label>
                     </div>
@@ -137,26 +133,32 @@ const GuestListAccessPage: React.FC = () => {
 
                 {accessMode === 'specific' && (
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Selecione as Divulgadoras com Acesso</h2>
-                        {promoters.length > 0 ? (
-                            <div className="mt-2 border border-gray-700 rounded-lg p-2 max-h-80 overflow-y-auto">
-                                <label className="flex items-center space-x-2 p-2 font-semibold">
-                                    <input type="checkbox" onChange={handleSelectAll} checked={assignedPromoters.size === promoters.length && promoters.length > 0} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                    <span>Selecionar Todas ({assignedPromoters.size}/{promoters.length})</span>
-                                </label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                                    {promoters.map(p => (
-                                        <label key={p.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-700/50 cursor-pointer">
-                                            <input type="checkbox" checked={assignedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded flex-shrink-0" />
-                                            <span className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-gray-200'}`} title={`${p.name} (${p.instagram})`}>
-                                                {p.instagram || p.name}
-                                            </span>
-                                        </label>
-                                    ))}
-                                </div>
+                        <h2 className="text-lg font-semibold text-white">Atribuir Listas</h2>
+                        {promoters.length > 0 && (campaign?.guestListTypes?.length ?? 0) > 0 ? (
+                            <div className="mt-2 border border-gray-700 rounded-lg p-2 max-h-[60vh] overflow-y-auto space-y-3">
+                                {promoters.map(p => (
+                                    <div key={p.id} className="p-3 bg-gray-800/50 rounded-md">
+                                        <p className={`font-semibold ${p.hasJoinedGroup ? 'text-green-400' : 'text-gray-200'}`} title={p.name}>{p.instagram || p.name}</p>
+                                        <div className="pl-4 mt-2 space-y-1 border-l-2 border-gray-600">
+                                            {(campaign?.guestListTypes || []).map(listName => (
+                                                <label key={listName} className="flex items-center space-x-2 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={(assignments[p.id] || []).includes(listName)}
+                                                        onChange={() => handleAssignmentToggle(p.id, listName)}
+                                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
+                                                    />
+                                                    <span className="text-sm text-gray-300">{listName}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         ) : (
-                            <p className="text-gray-400 text-center mt-4">Nenhuma divulgadora aprovada para este evento foi encontrada.</p>
+                            <p className="text-gray-400 text-center mt-4">
+                                {promoters.length === 0 ? "Nenhuma divulgadora aprovada para este evento." : "Nenhum tipo de lista foi criado para este evento."}
+                            </p>
                         )}
                     </div>
                 )}

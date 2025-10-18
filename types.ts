@@ -60,7 +60,7 @@ export interface Campaign {
   guestListTypes?: string[];
   guestAllowance?: number;
   guestListAccess?: 'all' | 'specific';
-  guestListAssignedPromoters?: string[]; // array of promoter IDs
+  guestListAssignments?: { [promoterId: string]: string[] }; // Maps promoterId to an array of list names
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';
