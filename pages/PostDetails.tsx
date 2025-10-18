@@ -348,42 +348,49 @@ export const PostDetails: React.FC = () => {
 
                     <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="Filtrar por nome..." className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 mb-4" />
 
-                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                    <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                         {filteredAssignments.map(a => {
                             const hasConfirmed = a.status === 'confirmed';
                             const hasProof = a.proofSubmittedAt;
                             return (
                                 <div key={a.id} className="bg-gray-800/50 p-3 rounded-md">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start">
-                                        <div>
-                                            <p className="font-semibold text-white">{a.promoterName}</p>
-                                            <p className="text-sm text-gray-400">{a.promoterEmail}</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-y-3 gap-x-4">
+                                        {/* Promoter Info */}
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-white truncate" title={a.promoterName}>{a.promoterName}</p>
+                                            <p className="text-xs text-gray-400 truncate" title={a.promoterEmail}>{a.promoterEmail}</p>
                                         </div>
-                                        <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-shrink-0">
-                                            {hasProof ? (
-                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Comprovado</span>
-                                            ) : hasConfirmed ? (
-                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
-                                            ) : (
-                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                            
+                                        {/* Status, Proof, Actions */}
+                                        <div className="flex items-center justify-start sm:justify-end gap-x-4">
+                                            {/* Proof Images */}
+                                            {hasProof && a.proofImageUrls && (
+                                                <div className="flex gap-1.5">
+                                                    {a.proofImageUrls.map((url, i) => (
+                                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={`Ver comprovação ${i+1}`}>
+                                                            <img src={url} alt={`Prova ${i+1}`} className="w-9 h-9 object-cover rounded-md border-2 border-gray-600" />
+                                                        </a>
+                                                    ))}
+                                                </div>
                                             )}
-                                        </div>
-                                    </div>
-                                    {hasProof && a.proofImageUrls && (
-                                        <div className="mt-3 border-t border-gray-700 pt-3">
-                                            <p className="text-xs font-semibold text-gray-400 mb-2">Comprovação:</p>
-                                            <div className="flex gap-2">
-                                                {a.proofImageUrls.map((url, i) => (
-                                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                                                        <img src={url} alt={`Prova ${i+1}`} className="w-16 h-16 object-cover rounded" />
-                                                    </a>
-                                                ))}
+                                            
+                                            {/* Status Badge */}
+                                            <div className="w-24 flex-shrink-0 text-center">
+                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    hasProof ? 'bg-blue-900/50 text-blue-300' :
+                                                    hasConfirmed ? 'bg-green-900/50 text-green-300' :
+                                                    'bg-yellow-900/50 text-yellow-300'
+                                                }`}>
+                                                    {hasProof ? 'Comprovado' : hasConfirmed ? 'Confirmado' : 'Pendente'}
+                                                </span>
+                                            </div>
+                            
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-x-4 text-sm font-medium">
+                                                <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Stats</button>
+                                                <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover</button>
                                             </div>
                                         </div>
-                                    )}
-                                     <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium">
-                                        <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Ver Stats</button>
-                                        <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover do Grupo</button>
                                     </div>
                                 </div>
                             );
