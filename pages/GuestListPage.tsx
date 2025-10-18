@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
-import { getCampaigns } from '../services/settingsService';
+import { getAllCampaigns } from '../services/settingsService';
 import { GuestListConfirmation, Campaign } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
+    const { adminData } = useAdminAuth();
     const [confirmations, setConfirmations] = useState<GuestListConfirmation[]>([]);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -26,13 +28,24 @@ const GuestListPage: React.FC = () => {
             const confirmationData = await getGuestListForCampaign(campaignId);
             setConfirmations(confirmationData);
 
-            // Fetch campaign details to show its name (assuming we might not have it)
-            // This is a bit inefficient but makes the component self-contained.
+            // Fetch campaign details to show its name (robustly)
+            let orgId: string | undefined;
             if (confirmationData.length > 0) {
-                 const firstConfirm = confirmationData[0];
-                 const campaigns = await getCampaigns(firstConfirm.campaignName.split(' - ')[1], firstConfirm.organizationId);
-                 const camp = campaigns.find(c => c.id === campaignId);
-                 setCampaign(camp || null);
+                orgId = confirmationData[0].organizationId;
+            } else if (adminData?.organizationId) {
+                // If list is empty, get orgId from logged-in admin
+                orgId = adminData.organizationId;
+            }
+
+            if (orgId) {
+                const allCampaigns = await getAllCampaigns(orgId);
+                const camp = allCampaigns.find(c => c.id === campaignId);
+                setCampaign(camp || null);
+            } else if (adminData?.role === 'superadmin' && confirmationData.length === 0) {
+                 // Fallback for Superadmin viewing an empty list for an org they don't belong to.
+                const allCampaignsEver = await getAllCampaigns();
+                const camp = allCampaignsEver.find(c => c.id === campaignId);
+                setCampaign(camp || null);
             }
 
         } catch (err: any) {
@@ -40,7 +53,7 @@ const GuestListPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [campaignId]);
+    }, [campaignId, adminData]);
 
     useEffect(() => {
         fetchData();
