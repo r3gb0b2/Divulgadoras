@@ -20,7 +20,8 @@ import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
 import CreatePost from './CreatePost';
-import PostDetails from './PostDetails';
+// FIX: Changed to a named import to resolve module export issue.
+import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {

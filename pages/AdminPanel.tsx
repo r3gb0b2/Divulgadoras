@@ -284,6 +284,34 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             throw error;
         }
     };
+
+    const handleGroupStatusChange = async (promoter: Promoter, hasJoined: boolean) => {
+        if (hasJoined) {
+            // If they are joining, just update the flag. No need to delete anything.
+            await handleUpdatePromoter(promoter.id, { hasJoinedGroup: true });
+        } else {
+            // If they are leaving, confirm and then call the cloud function.
+            if (window.confirm(`Tem certeza que deseja marcar "${promoter.name}" como fora do grupo? Isso a removerá de TODAS as publicações ativas para este evento.`)) {
+                try {
+                    const removePromoter = httpsCallable(functions, 'removePromoterFromAllAssignments');
+                    await removePromoter({ promoterId: promoter.id });
+                    
+                    alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
+    
+                    // Optimistic UI update for the checkbox.
+                    setAllPromoters(prev => prev.map(p => 
+                        p.id === promoter.id ? { ...p, hasJoinedGroup: false } as Promoter : p
+                    ));
+                     // Also refetch dashboard stats in the background
+                    fetchStats();
+    
+                } catch (error: any) {
+                    console.error("Failed to remove promoter from all assignments:", error);
+                    alert(`Falha ao remover a divulgadora: ${error.message}`);
+                }
+            }
+        }
+    };
     
     const handleConfirmReject = async (reason: string) => {
         if (rejectingPromoter && canManage) {
@@ -547,7 +575,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                             <input 
                                                 type="checkbox" 
                                                 checked={!!promoter.hasJoinedGroup} 
-                                                onChange={(e) => handleUpdatePromoter(promoter.id, { hasJoinedGroup: e.target.checked })}
+                                                onChange={(e) => handleGroupStatusChange(promoter, e.target.checked)}
                                                 className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
                                             />
                                             <span className="text-gray-300">Entrou no grupo</span>

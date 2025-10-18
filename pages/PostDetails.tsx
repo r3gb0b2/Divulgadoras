@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost, updatePost, sendPostReminder } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -34,12 +34,14 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
-const PostDetails: React.FC = () => {
+// FIX: Changed to a named export to resolve a module resolution error.
+export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
     const { adminData } = useAdminAuth();
     const [post, setPost] = useState<Post | null>(null);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
+    const [filterQuery, setFilterQuery] = useState('');
     
     // Edit state
     const [isActive, setIsActive] = useState(false);
@@ -206,9 +208,35 @@ const PostDetails: React.FC = () => {
         }
     };
 
+    const handleRemoveFromGroup = async (assignment: PostAssignment) => {
+        if (window.confirm(`Tem certeza que deseja marcar "${assignment.promoterName}" como fora do grupo e removê-la desta publicação? A divulgadora não aparecerá mais nas listas de atribuição de posts.`)) {
+            setIsSaving(true);
+            setError(null);
+            try {
+                await removePromoterFromPostAndGroup(assignment.id, assignment.promoterId);
+                showSuccessMessage(`${assignment.promoterName} foi removida com sucesso.`);
+                await fetchDetails();
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setIsSaving(false);
+            }
+        }
+    };
+
     const pendingProofCount = useMemo(() => {
         return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
     }, [assignments]);
+
+    const filteredAssignments = useMemo(() => {
+        if (!filterQuery.trim()) {
+            return assignments;
+        }
+        const lowercasedQuery = filterQuery.toLowerCase();
+        return assignments.filter(a => 
+            a.promoterName.toLowerCase().includes(lowercasedQuery)
+        );
+    }, [assignments, filterQuery]);
 
 
     const formatDate = (timestamp: any): string => {
@@ -289,130 +317,133 @@ const PostDetails: React.FC = () => {
                             Editar Conteúdo e Instruções
                         </button>
                         <button onClick={handleDuplicate} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
-                            Duplicar Publicação
+                            Duplicar Post
                         </button>
-                        <button onClick={() => setIsAssignModalOpen(true)} disabled={isSaving || isDeleting} className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 disabled:opacity-50">
-                            Atribuir a Novas Divulgadoras
-                        </button>
-                        <button onClick={handleSendReminder} disabled={isSendingReminder || pendingProofCount === 0} className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50">
-                            {isSendingReminder ? 'Enviando...' : `Enviar Lembrete de Comprovação (${pendingProofCount})`}
+                        <button onClick={handleDelete} disabled={isDeleting || isSaving} className="w-full px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 disabled:opacity-50">
+                            {isDeleting ? 'Deletando...' : 'Deletar Publicação'}
                         </button>
                     </div>
                 </div>
 
                 {/* Assignments List */}
                 <div className="lg:col-span-2 bg-dark/70 p-4 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
-                         <h2 className="text-xl font-bold text-white">Divulgadoras Designadas</h2>
-                         <div className="text-right">
-                            <p className="text-lg font-semibold">{confirmationStats.confirmed} / {confirmationStats.total} <span className="text-sm font-normal">Confirmaram</span></p>
-                            <p className="text-sm font-semibold">{confirmationStats.proofs} / {confirmationStats.total} <span className="text-xs font-normal">Comprovaram</span></p>
-                         </div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Divulgadoras Atribuídas</h2>
+                             <div className="flex items-center gap-4 text-sm mt-1">
+                                <span className="text-gray-400">Total: <span className="font-bold text-white">{confirmationStats.total}</span></span>
+                                <span className="text-gray-400">Confirmaram: <span className="font-bold text-green-400">{confirmationStats.confirmed}</span></span>
+                                <span className="text-gray-400">Comprovaram: <span className="font-bold text-blue-400">{confirmationStats.proofs}</span></span>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                             <button onClick={() => setIsAssignModalOpen(true)} className="px-3 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark text-sm">
+                                + Atribuir a Mais
+                            </button>
+                            <button onClick={handleSendReminder} disabled={isSendingReminder || pendingProofCount === 0} className="px-3 py-2 bg-yellow-600 text-white font-semibold rounded-md hover:bg-yellow-700 text-sm disabled:opacity-50">
+                                {isSendingReminder ? 'Enviando...' : `Lembrete (${pendingProofCount})`}
+                            </button>
+                        </div>
                     </div>
-                    <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                             <thead className="bg-gray-800 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Nome</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Data Confirmação</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">Comprovação</th>
-                                </tr>
-                             </thead>
-                             <tbody className="divide-y divide-gray-700">
-                                {assignments.map(a => (
-                                    <tr key={a.id}>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                            <button
-                                                onClick={() => handleOpenStatsModal(a)}
-                                                className="text-gray-200 hover:text-primary hover:underline font-medium"
-                                            >
-                                                {a.promoterName}
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                            {a.status === 'confirmed' ? (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
+
+                    <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="Filtrar por nome..." className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 mb-4" />
+
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                        {filteredAssignments.map(a => {
+                            const hasConfirmed = a.status === 'confirmed';
+                            const hasProof = a.proofSubmittedAt;
+                            return (
+                                <div key={a.id} className="bg-gray-800/50 p-3 rounded-md">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold text-white">{a.promoterName}</p>
+                                            <p className="text-sm text-gray-400">{a.promoterEmail}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-shrink-0">
+                                            {hasProof ? (
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Comprovado</span>
+                                            ) : hasConfirmed ? (
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
                                             ) : (
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-400">{formatDate(a.confirmedAt)}</td>
-                                        <td className="px-4 py-2 whitespace-nowrap">
-                                            {a.proofImageUrls && a.proofImageUrls.length > 0 ? (
-                                                <div className="flex gap-1">
-                                                    {a.proofImageUrls.map((url, index) => (
-                                                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                                            <img src={url} alt={`Prova ${index + 1}`} className="w-10 h-10 object-cover rounded-md" />
-                                                        </a>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-gray-500">N/A</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                             </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+                                    {hasProof && a.proofImageUrls && (
+                                        <div className="mt-3 border-t border-gray-700 pt-3">
+                                            <p className="text-xs font-semibold text-gray-400 mb-2">Comprovação:</p>
+                                            <div className="flex gap-2">
+                                                {a.proofImageUrls.map((url, i) => (
+                                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                                        <img src={url} alt={`Prova ${i+1}`} className="w-16 h-16 object-cover rounded" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                     <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium">
+                                        <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Ver Stats</button>
+                                        <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover do Grupo</button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredAssignments.length === 0 && <p className="text-gray-400 text-center py-4">Nenhuma divulgadora encontrada.</p>}
                     </div>
                 </div>
             </div>
         );
-    };
+    }
+
 
     return (
         <div>
-             <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+            <div className="flex justify-between items-center mb-6">
                 <div>
-                     <button onClick={() => navigate('/admin/posts')} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                     <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
                         <ArrowLeftIcon className="w-5 h-5" />
                         <span>Todas as Publicações</span>
                     </button>
                     <h1 className="text-3xl font-bold mt-1">Detalhes da Publicação</h1>
                 </div>
-                <div className="flex items-center gap-4">
-                    {(adminData?.role === 'admin' || adminData?.role === 'superadmin') && (
-                        <button
-                            onClick={handleDelete}
-                            disabled={isDeleting || isSaving}
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                        >
-                            {isDeleting ? 'Deletando...' : 'Deletar Publicação'}
-                        </button>
-                    )}
-                    {adminData?.role === 'poster' && (
-                        <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
-                            Sair
-                        </button>
-                    )}
-                </div>
+                 {adminData?.role === 'poster' && (
+                    <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
+                        Sair
+                    </button>
+                )}
             </div>
-             {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
-             {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
             <div className="bg-secondary shadow-lg rounded-lg p-6">
+                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
+                 {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
                 {renderContent()}
             </div>
-            <PromoterPostStatsModal
-                isOpen={statsModalOpen}
-                onClose={() => setStatsModalOpen(false)}
-                promoter={selectedPromoter}
-            />
-            <AssignPostModal
-                isOpen={isAssignModalOpen}
-                onClose={() => setIsAssignModalOpen(false)}
-                post={post}
-                existingAssignments={assignments}
-                onSuccess={fetchDetails}
-            />
-            <EditPostModal
-                isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
-                post={post}
-                onSave={handleSaveContent}
-            />
+
+            {statsModalOpen && selectedPromoter && (
+                <PromoterPostStatsModal
+                    isOpen={statsModalOpen}
+                    onClose={() => setStatsModalOpen(false)}
+                    promoter={selectedPromoter}
+                />
+            )}
+            
+            {isAssignModalOpen && post && (
+                <AssignPostModal 
+                    isOpen={isAssignModalOpen}
+                    onClose={() => setIsAssignModalOpen(false)}
+                    post={post}
+                    existingAssignments={assignments}
+                    onSuccess={fetchDetails}
+                />
+            )}
+            
+            {isEditModalOpen && post && (
+                <EditPostModal 
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    post={post}
+                    onSave={handleSaveContent}
+                />
+            )}
         </div>
     );
 };
-
-export default PostDetails;

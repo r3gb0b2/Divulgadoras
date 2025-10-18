@@ -443,7 +443,11 @@ export const getApprovedPromoters = async (organizationId: string, state: string
     querySnapshot.forEach((doc) => {
       promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
     });
-    return promoters.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Filter out promoters who have been marked as having left the group
+    const activePromoters = promoters.filter(p => p.hasJoinedGroup !== false);
+
+    return activePromoters.sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
     console.error("Error getting approved promoters: ", error);
     throw new Error("Não foi possível buscar as divulgadoras aprovadas.");

@@ -715,6 +715,44 @@ exports.createOrganizationAndUser = functions.region("southamerica-east1").https
   });
 });
 
+exports.removePromoterFromAllAssignments = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+        }
+        const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+        if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+            throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+        }
+
+        const { promoterId } = data;
+        if (!promoterId) {
+            throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+        }
+
+        const batch = db.batch();
+
+        // 1. Update the promoter document
+        const promoterRef = db.collection("promoters").doc(promoterId);
+        batch.update(promoterRef, { hasJoinedGroup: false });
+
+        // 2. Find and delete all their assignments
+        const assignmentsQuery = db.collection("postAssignments").where("promoterId", "==", promoterId);
+        const assignmentsSnapshot = await assignmentsQuery.get();
+
+        if (!assignmentsSnapshot.empty) {
+            assignmentsSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+        }
+
+        // 3. Commit the batch
+        await batch.commit();
+
+        return { success: true, deletedCount: assignmentsSnapshot.size };
+    });
+
 
 // --- Gemini AI assistant function ---
 const { GoogleGenAI } = require("@google/genai");

@@ -310,3 +310,20 @@ export const sendPostReminder = async (postId: string): Promise<{count: number, 
         throw new Error("Não foi possível enviar os lembretes.");
     }
 };
+
+export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
+    try {
+        const batch = writeBatch(firestore);
+
+        const promoterDocRef = doc(firestore, 'promoters', promoterId);
+        batch.update(promoterDocRef, { hasJoinedGroup: false });
+
+        const assignmentDocRef = doc(firestore, 'postAssignments', assignmentId);
+        batch.delete(assignmentDocRef);
+
+        await batch.commit();
+    } catch (error) {
+        console.error("Error removing promoter from post and group:", error);
+        throw new Error("Não foi possível remover a divulgadora.");
+    }
+};
