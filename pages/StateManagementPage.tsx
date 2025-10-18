@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Campaign, AdminUserData, StatesConfig, Organization, PlanId } from '../types';
-import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig, getAllCampaigns } from '../services/settingsService';
-import { getOrganization } from '../services/organizationService';
+import { Campaign, AdminUserData, StatesConfig } from '../types';
+import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
 import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
@@ -45,6 +44,7 @@ const CampaignModal: React.FC<{
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSave({ ...(campaign || {}), ...formData });
+        onClose();
     };
 
     return (
@@ -96,8 +96,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
     const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
-    const [organization, setOrganization] = useState<Organization | null>(null);
-    const [allOrgCampaigns, setAllOrgCampaigns] = useState<Campaign[]>([]);
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
@@ -106,26 +104,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const orgId = adminData.organizationId;
-            if (!isSuperAdmin && !orgId) {
-                throw new Error("Administrador não está vinculado a uma organização.");
-            }
-
-            // Fetch campaigns for the current state view
-            const campaignData = await getCampaigns(stateAbbr, orgId);
+            const campaignData = await getCampaigns(stateAbbr, adminData.organizationId);
             setCampaigns(campaignData);
-
-            // Fetch organization-wide data needed for limits
-            if (orgId) {
-                const [orgData, allCampaignsData] = await Promise.all([
-                    getOrganization(orgId),
-                    getAllCampaigns(orgId)
-                ]);
-                setOrganization(orgData);
-                setAllOrgCampaigns(allCampaignsData);
-            }
-
-            // Fetch global settings only if superadmin
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
                 setStatesConfig(config);
@@ -142,7 +122,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     }, [fetchData]);
 
     const handleOpenModal = (campaign: Campaign | null = null) => {
-        setError(''); // Clear previous errors when opening modal
         setEditingCampaign(campaign);
         setIsModalOpen(true);
     };
@@ -178,39 +157,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
              setError("Super Admins devem gerenciar campanhas no painel da organização.");
              return;
         }
-
-        // Check plan limits
-        if (organization) {
-            const planLimits: { [key in PlanId]: number } = {
-                basic: 2,
-                professional: 10,
-            };
-            const limit = planLimits[organization.planId];
-            const isNewCampaign = !('id' in campaignData && campaignData.id);
-            const isBecomingActive = (campaignData as Campaign).isActive;
-    
-            if (isBecomingActive) {
-                const activeCampaignsCount = allOrgCampaigns.filter(c => c.isActive).length;
-                
-                if (isNewCampaign) {
-                    if (activeCampaignsCount >= limit) {
-                        setError(`Seu plano "${organization.planId}" permite apenas ${limit} eventos ativos. Crie o evento como inativo ou desative outro evento.`);
-                        return; // Stop execution
-                    }
-                } else { // It's an update
-                    const campaignId = (campaignData as Campaign).id;
-                    const existingCampaign = allOrgCampaigns.find(c => c.id === campaignId);
-                    // We only check if an INACTIVE campaign is becoming ACTIVE
-                    if (existingCampaign && !existingCampaign.isActive) {
-                        if (activeCampaignsCount >= limit) {
-                            setError(`Seu plano "${organization.planId}" permite apenas ${limit} eventos ativos. Para ativar este, você precisa desativar outro.`);
-                            return; // Stop execution
-                        }
-                    }
-                }
-            }
-        }
-
 
         try {
             if ('id' in campaignData && campaignData.id) {

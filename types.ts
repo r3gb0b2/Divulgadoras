@@ -20,14 +20,11 @@ export interface Promoter {
   organizationId: string;
   rejectionReason?: string;
   hasJoinedGroup?: boolean;
-  leftGroup?: boolean; // New field
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
-  canReapply?: boolean;
-  updatedAt?: Timestamp | FieldValue;
 }
 
 export interface PromoterApplicationData {
@@ -156,7 +153,7 @@ export interface PostAssignment {
   promoterId: string;
   promoterEmail: string; // lowercase
   promoterName: string;
-  status: 'pending' | 'confirmed' | 'cancelled'; // Added 'cancelled'
+  status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
   proofSubmittedAt?: Timestamp | FieldValue | null;

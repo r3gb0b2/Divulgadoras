@@ -13,7 +13,6 @@ const defaultRejectionReasons: Omit<RejectionReason, 'organizationId'>[] = [
     { id: 'default-2', text: "Fotos de baixa qualidade ou inadequadas." },
     { id: 'default-3', text: "Informações de contato inválidas." },
     { id: 'default-4', text: "Não cumpre os pré-requisitos da vaga." },
-    { id: 'default-6', text: "Informações incompletas ou inválidas (Permitir reenvio)" },
     { id: 'default-5', text: "Vagas preenchidas no momento, tente novamente no futuro." }
 ];
 

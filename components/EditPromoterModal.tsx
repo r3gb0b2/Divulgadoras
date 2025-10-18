@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Promoter, Campaign } from '../types';
 import { getAllCampaigns } from '../services/settingsService';
-import { cancelPendingAssignmentsForPromoter } from '../services/postService';
 import { stateMap } from '../constants/states';
 
 interface EditPromoterModalProps {
@@ -32,7 +31,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         status: promoter.status,
         rejectionReason: promoter.rejectionReason || '',
         hasJoinedGroup: promoter.hasJoinedGroup || false,
-        leftGroup: promoter.leftGroup || false,
         observation: promoter.observation || '',
         associatedCampaigns: promoter.associatedCampaigns || [],
       });
@@ -87,17 +85,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     setIsSaving(true);
     try {
       const dataToSave = { ...formData };
-      
-      const wasMarkedAsLeft = dataToSave.leftGroup && !promoter.leftGroup;
-
-      if (wasMarkedAsLeft) {
-          if (!window.confirm("Atenção: Marcar que esta divulgadora saiu do grupo irá cancelar todas as suas postagens pendentes. Deseja continuar?")) {
-              setIsSaving(false);
-              return; // Abort save
-          }
-          await cancelPendingAssignmentsForPromoter(promoter.id);
-      }
-      
       if (dataToSave.email) {
         dataToSave.email = dataToSave.email.toLowerCase().trim();
       }
@@ -191,79 +178,74 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                         <div key={stateAbbr}>
                             <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
                             <div className="pl-2 space-y-1">
+                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
                                 {(campaigns as Campaign[]).map(campaign => (
                                     <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={(formData.associatedCampaigns || []).includes(campaign.name)}
                                             onChange={() => handleCampaignToggle(campaign.name)}
-                                            className={formCheckboxStyle}
-                                            disabled={promoter.campaignName === campaign.name}
+                                            disabled={campaign.name === promoter.campaignName}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50"
                                         />
-                                        <span className={promoter.campaignName === campaign.name ? "text-gray-500" : ""}>{campaign.name}</span>
+                                        <span className={`text-sm ${campaign.name === promoter.campaignName ? 'text-gray-500' : 'text-gray-200'}`}>{campaign.name}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
                     ))}
                 </div>
-            ) : <p className="text-sm text-gray-400">Nenhum outro evento disponível.</p>}
+            ) : (
+                <p className="text-sm text-gray-400">Nenhum outro evento encontrado para esta organização.</p>
+            )}
           </div>
 
-          <div className="border-t border-gray-700 pt-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300">Status</label>
-              <select name="status" value={formData.status || ''} onChange={handleChange} className={formInputStyle}>
-                <option value="pending">Pendente</option>
-                <option value="approved">Aprovado</option>
-                <option value="rejected">Rejeitado</option>
-              </select>
-            </div>
-            {formData.status === 'rejected' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300">Motivo da Rejeição</label>
-                <input type="text" name="rejectionReason" value={formData.rejectionReason || ''} onChange={handleChange} className={formInputStyle} />
-              </div>
-            )}
-            {formData.status === 'approved' && (
-                <label className="flex items-center space-x-2">
-                    <input type="checkbox" name="hasJoinedGroup" checked={formData.hasJoinedGroup || false} onChange={handleChange} className={formCheckboxStyle} />
-                    <span>Entrou no grupo de divulgação</span>
-                </label>
-            )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Status</label>
+            <select name="status" value={formData.status || 'pending'} onChange={handleChange} className={formInputStyle}>
+              <option value="pending">Pendente</option>
+              <option value="approved">Aprovado</option>
+              <option value="rejected">Rejeitado</option>
+            </select>
           </div>
           
-          <div className="border-t border-red-700/50 bg-red-900/20 p-4 mt-4 rounded-md">
-            <label className="flex items-center space-x-3 cursor-pointer">
-                <input
-                    type="checkbox"
-                    name="leftGroup"
-                    checked={formData.leftGroup || false}
-                    onChange={handleChange}
-                    className="h-5 w-5 text-red-500 rounded border-gray-500 bg-gray-700 focus:ring-red-500"
-                />
-                <div className="flex flex-col">
-                    <span className="font-semibold text-red-300">Marcar que divulgadora saiu do grupo</span>
-                    <span className="text-xs text-red-300/80">Esta ação cancelará todas as publicações pendentes dela.</span>
-                </div>
-            </label>
+          {formData.status === 'approved' && (
+            <div className="mt-4">
+                 <label className="flex items-center text-sm font-medium text-gray-300">
+                    <input 
+                        type="checkbox" 
+                        name="hasJoinedGroup" 
+                        checked={!!formData.hasJoinedGroup} 
+                        onChange={handleChange}
+                        className={formCheckboxStyle}
+                    />
+                    <span className="ml-2">Confirmar que entrou no grupo</span>
+                 </label>
+            </div>
+          )}
+          
+          {formData.status === 'rejected' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">Motivo da Rejeição</label>
+              <textarea
+                name="rejectionReason"
+                value={formData.rejectionReason || ''}
+                onChange={handleChange}
+                className={formInputStyle + ' min-h-[60px]'}
+                placeholder="Informe o motivo..."
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end space-x-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+              Cancelar
+            </button>
+            <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
+              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
           </div>
-
         </form>
-
-        <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
-            Cancelar
-          </button>
-          <button 
-            type="button" 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
-          >
-            {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-          </button>
-        </div>
       </div>
     </div>
   );

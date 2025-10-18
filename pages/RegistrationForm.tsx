@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
-import { Promoter, Campaign } from '../types';
+import { Campaign } from '../types';
 // FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
@@ -74,10 +74,6 @@ const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const [promoterIdToUpdate, setPromoterIdToUpdate] = useState<string | null>(null);
-  const [isResubmission, setIsResubmission] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -96,26 +92,6 @@ const PromoterForm: React.FC = () => {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [showGenderWarning, setShowGenderWarning] = useState(false);
-
-  useEffect(() => {
-    const promoterToEdit = location.state?.promoterToEdit as Promoter | undefined;
-    if (promoterToEdit) {
-        setIsResubmission(true);
-        setPromoterIdToUpdate(promoterToEdit.id);
-        setFormData({
-            email: promoterToEdit.email,
-            name: promoterToEdit.name,
-            whatsapp: promoterToEdit.whatsapp,
-            instagram: promoterToEdit.instagram,
-            tiktok: promoterToEdit.tiktok || '',
-            dateOfBirth: promoterToEdit.dateOfBirth,
-        });
-        setProfileLoaded(true);
-        setPhotoFiles([]);
-        setPhotoPreviews([]);
-    }
-  }, [location.state]);
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -137,7 +113,6 @@ const PromoterForm: React.FC = () => {
   };
   
   const handleCheckEmail = async () => {
-    if (isResubmission) return; // Don't check email if we are resubmitting
     const email = formData.email.trim();
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return; // Don't search for invalid or empty emails
@@ -239,7 +214,7 @@ const PromoterForm: React.FC = () => {
     
     try {
       const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
-      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId }, promoterIdToUpdate);
+      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
       setSubmitSuccess(true);
       
       setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
@@ -247,8 +222,6 @@ const PromoterForm: React.FC = () => {
       setPhotoPreviews([]);
       setProfileLoaded(false);
       setShowGenderWarning(false);
-      setIsResubmission(false);
-      setPromoterIdToUpdate(null);
       const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
@@ -266,7 +239,6 @@ const PromoterForm: React.FC = () => {
   const getButtonText = () => {
       if (isSubmitting) return 'Enviando Cadastro...';
       if (isProcessingPhoto) return 'Processando fotos...';
-      if (isResubmission) return 'Reenviar Cadastro';
       return 'Finalizar Cadastro';
   }
 
@@ -284,14 +256,7 @@ const PromoterForm: React.FC = () => {
             {submitSuccess && (
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
-                    <p>{isResubmission ? 'Seu cadastro foi atualizado e reenviado para análise!' : 'Seu cadastro foi enviado com sucesso!'} Fique de olho na página 'Verificar Status' para acompanhar sua aprovação.</p>
-                </div>
-            )}
-
-            {isResubmission && !submitSuccess && (
-                <div className="bg-blue-900/50 border-l-4 border-blue-500 text-blue-300 p-4 mb-6 rounded-md" role="alert">
-                    <p className="font-bold">Editando Cadastro</p>
-                    <p>Por favor, corrija as informações necessárias e envie suas fotos novamente. Seu cadastro será reenviado para uma nova análise.</p>
+                    <p>Seu cadastro foi enviado com sucesso! Fique de olho na página 'Verificar Status' para acompanhar sua aprovação.</p>
                 </div>
             )}
 
@@ -313,10 +278,9 @@ const PromoterForm: React.FC = () => {
                         onChange={handleChange} 
                         onBlur={handleCheckEmail}
                         required 
-                        disabled={isResubmission}
                     />
                      {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
-                     {profileLoaded && !isResubmission && (
+                     {profileLoaded && (
                         <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
                             <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
                         </div>
@@ -381,13 +345,9 @@ const RegistrationFlowPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
-    const location = useLocation();
-
-    // If we're coming from a resubmission link, we already have the promoter data and can skip campaign selection
-    const isResubmission = !!location.state?.promoterToEdit;
 
     useEffect(() => {
-        if (organizationId && state && !campaignName && !isResubmission) { // Only fetch campaigns if one isn't already selected in the URL and not resubmitting
+        if (organizationId && state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
             setIsLoading(true);
             getCampaigns(state, organizationId)
                 .then(data => {
@@ -399,7 +359,7 @@ const RegistrationFlowPage: React.FC = () => {
         } else {
             setIsLoading(false);
         }
-    }, [organizationId, state, campaignName, isResubmission]);
+    }, [organizationId, state, campaignName]);
 
     if (isLoading) {
         return (
@@ -413,8 +373,8 @@ const RegistrationFlowPage: React.FC = () => {
         return <p className="text-red-400 text-center">{error}</p>;
     }
 
-    // If a campaign is already in the URL, or if there are no campaigns for this state, or it's a resubmission, show the form.
-    if (campaignName || campaigns.length === 0 || isResubmission) {
+    // If a campaign is already in the URL, or if there are no campaigns for this state, show the form.
+    if (campaignName || campaigns.length === 0) {
         return <PromoterForm />;
     }
 
@@ -461,7 +421,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
-                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                 style={props.type === 'date' ? { colorScheme: 'dark' } : undefined}
             />
         </div>
