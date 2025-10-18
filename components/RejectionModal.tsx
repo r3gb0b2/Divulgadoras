@@ -4,14 +4,14 @@ import { RejectionReason } from '../types';
 interface RejectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (reason: string, allowsResubmission: boolean) => void;
+  onConfirm: (reason: string) => void;
   reasons: RejectionReason[];
 }
 
 const defaultRejectionReasons: Omit<RejectionReason, 'organizationId'>[] = [
     { id: 'default-1', text: "Perfil inadequado para a vaga." },
-    { id: 'default-2', text: "Fotos de baixa qualidade ou inadequadas.", allowResubmission: true },
-    { id: 'default-3', text: "Informações de contato inválidas.", allowResubmission: true },
+    { id: 'default-2', text: "Fotos de baixa qualidade ou inadequadas." },
+    { id: 'default-3', text: "Informações de contato inválidas." },
     { id: 'default-4', text: "Não cumpre os pré-requisitos da vaga." },
     { id: 'default-5', text: "Vagas preenchidas no momento, tente novamente no futuro." }
 ];
@@ -65,12 +65,8 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
     const reasonMessage = finalReasons.length > 0 
         ? `- ${finalReasons.join('\n- ')}` 
         : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.';
-    
-    const allowsResubmission = combinedReasons.some(reason =>
-        selectedReasons.has(reason.text) && reason.allowResubmission
-    );
 
-    onConfirm(reasonMessage, allowsResubmission);
+    onConfirm(reasonMessage);
     // Reset state for next use
     setSelectedReasons(new Set());
     setCustomReason('');
@@ -88,17 +84,14 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
             <h3 className="text-lg font-semibold text-gray-200">Selecione um ou mais motivos:</h3>
             <div className="space-y-2">
                 {combinedReasons.map(reason => (
-                    <label key={reason.id} className="flex items-start p-2 bg-gray-700/50 rounded-md cursor-pointer hover:bg-gray-700">
+                    <label key={reason.id} className="flex items-center p-2 bg-gray-700/50 rounded-md cursor-pointer hover:bg-gray-700">
                         <input
                             type="checkbox"
                             checked={selectedReasons.has(reason.text)}
                             onChange={() => handleReasonToggle(reason.text)}
-                            className="h-4 w-4 mt-1 flex-shrink-0 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
+                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
                         />
-                        <span className="ml-3 text-gray-200">
-                            {reason.text}
-                            {reason.allowResubmission && <span className="text-xs text-yellow-400 block">(Permite que a divulgadora corrija e reenvie)</span>}
-                        </span>
+                        <span className="ml-3 text-gray-200">{reason.text}</span>
                     </label>
                 ))}
             </div>

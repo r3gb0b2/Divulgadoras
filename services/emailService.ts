@@ -21,40 +21,62 @@ const handleCallableError = (error: any, defaultMessage: string): Error => {
     return new Error(`${defaultMessage}. Detalhes: ${details}`);
 };
 
-const callTemplateFunc = async (funcName: string, args: object | null = null): Promise<any> => {
+
+/**
+ * Fetches the currently active email template for approved promoters.
+ * This will return the custom template if it exists, otherwise the default.
+ * @returns {Promise<string>} A promise that resolves to the HTML content of the template.
+ */
+export const getEmailTemplate = async (): Promise<string> => {
     try {
-        const func = httpsCallable(functions, funcName);
-        const result = await func(args || undefined);
-        return result.data;
+        const getTemplate = httpsCallable(functions, 'getEmailTemplate');
+        const result = await getTemplate();
+        const data = result.data as { htmlContent: string };
+        return data.htmlContent;
     } catch (error) {
-         throw handleCallableError(error, `Erro ao chamar a função: ${funcName}`);
+        throw handleCallableError(error, "Não foi possível carregar o template de e-mail");
     }
 };
 
-// Approved
-export const getEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getEmailTemplate')).htmlContent;
-export const setEmailTemplate = async (htmlContent: string): Promise<void> => callTemplateFunc('setEmailTemplate', { htmlContent });
-export const resetEmailTemplate = async (): Promise<void> => callTemplateFunc('resetEmailTemplate');
-export const getDefaultEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getDefaultEmailTemplate')).htmlContent;
+/**
+ * Fetches the system's hardcoded default email template, ignoring any custom template.
+ * @returns {Promise<string>} A promise that resolves to the default HTML content.
+ */
+export const getDefaultEmailTemplate = async (): Promise<string> => {
+    try {
+        const getDefault = httpsCallable(functions, 'getDefaultEmailTemplate');
+        const result = await getDefault();
+        const data = result.data as { htmlContent: string };
+        return data.htmlContent;
+    } catch (error) {
+        throw handleCallableError(error, "Não foi possível carregar o template padrão do sistema");
+    }
+};
 
-// Rejected
-export const getRejectedEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getRejectedEmailTemplate')).htmlContent;
-export const setRejectedEmailTemplate = async (htmlContent: string): Promise<void> => callTemplateFunc('setRejectedEmailTemplate', { htmlContent });
-export const resetRejectedEmailTemplate = async (): Promise<void> => callTemplateFunc('resetRejectedEmailTemplate');
-export const getDefaultRejectedEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getDefaultRejectedEmailTemplate')).htmlContent;
+/**
+ * Saves the custom HTML template for approved promoters.
+ * @param {string} htmlContent - The new HTML content to save.
+ */
+export const setEmailTemplate = async (htmlContent: string): Promise<void> => {
+    try {
+        const setTemplate = httpsCallable(functions, 'setEmailTemplate');
+        await setTemplate({ htmlContent });
+    } catch (error) {
+        throw handleCallableError(error, "Não foi possível salvar o template de e-mail");
+    }
+};
 
-// New Post
-export const getNewPostEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getNewPostEmailTemplate')).htmlContent;
-export const setNewPostEmailTemplate = async (htmlContent: string): Promise<void> => callTemplateFunc('setNewPostEmailTemplate', { htmlContent });
-export const resetNewPostEmailTemplate = async (): Promise<void> => callTemplateFunc('resetNewPostEmailTemplate');
-export const getDefaultNewPostEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getDefaultNewPostEmailTemplate')).htmlContent;
-
-// Proof Reminder
-export const getProofReminderEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getProofReminderEmailTemplate')).htmlContent;
-export const setProofReminderEmailTemplate = async (htmlContent: string): Promise<void> => callTemplateFunc('setProofReminderEmailTemplate', { htmlContent });
-export const resetProofReminderEmailTemplate = async (): Promise<void> => callTemplateFunc('resetProofReminderEmailTemplate');
-export const getDefaultProofReminderEmailTemplate = async (): Promise<string> => (await callTemplateFunc('getDefaultProofReminderEmailTemplate')).htmlContent;
-
+/**
+ * Resets the approved promoter email template to the system default.
+ */
+export const resetEmailTemplate = async (): Promise<void> => {
+    try {
+        const resetTemplate = httpsCallable(functions, 'resetEmailTemplate');
+        await resetTemplate();
+    } catch (error) {
+        throw handleCallableError(error, "Não foi possível redefinir o template de e-mail");
+    }
+};
 
 /**
  * Sends a test email using the provided HTML content.

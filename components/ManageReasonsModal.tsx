@@ -14,7 +14,6 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [newReasonText, setNewReasonText] = useState('');
-  const [newReasonAllowResubmission, setNewReasonAllowResubmission] = useState(false);
   const [editingReason, setEditingReason] = useState<RejectionReason | null>(null);
 
   const fetchReasons = useCallback(async () => {
@@ -44,9 +43,8 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
   const handleAddReason = async () => {
     if (!newReasonText.trim() || !organizationId) return;
     try {
-      await addRejectionReason(newReasonText, organizationId, newReasonAllowResubmission);
+      await addRejectionReason(newReasonText, organizationId);
       setNewReasonText('');
-      setNewReasonAllowResubmission(false);
       await fetchReasons();
       onReasonsUpdated();
     } catch (err) {
@@ -57,7 +55,7 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
   const handleUpdateReason = async () => {
     if (!editingReason || !editingReason.text.trim()) return;
     try {
-      await updateRejectionReason(editingReason.id, editingReason.text, editingReason.allowResubmission || false);
+      await updateRejectionReason(editingReason.id, editingReason.text);
       setEditingReason(null);
       await fetchReasons();
       onReasonsUpdated();
@@ -88,19 +86,15 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
 
         <div className="space-y-4 mb-4">
             <h3 className="text-lg font-semibold text-gray-200">Adicionar Novo Motivo</h3>
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
                 <input
                     type="text"
                     value={newReasonText}
                     onChange={(e) => setNewReasonText(e.target.value)}
                     placeholder="Digite o novo motivo..."
-                    className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                    className="flex-grow mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
                 />
-                <label className="flex items-center space-x-2 text-gray-300">
-                    <input type="checkbox" checked={newReasonAllowResubmission} onChange={(e) => setNewReasonAllowResubmission(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/>
-                    <span>Permitir que a divulgadora corrija e reenvie o cadastro</span>
-                </label>
-                <button onClick={handleAddReason} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark self-start">Adicionar</button>
+                <button onClick={handleAddReason} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark self-start mt-1">Adicionar</button>
             </div>
         </div>
 
@@ -110,36 +104,27 @@ const ManageReasonsModal: React.FC<ManageReasonsModalProps> = ({ isOpen, onClose
             {error && <p className="text-red-500">{error}</p>}
             <ul className="space-y-2">
                 {reasons.map(reason => (
-                    <li key={reason.id} className="p-2 bg-gray-700/50 rounded-md">
+                    <li key={reason.id} className="flex items-center justify-between p-2 bg-gray-700/50 rounded-md">
                         {editingReason?.id === reason.id ? (
-                            <div className="space-y-2">
-                                <input
-                                    type="text"
-                                    value={editingReason.text}
-                                    onChange={(e) => setEditingReason({ ...editingReason, text: e.target.value })}
-                                    className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800"
-                                />
-                                <label className="flex items-center space-x-2 text-gray-300 text-sm">
-                                    <input type="checkbox" checked={!!editingReason.allowResubmission} onChange={(e) => setEditingReason({...editingReason, allowResubmission: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/>
-                                    <span>Permitir reenvio</span>
-                                </label>
-                            </div>
+                            <input
+                                type="text"
+                                value={editingReason.text}
+                                onChange={(e) => setEditingReason({ ...editingReason, text: e.target.value })}
+                                className="flex-grow px-2 py-1 border border-gray-600 rounded-md bg-gray-800"
+                            />
                         ) : (
-                             <div>
-                                <p className="text-gray-200">{reason.text}</p>
-                                {reason.allowResubmission && <p className="text-xs text-yellow-400 mt-1">Permite reenvio</p>}
-                            </div>
+                            <p className="text-gray-200">{reason.text}</p>
                         )}
-                        <div className="flex gap-2 justify-end mt-2">
+                        <div className="flex gap-2 ml-4">
                             {editingReason?.id === reason.id ? (
                                 <>
-                                    <button onClick={handleUpdateReason} className="text-green-400 hover:text-green-300 text-sm">Salvar</button>
-                                    <button onClick={() => setEditingReason(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button>
+                                    <button onClick={handleUpdateReason} className="text-green-400 hover:text-green-300">Salvar</button>
+                                    <button onClick={() => setEditingReason(null)} className="text-gray-400 hover:text-gray-300">Cancelar</button>
                                 </>
                             ) : (
                                 <>
-                                    <button onClick={() => setEditingReason(reason)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button>
-                                    <button onClick={() => handleDeleteReason(reason.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button>
+                                    <button onClick={() => setEditingReason(reason)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                    <button onClick={() => handleDeleteReason(reason.id)} className="text-red-400 hover:text-red-300">Excluir</button>
                                 </>
                             )}
                         </div>

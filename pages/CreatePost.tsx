@@ -6,7 +6,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
@@ -23,10 +23,22 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
+interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    Icon: React.ElementType;
+}
+const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
+    <div className="relative">
+        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+            <Icon className="h-5 w-5 text-gray-400" />
+        </span>
+        <input {...props} className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200" />
+    </div>
+);
+
 const CreatePost: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { adminData, selectedOrganizationId } = useAdminAuth();
+    const { adminData } = useAdminAuth();
 
     // Data fetching states
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -42,6 +54,7 @@ const CreatePost: React.FC = () => {
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [instructions, setInstructions] = useState('');
+    const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
@@ -53,15 +66,15 @@ const CreatePost: React.FC = () => {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            if (!selectedOrganizationId) {
-                setError("Nenhuma organização selecionada.");
+            if (!adminData?.organizationId) {
+                setError("Admin não está vinculado a uma organização.");
                 setIsLoading(false);
                 return;
             }
             try {
                 const [orgData, allCampaigns] = await Promise.all([
-                    getOrganization(selectedOrganizationId),
-                    getAllCampaigns(selectedOrganizationId)
+                    getOrganization(adminData.organizationId),
+                    getAllCampaigns(adminData.organizationId)
                 ]);
 
                 if (orgData?.assignedStates) {
@@ -78,6 +91,7 @@ const CreatePost: React.FC = () => {
                     setPostType(originalPost.type);
                     setTextContent(originalPost.textContent || '');
                     setInstructions(originalPost.instructions || '');
+                    setPostLink(originalPost.postLink || '');
                     setIsActive(originalPost.isActive);
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
@@ -94,16 +108,16 @@ const CreatePost: React.FC = () => {
             }
         };
         loadInitialData();
-    }, [selectedOrganizationId, location.search]);
+    }, [adminData, location.search]);
     
     useEffect(() => {
         const fetchPromoters = async () => {
-            if (selectedCampaign && selectedState && selectedOrganizationId) {
+            if (selectedCampaign && selectedState && adminData?.organizationId) {
                 setIsLoading(true);
                 try {
                     const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
                     if (campaignDetails) {
-                        const promoterData = await getApprovedPromoters(selectedOrganizationId, selectedState, campaignDetails.name);
+                        const promoterData = await getApprovedPromoters(adminData.organizationId, selectedState, campaignDetails.name);
                         
                         // Sort promoters: those who joined the group first, then alphabetically.
                         promoterData.sort((a, b) => {
@@ -127,7 +141,7 @@ const CreatePost: React.FC = () => {
             }
         };
         fetchPromoters();
-    }, [selectedCampaign, selectedState, selectedOrganizationId, campaigns]);
+    }, [selectedCampaign, selectedState, adminData?.organizationId, campaigns]);
     
     const handleLogout = async () => {
         try {
@@ -170,7 +184,7 @@ const CreatePost: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedOrganizationId || !adminData?.email) {
+        if (!adminData?.organizationId || !adminData.email) {
             setError("Dados do administrador inválidos.");
             return;
         }
@@ -208,13 +222,14 @@ const CreatePost: React.FC = () => {
             }
 
             const postData = {
-                organizationId: selectedOrganizationId,
+                organizationId: adminData.organizationId,
                 createdByEmail: adminData.email,
                 campaignName: campaignDetails.name,
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
                 instructions,
+                postLink,
                 isActive,
                 expiresAt: expiryTimestamp,
                 autoAssignToNewPromoters: autoAssign,
@@ -279,18 +294,10 @@ const CreatePost: React.FC = () => {
                                     {promoters.map(p => (
                                         <label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
                                             <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                            <div className="truncate flex items-center">
-                                                <a 
-                                                    href={`https://instagram.com/${p.instagram.replace('@', '')}`} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className={`${p.hasJoinedGroup ? 'text-green-400' : 'text-white'} hover:text-primary hover:underline`}
-                                                    title={p.hasJoinedGroup ? `${p.name} (Está no grupo)` : p.name}
-                                                >
-                                                    @{p.instagram.replace('@', '')}
-                                                </a>
-                                            </div>
+                                            <span className="truncate" title={`${p.name}${p.hasJoinedGroup ? ' (está no grupo)' : ''}`}>
+                                                {p.name}
+                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
+                                            </span>
                                         </label>
                                     ))}
                                 </div>
@@ -321,6 +328,9 @@ const CreatePost: React.FC = () => {
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                    <div className="mt-4">
+                       <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                    </div>
                     
                      <div className="flex flex-col sm:flex-row items-center gap-6 mt-4">
                         <label className="flex items-center space-x-2">

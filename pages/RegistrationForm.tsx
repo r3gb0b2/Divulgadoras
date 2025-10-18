@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
+import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
-import { Campaign, Promoter } from '../types';
+// FIX: Added missing import for Campaign type
+import { Campaign } from '../types';
+// FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
@@ -68,8 +70,9 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
   });
 };
 
-const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterIdForResubmit }) => {
+const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
+  const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -80,9 +83,6 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
     tiktok: '',
     dateOfBirth: '',
   });
-
-  const [localParams, setLocalParams] = useState({ state, organizationId, campaignName, stateFullName: state ? stateMap[state.toUpperCase()] : '' });
-
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
@@ -92,45 +92,6 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [showGenderWarning, setShowGenderWarning] = useState(false);
-  const [isResubmitMode, setIsResubmitMode] = useState(!!promoterIdForResubmit);
-
-
-  useEffect(() => {
-    const handleResubmitLoad = async () => {
-        if (promoterIdForResubmit) {
-            setIsCheckingEmail(true);
-            try {
-                const profile = await getPromoterById(promoterIdForResubmit);
-                if (profile && profile.status === 'rejected' && profile.canResubmit) {
-                    setFormData({
-                        email: profile.email,
-                        name: profile.name,
-                        whatsapp: profile.whatsapp,
-                        instagram: profile.instagram,
-                        tiktok: profile.tiktok || '',
-                        dateOfBirth: profile.dateOfBirth,
-                    });
-                    setLocalParams({
-                        state: profile.state,
-                        organizationId: profile.organizationId,
-                        campaignName: profile.campaignName || undefined,
-                        stateFullName: stateMap[profile.state.toUpperCase()]
-                    });
-                    setPhotoPreviews(profile.photoUrls); // Show existing photos
-                    setProfileLoaded(true);
-                } else {
-                    setSubmitError("Este cadastro não é válido para reenvio ou já foi corrigido.");
-                }
-            } catch (err: any) {
-                 setSubmitError(err.message || "Ocorreu um erro ao carregar seus dados.");
-            } finally {
-                setIsCheckingEmail(false);
-            }
-        }
-    };
-    handleResubmitLoad();
-  }, [promoterIdForResubmit]);
-
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -152,7 +113,6 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
   };
   
   const handleCheckEmail = async () => {
-    if (isResubmitMode) return; // Don't check email in resubmit mode
     const email = formData.email.trim();
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return; // Don't search for invalid or empty emails
@@ -174,6 +134,7 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
           dateOfBirth: profile.dateOfBirth,
         });
         setProfileLoaded(true);
+        // Clear photos as they need to be re-uploaded for each event
         setPhotoFiles([]);
         setPhotoPreviews([]);
       }
@@ -188,12 +149,6 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      if (files.length > 10) {
-        setSubmitError("Você pode enviar no máximo 10 fotos.");
-        e.target.value = ''; // Clear the file input
-        return;
-      }
-
       setIsProcessingPhoto(true);
       setSubmitError(null);
       setPhotoPreviews([]);
@@ -228,25 +183,28 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
     // Age validation
     if (formData.dateOfBirth) {
         const birthDate = new Date(formData.dateOfBirth);
+        // Adjust for timezone offset to get the correct local date
         birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        
         const today = new Date();
         const fourteenYearsAgo = new Date(today.getFullYear() - 14, today.getMonth(), today.getDate());
+
         if (birthDate > fourteenYearsAgo) {
             setSubmitError("Você precisa ter pelo menos 14 anos para se cadastrar.");
             return;
         }
     }
 
-    if (!localParams.organizationId) {
-        setSubmitError("Organização não identificada.");
+    if (!organizationId) {
+        setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
         return;
     }
-    if (!localParams.state) {
-        setSubmitError("Estado não identificado.");
+    if (!state) {
+        setSubmitError("Estado não selecionado. Volte para a página inicial e selecione seu estado.");
         return;
     }
 
-    if (photoFiles.length === 0 && !isResubmitMode) {
+    if (photoFiles.length === 0) {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
@@ -255,45 +213,34 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
     setSubmitError(null);
     
     try {
-      if (isResubmitMode && promoterIdForResubmit) {
-          // RESUBMIT LOGIC
-          await resubmitPromoterApplication(promoterIdForResubmit, { ...formData, photos: photoFiles });
-          setSubmitSuccess(true);
-          // Don't clear form, just show success message and navigate
-          setTimeout(() => navigate(`/status?email=${formData.email}`), 3000);
-
-      } else {
-          // CREATE LOGIC
-          const decodedCampaignName = localParams.campaignName ? decodeURIComponent(localParams.campaignName) : undefined;
-          await addPromoter({ ...formData, photos: photoFiles, state: localParams.state, campaignName: decodedCampaignName, organizationId: localParams.organizationId });
-          setSubmitSuccess(true);
-          setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
-          setPhotoFiles([]);
-          setPhotoPreviews([]);
-          setProfileLoaded(false);
-          setShowGenderWarning(false);
-          const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
-          if (fileInput) fileInput.value = '';
-          setTimeout(() => setSubmitSuccess(false), 5000);
-      }
+      const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
+      await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
+      setSubmitSuccess(true);
+      
+      setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
+      setPhotoFiles([]);
+      setPhotoPreviews([]);
+      setProfileLoaded(false);
+      setShowGenderWarning(false);
+      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
+      setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (error) {
       console.error("Failed to submit form", error);
-      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário.";
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
       setSubmitError(message);
-      setTimeout(() => setSubmitError(null), 5000);
+       setTimeout(() => setSubmitError(null), 5000);
     } finally {
       setIsSubmitting(false);
     }
   };
   
   const getButtonText = () => {
-      if (isSubmitting) return isResubmitMode ? 'Reenviando...' : 'Enviando Cadastro...';
+      if (isSubmitting) return 'Enviando Cadastro...';
       if (isProcessingPhoto) return 'Processando fotos...';
-      return isResubmitMode ? 'Corrigir e Reenviar' : 'Finalizar Cadastro';
+      return 'Finalizar Cadastro';
   }
-
-  const title = isResubmitMode ? "Corrigir Cadastro" : `Seja uma Divulgadora - ${localParams.stateFullName} (${localParams.state?.toUpperCase()})`;
-  const description = isResubmitMode ? "Corrija as informações necessárias e reenvie seu cadastro para uma nova análise." : "Preencha o formulário abaixo para fazer parte do nosso time.";
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -302,14 +249,14 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
             <span>Voltar</span>
         </button>
         <div className="bg-secondary shadow-2xl rounded-lg p-8">
-            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{title}</h1>
-            {localParams.campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(localParams.campaignName)}</p>}
-            <p className="text-center text-gray-400 mb-8">{description}</p>
+            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Seja uma Divulgadora - {stateFullName} ({state?.toUpperCase()})</h1>
+            {campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(campaignName)}</p>}
+            <p className="text-center text-gray-400 mb-8">Preencha o formulário abaixo para fazer parte do nosso time.</p>
             
             {submitSuccess && (
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 mb-6 rounded-md" role="alert">
                     <p className="font-bold">Sucesso!</p>
-                    <p>{isResubmitMode ? "Seu cadastro foi reenviado para análise! Você será redirecionado em breve." : "Seu cadastro foi enviado com sucesso! Fique de olho na página 'Verificar Status'."}</p>
+                    <p>Seu cadastro foi enviado com sucesso! Fique de olho na página 'Verificar Status' para acompanhar sua aprovação.</p>
                 </div>
             )}
 
@@ -331,13 +278,11 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
                         onChange={handleChange} 
                         onBlur={handleCheckEmail}
                         required 
-                        disabled={isResubmitMode}
-                        className={isResubmitMode ? 'disabled:bg-gray-800 disabled:cursor-not-allowed' : ''}
                     />
                      {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
                      {profileLoaded && (
                         <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
-                            <p><strong>{isResubmitMode ? 'Dados carregados!' : 'Cadastro encontrado!'}</strong> {isResubmitMode ? 'Corrija o que for necessário e reenvie.' : 'Seus dados foram preenchidos. Verifique e envie suas fotos.'}</p>
+                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
                         </div>
                     )}
                 </div>
@@ -358,7 +303,7 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (até 10) {isResubmitMode ? '(envie novas se necessário)' : '(obrigatório)'}</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (obrigatório)</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
@@ -395,18 +340,13 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
 };
 
 const RegistrationFlowPage: React.FC = () => {
-    const { organizationId, state, campaignName, promoterId } = useParams<{ organizationId: string, state: string, campaignName?: string, promoterId?: string }>();
+    const { organizationId, state, campaignName } = useParams<{ organizationId: string, state: string, campaignName?: string }>();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (promoterId) { // Resubmit mode, skip campaign fetching
-            setIsLoading(false);
-            return;
-        }
-
         if (organizationId && state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
             setIsLoading(true);
             getCampaigns(state, organizationId)
@@ -419,7 +359,7 @@ const RegistrationFlowPage: React.FC = () => {
         } else {
             setIsLoading(false);
         }
-    }, [organizationId, state, campaignName, promoterId]);
+    }, [organizationId, state, campaignName]);
 
     if (isLoading) {
         return (
@@ -433,12 +373,7 @@ const RegistrationFlowPage: React.FC = () => {
         return <p className="text-red-400 text-center">{error}</p>;
     }
 
-    // If a promoterId for resubmission exists, go straight to the form.
-    if (promoterId) {
-        return <PromoterForm promoterIdForResubmit={promoterId} />;
-    }
-
-    // If a campaign is in the URL, or if there are no campaigns for this state, show the form.
+    // If a campaign is already in the URL, or if there are no campaigns for this state, show the form.
     if (campaignName || campaigns.length === 0) {
         return <PromoterForm />;
     }
@@ -486,7 +421,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
             </span>
             <input
                 {...props}
-                className={`w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200 ${props.className || ''}`}
+                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                 style={props.type === 'date' ? { colorScheme: 'dark' } : undefined}
             />
         </div>

@@ -15,7 +15,6 @@ import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
 import { serverTimestamp, Timestamp } from 'firebase/firestore';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
     adminData: AdminUserData;
@@ -49,8 +48,6 @@ const formatDate = (timestamp: any): string => {
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
-    const { selectedOrganizationId, clearSelectedOrganization } = useAdminAuth();
-
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
@@ -96,14 +93,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const isSuperAdmin = adminData.role === 'superadmin';
     const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
 
-    const organizationIdForScope = isSuperAdmin ? null : selectedOrganizationId;
-
     const organizationIdForReasons = useMemo(() => {
         if (isSuperAdmin) {
             return selectedOrg !== 'all' ? selectedOrg : null;
         }
-        return selectedOrganizationId || null;
-    }, [isSuperAdmin, selectedOrg, selectedOrganizationId]);
+        return adminData.organizationId || null;
+    }, [isSuperAdmin, selectedOrg, adminData.organizationId]);
 
 
     // Fetch static data (reasons, orgs, campaigns) once
@@ -115,11 +110,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     campaignsPromise = getAllCampaigns();
                     const orgsData = await getOrganizations();
                     setAllOrganizations(orgsData.sort((a, b) => a.name.localeCompare(b.name)));
-                } else if (selectedOrganizationId) {
-                    campaignsPromise = getAllCampaigns(selectedOrganizationId);
+                } else if (adminData.organizationId) {
+                    campaignsPromise = getAllCampaigns(adminData.organizationId);
                     const [reasonsData, orgData] = await Promise.all([
-                        getRejectionReasons(selectedOrganizationId),
-                        getOrganization(selectedOrganizationId),
+                        getRejectionReasons(adminData.organizationId),
+                        getOrganization(adminData.organizationId),
                     ]);
                     setRejectionReasons(reasonsData);
                     setOrganization(orgData);
@@ -133,7 +128,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             }
         };
         fetchStaticData();
-    }, [adminData, isSuperAdmin, selectedOrganizationId]);
+    }, [adminData, isSuperAdmin]);
 
     const getStatesForScope = useCallback(() => {
         let statesForScope: string[] | null = null;
@@ -151,9 +146,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Calculate the exact list of campaigns the admin is allowed to see.
     const campaignsInScope = useMemo(() => {
         if (isSuperAdmin) return null; // null means no campaign filter
-        if (!selectedOrganizationId) return []; // No org, no campaigns
+        if (!adminData.organizationId) return []; // No org, no campaigns
 
-        const orgCampaigns = allCampaigns.filter(c => c.organizationId === selectedOrganizationId);
+        const orgCampaigns = allCampaigns.filter(c => c.organizationId === adminData.organizationId);
         
         // If admin has no specific campaign assignments, they can see all campaigns from their org's assigned states
         if (!adminData.assignedCampaigns || Object.keys(adminData.assignedCampaigns).length === 0) {
@@ -178,10 +173,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
 
         return Array.from(allowedCampaignNames);
-    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns, selectedOrganizationId]);
+    }, [isSuperAdmin, adminData, getStatesForScope, allCampaigns]);
 
     const fetchStats = useCallback(async () => {
-        const orgId = isSuperAdmin ? undefined : selectedOrganizationId;
+        const orgId = isSuperAdmin ? undefined : adminData.organizationId;
         if (!isSuperAdmin && !orgId) return;
 
         const statesForScope = getStatesForScope();
@@ -196,7 +191,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // Avoid overwriting a more specific error from the main fetch
             if (!error) setError(err.message);
         }
-    }, [selectedOrganizationId, organization, isSuperAdmin, getStatesForScope, error]);
+    }, [adminData, organization, isSuperAdmin, getStatesForScope, error]);
 
 
     // Fetch stats
@@ -210,9 +205,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setIsLoading(true);
             setError(null);
             
-            const orgId = isSuperAdmin ? undefined : selectedOrganizationId;
+            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
             if (!isSuperAdmin && !orgId) {
-                 setError("Nenhuma organização selecionada.");
+                 setError("Administrador não está vinculado a uma organização.");
                  setIsLoading(false);
                  setAllPromoters([]);
                  return;
@@ -241,7 +236,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         };
 
         fetchAllPromoters();
-    }, [selectedOrganizationId, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope]);
+    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, campaignsInScope]);
 
 
     // Reset page number whenever filters or search query change
@@ -318,14 +313,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
     
-    const handleConfirmReject = async (reason: string, allowsResubmission: boolean) => {
+    const handleConfirmReject = async (reason: string) => {
         if (rejectingPromoter && canManage) {
-            const updateData: Partial<Promoter> = {
-                status: 'rejected',
-                rejectionReason: reason,
-                canResubmit: allowsResubmission,
-            };
-            await handleUpdatePromoter(rejectingPromoter.id, updateData);
+            await handleUpdatePromoter(rejectingPromoter.id, { status: 'rejected', rejectionReason: reason });
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);
@@ -464,26 +454,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 totalFilteredCount: sorted.length,
             };
         }
-        
-        const searchTerms = lowercasedQuery.split(' ').filter(term => term.length > 0);
 
         const filtered = sorted.filter(p => {
-            // For a promoter to be a match, ALL search terms must be found somewhere in their data.
-            return searchTerms.every(term => {
-                const textMatch =
-                    (p.name && String(p.name).toLowerCase().includes(term)) ||
-                    (p.email && String(p.email).toLowerCase().includes(term)) ||
-                    (p.campaignName && String(p.campaignName).toLowerCase().includes(term));
+            // Standard text search on name, email, campaign
+            const textSearch =
+                (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
+                (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
+                (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
 
-                // Also check against phone number if the term could be part of one
-                const searchDigits = term.replace(/\D/g, '');
-                const phoneMatch =
-                    searchDigits.length > 0 &&
-                    p.whatsapp &&
-                    String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
+            // Phone number search, only triggered if the search query contains digits
+            const searchDigits = lowercasedQuery.replace(/\D/g, '');
+            const phoneSearch =
+                searchDigits.length > 0 &&
+                p.whatsapp &&
+                String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
 
-                return textMatch || phoneMatch;
-            });
+            return textSearch || phoneSearch;
         });
 
         // Apply pagination to the filtered results
@@ -547,17 +533,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <p className="text-sm text-gray-400">{promoter.email}</p>
                                 <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             </div>
-                            <div className="mt-2 sm:mt-0 flex-shrink-0 flex items-center gap-2">
-                                {promoter.status === 'approved' && promoter.hasJoinedGroup === false && (
-                                    <span
-                                        className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300"
-                                        title="Esta divulgadora saiu ou foi removida do grupo de WhatsApp e não receberá mais publicações."
-                                    >
-                                        Fora do Grupo
-                                    </span>
-                                )}
-                                {getStatusBadge(promoter.status)}
-                            </div>
+                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
                         </div>
 
                         <div className="text-xs text-gray-500 mb-3 space-y-1">
@@ -595,20 +571,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
                                 <div>
                                     {promoter.status === 'approved' && (
-                                        <label
-                                            className={`flex items-center space-x-2 ${promoter.hasJoinedGroup === false ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                            title={promoter.hasJoinedGroup === false ? "Para reativar, edite o perfil da divulgadora." : ""}
-                                        >
+                                        <label className="flex items-center space-x-2 cursor-pointer">
                                             <input 
                                                 type="checkbox" 
                                                 checked={!!promoter.hasJoinedGroup} 
                                                 onChange={(e) => handleGroupStatusChange(promoter, e.target.checked)}
-                                                disabled={promoter.hasJoinedGroup === false}
-                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
                                             />
-                                            <span className={`text-gray-300 ${promoter.hasJoinedGroup === false ? 'text-gray-500 italic' : ''}`}>
-                                                {promoter.hasJoinedGroup === false ? 'Saiu do grupo' : 'Entrou no grupo'}
-                                            </span>
+                                            <span className="text-gray-300">Entrou no grupo</span>
                                         </label>
                                     )}
                                 </div>
@@ -652,13 +622,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     return (
         <div>
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                <h1 className="text-3xl font-bold">{organization?.name || 'Painel do Organizador'}</h1>
+                <h1 className="text-3xl font-bold">Painel do Organizador</h1>
                 <div className="flex items-center gap-2">
-                     {adminData.organizationIds && adminData.organizationIds.length > 1 && (
-                        <button onClick={clearSelectedOrganization} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm">
-                            Trocar Organização
-                        </button>
-                    )}
                     {canManage && (
                         <Link to="/admin/settings" className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500" title="Configurações">
                             <CogIcon className="w-5 h-5"/>

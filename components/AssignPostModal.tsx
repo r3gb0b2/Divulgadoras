@@ -106,18 +106,10 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
                                 {assignable.map(p => (
                                     <label key={p.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-700/50 cursor-pointer">
                                         <input type="checkbox" checked={selected.has(p.id)} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                        <div className="truncate flex items-center">
-                                            <a 
-                                                href={`https://instagram.com/${p.instagram.replace('@', '')}`} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className={`${p.hasJoinedGroup ? 'text-green-400' : 'text-white'} hover:text-primary hover:underline`}
-                                                title={p.hasJoinedGroup ? `${p.name} (Está no grupo)` : p.name}
-                                            >
-                                                @{p.instagram.replace('@', '')}
-                                            </a>
-                                        </div>
+                                        <span>
+                                            {p.name}
+                                            {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(está no grupo)</span>}
+                                        </span>
                                     </label>
                                 ))}
                             </div>

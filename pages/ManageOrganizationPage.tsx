@@ -17,7 +17,7 @@ const timestampToInputDate = (ts: Timestamp | undefined): string => {
 const ManageOrganizationPage: React.FC = () => {
     const { orgId } = useParams<{ orgId: string }>();
     const navigate = useNavigate();
-    const { adminData, selectedOrganizationId } = useAdminAuth();
+    const { adminData } = useAdminAuth();
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [formData, setFormData] = useState<Partial<Organization>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -63,12 +63,8 @@ const ManageOrganizationPage: React.FC = () => {
     useEffect(() => {
         // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
-            // Superadmin can access any organization page.
-            // An Admin can only access if they are the designated owner of the organization.
             const isOwner = adminData.uid === organization.ownerUid;
-            const isAdminAndOwner = adminData.role === 'admin' && isOwner;
-
-            if (isSuperAdmin || isAdminAndOwner) {
+            if (isSuperAdmin || (isOwner && adminData.organizationId === organization.id)) {
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -81,15 +77,13 @@ const ManageOrganizationPage: React.FC = () => {
     
     const associatedAdmins = useMemo(() => {
         if (!organization) return [];
-        // FIX: Property 'organizationId' does not exist. Using 'organizationIds' array.
-        return allAdmins.filter(admin => admin.organizationIds?.includes(organization.id));
+        return allAdmins.filter(admin => admin.organizationId === organization.id);
     }, [allAdmins, organization]);
 
     const availableAdmins = useMemo(() => {
         if (!organization) return [];
-        // Available admins are those not yet associated with this org.
-        // FIX: Property 'organizationId' does not exist. Check against 'organizationIds' array.
-        return allAdmins.filter(admin => !admin.organizationIds?.includes(organization.id))
+        // Available admins are those with no orgId or a different one
+        return allAdmins.filter(admin => !admin.organizationId || admin.organizationId !== organization.id)
             .sort((a, b) => a.email.localeCompare(b.email));
     }, [allAdmins, organization]);
 
@@ -97,14 +91,7 @@ const ManageOrganizationPage: React.FC = () => {
         if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            const adminToUpdate = allAdmins.find(a => a.uid === adminUid);
-            if (!adminToUpdate) throw new Error("Admin não encontrado.");
-
-            const existingOrgIds = adminToUpdate.organizationIds || [];
-            if (!existingOrgIds.includes(orgId)) {
-                const newOrgIds = [...existingOrgIds, orgId];
-                await setAdminUserData(adminUid, { organizationIds: newOrgIds });
-            }
+            await setAdminUserData(adminUid, { organizationId: orgId });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao associar administrador.");
@@ -114,16 +101,10 @@ const ManageOrganizationPage: React.FC = () => {
     };
 
     const handleDisassociateAdmin = async (adminUid: string) => {
-        if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            const adminToUpdate = allAdmins.find(a => a.uid === adminUid);
-            if (!adminToUpdate) throw new Error("Admin não encontrado.");
-
-            const existingOrgIds = adminToUpdate.organizationIds || [];
-            const newOrgIds = existingOrgIds.filter(id => id !== orgId);
-            
-            await setAdminUserData(adminUid, { organizationIds: newOrgIds });
+            // Setting to an empty string effectively removes them from the organization scope
+            await setAdminUserData(adminUid, { organizationId: "" });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao desvincular administrador.");

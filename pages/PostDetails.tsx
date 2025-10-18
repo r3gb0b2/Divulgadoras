@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup } from '../services/postService';
 import { Post, PostAssignment } from '../types';
-import { ArrowLeftIcon, EyeIcon, ArrowDownTrayIcon } from '../components/Icons';
+import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -166,44 +166,6 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = async (url: string) => {
-        if (!url) return;
-        try {
-            // Fetch the media file as a blob
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const blob = await response.blob();
-
-            // Create a temporary URL for the blob
-            const objectUrl = window.URL.createObjectURL(blob);
-
-            // Create a temporary link element to trigger the download
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            
-            // Extract a filename from the URL
-            const urlParts = url.split('/');
-            const lastPart = urlParts[urlParts.length - 1];
-            const filename = lastPart.split('?')[0]; // Remove query params
-            const decodedFilename = decodeURIComponent(filename);
-
-            link.setAttribute('download', decodedFilename || 'download');
-            document.body.appendChild(link);
-            link.click();
-
-            // Clean up: remove the link and revoke the object URL
-            link.parentNode?.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
-
-        } catch (error) {
-            console.error('Download failed:', error);
-            // If download fails, fall back to opening in a new tab
-            window.open(url, '_blank');
-        }
-    };
-
 
     const handleDelete = async () => {
         if (!postId || !post) return;
@@ -312,34 +274,12 @@ export const PostDetails: React.FC = () => {
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg self-start">
                     <h2 className="text-xl font-bold text-primary mb-4">{post.campaignName}</h2>
                     {post.type === 'image' && post.mediaUrl && (
-                        <div className="mb-4">
-                            <img src={post.mediaUrl} alt="Arte da publicação" className="w-full rounded-md" />
-                            <div className="flex items-center justify-center gap-4 mt-2">
-                                <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
-                                    <EyeIcon className="w-6 h-6" />
-                                    <span className="text-sm">Visualizar</span>
-                                </a>
-                                <button onClick={() => handleDownload(post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
-                                    <ArrowDownTrayIcon className="w-6 h-6" />
-                                    <span className="text-sm">Baixar</span>
-                                </button>
-                            </div>
-                        </div>
+                        <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer">
+                             <img src={post.mediaUrl} alt="Arte da publicação" className="w-full rounded-md mb-4" />
+                        </a>
                     )}
                     {post.type === 'video' && post.mediaUrl && (
-                        <div className="mb-4">
-                            <video src={post.mediaUrl} controls className="w-full rounded-md" />
-                            <div className="flex items-center justify-center gap-4 mt-2">
-                                <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
-                                    <EyeIcon className="w-6 h-6" />
-                                    <span className="text-sm">Visualizar</span>
-                                </a>
-                                <button onClick={() => handleDownload(post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
-                                    <ArrowDownTrayIcon className="w-6 h-6" />
-                                    <span className="text-sm">Baixar</span>
-                                </button>
-                            </div>
-                        </div>
+                        <video src={post.mediaUrl} controls className="w-full rounded-md mb-4" />
                     )}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">
@@ -350,6 +290,12 @@ export const PostDetails: React.FC = () => {
                         <h4 className="font-semibold text-gray-200">Instruções:</h4>
                         <p className="text-gray-400 text-sm whitespace-pre-wrap">{post.instructions}</p>
                     </div>
+                    {post.postLink && (
+                        <div className="mt-2">
+                            <h4 className="font-semibold text-gray-200">Link do Post:</h4>
+                            <a href={post.postLink} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline break-all">{post.postLink}</a>
+                        </div>
+                    )}
                     <div className="mt-4 border-t border-gray-600 pt-4">
                         <p className="text-xs text-gray-500">Criado por: {post.createdByEmail}</p>
                         <p className="text-xs text-gray-500">Em: {formatDate(post.createdAt)}</p>
@@ -408,49 +354,42 @@ export const PostDetails: React.FC = () => {
 
                     <input type="text" value={filterQuery} onChange={e => setFilterQuery(e.target.value)} placeholder="Filtrar por nome..." className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 mb-4" />
 
-                    <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
                         {filteredAssignments.map(a => {
                             const hasConfirmed = a.status === 'confirmed';
                             const hasProof = a.proofSubmittedAt;
                             return (
                                 <div key={a.id} className="bg-gray-800/50 p-3 rounded-md">
-                                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-y-3 gap-x-4">
-                                        {/* Promoter Info */}
-                                        <div className="min-w-0">
-                                            <p className="font-semibold text-white truncate" title={a.promoterName}>{a.promoterName}</p>
-                                            <p className="text-xs text-gray-400 truncate" title={a.promoterEmail}>{a.promoterEmail}</p>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold text-white">{a.promoterName}</p>
+                                            <p className="text-sm text-gray-400">{a.promoterEmail}</p>
                                         </div>
-                            
-                                        {/* Status, Proof, Actions */}
-                                        <div className="flex items-center justify-start sm:justify-end gap-x-4">
-                                            {/* Proof Images */}
-                                            {hasProof && a.proofImageUrls && (
-                                                <div className="flex gap-1.5">
-                                                    {a.proofImageUrls.map((url, i) => (
-                                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={`Ver comprovação ${i+1}`}>
-                                                            <img src={url} alt={`Prova ${i+1}`} className="w-9 h-9 object-cover rounded-md border-2 border-gray-600" />
-                                                        </a>
-                                                    ))}
-                                                </div>
+                                        <div className="flex items-center gap-2 mt-2 sm:mt-0 flex-shrink-0">
+                                            {hasProof ? (
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Comprovado</span>
+                                            ) : hasConfirmed ? (
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
+                                            ) : (
+                                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
                                             )}
-                                            
-                                            {/* Status Badge */}
-                                            <div className="w-24 flex-shrink-0 text-center">
-                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                                    hasProof ? 'bg-blue-900/50 text-blue-300' :
-                                                    hasConfirmed ? 'bg-green-900/50 text-green-300' :
-                                                    'bg-yellow-900/50 text-yellow-300'
-                                                }`}>
-                                                    {hasProof ? 'Comprovado' : hasConfirmed ? 'Confirmado' : 'Pendente'}
-                                                </span>
-                                            </div>
-                            
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-x-4 text-sm font-medium">
-                                                <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Stats</button>
-                                                <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover</button>
+                                        </div>
+                                    </div>
+                                    {hasProof && a.proofImageUrls && (
+                                        <div className="mt-3 border-t border-gray-700 pt-3">
+                                            <p className="text-xs font-semibold text-gray-400 mb-2">Comprovação:</p>
+                                            <div className="flex gap-2">
+                                                {a.proofImageUrls.map((url, i) => (
+                                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                                        <img src={url} alt={`Prova ${i+1}`} className="w-16 h-16 object-cover rounded" />
+                                                    </a>
+                                                ))}
                                             </div>
                                         </div>
+                                    )}
+                                     <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium">
+                                        <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Ver Stats</button>
+                                        <button onClick={() => handleRemoveFromGroup(a)} className="text-red-400 hover:text-red-300">Remover do Grupo</button>
                                     </div>
                                 </div>
                             );

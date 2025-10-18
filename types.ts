@@ -19,7 +19,6 @@ export interface Promoter {
   allCampaigns?: string[];
   organizationId: string;
   rejectionReason?: string;
-  canResubmit?: boolean;
   hasJoinedGroup?: boolean;
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
@@ -45,7 +44,6 @@ export interface RejectionReason {
   id: string;
   text: string;
   organizationId: string;
-  allowResubmission?: boolean;
 }
 
 export interface Campaign {
@@ -70,7 +68,7 @@ export interface AdminUserData {
   email: string;
   role: AdminRole;
   assignedStates: string[];
-  organizationIds?: string[];
+  organizationId?: string;
   assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 
@@ -131,6 +129,7 @@ export interface Post {
   mediaUrl?: string;
   textContent?: string;
   instructions: string;
+  postLink?: string;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
   isActive: boolean;
@@ -146,6 +145,7 @@ export interface PostAssignment {
     mediaUrl?: string;
     textContent?: string;
     instructions: string;
+    postLink?: string;
     campaignName: string;
     isActive: boolean;
     expiresAt: Timestamp | FieldValue | null;

@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Post } from '../types';
+import { LinkIcon } from './Icons';
+
+interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    Icon: React.ElementType;
+}
+const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
+    <div className="relative">
+        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+            <Icon className="h-5 w-5 text-gray-400" />
+        </span>
+        <input {...props} className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200" />
+    </div>
+);
 
 interface EditPostModalProps {
     isOpen: boolean;
@@ -11,6 +24,7 @@ interface EditPostModalProps {
 const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, onSave }) => {
     const [instructions, setInstructions] = useState('');
     const [textContent, setTextContent] = useState('');
+    const [postLink, setPostLink] = useState('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -20,6 +34,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setInstructions(post.instructions || '');
             setTextContent(post.textContent || '');
             setMediaPreview(post.mediaUrl || null);
+            setPostLink(post.postLink || '');
             setMediaFile(null); // Reset file input on open
         }
     }, [post, isOpen]);
@@ -38,6 +53,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         setIsSaving(true);
         const updatedData: Partial<Post> = {
             instructions,
+            postLink,
         };
         
         if (post.type === 'text') {
@@ -81,6 +97,11 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Instruções</label>
                         <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
+                         <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
                     </div>
                 </div>
 
