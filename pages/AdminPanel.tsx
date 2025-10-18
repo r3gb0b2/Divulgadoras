@@ -533,7 +533,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <p className="text-sm text-gray-400">{promoter.email}</p>
                                 <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             </div>
-                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
+                            <div className="mt-2 sm:mt-0 flex-shrink-0 flex items-center gap-2">
+                                {promoter.status === 'approved' && promoter.hasJoinedGroup === false && (
+                                    <span
+                                        className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300"
+                                        title="Esta divulgadora saiu ou foi removida do grupo de WhatsApp e não receberá mais publicações."
+                                    >
+                                        Fora do Grupo
+                                    </span>
+                                )}
+                                {getStatusBadge(promoter.status)}
+                            </div>
                         </div>
 
                         <div className="text-xs text-gray-500 mb-3 space-y-1">
@@ -571,14 +581,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
                                 <div>
                                     {promoter.status === 'approved' && (
-                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                        <label
+                                            className={`flex items-center space-x-2 ${promoter.hasJoinedGroup === false ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                            title={promoter.hasJoinedGroup === false ? "Para reativar, edite o perfil da divulgadora." : ""}
+                                        >
                                             <input 
                                                 type="checkbox" 
                                                 checked={!!promoter.hasJoinedGroup} 
                                                 onChange={(e) => handleGroupStatusChange(promoter, e.target.checked)}
-                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                                disabled={promoter.hasJoinedGroup === false}
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                             />
-                                            <span className="text-gray-300">Entrou no grupo</span>
+                                            <span className={`text-gray-300 ${promoter.hasJoinedGroup === false ? 'text-gray-500 italic' : ''}`}>
+                                                {promoter.hasJoinedGroup === false ? 'Saiu do grupo' : 'Entrou no grupo'}
+                                            </span>
                                         </label>
                                     )}
                                 </div>
