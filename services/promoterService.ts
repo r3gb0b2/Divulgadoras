@@ -251,76 +251,118 @@ export const getAllPromoters = async (options: {
   try {
     const promotersRef = collection(firestore, "promoters");
 
-    const commonFilters: any[] = [];
+    // --- 1. Base Filters (excluding state and campaign) ---
+    const baseFilters: any[] = [];
     if (options.organizationId) {
-      commonFilters.push(where("organizationId", "==", options.organizationId));
+      baseFilters.push(where("organizationId", "==", options.organizationId));
+    }
+    // Superadmin filter override
+    if (options.filterOrgId !== 'all') {
+      // Find and remove the base organizationId filter if it exists
+      const orgFilterIndex = baseFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
+      if (orgFilterIndex > -1) baseFilters.splice(orgFilterIndex, 1);
+      baseFilters.push(where("organizationId", "==", options.filterOrgId));
     }
     if (options.status !== 'all') {
-        if (options.status === 'pending') {
-            commonFilters.push(where("status", "in", ["pending", "rejected_editable"]));
-        } else {
-            commonFilters.push(where("status", "==", options.status));
-        }
-    }
-    if (options.filterOrgId !== 'all') {
-      const orgFilterIndex = commonFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
-      if (orgFilterIndex > -1) commonFilters.splice(orgFilterIndex, 1);
-      commonFilters.push(where("organizationId", "==", options.filterOrgId));
+      if (options.status === 'pending') {
+        baseFilters.push(where("status", "in", ["pending", "rejected_editable"]));
+      } else {
+        baseFilters.push(where("status", "==", options.status));
+      }
     }
 
-    let finalCampaigns: string[] | null = options.campaignsInScope;
-
-    if (options.selectedCampaign !== 'all') {
-        if (finalCampaigns === null) {
-            finalCampaigns = [options.selectedCampaign];
-        } else {
-            if (finalCampaigns.includes(options.selectedCampaign)) {
-                finalCampaigns = [options.selectedCampaign];
-            } else {
-                return []; 
-            }
-        }
-    }
-    
-    const campaignFilter = finalCampaigns ? where("campaignName", "in", finalCampaigns.slice(0, 30)) : null;
-
+    // --- 2. Determine States to Query ---
     let statesToQuery: string[] | null = null;
     if (options.filterState !== 'all') {
         statesToQuery = [options.filterState];
-    } else if (options.statesForScope && options.statesForScope.length > 0) {
+    } else if (options.statesForScope) { // Use admin's scope
         statesToQuery = options.statesForScope;
     }
-    
-    const stateFilter = statesToQuery ? where("state", "in", statesToQuery) : null;
-    
-    const requiresMultiQuery = finalCampaigns && finalCampaigns.length > 1 && statesToQuery && statesToQuery.length > 1;
-
-    if (requiresMultiQuery) {
-        const promotersMap = new Map<string, Promoter>();
-        // To avoid Firestore limitations, query per state and merge results
-        for (const state of statesToQuery) {
-            const tempFilters = [...commonFilters, where("state", "==", state)];
-            if(campaignFilter) tempFilters.push(campaignFilter);
-
-            const q = query(promotersRef, ...tempFilters);
-            const snapshot = await getDocs(q);
-            snapshot.forEach(doc => {
-                 if (!promotersMap.has(doc.id)) {
-                    promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
-                }
-            });
-        }
-        return Array.from(promotersMap.values());
-    } else {
-        // Build a single, valid query
-        const finalFilters = [...commonFilters];
-        if (campaignFilter) finalFilters.push(campaignFilter);
-        if (stateFilter) finalFilters.push(stateFilter);
-
-        const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    // If statesToQuery is an empty array, it means no states in scope, so return early
+    if (Array.isArray(statesToQuery) && statesToQuery.length === 0) {
+        return [];
     }
+
+
+    // --- 3. Determine Campaigns to Query ---
+    let campaignsToQuery: string[] | null = options.campaignsInScope;
+    if (options.selectedCampaign !== 'all') {
+        if (campaignsToQuery === null) { // Superadmin case, no initial scope
+            campaignsToQuery = [options.selectedCampaign];
+        } else { // Admin with scope, filter by selected campaign
+            if (campaignsToQuery.includes(options.selectedCampaign)) {
+                campaignsToQuery = [options.selectedCampaign];
+            } else {
+                // Admin selected a campaign they are not scoped for
+                return [];
+            }
+        }
+    }
+    // If campaignsToQuery is an empty array, it means no campaigns in scope, so return early
+    if (Array.isArray(campaignsToQuery) && campaignsToQuery.length === 0) {
+        return [];
+    }
+
+
+    // --- 4. Build and Execute Queries ---
+    const promotersMap = new Map<string, Promoter>();
+    const CHUNK_SIZE = 30; // Firestore `in` query limit
+
+    const executeQuery = async (filters: any[]) => {
+        const q = query(promotersRef, ...filters);
+        const snapshot = await getDocs(q);
+        snapshot.forEach(doc => {
+            if (!promotersMap.has(doc.id)) {
+                promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
+            }
+        });
+    };
+
+    // Case 1: Filter by states and campaigns
+    if (statesToQuery && campaignsToQuery) {
+        // Iterate over the smaller list to reduce queries
+        if (statesToQuery.length <= campaignsToQuery.length) {
+            for (const state of statesToQuery) {
+                const stateFilter = where("state", "==", state);
+                for (let i = 0; i < campaignsToQuery.length; i += CHUNK_SIZE) {
+                    const campaignChunk = campaignsToQuery.slice(i, i + CHUNK_SIZE);
+                    const campaignFilter = where("campaignName", "in", campaignChunk);
+                    await executeQuery([...baseFilters, stateFilter, campaignFilter]);
+                }
+            }
+        } else {
+            for (const campaign of campaignsToQuery) {
+                const campaignFilter = where("campaignName", "==", campaign);
+                for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
+                    const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
+                    const stateFilter = where("state", "in", stateChunk);
+                    await executeQuery([...baseFilters, campaignFilter, stateFilter]);
+                }
+            }
+        }
+    } 
+    // Case 2: Filter by states only
+    else if (statesToQuery) {
+        for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
+            const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
+            const stateFilter = where("state", "in", stateChunk);
+            await executeQuery([...baseFilters, stateFilter]);
+        }
+    } 
+    // Case 3: Filter by campaigns only
+    else if (campaignsToQuery) {
+        for (let i = 0; i < campaignsToQuery.length; i += CHUNK_SIZE) {
+            const campaignChunk = campaignsToQuery.slice(i, i + CHUNK_SIZE);
+            const campaignFilter = where("campaignName", "in", campaignChunk);
+            await executeQuery([...baseFilters, campaignFilter]);
+        }
+    } 
+    // Case 4: No state or campaign filter (e.g., superadmin with 'all' selected)
+    else {
+        await executeQuery(baseFilters);
+    }
+    
+    return Array.from(promotersMap.values());
 
   } catch (error) {
     console.error("Error fetching all promoters:", error);
