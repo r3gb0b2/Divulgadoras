@@ -64,10 +64,11 @@ const ManageOrganizationPage: React.FC = () => {
         // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
             // Superadmin can access any organization page.
-            // An Admin can only access the page for the organization they have currently selected.
-            const isAdminForSelectedOrg = adminData.role === 'admin' && selectedOrganizationId === orgId;
+            // An Admin can only access if they are the designated owner of the organization.
+            const isOwner = adminData.uid === organization.ownerUid;
+            const isAdminAndOwner = adminData.role === 'admin' && isOwner;
 
-            if (isSuperAdmin || isAdminForSelectedOrg) {
+            if (isSuperAdmin || isAdminAndOwner) {
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -76,7 +77,7 @@ const ManageOrganizationPage: React.FC = () => {
             // If org doesn't exist or there was an error, don't show auth error yet
             setIsAuthorized(false);
         }
-    }, [isLoading, organization, adminData, isSuperAdmin, selectedOrganizationId, orgId]);
+    }, [isLoading, organization, adminData, isSuperAdmin]);
     
     const associatedAdmins = useMemo(() => {
         if (!organization) return [];
@@ -96,8 +97,14 @@ const ManageOrganizationPage: React.FC = () => {
         if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            // FIX: The property is 'organizationIds' (an array), not 'organizationId'.
-            await setAdminUserData(adminUid, { organizationIds: [orgId] });
+            const adminToUpdate = allAdmins.find(a => a.uid === adminUid);
+            if (!adminToUpdate) throw new Error("Admin não encontrado.");
+
+            const existingOrgIds = adminToUpdate.organizationIds || [];
+            if (!existingOrgIds.includes(orgId)) {
+                const newOrgIds = [...existingOrgIds, orgId];
+                await setAdminUserData(adminUid, { organizationIds: newOrgIds });
+            }
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao associar administrador.");
@@ -107,11 +114,16 @@ const ManageOrganizationPage: React.FC = () => {
     };
 
     const handleDisassociateAdmin = async (adminUid: string) => {
+        if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            // Setting to an empty array effectively removes them from the organization scope
-            // FIX: The property is 'organizationIds' (an array), not 'organizationId'.
-            await setAdminUserData(adminUid, { organizationIds: [] });
+            const adminToUpdate = allAdmins.find(a => a.uid === adminUid);
+            if (!adminToUpdate) throw new Error("Admin não encontrado.");
+
+            const existingOrgIds = adminToUpdate.organizationIds || [];
+            const newOrgIds = existingOrgIds.filter(id => id !== orgId);
+            
+            await setAdminUserData(adminUid, { organizationIds: newOrgIds });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao desvincular administrador.");

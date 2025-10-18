@@ -12,7 +12,7 @@ import { auth } from '../firebase/config';
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
     // FIX: Destructure selectedOrganizationId from useAdminAuth
-    const { adminData, selectedOrganizationId } = useAdminAuth();
+    const { adminData, selectedOrganizationId, clearSelectedOrganization } = useAdminAuth();
     const [posts, setPosts] = useState<Post[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -137,6 +137,11 @@ const AdminPosts: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Gerenciamento de Posts</h1>
                 <div className="flex items-center gap-4">
+                    {adminData && adminData.organizationIds && adminData.organizationIds.length > 1 && (
+                        <button onClick={clearSelectedOrganization} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm">
+                            Trocar Organização
+                        </button>
+                    )}
                     {adminData?.role !== 'poster' && (
                         <button onClick={() => navigate('/admin')} className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                             <ArrowLeftIcon className="w-4 h-4" />

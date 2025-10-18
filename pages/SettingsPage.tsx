@@ -1,23 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { getOrganization } from '../services/organizationService';
+import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { adminData, selectedOrganizationId } = useAdminAuth();
+  const { adminData, selectedOrganizationId, clearSelectedOrganization } = useAdminAuth();
+  const [organization, setOrganization] = useState<Organization | null>(null);
 
-  // An admin or superadmin can manage the organization's core data.
-  const canManageOrganization = adminData?.role === 'admin' || adminData?.role === 'superadmin';
+  useEffect(() => {
+    const fetchOrg = async () => {
+        if (selectedOrganizationId) {
+            try {
+                const orgData = await getOrganization(selectedOrganizationId);
+                setOrganization(orgData);
+            } catch (e) {
+                console.error("Failed to fetch organization data for settings page", e);
+            }
+        }
+    };
+    fetchOrg();
+  }, [selectedOrganizationId]);
+
+  // An admin can manage the organization's core data only if they are the owner. Superadmin can always manage.
+  const isOwner = organization?.ownerUid === adminData?.uid;
+  const canManageOrganization = adminData?.role === 'superadmin' || isOwner;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Configurações da Organização</h1>
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-          <ArrowLeftIcon className="w-4 h-4" />
-          <span>Voltar ao Painel</span>
-        </button>
+        <div className="flex items-center gap-2">
+            {adminData && adminData.organizationIds && adminData.organizationIds.length > 1 && (
+                <button onClick={clearSelectedOrganization} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm">
+                    Trocar Organização
+                </button>
+            )}
+            <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+              <ArrowLeftIcon className="w-4 h-4" />
+              <span>Voltar ao Painel</span>
+            </button>
+        </div>
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
