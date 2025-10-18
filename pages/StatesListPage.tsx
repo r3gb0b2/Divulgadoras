@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getStatesConfig } from '../services/settingsService';
@@ -22,8 +23,10 @@ const StatesListPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        if (!isSuperAdmin && adminData?.organizationId) {
-          const orgData = await getOrganization(adminData.organizationId);
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+        if (!isSuperAdmin && adminData?.organizationIds?.[0]) {
+          // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+          const orgData = await getOrganization(adminData.organizationIds[0]);
           setOrganization(orgData);
         }
         // Superadmin needs this to show global status (active/inactive)

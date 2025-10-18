@@ -35,8 +35,8 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const adminDataPromise = getAllAdmins(currentAdmin?.organizationId);
-            const campaignDataPromise = getAllCampaigns(currentAdmin?.organizationId);
+            const adminDataPromise = getAllAdmins(currentAdmin?.organizationIds?.[0]);
+            const campaignDataPromise = getAllCampaigns(currentAdmin?.organizationIds?.[0]);
             const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
 
             const [adminData, campaignData, orgData] = await Promise.all([
@@ -138,7 +138,7 @@ const ManageUsersPage: React.FC = () => {
         setRole(target.role);
         setAssignedStates(target.assignedStates || []);
         setAssignedCampaigns(target.assignedCampaigns || {});
-        setSelectedOrg(target.organizationId || '');
+        setSelectedOrg(target.organizationIds?.[0] || '');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -150,7 +150,7 @@ const ManageUsersPage: React.FC = () => {
         if (isSuperAdmin && role !== 'superadmin' && !selectedOrg) {
             return setError("Por favor, selecione uma organização para este usuário.");
         }
-        if (!isSuperAdmin && !currentAdmin?.organizationId) return setError("Você não está associado a uma organização.");
+        if (!isSuperAdmin && (!currentAdmin?.organizationIds || currentAdmin.organizationIds.length === 0)) return setError("Você não está associado a uma organização.");
 
         setIsLoading(true);
         try {
@@ -167,14 +167,21 @@ const ManageUsersPage: React.FC = () => {
 
             if (!targetUid) throw new Error("Não foi possível encontrar o UID do usuário.");
 
+            let orgIds: string[] = editingTarget?.organizationIds || [];
+            if (isSuperAdmin) {
+                orgIds = role === 'superadmin' ? [] : (selectedOrg ? [selectedOrg] : []);
+            } else if (!editingTarget) { // Regular admin creating a user
+                orgIds = currentAdmin?.organizationIds?.[0] ? [currentAdmin.organizationIds[0]] : [];
+            }
+            // Note: This page only handles single-org assignment for simplicity. 
+            // Multi-org assignment is done on the Manage Organization page.
+
             const dataToSave: Omit<AdminUserData, 'uid'> = { 
                 email, 
                 role, 
                 assignedStates, 
                 assignedCampaigns,
-                organizationId: isSuperAdmin 
-                    ? (role === 'superadmin' ? undefined : selectedOrg)
-                    : currentAdmin?.organizationId,
+                organizationIds: orgIds,
             };
             
             await setAdminUserData(targetUid, dataToSave);
@@ -321,14 +328,16 @@ const ManageUsersPage: React.FC = () => {
                              {isLoading ? <p>Carregando...</p> : (
                                 <div className="space-y-3">
                                     {admins.map(admin => {
-                                        const orgName = isSuperAdmin 
-                                            ? organizations.find(o => o.id === admin.organizationId)?.name || 'N/A (Global)'
+                                        const orgNames = isSuperAdmin 
+                                            ? (admin.organizationIds && admin.organizationIds.length > 0 
+                                                ? admin.organizationIds.map(id => organizations.find(o => o.id === id)?.name || id).join(', ') 
+                                                : 'N/A (Global)')
                                             : '';
                                         return (
                                             <div key={admin.uid} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
                                                 <div className="min-w-0 md:flex-1">
                                                     <p className="font-semibold break-words">{admin.email}</p>
-                                                    {isSuperAdmin && <p className="text-sm text-gray-300">Organização: <span className="font-medium">{orgName}</span></p>}
+                                                    {isSuperAdmin && <p className="text-sm text-gray-300">Organização(ões): <span className="font-medium">{orgNames}</span></p>}
                                                     <p className="text-sm text-gray-400 break-words">
                                                         <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
                                                     </p>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
@@ -11,8 +12,10 @@ const SettingsPage: React.FC = () => {
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    if (adminData?.organizationId) {
-      getOrganization(adminData.organizationId).then(orgData => {
+    // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+    if (adminData?.organizationIds?.[0]) {
+      // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+      getOrganization(adminData.organizationIds[0]).then(orgData => {
         if (orgData && adminData.uid === orgData.ownerUid) {
           setIsOwner(true);
         }
@@ -36,7 +39,8 @@ const SettingsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {isOwner && (
             <Link
-              to={`/admin/organization/${adminData?.organizationId}`}
+              // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+              to={`/admin/organization/${adminData?.organizationIds?.[0]}`}
               className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
             >
               <div className="flex items-center">

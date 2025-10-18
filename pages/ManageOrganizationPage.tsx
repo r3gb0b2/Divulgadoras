@@ -64,7 +64,7 @@ const ManageOrganizationPage: React.FC = () => {
         // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
             const isOwner = adminData.uid === organization.ownerUid;
-            if (isSuperAdmin || (isOwner && adminData.organizationId === organization.id)) {
+            if (isSuperAdmin || (isOwner && (adminData.organizationIds || []).includes(organization.id))) {
                 setIsAuthorized(true);
             } else {
                 setIsAuthorized(false);
@@ -77,13 +77,13 @@ const ManageOrganizationPage: React.FC = () => {
     
     const associatedAdmins = useMemo(() => {
         if (!organization) return [];
-        return allAdmins.filter(admin => admin.organizationId === organization.id);
+        return allAdmins.filter(admin => (admin.organizationIds || []).includes(organization.id));
     }, [allAdmins, organization]);
 
     const availableAdmins = useMemo(() => {
         if (!organization) return [];
-        // Available admins are those with no orgId or a different one
-        return allAdmins.filter(admin => !admin.organizationId || admin.organizationId !== organization.id)
+        // Available admins are those not already associated with this org
+        return allAdmins.filter(admin => !(admin.organizationIds || []).includes(organization.id))
             .sort((a, b) => a.email.localeCompare(b.email));
     }, [allAdmins, organization]);
 
@@ -91,7 +91,11 @@ const ManageOrganizationPage: React.FC = () => {
         if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
-            await setAdminUserData(adminUid, { organizationId: orgId });
+            const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
+            const currentOrgIds = adminToUpdate?.organizationIds || [];
+            if (!currentOrgIds.includes(orgId)) {
+                await setAdminUserData(adminUid, { organizationIds: [...currentOrgIds, orgId] });
+            }
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao associar administrador.");
@@ -103,8 +107,9 @@ const ManageOrganizationPage: React.FC = () => {
     const handleDisassociateAdmin = async (adminUid: string) => {
         setIsProcessingAdmin(adminUid);
         try {
-            // Setting to an empty string effectively removes them from the organization scope
-            await setAdminUserData(adminUid, { organizationId: "" });
+            const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
+            const newOrgIds = (adminToUpdate?.organizationIds || []).filter(id => id !== orgId);
+            await setAdminUserData(adminUid, { organizationIds: newOrgIds });
             await fetchData(); // Refresh data
         } catch (err: any) {
             setError("Falha ao desvincular administrador.");

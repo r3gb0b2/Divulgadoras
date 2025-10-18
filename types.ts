@@ -70,7 +70,7 @@ export interface AdminUserData {
   email: string;
   role: AdminRole;
   assignedStates: string[];
-  organizationId?: string;
+  organizationIds?: string[];
   assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 

@@ -751,7 +751,7 @@ exports.createOrganizationAndUser = functions.region("southamerica-east1").https
     transaction.set(orgRef, newOrgData);
     const adminRef = db.collection("admins").doc(userRecord.uid);
     const newAdminData = {
-      email, role: "admin", organizationId: orgRef.id,
+      email, role: "admin", organizationIds: [orgRef.id],
       assignedStates: [], assignedCampaigns: {},
     };
     transaction.set(adminRef, newAdminData);

@@ -1,4 +1,5 @@
 
+
 import { firestore, functions } from '../firebase/config';
 import {
   collection,
@@ -79,7 +80,7 @@ export const getAllAdmins = async (organizationId?: string): Promise<AdminUserDa
   try {
     let q = query(collection(firestore, 'admins'));
     if (organizationId) {
-      q = query(q, where('organizationId', '==', organizationId));
+      q = query(q, where('organizationIds', 'array-contains', organizationId));
     }
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as AdminUserData));
@@ -150,7 +151,7 @@ export const acceptAdminApplication = async (app: AdminApplication, orgId: strin
     const newAdminData: Omit<AdminUserData, 'uid'> = {
       email: app.email,
       role: 'admin', // Default role on approval
-      organizationId: orgId,
+      organizationIds: [orgId],
       assignedStates: [],
       assignedCampaigns: {},
     };

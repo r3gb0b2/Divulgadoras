@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -39,10 +40,12 @@ const SubscriptionPage: React.FC = () => {
     const [taxId, setTaxId] = useState('');
 
     const fetchOrg = async () => {
-        if (adminData?.organizationId) {
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+        if (adminData?.organizationIds?.[0]) {
             setIsLoading(true);
             try {
-                const orgData = await getOrganization(adminData.organizationId);
+                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                const orgData = await getOrganization(adminData.organizationIds[0]);
                 setOrganization(orgData);
                 if (orgData) {
                     // Pre-fill form if data exists

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -26,7 +27,8 @@ const GuestListAccessPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const orgId = adminData.organizationId;
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            const orgId = adminData.organizationIds?.[0];
             if (!orgId && adminData.role !== 'superadmin') {
                 throw new Error("Organização não encontrada.");
             }

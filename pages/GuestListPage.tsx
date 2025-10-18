@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
@@ -47,8 +48,10 @@ const GuestListPage: React.FC = () => {
             let orgId: string | undefined;
             if (confirmationData.length > 0) {
                 orgId = confirmationData[0].organizationId;
-            } else if (adminData?.organizationId) {
-                orgId = adminData.organizationId;
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            } else if (adminData?.organizationIds?.[0]) {
+                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                orgId = adminData.organizationIds[0];
             }
 
             if (orgId) {

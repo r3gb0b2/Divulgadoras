@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -66,15 +67,18 @@ const CreatePost: React.FC = () => {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            if (!adminData?.organizationId) {
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            if (!adminData?.organizationIds?.[0]) {
                 setError("Admin não está vinculado a uma organização.");
                 setIsLoading(false);
                 return;
             }
             try {
                 const [orgData, allCampaigns] = await Promise.all([
-                    getOrganization(adminData.organizationId),
-                    getAllCampaigns(adminData.organizationId)
+                    // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                    getOrganization(adminData.organizationIds[0]),
+                    // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                    getAllCampaigns(adminData.organizationIds[0])
                 ]);
 
                 if (orgData?.assignedStates) {
@@ -112,12 +116,14 @@ const CreatePost: React.FC = () => {
     
     useEffect(() => {
         const fetchPromoters = async () => {
-            if (selectedCampaign && selectedState && adminData?.organizationId) {
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            if (selectedCampaign && selectedState && adminData?.organizationIds?.[0]) {
                 setIsLoading(true);
                 try {
                     const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
                     if (campaignDetails) {
-                        const promoterData = await getApprovedPromoters(adminData.organizationId, selectedState, campaignDetails.name);
+                        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                        const promoterData = await getApprovedPromoters(adminData.organizationIds[0], selectedState, campaignDetails.name);
                         
                         // Sort promoters: those who joined the group first, then alphabetically.
                         promoterData.sort((a, b) => {
@@ -141,7 +147,8 @@ const CreatePost: React.FC = () => {
             }
         };
         fetchPromoters();
-    }, [selectedCampaign, selectedState, adminData?.organizationId, campaigns]);
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+    }, [selectedCampaign, selectedState, adminData?.organizationIds, campaigns]);
     
     const handleLogout = async () => {
         try {
@@ -184,7 +191,8 @@ const CreatePost: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!adminData?.organizationId || !adminData.email) {
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+        if (!adminData?.organizationIds?.[0] || !adminData.email) {
             setError("Dados do administrador inválidos.");
             return;
         }
@@ -222,7 +230,8 @@ const CreatePost: React.FC = () => {
             }
 
             const postData = {
-                organizationId: adminData.organizationId,
+                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+                organizationId: adminData.organizationIds[0],
                 createdByEmail: adminData.email,
                 campaignName: campaignDetails.name,
                 stateAbbr: selectedState,

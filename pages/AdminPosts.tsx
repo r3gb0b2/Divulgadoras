@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg } from '../services/postService';
@@ -26,7 +27,8 @@ const AdminPosts: React.FC = () => {
             setIsLoading(true);
             setError(null);
             
-            const orgId = isSuperAdmin ? undefined : adminData.organizationId;
+            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
+            const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
 
             if (!isSuperAdmin && !orgId) {
                 setError("Organização não encontrada para este admin.");
