@@ -188,6 +188,12 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
+      if (files.length > 10) {
+        setSubmitError("Você pode enviar no máximo 10 fotos.");
+        e.target.value = ''; // Clear the file input
+        return;
+      }
+
       setIsProcessingPhoto(true);
       setSubmitError(null);
       setPhotoPreviews([]);
@@ -352,7 +358,7 @@ const PromoterForm: React.FC<{ promoterIdForResubmit?: string }> = ({ promoterId
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos {isResubmitMode ? '(envie novas se necessário)' : '(obrigatório)'}</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (até 10) {isResubmitMode ? '(envie novas se necessário)' : '(obrigatório)'}</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
