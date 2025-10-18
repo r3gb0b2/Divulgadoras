@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
 import { PostAssignment } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, ArrowDownTrayIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
@@ -89,6 +89,32 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
         }
     };
 
+    const handleDownload = async (url: string) => {
+        if (!url) return;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            const urlParts = url.split('/');
+            const lastPart = urlParts[urlParts.length - 1];
+            const filename = lastPart.split('?')[0];
+            const decodedFilename = decodeURIComponent(filename);
+            link.setAttribute('download', decodedFilename || 'download');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            window.open(url, '_blank');
+        }
+    };
+
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
             <div className="flex justify-between items-start mb-3">
@@ -102,12 +128,34 @@ const PostCard: React.FC<{ assignment: PostAssignment, onConfirm: (assignmentId:
             
             <div className="border-t border-gray-700 pt-3">
                 {assignment.post.type === 'image' && assignment.post.mediaUrl && (
-                    <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer">
-                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
-                    </a>
+                    <div className="mb-4">
+                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md" />
+                        <div className="flex items-center justify-center gap-4 mt-2">
+                            <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
+                                <EyeIcon className="w-6 h-6" />
+                                <span className="text-sm">Visualizar</span>
+                            </a>
+                            <button onClick={() => handleDownload(assignment.post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
+                                <ArrowDownTrayIcon className="w-6 h-6" />
+                                <span className="text-sm">Baixar</span>
+                            </button>
+                        </div>
+                    </div>
                 )}
                 {assignment.post.type === 'video' && assignment.post.mediaUrl && (
-                    <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                    <div className="mb-4">
+                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                        <div className="flex items-center justify-center gap-4 mt-2">
+                            <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Visualizar">
+                                <EyeIcon className="w-6 h-6" />
+                                <span className="text-sm">Visualizar</span>
+                            </a>
+                            <button onClick={() => handleDownload(assignment.post.mediaUrl!)} className="flex items-center gap-2 text-gray-300 hover:text-primary transition-colors" title="Baixar">
+                                <ArrowDownTrayIcon className="w-6 h-6" />
+                                <span className="text-sm">Baixar</span>
+                            </button>
+                        </div>
+                    </div>
                 )}
                 {assignment.post.type === 'text' && (
                     <div className="bg-gray-800 p-3 rounded-md mb-4">
