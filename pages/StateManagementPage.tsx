@@ -277,6 +277,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
                                         {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
+                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist-access/${c.id}`)} className="text-yellow-400 hover:text-yellow-300">Gerenciar Acesso</button>}
                                         {c.guestListTypes && c.guestListTypes.length > 0 && <button 
                                             onClick={() => handleCopyGuestListLink(c)}
                                             className="text-green-400 hover:text-green-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"

@@ -59,6 +59,8 @@ export interface Campaign {
   // Guest List Feature
   guestListTypes?: string[];
   guestAllowance?: number;
+  guestListAccess?: 'all' | 'specific';
+  guestListAssignedPromoters?: string[]; // array of promoter IDs
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';

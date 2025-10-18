@@ -24,6 +24,7 @@ import CreatePost from './CreatePost';
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page
 import GuestListCheckinPage from './GuestListCheckinPage'; // Import new page
+import GuestListAccessPage from './GuestListAccessPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -229,6 +230,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="guestlist-access/:campaignId" element={<ProtectedRoute><GuestListAccessPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -246,6 +248,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="guestlist-access/:campaignId" element={<ProtectedRoute><GuestListAccessPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                 </>
             )}

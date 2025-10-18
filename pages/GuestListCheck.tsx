@@ -164,13 +164,23 @@ const GuestListCheck: React.FC = () => {
                     )
                 );
 
-                if (entryForThisEvent && directCampaign.guestListTypes) {
-                    const eventsWithLists = directCampaign.guestListTypes.map(listName => ({
-                        ...entryForThisEvent,
-                        campaignDetails: directCampaign,
-                        listName
-                    }));
-                    setEvents(eventsWithLists);
+                if (entryForThisEvent) {
+                    // Check for specific access control
+                    if (directCampaign.guestListAccess === 'specific' && !(directCampaign.guestListAssignedPromoters || []).includes(entryForThisEvent.id)) {
+                        setEvents([]);
+                        setError("Você não tem permissão para acessar a lista deste evento.");
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    if (directCampaign.guestListTypes) {
+                        const eventsWithLists = directCampaign.guestListTypes.map(listName => ({
+                            ...entryForThisEvent,
+                            campaignDetails: directCampaign,
+                            listName
+                        }));
+                        setEvents(eventsWithLists);
+                    }
                 } else {
                     setEvents([]);
                     setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
@@ -199,6 +209,13 @@ const GuestListCheck: React.FC = () => {
                         const campaignDetails = campaignMap.get(`${entry.organizationId}-${campaignName}`);
                         
                         if (campaignDetails && campaignDetails.guestListTypes) {
+                            // Check for specific access control
+                            if (campaignDetails.guestListAccess === 'specific') {
+                                if (!(campaignDetails.guestListAssignedPromoters || []).includes(entry.id)) {
+                                    continue; // Skip, promoter not assigned to this list
+                                }
+                            }
+
                             for (const listName of campaignDetails.guestListTypes) {
                                 const uniqueKey = `${campaignDetails.id}-${listName}`;
                                 if (!addedCampaignIds.has(uniqueKey)) { // Prevent duplicates if promoter is in multiple source campaigns that point to the same destination
