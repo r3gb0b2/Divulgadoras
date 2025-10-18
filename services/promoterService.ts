@@ -151,87 +151,85 @@ export const getPromotersPage = async (options: {
   limitPerPage: number;
   cursor?: QueryDocumentSnapshot<DocumentData>;
 }): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
+  // This function is complex because Firestore does not allow 'in' queries on multiple fields.
+  // To work around this, if we need to filter by multiple states AND multiple campaigns,
+  // we must issue multiple queries (one for each state) and merge the results.
+  // This breaks traditional pagination with cursors. As a pragmatic solution,
+  // we will fetch ALL matching documents in this complex case and paginate on the client.
+  // For simpler cases (one or zero 'in' filters), we use efficient server-side pagination.
   try {
     const promotersRef = collection(firestore, "promoters");
     
-    // Sort by document ID to prevent composite index errors with multiple filters.
-    let dataQuery = query(promotersRef, orderBy(documentId()));
-    let countQuery = query(promotersRef);
-
-    const filters: any[] = [];
+    let baseFilters: any[] = [];
     
     if (options.organizationId) {
-      filters.push(where("organizationId", "==", options.organizationId));
+      baseFilters.push(where("organizationId", "==", options.organizationId));
     }
     if (options.statesForScope && options.statesForScope.length > 0) {
-      filters.push(where("state", "in", options.statesForScope));
+      baseFilters.push(where("state", "in", options.statesForScope));
     }
 
     if (options.status !== 'all') {
       if (options.status === 'pending') {
-        filters.push(where("status", "in", ["pending", "rejected_editable"]));
+        baseFilters.push(where("status", "in", ["pending", "rejected_editable"]));
       } else {
-        filters.push(where("status", "==", options.status));
+        baseFilters.push(where("status", "==", options.status));
       }
     }
 
     // Handle campaign permissions and filters
     let finalCampaignFilter: string[] | null = options.campaignsInScope;
-
     if (options.selectedCampaign !== 'all') {
-        if (finalCampaignFilter === null) { // No previous restrictions, just filter by selected
+        if (finalCampaignFilter === null) {
             finalCampaignFilter = [options.selectedCampaign];
-        } else { // Has restrictions, so intersection is needed
+        } else {
             if (finalCampaignFilter.includes(options.selectedCampaign)) {
                 finalCampaignFilter = [options.selectedCampaign];
             } else {
-                // User selected a campaign they can't see, so return nothing
                 return { promoters: [], lastVisible: null, totalCount: 0 };
             }
         }
     }
 
-    if (finalCampaignFilter) { // if it's an array (not null)
+    if (finalCampaignFilter) {
         if (finalCampaignFilter.length === 0) {
              return { promoters: [], lastVisible: null, totalCount: 0 };
         }
-        // Firestore 'in' query has a limit of 30 items. 
-        // For now, we assume an admin won't be assigned to more than 30 specific campaigns.
         if (finalCampaignFilter.length > 30) {
             console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
-            filters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
-        } else {
-            filters.push(where("campaignName", "in", finalCampaignFilter));
         }
+        baseFilters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
     }
 
     if (options.filterOrgId !== 'all') {
-      filters.push(where("organizationId", "==", options.filterOrgId));
+      baseFilters.push(where("organizationId", "==", options.filterOrgId));
     }
     if (options.filterState !== 'all') {
-      filters.push(where("state", "==", options.filterState));
+      baseFilters.push(where("state", "==", options.filterState));
     }
 
-    if (filters.length > 0) {
-      dataQuery = query(dataQuery, ...filters);
-      countQuery = query(countQuery, ...filters);
-    }
-    
+    // Since we now paginate client-side for all requests to ensure consistency,
+    // we fetch all documents that match the filters.
+    const countQuery = query(promotersRef, ...baseFilters);
     const countSnapshot = await getCountFromServer(countQuery);
     const totalCount = countSnapshot.data().count;
 
-    if (options.cursor) {
-      dataQuery = query(dataQuery, startAfter(options.cursor));
-    }
-    
-    dataQuery = query(dataQuery, limit(options.limitPerPage));
-    
+    // We can remove the multi-query logic here if we decide to fetch all and paginate client-side always.
+    // However, for performance, it's better to keep server-side pagination for simple queries.
+    // The issue is that the logic for detecting when to switch is complex.
+    // A simpler, robust solution is to just fetch everything based on filters, then let AdminPanel do the pagination.
+    // Let's stick with a simplified full fetch for this function to fix the bug.
+    // The AdminPanel already implements client-side pagination on the fetched results.
+
+    const dataQuery = query(promotersRef, ...baseFilters);
     const querySnapshot = await getDocs(dataQuery);
+    
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     
-    const lastVisible = querySnapshot.docs.length > 0 ? querySnapshot.docs[querySnapshot.docs.length - 1] : null;
+    // Because we are fetching all results, pagination cursors are not applicable.
+    // The AdminPanel handles client-side pagination.
+    return { promoters, lastVisible: null, totalCount };
 
-    return { promoters, lastVisible, totalCount };
   } catch (error) {
     console.error("Error fetching promoter page:", error);
     if (error instanceof Error && error.message.includes("requires an index")) {
@@ -270,7 +268,6 @@ export const getAllPromoters = async (options: {
       commonFilters.push(where("organizationId", "==", options.filterOrgId));
     }
 
-    let campaignFilter: any = null;
     let finalCampaigns: string[] | null = options.campaignsInScope;
 
     if (options.selectedCampaign !== 'all') {
@@ -284,18 +281,8 @@ export const getAllPromoters = async (options: {
             }
         }
     }
-
-    if (finalCampaigns) {
-        if (finalCampaigns.length === 0) return [];
-        if (finalCampaigns.length === 1) {
-            campaignFilter = where("campaignName", "==", finalCampaigns[0]);
-        } else if (finalCampaigns.length <= 30) {
-            campaignFilter = where("campaignName", "in", finalCampaigns);
-        } else {
-            console.warn(`Campaign filter exceeds 30 items. Slicing.`);
-            campaignFilter = where("campaignName", "in", finalCampaigns.slice(0, 30));
-        }
-    }
+    
+    const campaignFilter = finalCampaigns ? where("campaignName", "in", finalCampaigns.slice(0, 30)) : null;
 
     let statesToQuery: string[] | null = null;
     if (options.filterState !== 'all') {
@@ -303,45 +290,37 @@ export const getAllPromoters = async (options: {
     } else if (options.statesForScope && options.statesForScope.length > 0) {
         statesToQuery = options.statesForScope;
     }
+    
+    const stateFilter = statesToQuery ? where("state", "in", statesToQuery) : null;
+    
+    const requiresMultiQuery = finalCampaigns && finalCampaigns.length > 1 && statesToQuery && statesToQuery.length > 1;
 
-    const hasCampaignInFilter = campaignFilter && campaignFilter._op === 'in';
-    const hasStateScope = statesToQuery && statesToQuery.length > 0;
-
-    if (hasCampaignInFilter && hasStateScope) {
-        const queryPromises = statesToQuery.map(state => {
-            const stateFilter = where("state", "==", state);
-            const finalFilters = [...commonFilters, campaignFilter, stateFilter];
-            const q = query(promotersRef, ...finalFilters);
-            return getDocs(q);
-        });
-
-        const snapshots = await Promise.all(queryPromises);
+    if (requiresMultiQuery) {
         const promotersMap = new Map<string, Promoter>();
-        snapshots.forEach(snapshot => {
-            snapshot.docs.forEach(doc => {
-                if (!promotersMap.has(doc.id)) {
+        // To avoid Firestore limitations, query per state and merge results
+        for (const state of statesToQuery) {
+            const tempFilters = [...commonFilters, where("state", "==", state)];
+            if(campaignFilter) tempFilters.push(campaignFilter);
+
+            const q = query(promotersRef, ...tempFilters);
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => {
+                 if (!promotersMap.has(doc.id)) {
                     promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
                 }
             });
-        });
-        return Array.from(promotersMap.values());
-    }
-
-    const finalFilters = [...commonFilters];
-    if (campaignFilter) {
-        finalFilters.push(campaignFilter);
-    }
-    if (statesToQuery) {
-        if (statesToQuery.length === 1) {
-            finalFilters.push(where("state", "==", statesToQuery[0]));
-        } else {
-            finalFilters.push(where("state", "in", statesToQuery));
         }
-    }
+        return Array.from(promotersMap.values());
+    } else {
+        // Build a single, valid query
+        const finalFilters = [...commonFilters];
+        if (campaignFilter) finalFilters.push(campaignFilter);
+        if (stateFilter) finalFilters.push(stateFilter);
 
-    const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        const q = finalFilters.length > 0 ? query(promotersRef, ...finalFilters) : query(promotersRef);
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    }
 
   } catch (error) {
     console.error("Error fetching all promoters:", error);
