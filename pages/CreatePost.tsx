@@ -285,12 +285,11 @@ const CreatePost: React.FC = () => {
                                                     target="_blank" 
                                                     rel="noopener noreferrer"
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="text-white hover:text-primary hover:underline"
-                                                    title={p.name}
+                                                    className={`${p.hasJoinedGroup ? 'text-green-400' : 'text-white'} hover:text-primary hover:underline`}
+                                                    title={p.hasJoinedGroup ? `${p.name} (Está no grupo)` : p.name}
                                                 >
                                                     @{p.instagram.replace('@', '')}
                                                 </a>
-                                                {p.hasJoinedGroup && <span className="text-xs text-green-400 font-normal ml-1">(no grupo)</span>}
                                             </div>
                                         </label>
                                     ))}
