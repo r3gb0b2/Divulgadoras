@@ -1,5 +1,5 @@
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
 
@@ -50,6 +50,57 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     }
     throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
   }
+};
+
+export const resubmitPromoterApplication = async (
+    promoterId: string,
+    promoterData: Partial<PromoterApplicationData> & { photos?: File[] }
+): Promise<void> => {
+    try {
+        const updateData: Partial<Promoter> = {
+            name: promoterData.name,
+            whatsapp: promoterData.whatsapp,
+            instagram: promoterData.instagram,
+            tiktok: promoterData.tiktok,
+            dateOfBirth: promoterData.dateOfBirth,
+            status: 'pending',
+            rejectionReason: '',
+            canResubmit: false,
+        };
+
+        if (promoterData.photos && promoterData.photos.length > 0) {
+            const photoUrls = await Promise.all(
+                promoterData.photos.map(async (photo) => {
+                    const fileExtension = photo.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = ref(storage, `promoters-photos/${fileName}`);
+                    await uploadBytes(storageRef, photo);
+                    return await getDownloadURL(storageRef);
+                })
+            );
+            updateData.photoUrls = photoUrls;
+        }
+
+        await updatePromoter(promoterId, updateData);
+    } catch (error) {
+        console.error("Error resubmitting promoter application: ", error);
+        throw new Error("Não foi possível reenviar o cadastro. Tente novamente.");
+    }
+};
+
+
+export const getPromoterById = async (id: string): Promise<Promoter | null> => {
+    try {
+        const promoterDoc = doc(firestore, 'promoters', id);
+        const docSnap = await getDoc(promoterDoc);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Promoter;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching promoter by ID: ", error);
+        throw new Error("Não foi possível buscar os dados do cadastro.");
+    }
 };
 
 export const getLatestPromoterProfileByEmail = async (email: string): Promise<Promoter | null> => {
@@ -476,9 +527,9 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
     }
 };
 
-export const addRejectionReason = async (text: string, organizationId: string): Promise<string> => {
+export const addRejectionReason = async (text: string, organizationId: string, allowResubmission: boolean): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text, organizationId });
+        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text, organizationId, allowResubmission });
         return docRef.id;
     } catch (error) {
         console.error("Error adding rejection reason: ", error);
@@ -486,9 +537,9 @@ export const addRejectionReason = async (text: string, organizationId: string): 
     }
 };
 
-export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
+export const updateRejectionReason = async (id: string, text: string, allowResubmission: boolean): Promise<void> => {
     try {
-        await updateDoc(doc(firestore, 'rejectionReasons', id), { text });
+        await updateDoc(doc(firestore, 'rejectionReasons', id), { text, allowResubmission });
     } catch (error) {
         console.error("Error updating rejection reason: ", error);
         throw new Error("Não foi possível atualizar o motivo de rejeição.");

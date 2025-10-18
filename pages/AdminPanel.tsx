@@ -313,9 +313,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
     
-    const handleConfirmReject = async (reason: string) => {
+    const handleConfirmReject = async (reason: string, allowsResubmission: boolean) => {
         if (rejectingPromoter && canManage) {
-            await handleUpdatePromoter(rejectingPromoter.id, { status: 'rejected', rejectionReason: reason });
+            const updateData: Partial<Promoter> = {
+                status: 'rejected',
+                rejectionReason: reason,
+                canResubmit: allowsResubmission,
+            };
+            await handleUpdatePromoter(rejectingPromoter.id, updateData);
         }
         setIsRejectionModalOpen(false);
         setRejectingPromoter(null);

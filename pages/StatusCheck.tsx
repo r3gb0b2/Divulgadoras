@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
@@ -202,6 +202,8 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
         fetchAllCampaignData();
     }, [promoter]);
 
+    const canResubmit = promoter.status === 'rejected' && promoter.canResubmit === true;
+
     const statusInfoMap = {
         pending: {
             title: 'Cadastro em Análise',
@@ -214,9 +216,11 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             styles: 'bg-green-900/50 border-green-500 text-green-300'
         },
         rejected: {
-            title: 'Cadastro Não Aprovado',
-            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
-            styles: 'bg-red-900/50 border-red-500 text-red-300'
+            title: canResubmit ? 'Ação Necessária' : 'Cadastro Não Aprovado',
+            message: canResubmit 
+                ? 'Identificamos um problema com seu cadastro. Por favor, corrija as informações e reenvie para uma nova análise.'
+                : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
+            styles: canResubmit ? 'bg-yellow-900/50 border-yellow-500 text-yellow-300' : 'bg-red-900/50 border-red-500 text-red-300'
         }
     };
 
@@ -226,9 +230,7 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
          return <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md"><p>Ocorreu um erro ao verificar o status deste cadastro.</p></div>;
     }
 
-    const finalMessage = promoter.status === 'rejected' && promoter.rejectionReason
-        ? promoter.rejectionReason
-        : statusInfo.message;
+    const finalMessage = promoter.rejectionReason || statusInfo.message;
 
     return (
         <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
@@ -244,6 +246,17 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             </div>
 
             <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
+            
+            {canResubmit && (
+                <div className="mt-4 border-t border-gray-600/50 pt-4 text-center">
+                    <Link
+                        to={`/resubmit/${promoter.id}`}
+                        className="inline-block bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
+                    >
+                        Corrigir e Reenviar Cadastro
+                    </Link>
+                </div>
+            )}
             
             {promoter.status === 'approved' && (
                 <>

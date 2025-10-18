@@ -19,6 +19,7 @@ export interface Promoter {
   allCampaigns?: string[];
   organizationId: string;
   rejectionReason?: string;
+  canResubmit?: boolean;
   hasJoinedGroup?: boolean;
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
@@ -44,6 +45,7 @@ export interface RejectionReason {
   id: string;
   text: string;
   organizationId: string;
+  allowResubmission?: boolean;
 }
 
 export interface Campaign {
