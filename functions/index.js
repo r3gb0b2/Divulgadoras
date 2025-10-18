@@ -181,9 +181,9 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
  * @param {string} promoterId The ID of the promoter document.
  */
 async function assignPostsToNewPromoter(promoterData, promoterId) {
-  const { organizationId, stateAbbr, campaignName } = promoterData;
+  const { organizationId, state: stateAbbr, campaignName } = promoterData;
   if (!organizationId || !stateAbbr || !campaignName) {
-    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign.`);
+    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign. orgId: ${organizationId}, state: ${stateAbbr}, campaign: ${campaignName}`);
     return;
   }
 
