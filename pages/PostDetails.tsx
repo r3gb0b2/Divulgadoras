@@ -261,10 +261,12 @@ export const PostDetails: React.FC = () => {
     const handleSendReminder = async () => {
         if (!postId) return;
         
-        const pendingCount = assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
-        if (pendingCount === 0) return;
+        if (pendingProofCount === 0) {
+            alert("Nenhuma divulgadora está apta a receber um lembrete no momento (ou todas já enviaram a comprovação).");
+            return;
+        }
 
-        if (window.confirm(`Isso enviará um e-mail de lembrete para ${pendingCount} divulgadora(s) que ainda não enviaram a comprovação. Deseja continuar?`)) {
+        if (window.confirm(`Isso enviará um e-mail de lembrete para ${pendingProofCount} divulgadora(s) que estão com o tempo de envio ativo. Deseja continuar?`)) {
             setIsSendingReminder(true);
             setError(null);
             try {
@@ -310,7 +312,17 @@ export const PostDetails: React.FC = () => {
     };
 
     const pendingProofCount = useMemo(() => {
-        return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
+        const now = new Date();
+        return assignments.filter(a => {
+            if (a.status !== 'confirmed' || a.proofSubmittedAt || !a.confirmedAt) {
+                return false;
+            }
+            const confirmationTime = (a.confirmedAt as Timestamp).toDate();
+            const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
+            const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+    
+            return now >= enableTime && now < expireTime;
+        }).length;
     }, [assignments]);
 
     const filteredAssignments = useMemo(() => {

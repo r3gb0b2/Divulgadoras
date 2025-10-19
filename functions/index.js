@@ -1242,8 +1242,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
   const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
 
-  // CORRECTED QUERY: Find promoters who have CONFIRMED their post.
-  // We will filter for missing proof in the next step.
+  // Query for promoters who have CONFIRMED their post.
   const assignmentsQuery = db.collection("postAssignments")
       .where("postId", "==", postId)
       .where("status", "==", "confirmed");
@@ -1253,14 +1252,23 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
     return { success: true, count: 0, message: "Nenhuma divulgação confirmada foi encontrada para este post." };
   }
 
-  // In-memory filter to find those who confirmed but have not submitted proof yet.
-  // The 'proofSubmittedAt' field does not exist on these documents.
+  const now = new Date();
   const promotersToRemind = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((assignment) => !assignment.proofSubmittedAt);
+      .filter((assignment) => {
+        // Filter out those who already submitted proof or don't have a confirmation time
+        if (assignment.proofSubmittedAt || !assignment.confirmedAt) {
+          return false;
+        }
+        // Check if the submission window is active (after 6h, before 24h)
+        const confirmationTime = assignment.confirmedAt.toDate();
+        const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
+        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+        return now >= enableTime && now < expireTime;
+      });
 
   if (promotersToRemind.length === 0) {
-    return { success: true, count: 0, message: "Todas as divulgadoras que confirmaram já enviaram a comprovação." };
+    return { success: true, count: 0, message: "Nenhuma divulgadora com janela de envio de comprovação ativa no momento." };
   }
 
   const emailPromises = promotersToRemind.map((promoter) =>
