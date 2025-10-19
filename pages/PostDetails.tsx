@@ -477,7 +477,7 @@ export const PostDetails: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-                                     <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium">
+                                     <div className="mt-3 border-t border-gray-700 pt-2 flex justify-end gap-4 text-sm font-medium relative z-10">
                                         {!hasProof && hasConfirmed && (
                                             <button
                                                 onClick={() => handleSendSingleReminder(a.id, a.promoterName)}
