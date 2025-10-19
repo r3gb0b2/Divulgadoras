@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -60,6 +58,7 @@ const CreatePost: React.FC = () => {
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
+    const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +96,7 @@ const CreatePost: React.FC = () => {
                     setIsActive(originalPost.isActive);
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
+                    setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     if ((originalPost.type === 'image' || originalPost.type === 'video') && originalPost.mediaUrl) {
                         setMediaPreview(originalPost.mediaUrl);
                         // User will have to re-upload, but we show the preview.
@@ -235,6 +235,7 @@ const CreatePost: React.FC = () => {
                 isActive,
                 expiresAt: expiryTimestamp,
                 autoAssignToNewPromoters: autoAssign,
+                allowLateSubmissions: allowLateSubmissions,
             };
 
             await createPost(postData, mediaFile, promotersToAssign);
@@ -350,6 +351,12 @@ const CreatePost: React.FC = () => {
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
                             <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Atribuir automaticamente para novas divulgadoras</span>
+                        </label>
+                    </div>
+                    <div className="mt-4">
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, permite que as divulgadoras enviem a comprovação mesmo após o prazo de 24 horas ter expirado.">
+                            <input type="checkbox" checked={allowLateSubmissions} onChange={(e) => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Permitir envio de comprovação fora do prazo</span>
                         </label>
                     </div>
                 </fieldset>

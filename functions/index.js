@@ -229,6 +229,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
         isActive: post.isActive,
         expiresAt: post.expiresAt || null,
         createdAt: post.createdAt,
+        allowLateSubmissions: post.allowLateSubmissions || false,
       },
       organizationId: promoterData.organizationId,
       promoterId: promoterId,
@@ -1064,6 +1065,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     isActive: postData.isActive,
     expiresAt: postData.expiresAt,
     createdAt: postCreatedAt,
+    allowLateSubmissions: postData.allowLateSubmissions || false,
   };
 
   for (const promoter of assignedPromoters) {
@@ -1125,6 +1127,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").onCall(asy
     isActive: post.isActive,
     expiresAt: post.expiresAt || null,
     createdAt: post.createdAt,
+    allowLateSubmissions: post.allowLateSubmissions || false,
   };
 
   // 3. Fetch promoters and create assignment docs
@@ -1198,7 +1201,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
 
     // Build the denormalized update object dynamically
     const denormalizedUpdateData = {};
-    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink"];
+    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions"];
 
     for (const field of fieldsToSync) {
       // Check if the property exists in updateData, even if its value is null or undefined

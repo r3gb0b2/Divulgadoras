@@ -23,8 +23,13 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
             const now = new Date();
 
             if (now > expireTime) {
-                setTimeLeft('Tempo esgotado');
-                setIsButtonEnabled(false);
+                if (assignment.post.allowLateSubmissions) {
+                    setTimeLeft('Envio fora do prazo liberado pelo organizador.');
+                    setIsButtonEnabled(true);
+                } else {
+                    setTimeLeft('Tempo esgotado');
+                    setIsButtonEnabled(false);
+                }
                 clearInterval(timer);
                 return;
             }
@@ -47,7 +52,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [assignment.confirmedAt]);
+    }, [assignment.confirmedAt, assignment.post.allowLateSubmissions]);
 
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
         return (

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getAssignmentById, submitProof } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
+import { Timestamp } from 'firebase/firestore';
 
 const ProofUploadPage: React.FC = () => {
     const { assignmentId } = useParams<{ assignmentId: string }>();
@@ -27,6 +28,17 @@ const ProofUploadPage: React.FC = () => {
             try {
                 const data = await getAssignmentById(assignmentId);
                 if (!data) throw new Error("Tarefa não encontrada.");
+
+                // Check if deadline has passed and late submissions are not allowed
+                if (data.status === 'confirmed' && data.confirmedAt && !data.proofSubmittedAt) {
+                    const confirmationTime = (data.confirmedAt as Timestamp).toDate();
+                    const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+                    const now = new Date();
+                    if (now > expireTime && !data.post.allowLateSubmissions) {
+                        throw new Error("O prazo para envio da comprovação já encerrou e não foi liberado pelo organizador.");
+                    }
+                }
+                
                 setAssignment(data);
 
                 if (data.proofImageUrls && data.proofImageUrls.length > 0) {
