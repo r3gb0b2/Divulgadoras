@@ -13,6 +13,7 @@ interface Stats {
     assigned: number;
     completed: number;
     missed: number;
+    proofDeadlineMissed: number;
     pending: number;
 }
 
@@ -81,9 +82,10 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
                     ) : stats && (
                         <>
                             {/* Stats Cards */}
-                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{stats.assigned}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Concluídas</h3><p className="text-2xl font-bold text-green-400">{stats.completed}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Prazo Perdido</h3><p className="text-2xl font-bold text-orange-400">{stats.proofDeadlineMissed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Perdidas</h3><p className="text-2xl font-bold text-red-400">{stats.missed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Aproveitamento</h3><p className="text-2xl font-bold text-blue-400">{completionPercentage}%</p></div>

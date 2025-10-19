@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -129,6 +129,7 @@ export const PostDetails: React.FC = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isSendingReminder, setIsSendingReminder] = useState(false);
     const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+    const [renewingId, setRenewingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -303,6 +304,22 @@ export const PostDetails: React.FC = () => {
             setError(err.message);
         } finally {
             setSendingReminderId(null);
+        }
+    };
+    
+    const handleRenewDeadline = async (assignment: PostAssignment) => {
+        if (window.confirm(`Tem certeza que deseja renovar o prazo de 24 horas para ${assignment.promoterName}? O contador será reiniciado a partir de agora.`)) {
+            setRenewingId(assignment.id);
+            setError(null);
+            try {
+                await renewAssignmentDeadline(assignment.id);
+                showSuccessMessage(`Prazo para ${assignment.promoterName} renovado com sucesso!`);
+                await fetchDetails(); // Refresh all data
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setRenewingId(null);
+            }
         }
     };
 
@@ -512,10 +529,19 @@ export const PostDetails: React.FC = () => {
                                         {!hasProof && hasConfirmed && (
                                             <button
                                                 onClick={() => handleSendSingleReminder(a.id, a.promoterName)}
-                                                disabled={sendingReminderId === a.id}
+                                                disabled={sendingReminderId === a.id || renewingId === a.id}
                                                 className="text-yellow-400 hover:text-yellow-300 disabled:text-gray-500 disabled:cursor-wait"
                                             >
                                                 {sendingReminderId === a.id ? 'Enviando...' : 'Lembrete Manual'}
+                                            </button>
+                                        )}
+                                        {!hasProof && hasConfirmed && (
+                                            <button
+                                                onClick={() => handleRenewDeadline(a)}
+                                                disabled={renewingId === a.id || sendingReminderId === a.id}
+                                                className="text-cyan-400 hover:text-cyan-300 disabled:text-gray-500 disabled:cursor-wait"
+                                            >
+                                                {renewingId === a.id ? 'Renovando...' : 'Renovar Prazo'}
                                             </button>
                                         )}
                                         <button onClick={() => handleOpenStatsModal(a)} className="text-indigo-400 hover:text-indigo-300">Ver Stats</button>

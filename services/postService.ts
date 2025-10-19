@@ -198,7 +198,7 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
 };
 
 export const getStatsForPromoter = async (promoterId: string): Promise<{
-  stats: { assigned: number; completed: number; missed: number; pending: number };
+  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
   assignments: PostAssignment[];
 }> => {
   try {
@@ -207,20 +207,41 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
-    let missed = 0;
+    let missed = 0; // Post expired
+    let proofDeadlineMissed = 0; // 24h proof window expired
     let pending = 0;
     const now = new Date();
 
     assignments.forEach(assignment => {
       if (assignment.proofSubmittedAt) {
         completed++;
-      } else {
-        const expiresAt = assignment.post.expiresAt;
-        if (expiresAt && (expiresAt as Timestamp).toDate() < now) {
-          missed++;
-        } else {
-          pending++;
+      } else if (!assignment.post.allowLateSubmissions) {
+        let deadlineHasPassed = false;
+        
+        // Proof deadline is more specific, check it first for confirmed posts
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofExpireTime) {
+                proofDeadlineMissed++;
+                deadlineHasPassed = true;
+            }
         }
+
+        // If not caught by proof deadline, check general post expiration
+        if (!deadlineHasPassed) {
+            const postExpiresAt = assignment.post.expiresAt;
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+                missed++;
+                deadlineHasPassed = true;
+            }
+        }
+
+        if (!deadlineHasPassed) {
+            pending++;
+        }
+      } else { // Late submissions are allowed, so it's always pending until submitted
+          pending++;
       }
     });
 
@@ -237,6 +258,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         assigned: assignments.length,
         completed,
         missed,
+        proofDeadlineMissed,
         pending,
       },
       assignments,
@@ -248,7 +270,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
 };
 
 export const getStatsForPromoterByEmail = async (email: string): Promise<{
-  stats: { assigned: number; completed: number; missed: number; pending: number };
+  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
   assignments: PostAssignment[];
 }> => {
   try {
@@ -257,20 +279,41 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
-    let missed = 0;
+    let missed = 0; // Post expired
+    let proofDeadlineMissed = 0; // 24h proof window expired
     let pending = 0;
     const now = new Date();
 
     assignments.forEach(assignment => {
       if (assignment.proofSubmittedAt) {
         completed++;
-      } else {
-        const expiresAt = assignment.post.expiresAt;
-        if (expiresAt && (expiresAt as Timestamp).toDate() < now) {
-          missed++;
-        } else {
-          pending++;
+      } else if (!assignment.post.allowLateSubmissions) {
+        let deadlineHasPassed = false;
+        
+        // Proof deadline is more specific, check it first for confirmed posts
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofExpireTime) {
+                proofDeadlineMissed++;
+                deadlineHasPassed = true;
+            }
         }
+
+        // If not caught by proof deadline, check general post expiration
+        if (!deadlineHasPassed) {
+            const postExpiresAt = assignment.post.expiresAt;
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+                missed++;
+                deadlineHasPassed = true;
+            }
+        }
+
+        if (!deadlineHasPassed) {
+            pending++;
+        }
+      } else { // Late submissions are allowed, so it's always pending until submitted
+          pending++;
       }
     });
 
@@ -287,6 +330,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         assigned: assignments.length,
         completed,
         missed,
+        proofDeadlineMissed,
         pending,
       },
       assignments,
@@ -389,5 +433,17 @@ export const removePromoterFromPostAndGroup = async (assignmentId: string, promo
     } catch (error) {
         console.error("Error removing promoter from post and group:", error);
         throw new Error("Não foi possível remover a divulgadora.");
+    }
+};
+
+export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            confirmedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error("Error renewing assignment deadline: ", error);
+        throw new Error("Não foi possível renovar o prazo da tarefa.");
     }
 };
