@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { PostAssignment } from '../types';
+import { PostAssignment, Promoter } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const navigate = useNavigate();
@@ -221,21 +222,28 @@ const PostCheck: React.FC = () => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
+    const [currentPromoter, setCurrentPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
     const performSearch = async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true);
         setError(null);
         setAssignments(null);
+        setCurrentPromoter(null);
         setSearched(true);
         try {
             const [assignmentsResult, promoterProfiles] = await Promise.all([
                 getAssignmentsForPromoterByEmail(searchEmail),
                 findPromotersByEmail(searchEmail),
             ]);
+
+            if (promoterProfiles && promoterProfiles.length > 0) {
+                setCurrentPromoter(promoterProfiles[0]);
+            }
 
             const campaignStatusMap = new Map<string, boolean>();
             if (promoterProfiles) {
@@ -288,13 +296,30 @@ const PostCheck: React.FC = () => {
             );
         }
         if (error) return <p className="text-red-500 mt-4 text-center">{error}</p>;
-        if (!assignments || assignments.length === 0) {
-            return <p className="text-center text-gray-400 mt-4">Nenhuma publicação encontrada para este e-mail.</p>;
+        
+        if (!currentPromoter) {
+            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro de divulgadora encontrado para este e-mail.</p>;
         }
+
         return (
-            <div className="space-y-4">
-                {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} />)}
-            </div>
+            <>
+                <div className="mb-6 text-center">
+                    <button
+                        onClick={() => setIsStatsModalOpen(true)}
+                        className="inline-block w-full sm:w-auto text-center bg-indigo-600 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700 transition-colors"
+                    >
+                        Ver Minhas Estatísticas de Postagens
+                    </button>
+                </div>
+                
+                {(!assignments || assignments.length === 0) ? (
+                    <p className="text-center text-gray-400 mt-4">Nenhuma publicação ativa encontrada para você no momento.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} />)}
+                    </div>
+                )}
+            </>
         );
     }
     
@@ -330,6 +355,11 @@ const PostCheck: React.FC = () => {
                     {renderResult()}
                 </div>
             </div>
+             <PromoterPublicStatsModal 
+                isOpen={isStatsModalOpen}
+                onClose={() => setIsStatsModalOpen(false)}
+                promoter={currentPromoter}
+            />
         </div>
     );
 };
