@@ -1315,6 +1315,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
+    // CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -1335,17 +1336,23 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
         const decodedUrl = decodeURIComponent(fileUrl);
 
         const makeRequest = (urlToFetch) => {
-            const proxyRequest = https.get(urlToFetch, (proxyResponse) => {
+            const requestOptions = {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            };
+            const proxyRequest = https.get(urlToFetch, requestOptions, (proxyResponse) => {
                 // Handle redirects
                 if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
-                    console.log(`Redirecting to ${proxyResponse.headers.location}`);
-                    makeRequest(proxyResponse.headers.location); // Recursive call to the new location
-                    return; // Stop processing the current response
+                    const redirectUrl = new URL(proxyResponse.headers.location, urlToFetch).href;
+                    functions.logger.info(`Redirecting download to: ${redirectUrl}`);
+                    makeRequest(redirectUrl);
+                    return;
                 }
 
                 if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
-                    console.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
-                    res.status(proxyResponse.statusCode).send("Failed to fetch the file.");
+                    functions.logger.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
+                    res.status(500).send("Failed to fetch the file.");
                     return;
                 }
 
@@ -1361,7 +1368,7 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
             });
 
             proxyRequest.on("error", (e) => {
-                console.error(`Proxy request error: ${e.message}`);
+                functions.logger.error(`Proxy request error: ${e.message}`, { url: urlToFetch });
                 res.status(500).send("Error during proxy request.");
             });
         };
@@ -1369,7 +1376,7 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
         makeRequest(decodedUrl); // Initial request
 
     } catch (e) {
-        console.error("Error in download proxy function:", e);
+        functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
         res.status(500).send("An internal error occurred.");
     }
 });
