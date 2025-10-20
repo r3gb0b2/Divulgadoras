@@ -1019,7 +1019,7 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
 
 // --- Post Management ---
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  functions.logger.info("createPostAndAssignments function v6 called with data:", {
+  functions.logger.info("createPostAndAssignments function v7 called with data:", {
     hasPostData: !!data.postData,
     assignedPromotersCount: data.assignedPromoters?.length,
   });
@@ -1076,9 +1076,10 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       isActive: newPost.isActive,
       expiresAt: newPost.expiresAt,
       allowLateSubmissions: newPost.allowLateSubmissions,
+      autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
-      createdAt: admin.firestore.Timestamp.now(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const assignmentsCollectionRef = db.collection("postAssignments");

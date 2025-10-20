@@ -154,6 +154,7 @@ export interface PostAssignment {
     expiresAt: Timestamp | FieldValue | null;
     createdAt: Timestamp | FieldValue;
     allowLateSubmissions?: boolean;
+    autoAssignToNewPromoters?: boolean;
   };
   organizationId: string;
   promoterId: string;
