@@ -292,7 +292,7 @@ async function sendStatusChangeEmail(promoterData) {
       promoterData.campaignName,
   );
 
-  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/status?email=${encodeURIComponent(promoterData.email)}`;
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoterData.email, name: promoterData.name }];
@@ -350,7 +350,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
     return;
   }
 
-  const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/posts?email=${encodeURIComponent(promoter.email)}`;
   const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
   const htmlContent = `
     <!DOCTYPE html>
@@ -412,7 +412,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
     return;
   }
 
-  const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
+  const proofLink = `https://divulgadoras.vercel.app/proof/${promoter.id}`;
   const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
   const htmlContent = `
     <!DOCTYPE html>
@@ -647,7 +647,7 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
 
   const { testType, customHtmlContent } = data; // 'generic', 'approved', or 'custom_approved'
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(context.auth.token.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/status?email=${encodeURIComponent(context.auth.token.email)}`;
 
   sendSmtpEmail.to = [{ email: context.auth.token.email, name: "Super Admin Teste" }];
   sendSmtpEmail.sender = {
@@ -916,8 +916,8 @@ exports.createStripeCheckoutSession = functions.region("southamerica-east1").htt
     if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
     const orgData = orgDoc.data();
 
-    const successUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription`;
+    const successUrl = `https://divulgadoras.vercel.app/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `https://divulgadoras.vercel.app/admin/settings/subscription`;
 
     try {
         const session = await stripe.checkout.sessions.create({
