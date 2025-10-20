@@ -188,14 +188,22 @@ export const PostDetails: React.FC = () => {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Falha ao buscar o vídeo (status: ${response.status})`);
             
-            // Use the original blob directly from the response.
-            // Re-creating the blob can cause security errors ("load failed") on some browsers, especially on iOS.
             const blob = await response.blob();
-
-            const objectUrl = window.URL.createObjectURL(blob);
+    
+            // Promise-based FileReader to convert blob to data URL. This is more reliable on iOS.
+            const blobToDataUrl = (blob: Blob): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            };
+    
+            const dataUrl = await blobToDataUrl(blob);
             
             const link = document.createElement('a');
-            link.href = objectUrl;
+            link.href = dataUrl;
             
             const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
@@ -203,10 +211,8 @@ export const PostDetails: React.FC = () => {
             
             document.body.appendChild(link);
             link.click();
-            
-            // Clean up by removing the link and revoking the object URL
             document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
+    
         } catch (error) {
             console.error('Download failed:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
