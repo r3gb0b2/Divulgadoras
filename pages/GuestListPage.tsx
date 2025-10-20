@@ -8,6 +8,7 @@ import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { BASE_URL } from '../constants/config';
 
 const GuestListPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
