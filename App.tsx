@@ -10,7 +10,6 @@ import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
-// FIX: File 'file:///pages/PostCheck.tsx' is not a module.
 import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
 import ProofUploadPage from './pages/ProofUploadPage';
