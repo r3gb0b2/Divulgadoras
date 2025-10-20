@@ -1314,7 +1314,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
 
-exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
+exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     // CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -1334,49 +1334,46 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
 
     try {
         const decodedUrl = decodeURIComponent(fileUrl);
+        
+        // Extract file path from the URL
+        // Example: https://firebasestorage.googleapis.com/v0/b/stingressos-e0a5f.appspot.com/o/posts-media%2Fvideo.mp4?alt=media&token=...
+        const pathRegex = /\/o\/(.*?)\?alt=media/;
+        const match = decodedUrl.match(pathRegex);
+        
+        if (!match || !match[1]) {
+            functions.logger.error("Could not extract file path from URL.", { url: decodedUrl });
+            return res.status(400).send("Invalid Firebase Storage URL format.");
+        }
+        
+        const filePath = decodeURIComponent(match[1]);
+        
+        const bucket = admin.storage().bucket(); // Gets the default bucket
+        const file = bucket.file(filePath);
 
-        const makeRequest = (urlToFetch) => {
-            const requestOptions = {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            };
-            const proxyRequest = https.get(urlToFetch, requestOptions, (proxyResponse) => {
-                // Handle redirects
-                if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
-                    const redirectUrl = new URL(proxyResponse.headers.location, urlToFetch).href;
-                    functions.logger.info(`Redirecting download to: ${redirectUrl}`);
-                    makeRequest(redirectUrl);
-                    return;
-                }
+        const [exists] = await file.exists();
+        if (!exists) {
+            functions.logger.error("File does not exist in storage.", { path: filePath });
+            return res.status(404).send("File not found in storage.");
+        }
+        
+        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+        
+        // Create a read stream and pipe it to the response.
+        const readStream = file.createReadStream();
+        
+        readStream.on('error', (err) => {
+            functions.logger.error("Error reading file stream from storage.", { path: filePath, error: err });
+            if (!res.headersSent) {
+                res.status(500).send("Could not read the file from storage.");
+            }
+        });
 
-                if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
-                    functions.logger.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
-                    res.status(500).send("Failed to fetch the file.");
-                    return;
-                }
-
-                res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-                if (proxyResponse.headers['content-type']) {
-                    res.setHeader('Content-Type', proxyResponse.headers['content-type']);
-                }
-                if (proxyResponse.headers['content-length']) {
-                    res.setHeader('Content-Length', proxyResponse.headers['content-length']);
-                }
-
-                proxyResponse.pipe(res);
-            });
-
-            proxyRequest.on("error", (e) => {
-                functions.logger.error(`Proxy request error: ${e.message}`, { url: urlToFetch });
-                res.status(500).send("Error during proxy request.");
-            });
-        };
-
-        makeRequest(decodedUrl); // Initial request
+        readStream.pipe(res);
 
     } catch (e) {
         functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
-        res.status(500).send("An internal error occurred.");
+        if (!res.headersSent) {
+           res.status(500).send("An internal server error occurred.");
+        }
     }
 });
