@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline } from '../services/postService';
 import { Post, PostAssignment } from '../types';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -122,6 +122,7 @@ export const PostDetails: React.FC = () => {
     const [expiresAt, setExpiresAt] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     // UI State
     const [isLoading, setIsLoading] = useState(true);
@@ -178,6 +179,35 @@ export const PostDetails: React.FC = () => {
             await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
+        }
+    };
+
+    const handleDownload = async (url: string, campaignName: string) => {
+        setIsDownloading(true);
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Falha ao buscar o vídeo.');
+            
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
+            const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            link.download = `video_${safeCampaignName}.${fileExtension}`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            alert('Não foi possível baixar o vídeo. Por favor, tente novamente.');
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -404,7 +434,19 @@ export const PostDetails: React.FC = () => {
                         </a>
                     )}
                     {post.type === 'video' && post.mediaUrl && (
-                        <video src={post.mediaUrl} controls className="w-full rounded-md mb-4" />
+                        <>
+                            <video src={post.mediaUrl} controls className="w-full rounded-md mb-2" />
+                            <div className="flex justify-center mt-2 mb-4">
+                                <button
+                                    onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
+                                    disabled={isDownloading}
+                                    className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
+                                </button>
+                            </div>
+                        </>
                     )}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">

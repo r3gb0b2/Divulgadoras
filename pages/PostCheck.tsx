@@ -87,6 +87,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
 const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     
     if (!assignment.promoterHasJoinedGroup) {
         return (
@@ -130,6 +131,35 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         });
     };
 
+    const handleDownload = async (url: string, campaignName: string) => {
+        setIsDownloading(true);
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Falha ao buscar o vídeo.');
+            
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
+            const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            link.download = `video_${safeCampaignName}.${fileExtension}`;
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            alert('Não foi possível baixar o vídeo. Por favor, tente novamente.');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
             <div className="flex justify-between items-start mb-3">
@@ -164,9 +194,14 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                              <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
                                 <EyeIcon className="w-4 h-4" /> Ver
                             </a>
-                            <a href={assignment.post.mediaUrl} download className="text-sm text-blue-400 hover:underline flex items-center gap-1">
-                                <DownloadIcon className="w-4 h-4" /> Baixar
-                            </a>
+                            <button
+                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName)}
+                                disabled={isDownloading}
+                                className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                            >
+                                <DownloadIcon className="w-4 h-4" />
+                                {isDownloading ? 'Baixando...' : 'Baixar'}
+                            </button>
                         </div>
                     </div>
                 )}
