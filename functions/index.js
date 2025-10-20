@@ -106,7 +106,7 @@ const isSuperAdmin = async (uid) => {
  * If the new status is 'approved' or 'rejected', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
-exports.promoterStatusTrigger = functions
+exports.onPromoterStatusChange = functions // Renamed to fix deployment error.
     .region("southamerica-east1")
     .firestore.document("promoters/{promoterId}")
     .onUpdate(async (change, context) => {
@@ -142,7 +142,7 @@ exports.promoterStatusTrigger = functions
  * Triggered when a new PostAssignment document is created.
  * This function is responsible for sending the notification email to the promoter in the background.
  */
-exports.postAssignmentTrigger = functions.region("southamerica-east1").firestore
+exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
     .document("postAssignments/{assignmentId}")
     .onCreate(async (snap, context) => {
         const assignmentData = snap.data();
