@@ -7,30 +7,50 @@ const https = require("https");
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
-
-// Stripe SDK for payments
-// Safely initialize Stripe to prevent crashes if config is missing.
-const stripeConfig = functions.config().stripe;
-const stripe = stripeConfig && stripeConfig.secret_key ? require("stripe")(stripeConfig.secret_key) : null;
-
+const { GoogleGenAI } = require("@google/genai");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
 
+// --- External SDK Initializations ---
+// This block safely initializes all external SDKs that depend on environment configuration.
+// If any config is missing, the respective SDK variable will be null, and dependent functions will handle it gracefully.
+let stripe = null;
+let brevoApiInstance = null;
+let ai = null;
 
-// --- Brevo API Client Initialization ---
-// The API key and sender email are configured in the Firebase environment.
-// Use the command:
-// firebase functions:config:set brevo.key="YOUR_API_KEY" brevo.sender_email="your@verified-sender.com"
-const brevoConfig = functions.config().brevo;
-let brevoApiInstance;
-if (brevoConfig && brevoConfig.key) {
-  const defaultClient = Brevo.ApiClient.instance;
-  const apiKey = defaultClient.authentications["api-key"];
-  apiKey.apiKey = brevoConfig.key;
-  brevoApiInstance = new Brevo.TransactionalEmailsApi();
+// We get the config object once to avoid multiple calls.
+const config = functions.config();
+
+try {
+    // Stripe Init
+    if (config.stripe && config.stripe.secret_key) {
+        stripe = require("stripe")(config.stripe.secret_key);
+    } else {
+        console.warn("Stripe config missing. Payment functions will be disabled.");
+    }
+
+    // Brevo Init
+    if (config.brevo && config.brevo.key) {
+        const defaultClient = Brevo.ApiClient.instance;
+        const apiKey = defaultClient.authentications["api-key"];
+        apiKey.apiKey = config.brevo.key;
+        brevoApiInstance = new Brevo.TransactionalEmailsApi();
+    } else {
+        console.warn("Brevo config missing. Email functions will be disabled.");
+    }
+
+    // Gemini Init
+    if (config.gemini && config.gemini.key) {
+        ai = new GoogleGenAI({ apiKey: config.gemini.key });
+    } else {
+        console.warn("Gemini config missing. AI functions will be disabled.");
+    }
+} catch (error) {
+    console.error("FATAL: Error during external SDK initialization. Some features may be disabled.", error);
 }
+
 
 /**
  * Helper function to extract detailed error messages from the Brevo SDK.
@@ -278,7 +298,7 @@ async function sendStatusChangeEmail(promoterData) {
   sendSmtpEmail.to = [{ email: promoterData.email, name: promoterData.name }];
   sendSmtpEmail.sender = {
     name: orgName || "Equipe de Eventos",
-    email: brevoConfig.sender_email,
+    email: config.brevo.sender_email,
   };
 
   const replacements = {
@@ -365,7 +385,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
   sendSmtpEmail.sender = {
     name: postDetails.orgName || "Equipe de Eventos",
-    email: brevoConfig.sender_email,
+    email: config.brevo.sender_email,
   };
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = htmlContent;
@@ -427,7 +447,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
   sendSmtpEmail.to = [{ email: promoter.promoterEmail, name: promoter.promoterName }];
   sendSmtpEmail.sender = {
     name: postDetails.orgName || "Equipe de Eventos",
-    email: brevoConfig.sender_email,
+    email: config.brevo.sender_email,
   };
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = htmlContent;
@@ -590,7 +610,7 @@ exports.getSystemStatus = functions.region("southamerica-east1").https.onCall(as
     log: [],
   };
   status.log.push({ level: "INFO", message: "Iniciando verificação do sistema..." });
-  if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email) {
+  if (!config.brevo || !config.brevo.key || !config.brevo.sender_email) {
     status.message = "As variáveis de ambiente para o serviço de e-mail (Brevo) não estão configuradas.";
     status.log.push({ level: "ERROR", message: "Configuração 'brevo.key' ou 'brevo.sender_email' não encontrada no Firebase." });
     return status;
@@ -632,7 +652,7 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
   sendSmtpEmail.to = [{ email: context.auth.token.email, name: "Super Admin Teste" }];
   sendSmtpEmail.sender = {
     name: "Sistema Equipe Certa",
-    email: brevoConfig.sender_email,
+    email: config.brevo.sender_email,
   };
 
   const replacements = {
@@ -830,24 +850,6 @@ exports.removePromoterFromAllAssignments = functions
 
 
 // --- Gemini AI assistant function ---
-const { GoogleGenAI } = require("@google/genai");
-
-// Configure Gemini using Firebase Functions config, similar to Brevo.
-// Use the command:
-// firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
-const geminiConfig = functions.config().gemini;
-let ai = null;
-try {
-  if (geminiConfig && geminiConfig.key) {
-    ai = new GoogleGenAI({ apiKey: geminiConfig.key });
-  } else {
-    console.warn("Gemini API Key not configured in Firebase Functions config. Run: firebase functions:config:set gemini.key=\"YOUR_API_KEY\"");
-  }
-} catch (e) {
-  console.error("Could not initialize GoogleGenAI.", e);
-  ai = null; // Ensure ai is null on initialization error
-}
-
 exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Acesso não autenticado.");
@@ -885,10 +887,10 @@ exports.getStripePublishableKey = functions.region("southamerica-east1").https.o
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
-    if (!stripeConfig || !stripeConfig.publishable_key) {
+    if (!config.stripe || !config.stripe.publishable_key) {
         throw new functions.https.HttpsError("failed-precondition", "A chave publicável do Stripe não está configurada no servidor.");
     }
-    return { publishableKey: stripeConfig.publishable_key };
+    return { publishableKey: config.stripe.publishable_key };
 });
 
 exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
@@ -899,13 +901,13 @@ exports.createStripeCheckoutSession = functions.region("southamerica-east1").htt
     const { orgId, planId } = data;
     if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
 
-    if (!stripeConfig || !stripeConfig.basic_price_id || !stripeConfig.professional_price_id) {
+    if (!config.stripe || !config.stripe.basic_price_id || !config.stripe.professional_price_id) {
         throw new functions.https.HttpsError("failed-precondition", "Os IDs de preço do Stripe não estão configurados no servidor.");
     }
 
     const plans = {
-        "basic": stripeConfig.basic_price_id,
-        "professional": stripeConfig.professional_price_id,
+        "basic": config.stripe.basic_price_id,
+        "professional": config.stripe.professional_price_id,
     };
     const priceId = plans[planId];
     if (!priceId) throw new functions.https.HttpsError("not-found", "ID de preço do Stripe não encontrado para este plano.");
@@ -948,7 +950,7 @@ exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(a
         return;
     }
     const sig = req.headers["stripe-signature"];
-    const webhookSecret = stripeConfig ? stripeConfig.webhook_secret : undefined;
+    const webhookSecret = config.stripe ? config.stripe.webhook_secret : undefined;
 
     if (!webhookSecret) {
         console.error("Stripe webhook secret is not configured.");
@@ -1014,12 +1016,12 @@ exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(as
         professionalPriceId: false,
     };
 
-    if (stripeConfig) {
-        if (stripeConfig.secret_key) status.secretKey = true;
-        if (stripeConfig.publishable_key) status.publishableKey = true;
-        if (stripeConfig.webhook_secret) status.webhookSecret = true;
-        if (stripeConfig.basic_price_id) status.basicPriceId = true;
-        if (stripeConfig.professional_price_id) status.professionalPriceId = true;
+    if (config.stripe) {
+        if (config.stripe.secret_key) status.secretKey = true;
+        if (config.stripe.publishable_key) status.publishableKey = true;
+        if (config.stripe.webhook_secret) status.webhookSecret = true;
+        if (config.stripe.basic_price_id) status.basicPriceId = true;
+        if (config.stripe.professional_price_id) status.professionalPriceId = true;
         
         if (status.secretKey && status.publishableKey && status.basicPriceId && status.professionalPriceId) {
             status.configured = true;
@@ -1033,7 +1035,7 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
     // Return the stripe config object so the frontend can display it for debugging.
-    return functions.config().stripe || {};
+    return config.stripe || {};
 });
 
 
