@@ -1047,8 +1047,13 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   const postDocRef = postCollectionRef.doc();
   const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
 
+  // Ensure optional fields are null, not undefined
   const newPost = {
     ...postData,
+    mediaUrl: postData.mediaUrl || null,
+    textContent: postData.textContent || null,
+    postLink: postData.postLink || null,
+    expiresAt: postData.expiresAt || null,
     createdAt: postCreatedAt,
   };
   batch.set(postDocRef, newPost);
@@ -1057,13 +1062,13 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   const assignmentsCollectionRef = db.collection("postAssignments");
   const denormalizedPostData = {
     type: postData.type,
-    mediaUrl: postData.mediaUrl,
-    textContent: postData.textContent,
+    mediaUrl: postData.mediaUrl || null,
+    textContent: postData.textContent || null,
     instructions: postData.instructions,
-    postLink: postData.postLink,
+    postLink: postData.postLink || null,
     campaignName: postData.campaignName,
     isActive: postData.isActive,
-    expiresAt: postData.expiresAt,
+    expiresAt: postData.expiresAt || null,
     createdAt: postCreatedAt,
     allowLateSubmissions: postData.allowLateSubmissions || false,
   };
