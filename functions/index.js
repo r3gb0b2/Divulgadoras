@@ -1019,7 +1019,7 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
 
 // --- Post Management ---
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  functions.logger.info("createPostAndAssignments function v5 called with data:", {
+  functions.logger.info("createPostAndAssignments function v6 called with data:", {
     hasPostData: !!data.postData,
     assignedPromotersCount: data.assignedPromoters?.length,
   });
@@ -1037,98 +1037,86 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e uma lista válida de divulgadoras são obrigatórios.");
   }
 
-  // Stricter validation for required fields
-  const requiredFields = ["organizationId", "createdByEmail", "campaignName", "stateAbbr", "type"];
-  for (const field of requiredFields) {
-    if (postData[field] === undefined || postData[field] === null || postData[field] === "") {
-      functions.logger.error(`Missing required field: ${field}`, { postData });
-      throw new functions.https.HttpsError("invalid-argument", `O campo obrigatório '${field}' está ausente.`);
+  try {
+    const postDocRef = db.collection("posts").doc();
+    const batch = db.batch();
+
+    let finalExpiresAt = null;
+    if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
+      finalExpiresAt = new admin.firestore.Timestamp(
+          postData.expiresAt.seconds,
+          postData.expiresAt.nanoseconds,
+      );
     }
-  }
 
-  let finalExpiresAt = null;
-  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
-    finalExpiresAt = new admin.firestore.Timestamp(
-        postData.expiresAt.seconds,
-        postData.expiresAt.nanoseconds,
-    );
-  }
-
-  const batch = db.batch();
-  const postDocRef = db.collection("posts").doc();
-  const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
-  const nowTimestamp = admin.firestore.Timestamp.now(); // Use a fixed timestamp for denormalization
-
-  const newPost = {
-    organizationId: postData.organizationId,
-    createdByEmail: postData.createdByEmail,
-    campaignName: postData.campaignName,
-    stateAbbr: postData.stateAbbr,
-    type: postData.type,
-    instructions: postData.instructions || "",
-    isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
-    autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true,
-    allowLateSubmissions: postData.allowLateSubmissions === true,
-    mediaUrl: postData.mediaUrl || null,
-    textContent: postData.textContent || null,
-    postLink: postData.postLink || null,
-    expiresAt: finalExpiresAt,
-    createdAt: postCreatedAt, // Use FieldValue for the main doc
-  };
-
-  for (const key in newPost) {
-    if (newPost[key] === undefined) {
-      // This safeguard should not be hit with the new validation, but it's good to keep.
-      functions.logger.error(`Found undefined value in newPost for key: ${key}`, { postData });
-      throw new functions.https.HttpsError("internal", `Server-side error: undefined value for key ${key}.`);
-    }
-  }
-
-  batch.set(postDocRef, newPost);
-
-  const denormalizedPostData = {
-    type: newPost.type,
-    mediaUrl: newPost.mediaUrl,
-    textContent: newPost.textContent,
-    instructions: newPost.instructions,
-    postLink: newPost.postLink,
-    campaignName: newPost.campaignName,
-    isActive: newPost.isActive,
-    expiresAt: newPost.expiresAt,
-    createdAt: nowTimestamp, // Use a concrete Timestamp for the nested object
-    allowLateSubmissions: newPost.allowLateSubmissions,
-  };
-
-  // Final safeguard for denormalized data
-  for (const key in denormalizedPostData) {
-    if (denormalizedPostData[key] === undefined) {
-      functions.logger.error(`Found undefined value in denormalizedPostData for key: ${key}`, { newPost });
-      throw new functions.https.HttpsError("internal", `Server-side error: undefined value for denormalized key ${key}.`);
-    }
-  }
-
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  for (const promoter of assignedPromoters) {
-    const assignmentDocRef = assignmentsCollectionRef.doc();
-    const newAssignment = {
-      postId: postDocRef.id,
-      post: denormalizedPostData,
+    const newPost = {
       organizationId: postData.organizationId,
-      promoterId: promoter.id,
-      promoterEmail: promoter.email.toLowerCase(),
-      promoterName: promoter.name,
-      status: "pending",
-      confirmedAt: null,
+      campaignName: postData.campaignName,
+      stateAbbr: postData.stateAbbr,
+      type: postData.type,
+      instructions: postData.instructions || "",
+      postLink: postData.postLink || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdByEmail: postData.createdByEmail,
+      isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
+      expiresAt: finalExpiresAt,
+      autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true,
+      allowLateSubmissions: postData.allowLateSubmissions === true,
+      mediaUrl: postData.mediaUrl || null,
+      textContent: postData.textContent || null,
     };
-    batch.set(assignmentDocRef, newAssignment);
+
+    batch.set(postDocRef, newPost);
+
+    const denormalizedPostData = {
+      type: newPost.type,
+      instructions: newPost.instructions,
+      postLink: newPost.postLink,
+      campaignName: newPost.campaignName,
+      isActive: newPost.isActive,
+      expiresAt: newPost.expiresAt,
+      allowLateSubmissions: newPost.allowLateSubmissions,
+      mediaUrl: newPost.mediaUrl,
+      textContent: newPost.textContent,
+      createdAt: admin.firestore.Timestamp.now(),
+    };
+
+    const assignmentsCollectionRef = db.collection("postAssignments");
+    for (const promoter of assignedPromoters) {
+      if (!promoter.id || !promoter.email || !promoter.name) {
+        functions.logger.warn("Skipping promoter with missing data:", promoter);
+        continue;
+      }
+      const assignmentDocRef = assignmentsCollectionRef.doc();
+      const newAssignment = {
+        postId: postDocRef.id,
+        post: denormalizedPostData,
+        organizationId: postData.organizationId,
+        promoterId: promoter.id,
+        promoterEmail: promoter.email.toLowerCase(),
+        promoterName: promoter.name,
+        status: "pending",
+        confirmedAt: null,
+        proofImageUrls: [],
+        proofSubmittedAt: null,
+      };
+      batch.set(assignmentDocRef, newAssignment);
+    }
+
+    await batch.commit();
+
+    return { success: true, postId: postDocRef.id };
+  } catch (error) {
+    functions.logger.error("Error committing post and assignments batch:", {
+      errorMessage: error.message,
+      errorStack: error.stack,
+      postData: postData,
+    });
+    throw new functions.https.HttpsError("internal", `Failed to save data. Error: ${error.message}`);
   }
-
-  await batch.commit();
-
-  return { success: true, postId: postDocRef.id };
 });
 
-exports.addAssignmentsToPost = functions.region("southamerica-east1").onCall(async (data, context) => {
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }

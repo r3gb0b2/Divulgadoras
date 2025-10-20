@@ -37,7 +37,7 @@ export const createPost = async (
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl,
+        mediaUrl: finalMediaUrl || null,
     };
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
