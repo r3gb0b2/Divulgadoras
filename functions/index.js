@@ -2,15 +2,13 @@
  * Import and initialize the Firebase Admin SDK.
  */
 const admin = require("firebase-admin");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onRequest } = require("firebase-functions/v2/https");
-// We still need the v1 SDK to access functions.config()
 const functions = require("firebase-functions");
-const { GoogleGenAI } = require("@google/genai");
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
+
+// Stripe SDK for payments
+const stripe = require("stripe")(functions.config().stripe.secret_key);
 
 
 // Initialize Firebase Admin SDK
@@ -18,58 +16,18 @@ admin.initializeApp();
 const db = admin.firestore();
 
 
-// --- Lazy Initializer for External SDKs ---
-// This pattern prevents container startup failures if config is missing.
-
+// --- Brevo API Client Initialization ---
+// The API key and sender email are configured in the Firebase environment.
+// Use the command:
+// firebase functions:config:set brevo.key="YOUR_API_KEY" brevo.sender_email="your@verified-sender.com"
+const brevoConfig = functions.config().brevo;
 let brevoApiInstance;
-const getBrevoApi = () => {
-    if (brevoApiInstance === undefined) {
-        const brevoConfig = functions.config().brevo;
-        if (brevoConfig && brevoConfig.key) {
-            const defaultClient = Brevo.ApiClient.instance;
-            const apiKey = defaultClient.authentications["api-key"];
-            apiKey.apiKey = brevoConfig.key;
-            brevoApiInstance = new Brevo.TransactionalEmailsApi();
-        } else {
-            console.warn("Brevo API key not configured. Emails will not be sent.");
-            brevoApiInstance = null;
-        }
-    }
-    return brevoApiInstance;
-};
-
-let stripe;
-const getStripe = () => {
-    if (stripe === undefined) { // Check for undefined to allow null on failure
-        const stripeConfig = functions.config().stripe;
-        if (stripeConfig && stripeConfig.secret_key) {
-            stripe = require("stripe")(stripeConfig.secret_key);
-        } else {
-            console.warn("Stripe 'secret_key' not configured. Stripe features will be disabled.");
-            stripe = null; // Set to null after checking
-        }
-    }
-    return stripe;
-};
-
-let ai;
-const getGeminiAi = () => {
-    if (ai === undefined) {
-        try {
-            const geminiConfig = functions.config().gemini;
-            if (geminiConfig && geminiConfig.key) {
-                ai = new GoogleGenAI({ apiKey: geminiConfig.key });
-            } else {
-                console.warn("Gemini API Key not configured...");
-                ai = null;
-            }
-        } catch (e) {
-            console.error("Could not initialize GoogleGenAI.", e);
-            ai = null;
-        }
-    }
-    return ai;
-};
+if (brevoConfig && brevoConfig.key) {
+  const defaultClient = Brevo.ApiClient.instance;
+  const apiKey = defaultClient.authentications["api-key"];
+  apiKey.apiKey = brevoConfig.key;
+  brevoApiInstance = new Brevo.TransactionalEmailsApi();
+}
 
 /**
  * Helper function to extract detailed error messages from the Brevo SDK.
@@ -148,73 +106,72 @@ const isSuperAdmin = async (uid) => {
  * If the new status is 'approved' or 'rejected', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
-exports.handlePromoterUpdate = onDocumentUpdated({
-    document: "promoters/{promoterId}",
-    region: "southamerica-east1",
-}, async (event) => {
-    const newValue = event.data.after.data();
-    const oldValue = event.data.before.data();
-    const promoterId = event.params.promoterId;
+exports.onPromoterStatusChange = functions
+    .region("southamerica-east1")
+    .firestore.document("promoters/{promoterId}")
+    .onUpdate(async (change, context) => {
+      const newValue = change.after.data();
+      const oldValue = change.before.data();
+      const promoterId = context.params.promoterId;
 
-    // 1. Check for new approvals to auto-assign posts
-    const isNewApproval = oldValue.status !== "approved" && newValue.status === "approved";
-    if (isNewApproval) {
+      // 1. Check for new approvals to auto-assign posts
+      const isNewApproval = oldValue.status !== "approved" && newValue.status === "approved";
+      if (isNewApproval) {
         try {
-            await assignPostsToNewPromoter(newValue, promoterId);
+          await assignPostsToNewPromoter(newValue, promoterId);
         } catch (error) {
-            console.error(`[Auto-Assign Trigger] Failed for promoter ${promoterId}:`, error);
+          console.error(`[Auto-Assign Trigger] Failed for promoter ${promoterId}:`, error);
         }
-    }
+      }
 
-    // 2. Check for status changes to send notification emails
-    const statusChanged = newValue.status !== oldValue.status;
-    const isApprovalOrRejection =
-    newValue.status === "approved" || newValue.status === "rejected";
+      // 2. Check for status changes to send notification emails
+      const statusChanged = newValue.status !== oldValue.status;
+      const isApprovalOrRejection =
+      newValue.status === "approved" || newValue.status === "rejected";
 
-    if (statusChanged && isApprovalOrRejection) {
+      if (statusChanged && isApprovalOrRejection) {
         try {
-            await sendStatusChangeEmail(newValue);
+          await sendStatusChangeEmail(newValue);
         } catch (error) {
-            console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
+          console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
         }
-    }
-});
+      }
+    });
 
 /**
  * Triggered when a new PostAssignment document is created.
  * This function is responsible for sending the notification email to the promoter in the background.
  */
-exports.handlePostAssignmentCreation = onDocumentCreated({
-    document: "postAssignments/{assignmentId}",
-    region: "southamerica-east1",
-}, async (event) => {
-    const assignmentData = event.data.data();
-    if (!assignmentData) {
-        console.error(`No data for new assignment ${event.params.assignmentId}`);
-        return;
-    }
+exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
+    .document("postAssignments/{assignmentId}")
+    .onCreate(async (snap, context) => {
+        const assignmentData = snap.data();
+        if (!assignmentData) {
+            console.error(`No data for new assignment ${context.params.assignmentId}`);
+            return;
+        }
 
-    const { organizationId, promoterEmail, promoterName, post } = assignmentData;
-    if (!organizationId || !promoterEmail || !promoterName || !post) {
-        console.error(`Incomplete data for assignment ${event.params.assignmentId}, cannot send notification.`);
-        return;
-    }
+        const { organizationId, promoterEmail, promoterName, post } = assignmentData;
+        if (!organizationId || !promoterEmail || !promoterName || !post) {
+            console.error(`Incomplete data for assignment ${context.params.assignmentId}, cannot send notification.`);
+            return;
+        }
 
-    try {
-        const orgDoc = await db.collection("organizations").doc(organizationId).get();
-        const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+        try {
+            const orgDoc = await db.collection("organizations").doc(organizationId).get();
+            const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
 
-        await sendNewPostNotificationEmail(
-            { email: promoterEmail, name: promoterName },
-            {
-                campaignName: post.campaignName,
-                orgName: orgName,
-            }
-        );
-    } catch (error) {
-        console.error(`Failed to send notification for assignment ${event.params.assignmentId}:`, error);
-    }
-});
+            await sendNewPostNotificationEmail(
+                { email: promoterEmail, name: promoterName },
+                {
+                    campaignName: post.campaignName,
+                    orgName: orgName,
+                }
+            );
+        } catch (error) {
+            console.error(`Failed to send notification for assignment ${context.params.assignmentId}:`, error);
+        }
+    });
 
 
 /**
@@ -297,8 +254,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
  * @param {object} promoterData The promoter document data.
  */
 async function sendStatusChangeEmail(promoterData) {
-  const brevoApi = getBrevoApi();
-  if (!brevoApi) {
+  if (!brevoApiInstance) {
     console.error("Brevo API key not configured. Cannot send email.");
     return;
   }
@@ -307,7 +263,6 @@ async function sendStatusChangeEmail(promoterData) {
     return;
   }
 
-  const brevoConfig = functions.config().brevo;
   const { orgName } = await getOrgAndCampaignDetails(
       promoterData.organizationId,
       promoterData.state,
@@ -352,7 +307,7 @@ async function sendStatusChangeEmail(promoterData) {
 
 
   try {
-    await brevoApi.sendTransacEmail(sendSmtpEmail);
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
     console.log(`Email for status '${promoterData.status}' sent to ${promoterData.email}`);
   } catch (error) {
     const detailedError = getBrevoErrorDetails(error);
@@ -367,13 +322,11 @@ async function sendStatusChangeEmail(promoterData) {
  * @param {object} postDetails - Object containing post details like campaignName and orgName.
  */
 async function sendNewPostNotificationEmail(promoter, postDetails) {
-  const brevoApi = getBrevoApi();
-  if (!brevoApi) {
+  if (!brevoApiInstance) {
     console.warn(`Skipping new post email for ${promoter.email}: Brevo API is not configured.`);
     return;
   }
 
-  const brevoConfig = functions.config().brevo;
   const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
   const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
   const htmlContent = `
@@ -415,7 +368,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   sendSmtpEmail.htmlContent = htmlContent;
 
   try {
-    await brevoApi.sendTransacEmail(sendSmtpEmail);
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
     console.log(`New post notification sent to ${promoter.email}`);
   } catch (error) {
     const detailedError = getBrevoErrorDetails(error);
@@ -431,13 +384,11 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
  * @param {object} postDetails - Object with campaignName, orgName, etc.
  */
 async function sendProofReminderEmail(promoter, postDetails) {
-  const brevoApi = getBrevoApi();
-  if (!brevoApi) {
+  if (!brevoApiInstance) {
     console.warn(`Skipping proof reminder email for ${promoter.promoterEmail}: Brevo API is not configured.`);
     return;
   }
 
-  const brevoConfig = functions.config().brevo;
   const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
   const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
   const htmlContent = `
@@ -479,7 +430,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
   sendSmtpEmail.htmlContent = htmlContent;
 
   try {
-    await brevoApi.sendTransacEmail(sendSmtpEmail);
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
     console.log(`Proof reminder sent to ${promoter.promoterEmail}`);
   } catch (error) {
     const detailedError = getBrevoErrorDetails(error);
@@ -527,36 +478,36 @@ async function getOrgAndCampaignDetails(organizationId, stateAbbr, campaignName)
   return { orgName, campaignRules, campaignLink };
 }
 
-exports.sendsingleproofreminder = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
-  const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
   if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
   }
 
-  const { assignmentId } = request.data;
+  const { assignmentId } = data;
   if (!assignmentId) {
-    throw new HttpsError("invalid-argument", "O ID da atribuição (assignmentId) é obrigatório.");
+    throw new functions.https.HttpsError("invalid-argument", "O ID da atribuição (assignmentId) é obrigatório.");
   }
 
   const assignmentSnap = await db.collection("postAssignments").doc(assignmentId).get();
   if (!assignmentSnap.exists) {
-    throw new HttpsError("not-found", "Atribuição não encontrada.");
+    throw new functions.https.HttpsError("not-found", "Atribuição não encontrada.");
   }
   const assignment = { id: assignmentSnap.id, ...assignmentSnap.data() };
 
   if (assignment.proofSubmittedAt) {
-    throw new HttpsError("failed-precondition", "Esta divulgadora já enviou a comprovação.");
+    throw new functions.https.HttpsError("failed-precondition", "Esta divulgadora já enviou a comprovação.");
   }
   if (assignment.status !== "confirmed") {
-    throw new HttpsError("failed-precondition", "A divulgadora ainda não confirmou a postagem.");
+    throw new functions.https.HttpsError("failed-precondition", "A divulgadora ainda não confirmou a postagem.");
   }
 
   const postSnap = await db.collection("posts").doc(assignment.postId).get();
   if (!postSnap.exists) {
-    throw new HttpsError("not-found", "Publicação relacionada não encontrada.");
+    throw new functions.https.HttpsError("not-found", "Publicação relacionada não encontrada.");
   }
   const post = postSnap.data();
 
@@ -584,49 +535,50 @@ exports.sendsingleproofreminder = onCall({ region: "southamerica-east1" }, async
  * Manually resends a status email to a promoter.
  * Called by an admin from the admin panel.
  */
-exports.manuallysendstatusemail = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
-    }
-    const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
-    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new HttpsError("permission-denied", "Permissão negada. Apenas administradores podem executar esta ação.");
-    }
-    const { promoterId } = request.data;
-    if (!promoterId) {
-        throw new HttpsError("invalid-argument", "O ID da divulgadora (promoterId) é obrigatório.");
-    }
-    try {
+exports.manuallySendStatusEmail = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "A função deve ser chamada por um usuário autenticado.");
+      }
+      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Permissão negada. Apenas administradores podem executar esta ação.");
+      }
+      const { promoterId } = data;
+      if (!promoterId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora (promoterId) é obrigatório.");
+      }
+      try {
         const promoterDoc = await db.collection("promoters").doc(promoterId).get();
         if (!promoterDoc.exists) {
-            throw new HttpsError("not-found", "Divulgadora não encontrada.");
+          throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
         }
         const promoterData = promoterDoc.data();
         if (promoterData.status !== "approved" && promoterData.status !== "rejected") {
-            throw new HttpsError("failed-precondition", `Não é possível enviar notificação para status '${promoterData.status}'. Apenas 'approved' ou 'rejected'.`);
+          throw new functions.https.HttpsError("failed-precondition", `Não é possível enviar notificação para status '${promoterData.status}'. Apenas 'approved' ou 'rejected'.`);
         }
         await sendStatusChangeEmail(promoterData);
         return {
-            success: true,
-            message: `Notificação de '${promoterData.status}' enviada para ${promoterData.email}.`,
-            provider: "Brevo",
+          success: true,
+          message: `Notificação de '${promoterData.status}' enviada para ${promoterData.email}.`,
+          provider: "Brevo",
         };
-    } catch (error) {
-        if (error instanceof HttpsError) throw error;
+      } catch (error) {
+        if (error instanceof functions.https.HttpsError) throw error;
         console.error("Error in manuallySendStatusEmail:", error);
-        throw new HttpsError("internal", error.message, { originalError: error.message, provider: "Brevo" });
-    }
-});
+        throw new functions.https.HttpsError("internal", error.message, { originalError: error.message, provider: "Brevo" });
+      }
+    });
 
 /**
  * Checks the configuration status of the system, primarily the email service.
  */
-exports.getsystemstatus = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Apenas Super Admins podem ver o status do sistema.");
+exports.getSystemStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas Super Admins podem ver o status do sistema.");
   }
 
-  const brevoConfig = functions.config().brevo;
   const status = {
     functionVersion: process.env.K_REVISION,
     emailProvider: "Brevo (anteriormente Sendinblue)",
@@ -642,10 +594,6 @@ exports.getsystemstatus = onCall({ region: "southamerica-east1" }, async (reques
   }
   status.log.push({ level: "INFO", message: "Variáveis de ambiente encontradas." });
   try {
-    const brevoApi = getBrevoApi();
-    if (!brevoApi) {
-        throw new Error("Falha ao inicializar a instância da API Brevo.");
-    }
     status.log.push({ level: "INFO", message: "Tentando autenticar com a API do Brevo..." });
     const accountApi = new Brevo.AccountApi();
     await accountApi.getAccount();
@@ -666,21 +614,19 @@ exports.getsystemstatus = onCall({ region: "southamerica-east1" }, async (reques
  * Sends a test email to the calling super admin.
  * Supports different test types: generic, approved (using template), and custom HTML.
  */
-exports.sendtestemail = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !request.auth.token.email || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Apenas Super Admins podem enviar e-mails de teste.");
+exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.email || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas Super Admins podem enviar e-mails de teste.");
   }
-  const brevoApi = getBrevoApi();
-  if (!brevoApi) {
-    throw new HttpsError("failed-precondition", "A API de e-mail não está configurada no servidor.");
+  if (!brevoApiInstance) {
+    throw new functions.https.HttpsError("failed-precondition", "A API de e-mail não está configurada no servidor.");
   }
 
-  const brevoConfig = functions.config().brevo;
-  const { testType, customHtmlContent } = request.data; // 'generic', 'approved', or 'custom_approved'
+  const { testType, customHtmlContent } = data; // 'generic', 'approved', or 'custom_approved'
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(request.auth.token.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(context.auth.token.email)}`;
 
-  sendSmtpEmail.to = [{ email: request.auth.token.email, name: "Super Admin Teste" }];
+  sendSmtpEmail.to = [{ email: context.auth.token.email, name: "Super Admin Teste" }];
   sendSmtpEmail.sender = {
     name: "Sistema Equipe Certa",
     email: brevoConfig.sender_email,
@@ -688,7 +634,7 @@ exports.sendtestemail = onCall({ region: "southamerica-east1" }, async (request)
 
   const replacements = {
     promoterName: "Super Admin Teste",
-    promoterEmail: request.auth.token.email,
+    promoterEmail: context.auth.token.email,
     campaignName: "Evento de Teste",
     orgName: "Sua Organização",
     portalLink: portalLink,
@@ -702,7 +648,7 @@ exports.sendtestemail = onCall({ region: "southamerica-east1" }, async (request)
       htmlTemplate = templateDoc.exists ? templateDoc.data().htmlContent : DEFAULT_APPROVED_TEMPLATE_HTML;
     } else { // custom_approved
       if (!customHtmlContent) {
-        throw new HttpsError("invalid-argument", "Conteúdo HTML customizado é obrigatório para este tipo de teste.");
+        throw new functions.https.HttpsError("invalid-argument", "Conteúdo HTML customizado é obrigatório para este tipo de teste.");
       }
       sendSmtpEmail.subject = "Teste de Template Customizado - Equipe Certa";
       htmlTemplate = customHtmlContent;
@@ -719,20 +665,20 @@ exports.sendtestemail = onCall({ region: "southamerica-east1" }, async (request)
   }
 
   try {
-    await brevoApi.sendTransacEmail(sendSmtpEmail);
-    return { success: true, message: `E-mail de teste ('${testType}') enviado com sucesso para ${request.auth.token.email}.` };
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    return { success: true, message: `E-mail de teste ('${testType}') enviado com sucesso para ${context.auth.token.email}.` };
   } catch (error) {
     const detailedError = getBrevoErrorDetails(error);
     console.error(`[Brevo API Error] Failed to send test email. Details: ${detailedError}`);
-    throw new HttpsError("internal", `Falha no envio: ${detailedError}`);
+    throw new functions.https.HttpsError("internal", `Falha no envio: ${detailedError}`);
   }
 });
 
 
 // --- NEW Email Template Management Callables ---
-exports.getemailtemplate = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Acesso negado.");
+exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
   }
   const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
   const docSnap = await docRef.get();
@@ -742,29 +688,29 @@ exports.getemailtemplate = onCall({ region: "southamerica-east1" }, async (reque
   return { htmlContent: DEFAULT_APPROVED_TEMPLATE_HTML };
 });
 
-exports.getdefaultemailtemplate = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Acesso negado.");
+exports.getDefaultEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
   }
   return { htmlContent: DEFAULT_APPROVED_TEMPLATE_HTML };
 });
 
-exports.setemailtemplate = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Acesso negado.");
+exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
   }
-  const { htmlContent } = request.data;
+  const { htmlContent } = data;
   if (typeof htmlContent !== "string") {
-    throw new HttpsError("invalid-argument", "O conteúdo HTML é obrigatório.");
+    throw new functions.https.HttpsError("invalid-argument", "O conteúdo HTML é obrigatório.");
   }
   const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
   await docRef.set({ htmlContent });
   return { success: true };
 });
 
-exports.resetemailtemplate = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-    throw new HttpsError("permission-denied", "Acesso negado.");
+exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+    throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
   }
   const docRef = db.doc(EMAIL_TEMPLATE_DOC_PATH);
   await docRef.delete();
@@ -774,18 +720,18 @@ exports.resetemailtemplate = onCall({ region: "southamerica-east1" }, async (req
 
 // --- User and Organization Management ---
 
-exports.createadminrequest = onCall({ region: "southamerica-east1" }, async (request) => {
-  const { email, password, name, phone, message } = request.data;
+exports.createAdminRequest = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  const { email, password, name, phone, message } = data;
   if (!email || !password || !name || !phone) {
-    throw new HttpsError("invalid-argument", "Todos os campos obrigatórios devem ser preenchidos.");
+    throw new functions.https.HttpsError("invalid-argument", "Todos os campos obrigatórios devem ser preenchidos.");
   }
   if (password.length < 6) {
-    throw new HttpsError("invalid-argument", "A senha deve ter no mínimo 6 caracteres.");
+    throw new functions.https.HttpsError("invalid-argument", "A senha deve ter no mínimo 6 caracteres.");
   }
   try {
     const existingUser = await admin.auth().getUserByEmail(email).catch(() => null);
     if (existingUser) {
-      throw new HttpsError("already-exists", "Este e-mail já está cadastrado no sistema.");
+      throw new functions.https.HttpsError("already-exists", "Este e-mail já está cadastrado no sistema.");
     }
     const userRecord = await admin.auth().createUser({ email, password, displayName: name });
     const applicationData = {
@@ -795,22 +741,22 @@ exports.createadminrequest = onCall({ region: "southamerica-east1" }, async (req
     await db.collection("adminApplications").doc(userRecord.uid).set(applicationData);
     return { success: true, message: "Solicitação enviada com sucesso." };
   } catch (error) {
-    if (error instanceof HttpsError) throw error;
+    if (error instanceof functions.https.HttpsError) throw error;
     console.error("Error creating admin request:", error);
-    throw new HttpsError("internal", "Ocorreu um erro interno ao processar sua solicitação.");
+    throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao processar sua solicitação.");
   }
 });
 
 
-exports.createorganizationanduser = onCall({ region: "southamerica-east1" }, async (request) => {
-  const { orgName, ownerName, phone, taxId, email, password, planId } = request.data;
+exports.createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  const { orgName, ownerName, phone, taxId, email, password, planId } = data;
   if (!orgName || !ownerName || !email || !password || !planId) {
-    throw new HttpsError("invalid-argument", "Dados insuficientes para criar la organização.");
+    throw new functions.https.HttpsError("invalid-argument", "Dados insuficientes para criar la organização.");
   }
   return db.runTransaction(async (transaction) => {
     const existingUser = await admin.auth().getUserByEmail(email).catch(() => null);
     if (existingUser) {
-      throw new HttpsError("already-exists", "Este e-mail já está cadastrado.");
+      throw new functions.https.HttpsError("already-exists", "Este e-mail já está cadastrado.");
     }
     const userRecord = await admin.auth().createUser({ email, password, displayName: ownerName });
     const orgRef = db.collection("organizations").doc();
@@ -836,66 +782,84 @@ exports.createorganizationanduser = onCall({ region: "southamerica-east1" }, asy
     return result;
   }).catch((error) => {
     console.error("Transaction failed: ", error);
-    if (error instanceof HttpsError) throw error;
-    throw new HttpsError("internal", "Falha na transação ao criar organização.");
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("internal", "Falha na transação ao criar organização.");
   });
 });
 
-exports.removepromoterfromallassignments = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Não autenticado.");
-    }
-    const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
-    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-    }
+exports.removePromoterFromAllAssignments = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+        }
+        const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+        if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+            throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+        }
 
-    const { promoterId } = request.data;
-    if (!promoterId) {
-        throw new HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
-    }
+        const { promoterId } = data;
+        if (!promoterId) {
+            throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+        }
 
-    const batch = db.batch();
+        const batch = db.batch();
 
-    // 1. Update the promoter document
-    const promoterRef = db.collection("promoters").doc(promoterId);
-    batch.update(promoterRef, { hasJoinedGroup: false });
+        // 1. Update the promoter document
+        const promoterRef = db.collection("promoters").doc(promoterId);
+        batch.update(promoterRef, { hasJoinedGroup: false });
 
-    // 2. Find and delete all their assignments
-    const assignmentsQuery = db.collection("postAssignments").where("promoterId", "==", promoterId);
-    const assignmentsSnapshot = await assignmentsQuery.get();
+        // 2. Find and delete all their assignments
+        const assignmentsQuery = db.collection("postAssignments").where("promoterId", "==", promoterId);
+        const assignmentsSnapshot = await assignmentsQuery.get();
 
-    if (!assignmentsSnapshot.empty) {
-        assignmentsSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-    }
+        if (!assignmentsSnapshot.empty) {
+            assignmentsSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+        }
 
-    // 3. Commit the batch
-    await batch.commit();
+        // 3. Commit the batch
+        await batch.commit();
 
-    return { success: true, deletedCount: assignmentsSnapshot.size };
-});
+        return { success: true, deletedCount: assignmentsSnapshot.size };
+    });
 
 
 // --- Gemini AI assistant function ---
-exports.askgemini = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Acesso não autenticado.");
+const { GoogleGenAI } = require("@google/genai");
+
+// Configure Gemini using Firebase Functions config, similar to Brevo.
+// Use the command:
+// firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+const geminiConfig = functions.config().gemini;
+let ai;
+try {
+  if (geminiConfig && geminiConfig.key) {
+    ai = new GoogleGenAI({ apiKey: geminiConfig.key });
+  } else {
+    console.warn("Gemini API Key not configured in Firebase Functions config. Run: firebase functions:config:set gemini.key=\"YOUR_API_KEY\"");
   }
-  const { prompt } = request.data;
+} catch (e) {
+  console.error("Could not initialize GoogleGenAI.", e);
+  ai = null; // Ensure ai is null on initialization error
+}
+
+exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Acesso não autenticado.");
+  }
+  const { prompt } = data;
   if (!prompt || typeof prompt !== "string") {
-    throw new HttpsError("invalid-argument", "O prompt é obrigatório e deve ser um texto.");
+    throw new functions.https.HttpsError("invalid-argument", "O prompt é obrigatório e deve ser um texto.");
   }
-  
-  const geminiClient = getGeminiAi();
-  if (!geminiClient) {
+  if (!ai) {
     const errorMessage = "A IA do Gemini não está configurada no servidor. Para configurar, execute no terminal: firebase functions:config:set gemini.key=\"SUA_CHAVE_DE_API\"";
     console.error("Gemini API Key is not set in Firebase config. Run 'firebase functions:config:set gemini.key=\"YOUR_API_KEY\"' and redeploy functions.");
-    throw new HttpsError("failed-precondition", errorMessage);
+    throw new functions.https.HttpsError("failed-precondition", errorMessage);
   }
   try {
-    const response = await geminiClient.models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-2.5-pro",
       contents: prompt,
     });
@@ -908,57 +872,45 @@ exports.askgemini = onCall({ region: "southamerica-east1" }, async (request) => 
     }
   } catch (error) {
     console.error("Error calling Gemini API:", error);
-    throw new HttpsError("internal", "Não foi possível comunicar com a IA do Gemini.", { originalError: error.message });
+    throw new functions.https.HttpsError("internal", "Não foi possível comunicar com a IA do Gemini.", { originalError: error.message });
   }
 });
 
 
 // --- Stripe Integration ---
+const stripeConfig = functions.config().stripe;
 
-exports.getstripepublishablekey = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.getStripePublishableKey = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
-    const stripeConfig = functions.config().stripe;
     if (!stripeConfig || !stripeConfig.publishable_key) {
-        throw new HttpsError("failed-precondition", "A chave publicável do Stripe não está configurada no servidor.");
+        throw new functions.https.HttpsError("failed-precondition", "A chave publicável do Stripe não está configurada no servidor.");
     }
     return { publishableKey: stripeConfig.publishable_key };
 });
 
-exports.createstripecheckoutsession = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Não autenticado.");
-
-    const stripeClient = getStripe();
-    if (!stripeClient) {
-        console.error("Stripe is not initialized due to missing configuration.");
-        throw new HttpsError("failed-precondition", "O sistema de pagamentos (Stripe) não está configurado no servidor.");
-    }
-
-    const { orgId, planId } = request.data;
-    if (!orgId || !planId) throw new HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
-    
-    const stripeConfig = functions.config().stripe;
-    if (!stripeConfig.basic_price_id || !stripeConfig.professional_price_id) {
-         throw new HttpsError("failed-precondition", "Os IDs de preço do Stripe não estão configurados no servidor.");
-    }
+exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    const { orgId, planId } = data;
+    if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
 
     const plans = {
         "basic": stripeConfig.basic_price_id,
         "professional": stripeConfig.professional_price_id,
     };
     const priceId = plans[planId];
-    if (!priceId) throw new HttpsError("not-found", "ID de preço do Stripe não encontrado para este plano.");
+    if (!priceId) throw new functions.https.HttpsError("not-found", "ID de preço do Stripe não encontrado para este plano.");
 
     const orgDoc = await db.collection("organizations").doc(orgId).get();
-    if (!orgDoc.exists) throw new HttpsError("not-found", "Organização não encontrada.");
+    if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
     const orgData = orgDoc.data();
 
     const successUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription`;
 
     try {
-        const session = await stripeClient.checkout.sessions.create({
+        const session = await stripe.checkout.sessions.create({
             payment_method_types: ["card"],
             mode: "subscription",
             line_items: [{
@@ -977,25 +929,17 @@ exports.createstripecheckoutsession = onCall({ region: "southamerica-east1" }, a
         return { sessionId: session.id };
     } catch (error) {
         console.error("Stripe Checkout Session Error:", error);
-        throw new HttpsError("internal", "Falha ao criar a sessão de checkout do Stripe.", { message: error.message });
+        throw new functions.https.HttpsError("internal", "Falha ao criar a sessão de checkout do Stripe.", { message: error.message });
     }
 });
 
-exports.stripewebhook = onRequest({ region: "southamerica-east1" }, async (req, res) => {
+exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const sig = req.headers["stripe-signature"];
-    const stripeConfig = functions.config().stripe;
-    const webhookSecret = stripeConfig ? stripeConfig.webhook_secret : undefined;
+    const webhookSecret = stripeConfig.webhook_secret;
     let event;
 
-    const stripeClient = getStripe();
-    if (!stripeClient || !webhookSecret) {
-        console.error("Stripe webhook processing failed: Stripe is not configured or webhook secret is missing.");
-        res.status(400).send("Webhook Error: Stripe configuration is missing on the server.");
-        return;
-    }
-
     try {
-        event = stripeClient.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
     } catch (err) {
         console.error("Webhook signature verification failed.", err.message);
         res.status(400).send(`Webhook Error: ${err.message}`);
@@ -1036,12 +980,11 @@ exports.stripewebhook = onRequest({ region: "southamerica-east1" }, async (req, 
 });
 
 
-exports.getstripestatus = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-        throw new HttpsError("permission-denied", "Acesso negado.");
+exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
 
-    const stripeConfig = functions.config().stripe;
     const status = {
         configured: false,
         secretKey: false,
@@ -1065,9 +1008,9 @@ exports.getstripestatus = onCall({ region: "southamerica-east1" }, async (reques
     return status;
 });
 
-exports.getenvironmentconfig = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth || !(await isSuperAdmin(request.auth.uid))) {
-        throw new HttpsError("permission-denied", "Acesso negado.");
+exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
     // Return the stripe config object so the frontend can display it for debugging.
     return functions.config().stripe || {};
@@ -1075,33 +1018,39 @@ exports.getenvironmentconfig = onCall({ region: "southamerica-east1" }, async (r
 
 
 // --- Post Management ---
-exports.createpostandassignments = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  // Add logging to confirm deployment
+  functions.logger.info("createPostAndAssignments function v4 called with data:", {
+    postDataType: typeof data.postData,
+    assignedPromotersCount: data.assignedPromoters?.length,
+  });
+
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
-  const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
   if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
-    throw new HttpsError("permission-denied", "Apenas usuários autorizados podem criar posts.");
+    throw new functions.https.HttpsError("permission-denied", "Apenas usuários autorizados podem criar posts.");
   }
 
-  const { postData, assignedPromoters } = request.data;
-  if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
-    throw new HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
+  const { postData, assignedPromoters } = data;
+  if (!postData || !assignedPromoters || !Array.isArray(assignedPromoters) || assignedPromoters.length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e uma lista válida de divulgadoras são obrigatórios.");
   }
 
   let finalExpiresAt = null;
   if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
-      finalExpiresAt = new admin.firestore.Timestamp(
-          postData.expiresAt.seconds,
-          postData.expiresAt.nanoseconds,
-      );
+    finalExpiresAt = new admin.firestore.Timestamp(
+        postData.expiresAt.seconds,
+        postData.expiresAt.nanoseconds,
+    );
   }
 
   const batch = db.batch();
   const postDocRef = db.collection("posts").doc();
   const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
 
-  // Defensively build the newPost object, ensuring no undefined values are passed.
+  // Version 4: Ultra-defensive object construction
   const newPost = {
     organizationId: postData.organizationId,
     createdByEmail: postData.createdByEmail,
@@ -1110,14 +1059,22 @@ exports.createpostandassignments = onCall({ region: "southamerica-east1" }, asyn
     type: postData.type,
     instructions: postData.instructions || "",
     isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
-    autoAssignToNewPromoters: postData.autoAssignToNewPromoters || false,
-    allowLateSubmissions: postData.allowLateSubmissions || false,
+    autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true, // Explicitly check for true
+    allowLateSubmissions: postData.allowLateSubmissions === true, // Explicitly check for true
     mediaUrl: postData.mediaUrl || null,
     textContent: postData.textContent || null,
     postLink: postData.postLink || null,
     expiresAt: finalExpiresAt,
     createdAt: postCreatedAt,
   };
+
+  // Final safeguard: Check for any undefined values before setting
+  for (const key in newPost) {
+    if (newPost[key] === undefined) {
+      functions.logger.error(`Found undefined value in newPost for key: ${key}`, { postData });
+      throw new functions.https.HttpsError("internal", `Server-side error: undefined value for key ${key}.`);
+    }
+  }
 
   batch.set(postDocRef, newPost);
 
@@ -1131,9 +1088,17 @@ exports.createpostandassignments = onCall({ region: "southamerica-east1" }, asyn
     campaignName: newPost.campaignName,
     isActive: newPost.isActive,
     expiresAt: newPost.expiresAt,
-    createdAt: postCreatedAt,
+    createdAt: postCreatedAt, // Using the same server timestamp object is fine
     allowLateSubmissions: newPost.allowLateSubmissions,
   };
+
+  // Final safeguard for denormalized data
+  for (const key in denormalizedPostData) {
+    if (denormalizedPostData[key] === undefined) {
+      functions.logger.error(`Found undefined value in denormalizedPostData for key: ${key}`, { newPost });
+      throw new functions.https.HttpsError("internal", `Server-side error: undefined value for denormalized key ${key}.`);
+    }
+  }
 
   const assignmentsCollectionRef = db.collection("postAssignments");
   for (const promoter of assignedPromoters) {
@@ -1156,25 +1121,25 @@ exports.createpostandassignments = onCall({ region: "southamerica-east1" }, asyn
   return { success: true, postId: postDocRef.id };
 });
 
-exports.addassignmentstopost = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.addAssignmentsToPost = functions.region("southamerica-east1").onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
-  const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
   if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
   }
 
-  const { postId, promoterIds } = request.data;
+  const { postId, promoterIds } = data;
   if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
-    throw new HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
+    throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
   }
 
   // 1. Fetch post
   const postDocRef = db.collection("posts").doc(postId);
   const postSnap = await postDocRef.get();
   if (!postSnap.exists) {
-    throw new HttpsError("not-found", "Publicação não encontrada.");
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
   }
   const post = postSnap.data();
 
@@ -1230,18 +1195,18 @@ exports.addassignmentstopost = onCall({ region: "southamerica-east1" }, async (r
   return { success: true, message: `${promotersToCreate.length} atribuições criadas. As notificações estão sendo enviadas em segundo plano.` };
 });
 
-exports.updatepoststatus = onCall({ region: "southamerica-east1" }, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
-    const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
     if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
     }
 
-    const { postId, updateData } = request.data;
+    const { postId, updateData } = data;
     if (!postId || !updateData) {
-        throw new HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
+        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
     }
 
     // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
@@ -1288,23 +1253,23 @@ exports.updatepoststatus = onCall({ region: "southamerica-east1" }, async (reque
     return { success: true };
 });
 
-exports.sendpostreminder = onCall({ region: "southamerica-east1" }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Não autenticado.");
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
-  const adminDoc = await db.collection("admins").doc(request.auth.uid).get();
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
   if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
   }
 
-  const { postId } = request.data;
+  const { postId } = data;
   if (!postId) {
-    throw new HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
   }
 
   const postSnap = await db.collection("posts").doc(postId).get();
   if (!postSnap.exists) {
-    throw new HttpsError("not-found", "Publicação não encontrada.");
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
   }
   const post = postSnap.data();
 
