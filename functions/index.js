@@ -1019,9 +1019,8 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
 
 // --- Post Management ---
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  // Add logging to confirm deployment
-  functions.logger.info("createPostAndAssignments function v4 called with data:", {
-    postDataType: typeof data.postData,
+  functions.logger.info("createPostAndAssignments function v5 called with data:", {
+    hasPostData: !!data.postData,
     assignedPromotersCount: data.assignedPromoters?.length,
   });
 
@@ -1038,6 +1037,15 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e uma lista válida de divulgadoras são obrigatórios.");
   }
 
+  // Stricter validation for required fields
+  const requiredFields = ["organizationId", "createdByEmail", "campaignName", "stateAbbr", "type"];
+  for (const field of requiredFields) {
+    if (postData[field] === undefined || postData[field] === null || postData[field] === "") {
+      functions.logger.error(`Missing required field: ${field}`, { postData });
+      throw new functions.https.HttpsError("invalid-argument", `O campo obrigatório '${field}' está ausente.`);
+    }
+  }
+
   let finalExpiresAt = null;
   if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
     finalExpiresAt = new admin.firestore.Timestamp(
@@ -1049,8 +1057,8 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   const batch = db.batch();
   const postDocRef = db.collection("posts").doc();
   const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
+  const nowTimestamp = admin.firestore.Timestamp.now(); // Use a fixed timestamp for denormalization
 
-  // Version 4: Ultra-defensive object construction
   const newPost = {
     organizationId: postData.organizationId,
     createdByEmail: postData.createdByEmail,
@@ -1059,18 +1067,18 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     type: postData.type,
     instructions: postData.instructions || "",
     isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
-    autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true, // Explicitly check for true
-    allowLateSubmissions: postData.allowLateSubmissions === true, // Explicitly check for true
+    autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true,
+    allowLateSubmissions: postData.allowLateSubmissions === true,
     mediaUrl: postData.mediaUrl || null,
     textContent: postData.textContent || null,
     postLink: postData.postLink || null,
     expiresAt: finalExpiresAt,
-    createdAt: postCreatedAt,
+    createdAt: postCreatedAt, // Use FieldValue for the main doc
   };
 
-  // Final safeguard: Check for any undefined values before setting
   for (const key in newPost) {
     if (newPost[key] === undefined) {
+      // This safeguard should not be hit with the new validation, but it's good to keep.
       functions.logger.error(`Found undefined value in newPost for key: ${key}`, { postData });
       throw new functions.https.HttpsError("internal", `Server-side error: undefined value for key ${key}.`);
     }
@@ -1078,7 +1086,6 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
 
   batch.set(postDocRef, newPost);
 
-  // Denormalized data for assignments, built from the sanitized newPost object
   const denormalizedPostData = {
     type: newPost.type,
     mediaUrl: newPost.mediaUrl,
@@ -1088,7 +1095,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     campaignName: newPost.campaignName,
     isActive: newPost.isActive,
     expiresAt: newPost.expiresAt,
-    createdAt: postCreatedAt, // Using the same server timestamp object is fine
+    createdAt: nowTimestamp, // Use a concrete Timestamp for the nested object
     allowLateSubmissions: newPost.allowLateSubmissions,
   };
 
