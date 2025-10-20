@@ -6,6 +6,7 @@ import { PostAssignment, Promoter } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
+import StorageMedia from '../components/StorageMedia';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const navigate = useNavigate();
@@ -131,14 +132,14 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         });
     };
 
-    const handleDownload = (url: string, campaignName: string) => {
+    const handleDownload = (path: string, campaignName: string, type: 'image' | 'video') => {
         setIsDownloading(true);
         try {
-            const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
+            const fileExtension = path.split('.').pop()?.split('?')[0] || (type === 'video' ? 'mp4' : 'jpg');
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
-            const fileName = `video_${safeCampaignName}.${fileExtension}`;
+            const fileName = `${type}_${safeCampaignName}.${fileExtension}`;
             
-            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}`;
+            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?path=${encodeURIComponent(path)}&name=${encodeURIComponent(fileName)}`;
 
             window.open(proxyUrl, '_blank');
 
@@ -164,28 +165,24 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
             <div className="border-t border-gray-700 pt-3">
                 {assignment.post.type === 'image' && assignment.post.mediaUrl && (
                     <div className="mb-4">
-                        <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md" />
-                        </a>
+                        <StorageMedia path={assignment.post.mediaUrl} type="image" className="w-full max-w-sm mx-auto rounded-md" />
                         <div className="flex justify-center items-center gap-4 mt-2">
-                            <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
-                                <EyeIcon className="w-4 h-4" /> Ver
-                            </a>
-                            <a href={assignment.post.mediaUrl} download className="text-sm text-blue-400 hover:underline flex items-center gap-1">
+                            <button
+                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, 'image')}
+                                disabled={isDownloading}
+                                className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                            >
                                 <DownloadIcon className="w-4 h-4" /> Baixar
-                            </a>
+                            </button>
                         </div>
                     </div>
                 )}
                 {assignment.post.type === 'video' && assignment.post.mediaUrl && (
                     <div className="mb-4">
-                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                        <StorageMedia path={assignment.post.mediaUrl} type="video" controls className="w-full max-w-sm mx-auto rounded-md" />
                         <div className="flex justify-center items-center gap-4 mt-2">
-                             <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
-                                <EyeIcon className="w-4 h-4" /> Ver
-                            </a>
                             <button
-                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName)}
+                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, 'video')}
                                 disabled={isDownloading}
                                 className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                             >

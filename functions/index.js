@@ -1042,6 +1042,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   try {
     const postDocRef = db.collection("posts").doc();
     const batch = db.batch();
+    const creationTimestamp = admin.firestore.Timestamp.now();
 
     let finalExpiresAt = null;
     if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
@@ -1058,7 +1059,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       type: postData.type,
       instructions: postData.instructions || "",
       postLink: postData.postLink || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: creationTimestamp,
       createdByEmail: postData.createdByEmail,
       isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
       expiresAt: finalExpiresAt,
@@ -1081,7 +1082,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: creationTimestamp,
     };
 
     const assignmentsCollectionRef = db.collection("postAssignments");
