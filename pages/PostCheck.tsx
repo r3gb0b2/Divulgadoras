@@ -131,42 +131,21 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         });
     };
 
-    const handleDownload = async (url: string, campaignName: string) => {
+    const handleDownload = (url: string, campaignName: string) => {
         setIsDownloading(true);
         try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Falha ao buscar o vídeo (status: ${response.status})`);
-            
-            const blob = await response.blob();
-    
-            // Promise-based FileReader to convert blob to data URL. This is more reliable on iOS.
-            const blobToDataUrl = (blob: Blob): Promise<string> => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-            };
-    
-            const dataUrl = await blobToDataUrl(blob);
-            
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            
             const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
-            link.download = `video_${safeCampaignName}.${fileExtension}`;
+            const fileName = `video_${safeCampaignName}.${fileExtension}`;
             
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-    
+            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}`;
+
+            window.open(proxyUrl, '_blank');
+
+            setTimeout(() => setIsDownloading(false), 3000);
         } catch (error) {
-            console.error('Download failed:', error);
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            alert(`Não foi possível baixar o vídeo. Por favor, tente novamente. Detalhe: ${errorMessage}`);
-        } finally {
+            console.error('Download setup failed:', error);
+            alert(`Não foi possível iniciar o download.`);
             setIsDownloading(false);
         }
     };

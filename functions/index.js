@@ -3,6 +3,7 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
+const https = require("https");
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
@@ -1311,4 +1312,60 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   await Promise.allSettled(emailPromises);
 
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
+});
+
+exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
+    // Enable CORS for the client app
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle preflight requests for CORS
+    if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
+    }
+
+    const fileUrl = req.query.url;
+    const fileName = req.query.name || "video.mp4"; // Allow client to suggest a name
+
+    if (!fileUrl) {
+        return res.status(400).send("URL parameter is missing.");
+    }
+
+    try {
+        const decodedUrl = decodeURIComponent(fileUrl);
+        
+        // Make the proxied request
+        const proxyRequest = https.get(decodedUrl, (proxyResponse) => {
+            if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
+                 console.error(`Proxy request failed with status: ${proxyResponse.statusCode}`);
+                 res.status(proxyResponse.statusCode).send("Failed to fetch the file.");
+                 return;
+            }
+
+            // Set headers to force download
+            res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+            
+            // Pass through content-type if available
+            if(proxyResponse.headers['content-type']){
+                res.setHeader('Content-Type', proxyResponse.headers['content-type']);
+            }
+             if(proxyResponse.headers['content-length']){
+                res.setHeader('Content-Length', proxyResponse.headers['content-length']);
+            }
+
+            // Pipe the video stream to the client
+            proxyResponse.pipe(res);
+        });
+
+        proxyRequest.on("error", (e) => {
+            console.error(`Proxy request error: ${e.message}`);
+            res.status(500).send("Error during proxy request.");
+        });
+
+    } catch(e) {
+        console.error("Error in download proxy function:", e);
+        res.status(500).send("An internal error occurred.");
+    }
 });
