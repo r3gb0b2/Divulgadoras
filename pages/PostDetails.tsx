@@ -7,11 +7,12 @@ import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
-import { storage } from '../firebase/config';
+import { storage, functions } from '../firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -261,23 +262,40 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = (url: string, campaignName: string) => {
+    const handleDownload = async (url: string, campaignName: string) => {
         setIsDownloading(true);
         setError('');
         try {
+            const pathRegex = /\/o\/(.*?)\?alt=media/;
+            const match = url.match(pathRegex);
+            if (!match || !match[1]) {
+                throw new Error("URL de mídia inválida.");
+            }
+            const filePath = decodeURIComponent(match[1]);
+
             const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
-            
-            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?file_url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}`;
-    
-            // Open the URL in a new tab. The browser will handle the download due to server headers.
-            window.open(proxyUrl, '_blank');
-    
-            setTimeout(() => setIsDownloading(false), 3000);
-        } catch (error) {
-            console.error('Download setup failed:', error);
-            alert(`Não foi possível iniciar o download.`);
+
+            const getDownloadUrl = httpsCallable(functions, 'getDownloadUrl');
+            const result = await getDownloadUrl({ filePath, fileName });
+            const data = result.data as { downloadUrl: string };
+
+            if (!data.downloadUrl) {
+                throw new Error("A função do servidor não retornou uma URL de download.");
+            }
+
+            const link = document.createElement('a');
+            link.href = data.downloadUrl;
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error: any) {
+            console.error('Download failed:', error);
+            const errorMessage = error.message || 'Não foi possível iniciar o download.';
+            alert(errorMessage);
+        } finally {
             setIsDownloading(false);
         }
     };

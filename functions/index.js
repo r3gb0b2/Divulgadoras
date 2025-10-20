@@ -1335,69 +1335,34 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
 
-exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
-    // CORS headers are important for the initial request before redirect.
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
+exports.getDownloadUrl = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Apenas usuários autenticados podem baixar arquivos.");
     }
-
-    const fileUrl = req.query.file_url;
-    const fileName = req.query.name || "video.mp4";
-
-    if (!fileUrl) {
-        return res.status(400).send("URL parameter 'file_url' is missing.");
+    const { filePath, fileName } = data;
+    if (!filePath || !fileName) {
+        throw new functions.https.HttpsError("invalid-argument", "filePath e fileName são obrigatórios.");
     }
-
     try {
-        // The fileUrl from req.query is already URI-decoded by Express.
-        // A second, manual decode can cause errors if the original filename contained characters like '%'.
-        // We will match the regex against the URL as-is provided by Express.
-
-        // Regex to extract the file path from a Firebase Storage URL
-        const pathRegex = /\/o\/(.*?)\?alt=media/;
-        const match = fileUrl.match(pathRegex);
-
-        if (!match || !match[1]) {
-            functions.logger.error("Could not extract file path from URL.", { url: fileUrl });
-            return res.status(400).send("Invalid Firebase Storage URL format.");
-        }
-
-        // The captured path is still URL-encoded (e.g., spaces as %20). We need to decode it once
-        // to get the actual path for the Storage SDK.
-        const filePath = decodeURIComponent(match[1]);
         const bucket = admin.storage().bucket();
         const file = bucket.file(filePath);
 
         const [exists] = await file.exists();
         if (!exists) {
             functions.logger.error("File does not exist in storage.", { path: filePath });
-            return res.status(404).send("File not found in storage.");
+            throw new functions.https.HttpsError("not-found", "Arquivo não encontrado no armazenamento.");
         }
-
-        // Generate a signed URL. This is more efficient than streaming through the function.
         const [signedUrl] = await file.getSignedUrl({
             action: "read",
-            // The URL will expire in 15 minutes.
-            expires: Date.now() + 15 * 60 * 1000,
-            // This header prompts the browser to download the file with the correct name.
+            expires: Date.now() + 15 * 60 * 1000, // 15 minutes
             responseDisposition: `attachment; filename="${fileName}"`,
         });
-
-        // Redirect the user's browser to the signed URL to start the download.
-        return res.redirect(302, signedUrl);
+        return { downloadUrl: signedUrl };
     } catch (e) {
-        functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack, fileUrl: fileUrl });
-        if (e instanceof URIError) {
-            // This specific error suggests a problem with URL decoding.
-            return res.status(400).send("Malformed file URL detected. It may contain invalid characters.");
+        functions.logger.error("Error in getDownloadUrl function:", { errorMessage: e.message, filePath });
+        if (e instanceof functions.https.HttpsError) {
+            throw e;
         }
-        if (!res.headersSent) {
-           return res.status(500).send("An internal server error occurred.");
-        }
+        throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao gerar o link de download.");
     }
 });
