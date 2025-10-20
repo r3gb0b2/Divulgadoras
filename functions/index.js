@@ -1315,7 +1315,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
-    // CORS headers
+    // CORS headers are important for the initial request before redirect.
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -1329,25 +1329,23 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
     const fileName = req.query.name || "video.mp4";
 
     if (!fileUrl) {
-        return res.status(400).send("URL parameter is missing.");
+        return res.status(400).send("URL parameter 'file_url' is missing.");
     }
 
     try {
         const decodedUrl = decodeURIComponent(fileUrl);
-        
-        // Extract file path from the URL
-        // Example: https://firebasestorage.googleapis.com/v0/b/stingressos-e0a5f.appspot.com/o/posts-media%2Fvideo.mp4?alt=media&token=...
+
+        // Regex to extract the file path from a Firebase Storage URL
         const pathRegex = /\/o\/(.*?)\?alt=media/;
         const match = decodedUrl.match(pathRegex);
-        
+
         if (!match || !match[1]) {
             functions.logger.error("Could not extract file path from URL.", { url: decodedUrl });
             return res.status(400).send("Invalid Firebase Storage URL format.");
         }
-        
+
         const filePath = decodeURIComponent(match[1]);
-        
-        const bucket = admin.storage().bucket(); // Gets the default bucket
+        const bucket = admin.storage().bucket();
         const file = bucket.file(filePath);
 
         const [exists] = await file.exists();
@@ -1355,25 +1353,22 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
             functions.logger.error("File does not exist in storage.", { path: filePath });
             return res.status(404).send("File not found in storage.");
         }
-        
-        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-        
-        // Create a read stream and pipe it to the response.
-        const readStream = file.createReadStream();
-        
-        readStream.on('error', (err) => {
-            functions.logger.error("Error reading file stream from storage.", { path: filePath, error: err });
-            if (!res.headersSent) {
-                res.status(500).send("Could not read the file from storage.");
-            }
+
+        // Generate a signed URL. This is more efficient than streaming through the function.
+        const [signedUrl] = await file.getSignedUrl({
+            action: "read",
+            // The URL will expire in 15 minutes.
+            expires: Date.now() + 15 * 60 * 1000,
+            // This header prompts the browser to download the file with the correct name.
+            responseDisposition: `attachment; filename="${fileName}"`,
         });
 
-        readStream.pipe(res);
-
+        // Redirect the user's browser to the signed URL to start the download.
+        return res.redirect(302, signedUrl);
     } catch (e) {
         functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
         if (!res.headersSent) {
-           res.status(500).send("An internal server error occurred.");
+           return res.status(500).send("An internal server error occurred.");
         }
     }
 });
