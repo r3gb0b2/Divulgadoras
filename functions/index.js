@@ -9,7 +9,9 @@ const https = require("https");
 const Brevo = require("@getbrevo/brevo");
 
 // Stripe SDK for payments
-const stripe = require("stripe")(functions.config().stripe.secret_key);
+// Safely initialize Stripe to prevent crashes if config is missing.
+const stripeConfig = functions.config().stripe;
+const stripe = stripeConfig && stripeConfig.secret_key ? require("stripe")(stripeConfig.secret_key) : null;
 
 
 // Initialize Firebase Admin SDK
@@ -834,7 +836,7 @@ const { GoogleGenAI } = require("@google/genai");
 // Use the command:
 // firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
 const geminiConfig = functions.config().gemini;
-let ai;
+let ai = null;
 try {
   if (geminiConfig && geminiConfig.key) {
     ai = new GoogleGenAI({ apiKey: geminiConfig.key });
@@ -879,8 +881,6 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 
 // --- Stripe Integration ---
-const stripeConfig = functions.config().stripe;
-
 exports.getStripePublishableKey = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
@@ -893,8 +893,15 @@ exports.getStripePublishableKey = functions.region("southamerica-east1").https.o
 
 exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    if (!stripe) {
+        throw new functions.https.HttpsError("failed-precondition", "A integração com pagamentos (Stripe) não está configurada no servidor.");
+    }
     const { orgId, planId } = data;
     if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
+
+    if (!stripeConfig || !stripeConfig.basic_price_id || !stripeConfig.professional_price_id) {
+        throw new functions.https.HttpsError("failed-precondition", "Os IDs de preço do Stripe não estão configurados no servidor.");
+    }
 
     const plans = {
         "basic": stripeConfig.basic_price_id,
@@ -935,8 +942,20 @@ exports.createStripeCheckoutSession = functions.region("southamerica-east1").htt
 });
 
 exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
+    if (!stripe) {
+        console.error("Stripe webhook received, but Stripe is not configured on the server.");
+        res.status(500).send("Stripe integration is not configured.");
+        return;
+    }
     const sig = req.headers["stripe-signature"];
-    const webhookSecret = stripeConfig.webhook_secret;
+    const webhookSecret = stripeConfig ? stripeConfig.webhook_secret : undefined;
+
+    if (!webhookSecret) {
+        console.error("Stripe webhook secret is not configured.");
+        res.status(400).send("Stripe webhook secret is not configured.");
+        return;
+    }
+
     let event;
 
     try {
