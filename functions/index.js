@@ -1315,19 +1315,17 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
 });
 
 exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
-    // Enable CORS for the client app
     res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type");
 
-    // Handle preflight requests for CORS
     if (req.method === "OPTIONS") {
         res.status(204).send("");
         return;
     }
 
     const fileUrl = req.query.url;
-    const fileName = req.query.name || "video.mp4"; // Allow client to suggest a name
+    const fileName = req.query.name || "video.mp4";
 
     if (!fileUrl) {
         return res.status(400).send("URL parameter is missing.");
@@ -1335,36 +1333,42 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
 
     try {
         const decodedUrl = decodeURIComponent(fileUrl);
-        
-        // Make the proxied request
-        const proxyRequest = https.get(decodedUrl, (proxyResponse) => {
-            if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
-                 console.error(`Proxy request failed with status: ${proxyResponse.statusCode}`);
-                 res.status(proxyResponse.statusCode).send("Failed to fetch the file.");
-                 return;
-            }
 
-            // Set headers to force download
-            res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-            
-            // Pass through content-type if available
-            if(proxyResponse.headers['content-type']){
-                res.setHeader('Content-Type', proxyResponse.headers['content-type']);
-            }
-             if(proxyResponse.headers['content-length']){
-                res.setHeader('Content-Length', proxyResponse.headers['content-length']);
-            }
+        const makeRequest = (urlToFetch) => {
+            const proxyRequest = https.get(urlToFetch, (proxyResponse) => {
+                // Handle redirects
+                if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
+                    console.log(`Redirecting to ${proxyResponse.headers.location}`);
+                    makeRequest(proxyResponse.headers.location); // Recursive call to the new location
+                    return; // Stop processing the current response
+                }
 
-            // Pipe the video stream to the client
-            proxyResponse.pipe(res);
-        });
+                if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
+                    console.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
+                    res.status(proxyResponse.statusCode).send("Failed to fetch the file.");
+                    return;
+                }
 
-        proxyRequest.on("error", (e) => {
-            console.error(`Proxy request error: ${e.message}`);
-            res.status(500).send("Error during proxy request.");
-        });
+                res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+                if (proxyResponse.headers['content-type']) {
+                    res.setHeader('Content-Type', proxyResponse.headers['content-type']);
+                }
+                if (proxyResponse.headers['content-length']) {
+                    res.setHeader('Content-Length', proxyResponse.headers['content-length']);
+                }
 
-    } catch(e) {
+                proxyResponse.pipe(res);
+            });
+
+            proxyRequest.on("error", (e) => {
+                console.error(`Proxy request error: ${e.message}`);
+                res.status(500).send("Error during proxy request.");
+            });
+        };
+
+        makeRequest(decodedUrl); // Initial request
+
+    } catch (e) {
         console.error("Error in download proxy function:", e);
         res.status(500).send("An internal error occurred.");
     }
