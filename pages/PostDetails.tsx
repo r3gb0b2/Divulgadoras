@@ -188,9 +188,9 @@ export const PostDetails: React.FC = () => {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Falha ao buscar o vídeo (status: ${response.status})`);
             
-            // Re-create blob with a generic mime type to force download on all devices
-            const originalBlob = await response.blob();
-            const blob = new Blob([originalBlob], { type: 'application/octet-stream' });
+            // Use the original blob directly from the response.
+            // Re-creating the blob can cause security errors ("load failed") on some browsers, especially on iOS.
+            const blob = await response.blob();
 
             const objectUrl = window.URL.createObjectURL(blob);
             
@@ -203,8 +203,9 @@ export const PostDetails: React.FC = () => {
             
             document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
             
+            // Clean up by removing the link and revoking the object URL
+            document.body.removeChild(link);
             window.URL.revokeObjectURL(objectUrl);
         } catch (error) {
             console.error('Download failed:', error);
