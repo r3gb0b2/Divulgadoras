@@ -1032,47 +1032,53 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
   }
 
-  // Convert serialized timestamp from client back to a real Timestamp object
+  let finalExpiresAt = null;
   if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
-      postData.expiresAt = new admin.firestore.Timestamp(
+      finalExpiresAt = new admin.firestore.Timestamp(
           postData.expiresAt.seconds,
           postData.expiresAt.nanoseconds,
       );
   }
 
   const batch = db.batch();
-
-  // 1. Create the main Post document
-  const postCollectionRef = db.collection("posts");
-  const postDocRef = postCollectionRef.doc();
+  const postDocRef = db.collection("posts").doc();
   const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
 
-  // Ensure optional fields are null, not undefined
+  // Defensively build the newPost object, ensuring no undefined values are passed.
   const newPost = {
-    ...postData,
+    organizationId: postData.organizationId,
+    createdByEmail: postData.createdByEmail,
+    campaignName: postData.campaignName,
+    stateAbbr: postData.stateAbbr,
+    type: postData.type,
+    instructions: postData.instructions || "",
+    isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
+    autoAssignToNewPromoters: postData.autoAssignToNewPromoters || false,
+    allowLateSubmissions: postData.allowLateSubmissions || false,
     mediaUrl: postData.mediaUrl || null,
     textContent: postData.textContent || null,
     postLink: postData.postLink || null,
-    expiresAt: postData.expiresAt || null,
+    expiresAt: finalExpiresAt,
     createdAt: postCreatedAt,
   };
+
   batch.set(postDocRef, newPost);
 
-  // 2. Create assignments
-  const assignmentsCollectionRef = db.collection("postAssignments");
+  // Denormalized data for assignments, built from the sanitized newPost object
   const denormalizedPostData = {
-    type: postData.type,
-    mediaUrl: postData.mediaUrl || null,
-    textContent: postData.textContent || null,
-    instructions: postData.instructions,
-    postLink: postData.postLink || null,
-    campaignName: postData.campaignName,
-    isActive: postData.isActive,
-    expiresAt: postData.expiresAt || null,
+    type: newPost.type,
+    mediaUrl: newPost.mediaUrl,
+    textContent: newPost.textContent,
+    instructions: newPost.instructions,
+    postLink: newPost.postLink,
+    campaignName: newPost.campaignName,
+    isActive: newPost.isActive,
+    expiresAt: newPost.expiresAt,
     createdAt: postCreatedAt,
-    allowLateSubmissions: postData.allowLateSubmissions || false,
+    allowLateSubmissions: newPost.allowLateSubmissions,
   };
 
+  const assignmentsCollectionRef = db.collection("postAssignments");
   for (const promoter of assignedPromoters) {
     const assignmentDocRef = assignmentsCollectionRef.doc();
     const newAssignment = {
@@ -1088,10 +1094,8 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     batch.set(assignmentDocRef, newAssignment);
   }
 
-  // 3. Commit Firestore writes
   await batch.commit();
 
-  // 4. Return immediately. Emails will be sent by the onPostAssignmentCreated trigger.
   return { success: true, postId: postDocRef.id };
 });
 
