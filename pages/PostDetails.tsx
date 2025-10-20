@@ -12,7 +12,6 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
-import StorageMedia from '../components/StorageMedia';
 
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -262,15 +261,15 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = (path: string, campaignName: string) => {
+    const handleDownload = (url: string, campaignName: string) => {
         setIsDownloading(true);
         setError('');
         try {
-            const fileExtension = path.split('.').pop()?.split('?')[0] || 'mp4';
+            const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
             
-            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?path=${encodeURIComponent(path)}&name=${encodeURIComponent(fileName)}`;
+            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?file_url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}`;
     
             // Open the URL in a new tab. The browser will handle the download due to server headers.
             window.open(proxyUrl, '_blank');
@@ -295,23 +294,28 @@ export const PostDetails: React.FC = () => {
                     <h2 className="font-bold text-lg text-primary">{post.campaignName}</h2>
                      <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
 
-                    {(post.type === 'image' || post.type === 'video') && post.mediaUrl ? (
+                    {post.type === 'image' && post.mediaUrl && (
                         <div className="mb-4">
-                            <StorageMedia path={post.mediaUrl} type={post.type} className="w-full max-w-sm mx-auto rounded-md" controls={post.type === 'video'} />
-                             {post.type === 'video' && (
-                                <div className="flex justify-center items-center gap-4 mt-2">
-                                    <button
-                                        onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
-                                        disabled={isDownloading}
-                                        className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                                    >
-                                        <DownloadIcon className="w-4 h-4" />
-                                        {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
-                                    </button>
-                                </div>
-                            )}
+                            <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer">
+                                <img src={post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md" />
+                            </a>
                         </div>
-                    ) : null}
+                    )}
+                     {post.type === 'video' && post.mediaUrl && (
+                        <div className="mb-4">
+                            <video src={post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                            <div className="flex justify-center items-center gap-4 mt-2">
+                                <button
+                                    onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
+                                    disabled={isDownloading}
+                                    className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">
                             <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{post.textContent}</pre>

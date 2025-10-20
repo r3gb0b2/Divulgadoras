@@ -3,8 +3,7 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
-const { Readable } = require("stream");
-
+const https = require("https");
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
@@ -108,7 +107,7 @@ const isSuperAdmin = async (uid) => {
  * If the new status is 'approved' or 'rejected', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
-exports.promoterStatusTrigger = functions
+exports.onPromoterStatusChange = functions // Renamed to fix deployment error.
     .region("southamerica-east1")
     .firestore.document("promoters/{promoterId}")
     .onUpdate(async (change, context) => {
@@ -144,7 +143,7 @@ exports.promoterStatusTrigger = functions
  * Triggered when a new PostAssignment document is created.
  * This function is responsible for sending the notification email to the promoter in the background.
  */
-exports.postAssignmentTrigger = functions.region("southamerica-east1").firestore
+exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
     .document("postAssignments/{assignmentId}")
     .onCreate(async (snap, context) => {
         const assignmentData = snap.data();
@@ -244,7 +243,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
   }
 
   await batch.commit();
-  // Note: Emails are now sent by the postAssignmentTrigger, so no email logic is needed here.
+  // Note: Emails are now sent by the onPostAssignmentCreated trigger, so no email logic is needed here.
   console.log(`[Auto-Assign] Created new assignments for promoter ${promoterId}.`);
 }
 
@@ -1042,7 +1041,6 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   try {
     const postDocRef = db.collection("posts").doc();
     const batch = db.batch();
-    const creationTimestamp = admin.firestore.Timestamp.now();
 
     let finalExpiresAt = null;
     if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
@@ -1059,7 +1057,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       type: postData.type,
       instructions: postData.instructions || "",
       postLink: postData.postLink || null,
-      createdAt: creationTimestamp,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
       createdByEmail: postData.createdByEmail,
       isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
       expiresAt: finalExpiresAt,
@@ -1082,7 +1080,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
-      createdAt: creationTimestamp,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const assignmentsCollectionRef = db.collection("postAssignments");
@@ -1316,7 +1314,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
 
-exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
+exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
     // CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -1327,49 +1325,58 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
         return;
     }
 
-    const filePath = req.query.path;
-    const fileName = req.query.name || "download";
+    const fileUrl = req.query.file_url;
+    const fileName = req.query.name || "video.mp4";
 
-    if (!filePath) {
-        return res.status(400).send("`path` parameter is missing.");
+    if (!fileUrl) {
+        return res.status(400).send("URL parameter is missing.");
     }
 
     try {
-        const decodedPath = decodeURIComponent(filePath);
-        functions.logger.info(`Streaming download for path: ${decodedPath}`);
+        const decodedUrl = decodeURIComponent(fileUrl);
 
-        const bucket = admin.storage().bucket();
-        const file = bucket.file(decodedPath);
+        const makeRequest = (urlToFetch) => {
+            const requestOptions = {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            };
+            const proxyRequest = https.get(urlToFetch, requestOptions, (proxyResponse) => {
+                // Handle redirects
+                if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
+                    const redirectUrl = new URL(proxyResponse.headers.location, urlToFetch).href;
+                    functions.logger.info(`Redirecting download to: ${redirectUrl}`);
+                    makeRequest(redirectUrl);
+                    return;
+                }
 
-        const [exists] = await file.exists();
-        if (!exists) {
-            functions.logger.error(`File not found at path: ${decodedPath}`);
-            return res.status(404).send("File not found.");
-        }
+                if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
+                    functions.logger.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
+                    res.status(500).send("Failed to fetch the file.");
+                    return;
+                }
 
-        const [metadata] = await file.getMetadata();
+                res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+                if (proxyResponse.headers['content-type']) {
+                    res.setHeader('Content-Type', proxyResponse.headers['content-type']);
+                }
+                if (proxyResponse.headers['content-length']) {
+                    res.setHeader('Content-Length', proxyResponse.headers['content-length']);
+                }
 
-        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-        if (metadata.contentType) {
-            res.setHeader("Content-Type", metadata.contentType);
-        }
-        if (metadata.size) {
-            res.setHeader("Content-Length", metadata.size);
-        }
-        
-        const readStream = file.createReadStream();
+                proxyResponse.pipe(res);
+            });
 
-        readStream.on("error", (err) => {
-            functions.logger.error("Error reading file stream:", { errorMessage: err.message });
-            // Can't send headers after this point
-        });
+            proxyRequest.on("error", (e) => {
+                functions.logger.error(`Proxy request error: ${e.message}`, { url: urlToFetch });
+                res.status(500).send("Error during proxy request.");
+            });
+        };
 
-        readStream.pipe(res);
-        
+        makeRequest(decodedUrl); // Initial request
+
     } catch (e) {
         functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
-        if (!res.headersSent) {
-            res.status(500).send("An internal error occurred.");
-        }
+        res.status(500).send("An internal error occurred.");
     }
 });
