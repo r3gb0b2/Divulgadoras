@@ -3,7 +3,8 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
-const https = require("https");
+const { Readable } = require("stream");
+
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
@@ -1314,7 +1315,7 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
 
-exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest((req, res) => {
+exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     // CORS headers
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -1334,47 +1335,37 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
 
     try {
         const decodedUrl = decodeURIComponent(fileUrl);
+        functions.logger.info(`Proxying download for URL: ${decodedUrl}`);
 
-        const makeRequest = (urlToFetch) => {
-            const requestOptions = {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            };
-            const proxyRequest = https.get(urlToFetch, requestOptions, (proxyResponse) => {
-                // Handle redirects
-                if (proxyResponse.statusCode >= 300 && proxyResponse.statusCode < 400 && proxyResponse.headers.location) {
-                    const redirectUrl = new URL(proxyResponse.headers.location, urlToFetch).href;
-                    functions.logger.info(`Redirecting download to: ${redirectUrl}`);
-                    makeRequest(redirectUrl);
-                    return;
-                }
+        const response = await fetch(decodedUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            },
+            redirect: "follow",
+        });
 
-                if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
-                    functions.logger.error(`Proxy request to ${urlToFetch} failed with status: ${proxyResponse.statusCode}`);
-                    res.status(500).send("Failed to fetch the file.");
-                    return;
-                }
+        if (!response.ok) {
+            const errorBody = await response.text().catch(() => "Could not read error body.");
+            functions.logger.error(`Fetch failed for URL ${decodedUrl} with status: ${response.status} ${response.statusText}`, { errorBody });
+            return res.status(500).send("Failed to fetch the file.");
+        }
 
-                res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-                if (proxyResponse.headers['content-type']) {
-                    res.setHeader('Content-Type', proxyResponse.headers['content-type']);
-                }
-                if (proxyResponse.headers['content-length']) {
-                    res.setHeader('Content-Length', proxyResponse.headers['content-length']);
-                }
+        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
-                proxyResponse.pipe(res);
-            });
+        const contentType = response.headers.get("content-type");
+        if (contentType) {
+            res.setHeader("Content-Type", contentType);
+        }
 
-            proxyRequest.on("error", (e) => {
-                functions.logger.error(`Proxy request error: ${e.message}`, { url: urlToFetch });
-                res.status(500).send("Error during proxy request.");
-            });
-        };
+        const contentLength = response.headers.get("content-length");
+        if (contentLength) {
+            res.setHeader("Content-Length", contentLength);
+        }
 
-        makeRequest(decodedUrl); // Initial request
+        // Use Readable.fromWeb to convert the web stream to a Node.js stream
+        const nodeStream = Readable.fromWeb(response.body);
 
+        nodeStream.pipe(res);
     } catch (e) {
         functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
         res.status(500).send("An internal error occurred.");
