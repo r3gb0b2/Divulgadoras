@@ -1,5 +1,6 @@
+// FIX: Add missing import for 'firebase' namespace to use compat types.
+import firebase from '../firebase/config';
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { states } from '../constants/states';
 import { StatesConfig, StateConfig, Campaign } from '../types';
 
@@ -13,10 +14,10 @@ const SETTINGS_COLLECTION = 'settings';
  */
 export const getStatesConfig = async (): Promise<StatesConfig> => {
     try {
-        const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        const docSnap = await getDoc(docRef);
+        const docRef = firestore.collection(SETTINGS_COLLECTION).doc(STATES_CONFIG_DOC_ID);
+        const docSnap = await docRef.get();
 
-        const dbConfig = docSnap.exists() ? (docSnap.data() as Partial<StatesConfig>) : {};
+        const dbConfig = docSnap.exists ? (docSnap.data() as Partial<StatesConfig>) : {};
         const finalConfig: StatesConfig = {};
 
         for (const state of states) {
@@ -65,8 +66,8 @@ export const getStateConfig = async (stateAbbr: string): Promise<StateConfig | n
  */
 export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
     try {
-        const docRef = doc(firestore, SETTINGS_COLLECTION, STATES_CONFIG_DOC_ID);
-        await setDoc(docRef, config);
+        const docRef = firestore.collection(SETTINGS_COLLECTION).doc(STATES_CONFIG_DOC_ID);
+        await docRef.set(config);
     } catch (error) {
         console.error("Error setting states config: ", error);
         throw new Error("Não foi possível salvar a configuração das localidades.");
@@ -77,23 +78,21 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
 
 export const getCampaigns = async (stateAbbr: string, organizationId?: string): Promise<Campaign[]> => {
     try {
-        let q;
-        const campaignsCollection = collection(firestore, "campaigns");
+        let q: firebase.firestore.Query;
+        const campaignsCollection = firestore.collection("campaigns");
 
         if (organizationId) {
             // This is a composite query. It might require a manual index in Firestore.
             // If it fails, the error log in the browser console will provide a direct link to create it.
-            q = query(
-                campaignsCollection,
-                where("organizationId", "==", organizationId),
-                where("stateAbbr", "==", stateAbbr)
-            );
+            q = campaignsCollection
+                .where("organizationId", "==", organizationId)
+                .where("stateAbbr", "==", stateAbbr);
         } else {
             // Superadmin case, fetching all campaigns for a specific state across all orgs
-            q = query(campaignsCollection, where("stateAbbr", "==", stateAbbr));
+            q = campaignsCollection.where("stateAbbr", "==", stateAbbr);
         }
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await q.get();
         const campaigns = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign);
         
         return campaigns.sort((a, b) => a.name.localeCompare(b.name));
@@ -110,11 +109,11 @@ export const getCampaigns = async (stateAbbr: string, organizationId?: string): 
 
 export const getAllCampaigns = async (organizationId?: string): Promise<Campaign[]> => {
     try {
-        let q = query(collection(firestore, "campaigns"));
+        let q: firebase.firestore.Query = firestore.collection("campaigns");
         if (organizationId) {
-            q = query(q, where("organizationId", "==", organizationId));
+            q = q.where("organizationId", "==", organizationId);
         }
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await q.get();
         // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
         return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
@@ -125,7 +124,7 @@ export const getAllCampaigns = async (organizationId?: string): Promise<Campaign
 
 export const addCampaign = async (campaignData: Omit<Campaign, 'id'>): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'campaigns'), campaignData);
+        const docRef = await firestore.collection('campaigns').add(campaignData);
         return docRef.id;
     } catch (error) {
         console.error("Error adding campaign: ", error);
@@ -135,7 +134,7 @@ export const addCampaign = async (campaignData: Omit<Campaign, 'id'>): Promise<s
 
 export const updateCampaign = async (id: string, data: Partial<Omit<Campaign, 'id'>>): Promise<void> => {
     try {
-        await updateDoc(doc(firestore, 'campaigns', id), data);
+        await firestore.collection('campaigns').doc(id).update(data);
     } catch (error) {
         console.error("Error updating campaign: ", error);
         throw new Error("Não foi possível atualizar o evento/gênero.");
@@ -144,7 +143,7 @@ export const updateCampaign = async (id: string, data: Partial<Omit<Campaign, 'i
 
 export const deleteCampaign = async (id: string): Promise<void> => {
     try {
-        await deleteDoc(doc(firestore, "campaigns", id));
+        await firestore.collection("campaigns").doc(id).delete();
     } catch (error) {
         console.error("Error deleting campaign: ", error);
         throw new Error("Não foi possível deletar o evento/gênero.");

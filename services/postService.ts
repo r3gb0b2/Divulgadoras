@@ -1,21 +1,8 @@
+import firebase from '../firebase/config';
 import { firestore, storage, functions } from '../firebase/config';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  updateDoc,
-  serverTimestamp,
-  query,
-  where,
-  deleteDoc,
-  Timestamp,
-  writeBatch,
-  getDoc,
-} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter } from '../types';
+import { Timestamp } from 'firebase/firestore';
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt' | 'mediaUrl'>,
@@ -29,9 +16,9 @@ export const createPost = async (
     if (mediaFile) {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-      const storageRef = ref(storage, `posts-media/${fileName}`);
-      await uploadBytes(storageRef, mediaFile);
-      finalMediaUrl = await getDownloadURL(storageRef);
+      const storageRef = storage.ref(`posts-media/${fileName}`);
+      await storageRef.put(mediaFile);
+      finalMediaUrl = await storageRef.getDownloadURL();
     }
 
     // 2. Prepare data for the cloud function
@@ -62,12 +49,12 @@ export const createPost = async (
 
 export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
     try {
-        const postsCollection = collection(firestore, "posts");
-        const q = organizationId 
-            ? query(postsCollection, where("organizationId", "==", organizationId))
-            : query(postsCollection);
+        let q: firebase.firestore.Query = firestore.collection("posts");
+        if (organizationId) {
+            q = q.where("organizationId", "==", organizationId);
+        }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
         const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         posts.sort((a, b) => 
             ((b.createdAt as Timestamp)?.toMillis() || 0) - ((a.createdAt as Timestamp)?.toMillis() || 0)
@@ -82,16 +69,16 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
 export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
     try {
         // Fetch post
-        const postDocRef = doc(firestore, 'posts', postId);
-        const postSnap = await getDoc(postDocRef);
-        if (!postSnap.exists()) {
+        const postDocRef = firestore.collection('posts').doc(postId);
+        const postSnap = await postDocRef.get();
+        if (!postSnap.exists) {
             throw new Error("Publicação não encontrada.");
         }
         const post = { id: postSnap.id, ...postSnap.data() } as Post;
 
         // Fetch assignments
-        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
-        const snapshot = await getDocs(q);
+        const q = firestore.collection("postAssignments").where("postId", "==", postId);
+        const snapshot = await q.get();
         const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
         return { post, assignments };
@@ -104,8 +91,8 @@ export const getPostWithAssignments = async (postId: string): Promise<{ post: Po
 
 export const getAssignmentsForPromoterByEmail = async (email: string): Promise<PostAssignment[]> => {
     try {
-        const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
-        const snapshot = await getDocs(q);
+        const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
+        const snapshot = await q.get();
         const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
         
         // Filter out inactive or expired posts
@@ -141,10 +128,10 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
 
 export const confirmAssignment = async (assignmentId: string): Promise<void> => {
     try {
-        const docRef = doc(firestore, 'postAssignments', assignmentId);
-        await updateDoc(docRef, {
+        const docRef = firestore.collection('postAssignments').doc(assignmentId);
+        await docRef.update({
             status: 'confirmed',
-            confirmedAt: serverTimestamp(),
+            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
         console.error("Error confirming assignment: ", error);
@@ -154,9 +141,9 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
 
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
     try {
-        const docRef = doc(firestore, 'postAssignments', assignmentId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        const docRef = firestore.collection('postAssignments').doc(assignmentId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
             return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
         }
         return null;
@@ -177,17 +164,17 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
             imageFiles.map(async (photo) => {
                 const fileExtension = photo.name.split('.').pop();
                 const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = ref(storage, `posts-proofs/${fileName}`);
-                await uploadBytes(storageRef, photo);
-                return await getDownloadURL(storageRef);
+                const storageRef = storage.ref(`posts-proofs/${fileName}`);
+                await storageRef.put(photo);
+                return await storageRef.getDownloadURL();
             })
         );
         
         // 2. Update Firestore document
-        const docRef = doc(firestore, 'postAssignments', assignmentId);
-        await updateDoc(docRef, {
+        const docRef = firestore.collection('postAssignments').doc(assignmentId);
+        await docRef.update({
             proofImageUrls: proofImageUrls,
-            proofSubmittedAt: serverTimestamp(),
+            proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         
         return proofImageUrls;
@@ -202,8 +189,8 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
   assignments: PostAssignment[];
 }> => {
   try {
-    const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
-    const snapshot = await getDocs(q);
+    const q = firestore.collection("postAssignments").where("promoterId", "==", promoterId);
+    const snapshot = await q.get();
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
@@ -274,8 +261,8 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
   assignments: PostAssignment[];
 }> => {
   try {
-    const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
-    const snapshot = await getDocs(q);
+    const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
+    const snapshot = await q.get();
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
@@ -355,11 +342,11 @@ export const updatePost = async (postId: string, updateData: Partial<Post>): Pro
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
-    const batch = writeBatch(firestore);
+    const batch = firestore.batch();
     try {
         // Find all assignments for the post
-        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
-        const assignmentsSnapshot = await getDocs(q);
+        const q = firestore.collection("postAssignments").where("postId", "==", postId);
+        const assignmentsSnapshot = await q.get();
         
         // Add assignments to the batch for deletion
         assignmentsSnapshot.forEach(doc => {
@@ -367,7 +354,7 @@ export const deletePost = async (postId: string): Promise<void> => {
         });
 
         // Add the post itself to the batch for deletion
-        const postDocRef = doc(firestore, 'posts', postId);
+        const postDocRef = firestore.collection('posts').doc(postId);
         batch.delete(postDocRef);
 
         await batch.commit();
@@ -421,12 +408,12 @@ export const sendSinglePostReminder = async (assignmentId: string): Promise<{mes
 
 export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
     try {
-        const batch = writeBatch(firestore);
+        const batch = firestore.batch();
 
-        const promoterDocRef = doc(firestore, 'promoters', promoterId);
+        const promoterDocRef = firestore.collection('promoters').doc(promoterId);
         batch.update(promoterDocRef, { hasJoinedGroup: false });
 
-        const assignmentDocRef = doc(firestore, 'postAssignments', assignmentId);
+        const assignmentDocRef = firestore.collection('postAssignments').doc(assignmentId);
         batch.delete(assignmentDocRef);
 
         await batch.commit();
@@ -438,9 +425,9 @@ export const removePromoterFromPostAndGroup = async (assignmentId: string, promo
 
 export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
     try {
-        const docRef = doc(firestore, 'postAssignments', assignmentId);
-        await updateDoc(docRef, {
-            confirmedAt: serverTimestamp(),
+        const docRef = firestore.collection('postAssignments').doc(assignmentId);
+        await docRef.update({
+            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
         console.error("Error renewing assignment deadline: ", error);

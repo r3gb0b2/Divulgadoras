@@ -1,20 +1,22 @@
+import firebase from '../firebase/config';
 import { firestore, storage } from '../firebase/config';
-import { collection, addDoc, getDocs, doc, updateDoc, serverTimestamp, query, orderBy, where, deleteDoc, Timestamp, FieldValue, getCountFromServer, limit, startAfter, QueryDocumentSnapshot, DocumentData, documentId, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
+import { Timestamp, DocumentData } from 'firebase/firestore';
+
+type QueryDocumentSnapshot<T> = firebase.firestore.QueryDocumentSnapshot<T>;
 
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
     // Check for existing registration for the same email, state, campaign and organization
-    const q = query(
-      collection(firestore, "promoters"),
-      where("email", "==", normalizedEmail),
-      where("state", "==", promoterData.state),
-      where("campaignName", "==", promoterData.campaignName || null),
-      where("organizationId", "==", promoterData.organizationId)
-    );
-    const querySnapshot = await getDocs(q);
+    const q = firestore
+      .collection("promoters")
+      .where("email", "==", normalizedEmail)
+      .where("state", "==", promoterData.state)
+      .where("campaignName", "==", promoterData.campaignName || null)
+      .where("organizationId", "==", promoterData.organizationId);
+    
+    const querySnapshot = await q.get();
     if (!querySnapshot.empty) {
       throw new Error("Você já se cadastrou para este evento/gênero.");
     }
@@ -25,24 +27,24 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
         const fileName = `${Date.now()}-${Math.random()
           .toString(36)
           .substring(2)}.${fileExtension}`;
-        const storageRef = ref(storage, `promoters-photos/${fileName}`);
-        await uploadBytes(storageRef, photo);
-        return await getDownloadURL(storageRef);
+        const storageRef = storage.ref(`promoters-photos/${fileName}`);
+        await storageRef.put(photo);
+        return await storageRef.getDownloadURL();
       })
     );
 
     const { photos, ...rest } = promoterData;
 
-    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: FieldValue } = {
+    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
       photoUrls,
       status: 'pending' as const,
-      createdAt: serverTimestamp(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
-    await addDoc(collection(firestore, 'promoters'), newPromoter);
+    await firestore.collection('promoters').add(newPromoter);
   } catch (error) {
     console.error("Error adding promoter: ", error);
     if (error instanceof Error) {
@@ -54,9 +56,9 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
 export const getPromoterById = async (id: string): Promise<Promoter | null> => {
     try {
-        const docRef = doc(firestore, 'promoters', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        const docRef = firestore.collection('promoters').doc(id);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
             return { id: docSnap.id, ...docSnap.data() } as Promoter;
         }
         return null;
@@ -68,11 +70,11 @@ export const getPromoterById = async (id: string): Promise<Promoter | null> => {
 
 export const getLatestPromoterProfileByEmail = async (email: string): Promise<Promoter | null> => {
     try {
-        const q = query(
-            collection(firestore, "promoters"),
-            where("email", "==", email.toLowerCase().trim())
-        );
-        const querySnapshot = await getDocs(q);
+        const q = firestore
+            .collection("promoters")
+            .where("email", "==", email.toLowerCase().trim());
+        
+        const querySnapshot = await q.get();
         if (querySnapshot.empty) {
             return null;
         }
@@ -98,11 +100,11 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
 
 export const findPromotersByEmail = async (email: string): Promise<Promoter[]> => {
     try {
-        const q = query(
-            collection(firestore, "promoters"),
-            where("email", "==", email.toLowerCase().trim())
-        );
-        const querySnapshot = await getDocs(q);
+        const q = firestore
+            .collection("promoters")
+            .where("email", "==", email.toLowerCase().trim());
+        
+        const querySnapshot = await q.get();
         const promoters: Promoter[] = [];
         querySnapshot.forEach((doc) => {
             promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
@@ -130,8 +132,8 @@ export const getPromotersByIds = async (promoterIds: string[]): Promise<Promoter
     const CHUNK_SIZE = 30;
     for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
         const chunk = promoterIds.slice(i, i + CHUNK_SIZE);
-        const q = query(collection(firestore, 'promoters'), where(documentId(), 'in', chunk));
-        const snapshot = await getDocs(q);
+        const q = firestore.collection('promoters').where(firebase.firestore.FieldPath.documentId(), 'in', chunk);
+        const snapshot = await q.get();
         snapshot.forEach(doc => {
             promoters.push({ id: doc.id, ...doc.data() } as Promoter);
         });
@@ -158,22 +160,20 @@ export const getPromotersPage = async (options: {
   // we will fetch ALL matching documents in this complex case and paginate on the client.
   // For simpler cases (one or zero 'in' filters), we use efficient server-side pagination.
   try {
-    const promotersRef = collection(firestore, "promoters");
-    
-    let baseFilters: any[] = [];
+    let baseQuery: firebase.firestore.Query = firestore.collection("promoters");
     
     if (options.organizationId) {
-      baseFilters.push(where("organizationId", "==", options.organizationId));
+      baseQuery = baseQuery.where("organizationId", "==", options.organizationId);
     }
     if (options.statesForScope && options.statesForScope.length > 0) {
-      baseFilters.push(where("state", "in", options.statesForScope));
+      baseQuery = baseQuery.where("state", "in", options.statesForScope);
     }
 
     if (options.status !== 'all') {
       if (options.status === 'pending') {
-        baseFilters.push(where("status", "in", ["pending", "rejected_editable"]));
+        baseQuery = baseQuery.where("status", "in", ["pending", "rejected_editable"]);
       } else {
-        baseFilters.push(where("status", "==", options.status));
+        baseQuery = baseQuery.where("status", "==", options.status);
       }
     }
 
@@ -198,31 +198,22 @@ export const getPromotersPage = async (options: {
         if (finalCampaignFilter.length > 30) {
             console.warn(`Campaign filter has ${finalCampaignFilter.length} items, which exceeds Firestore's limit of 30 for 'in' queries. Results may be incomplete.`);
         }
-        baseFilters.push(where("campaignName", "in", finalCampaignFilter.slice(0, 30)));
+        baseQuery = baseQuery.where("campaignName", "in", finalCampaignFilter.slice(0, 30));
     }
 
     if (options.filterOrgId !== 'all') {
-      baseFilters.push(where("organizationId", "==", options.filterOrgId));
+      baseQuery = baseQuery.where("organizationId", "==", options.filterOrgId);
     }
     if (options.filterState !== 'all') {
-      baseFilters.push(where("state", "==", options.filterState));
+      baseQuery = baseQuery.where("state", "==", options.filterState);
     }
 
     // Since we now paginate client-side for all requests to ensure consistency,
     // we fetch all documents that match the filters.
-    const countQuery = query(promotersRef, ...baseFilters);
-    const countSnapshot = await getCountFromServer(countQuery);
-    const totalCount = countSnapshot.data().count;
+    const countSnapshot = await baseQuery.get();
+    const totalCount = countSnapshot.size;
 
-    // We can remove the multi-query logic here if we decide to fetch all and paginate client-side always.
-    // However, for performance, it's better to keep server-side pagination for simple queries.
-    // The issue is that the logic for detecting when to switch is complex.
-    // A simpler, robust solution is to just fetch everything based on filters, then let AdminPanel do the pagination.
-    // Let's stick with a simplified full fetch for this function to fix the bug.
-    // The AdminPanel already implements client-side pagination on the fetched results.
-
-    const dataQuery = query(promotersRef, ...baseFilters);
-    const querySnapshot = await getDocs(dataQuery);
+    const querySnapshot = await baseQuery.get();
     
     const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     
@@ -249,14 +240,13 @@ export const getAllPromoters = async (options: {
   assignedCampaignsForScope?: { [stateAbbr: string]: string[] };
 }): Promise<Promoter[]> => {
   try {
-    const promotersRef = collection(firestore, "promoters");
+    const promotersRef = firestore.collection("promoters");
     const promotersMap = new Map<string, Promoter>();
     const CHUNK_SIZE = 30; // Firestore `in` query limit
 
     // --- Helper to execute queries and populate the map ---
-    const executeQuery = async (filters: any[]) => {
-        const q = query(promotersRef, ...filters);
-        const snapshot = await getDocs(q);
+    const executeQuery = async (query: firebase.firestore.Query) => {
+        const snapshot = await query.get();
         snapshot.forEach(doc => {
             if (!promotersMap.has(doc.id)) {
                 promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
@@ -264,18 +254,18 @@ export const getAllPromoters = async (options: {
         });
     };
 
+    let baseQuery: firebase.firestore.Query = promotersRef;
+
     // --- 1. Base Filters (org, status) ---
-    const baseFilters: any[] = [];
     if (options.organizationId) {
-        baseFilters.push(where("organizationId", "==", options.organizationId));
+        baseQuery = baseQuery.where("organizationId", "==", options.organizationId);
     }
     if (options.filterOrgId !== 'all') { // Superadmin filter override
-        const orgFilterIndex = baseFilters.findIndex(f => f._field.path.segments.join("/") === 'organizationId');
-        if (orgFilterIndex > -1) baseFilters.splice(orgFilterIndex, 1);
-        baseFilters.push(where("organizationId", "==", options.filterOrgId));
+        // This is tricky with compat syntax. A new query must be started.
+        baseQuery = firestore.collection("promoters").where("organizationId", "==", options.filterOrgId);
     }
     if (options.status !== 'all') {
-        baseFilters.push(where("status", "in", options.status === 'pending' ? ["pending", "rejected_editable"] : [options.status]));
+        baseQuery = baseQuery.where("status", "in", options.status === 'pending' ? ["pending", "rejected_editable"] : [options.status]);
     }
 
     // --- 2. Determine States to Query ---
@@ -290,68 +280,54 @@ export const getAllPromoters = async (options: {
     }
 
     // --- 3. Superadmin / No State Scope ---
-    // If there's no state scope (superadmin viewing "all states"), query based on other filters.
     if (!statesToQuery) {
-        let campaignFilters: any[] = [];
+        let finalQuery = baseQuery;
         if (options.selectedCampaign !== 'all') {
-            campaignFilters.push(where("campaignName", "==", options.selectedCampaign));
+            finalQuery = finalQuery.where("campaignName", "==", options.selectedCampaign);
         }
-        await executeQuery([...baseFilters, ...campaignFilters]);
+        await executeQuery(finalQuery);
         return Array.from(promotersMap.values());
     }
 
     // --- 4. Admin with State Scope ---
-
-    // --- 4a. Handle Specific Campaign Filter ---
-    // If a campaign is selected from the dropdown, it overrides all other permission logic.
     if (options.selectedCampaign !== 'all') {
-        const campaignFilter = where("campaignName", "==", options.selectedCampaign);
+        const campaignQuery = baseQuery.where("campaignName", "==", options.selectedCampaign);
         for (let i = 0; i < statesToQuery.length; i += CHUNK_SIZE) {
             const stateChunk = statesToQuery.slice(i, i + CHUNK_SIZE);
-            const stateFilter = where("state", "in", stateChunk);
-            await executeQuery([...baseFilters, stateFilter, campaignFilter]);
+            await executeQuery(campaignQuery.where("state", "in", stateChunk));
         }
         return Array.from(promotersMap.values());
     }
     
-    // --- 4b. Handle "All Campaigns" (Default View based on permissions) ---
+    // --- 4b. Handle "All Campaigns" ---
     const statesWithFullAccess = new Set<string>();
     const statesWithRestrictedAccess = new Map<string, string[]>();
 
     for (const state of statesToQuery) {
         if (!options.assignedCampaignsForScope || options.assignedCampaignsForScope[state] === undefined) {
-            statesWithFullAccess.add(state); // Undefined entry means full access for this state
+            statesWithFullAccess.add(state);
         } else {
             statesWithRestrictedAccess.set(state, options.assignedCampaignsForScope[state]);
         }
     }
 
-    // Query states with FULL access (no campaign filter)
     if (statesWithFullAccess.size > 0) {
         const states = Array.from(statesWithFullAccess);
         for (let i = 0; i < states.length; i += CHUNK_SIZE) {
             const stateChunk = states.slice(i, i + CHUNK_SIZE);
-            const stateFilter = where("state", "in", stateChunk);
-            await executeQuery([...baseFilters, stateFilter]); // This gets ALL promoters for the state
+            await executeQuery(baseQuery.where("state", "in", stateChunk));
         }
     }
 
-    // Query states with RESTRICTED access
     for (const [state, campaigns] of statesWithRestrictedAccess.entries()) {
-        const stateFilter = where("state", "==", state);
-        
-        // Query for specific campaigns in this state
+        const stateQuery = baseQuery.where("state", "==", state);
         if (campaigns.length > 0) {
             for (let i = 0; i < campaigns.length; i += CHUNK_SIZE) {
                 const campaignChunk = campaigns.slice(i, i + CHUNK_SIZE);
-                const campaignFilter = where("campaignName", "in", campaignChunk);
-                await executeQuery([...baseFilters, stateFilter, campaignFilter]);
+                await executeQuery(stateQuery.where("campaignName", "in", campaignChunk));
             }
         }
-
-        // ALWAYS query for general (null campaign) applicants in this restricted state
-        const nullCampaignFilter = where("campaignName", "==", null);
-        await executeQuery([...baseFilters, stateFilter, nullCampaignFilter]);
+        await executeQuery(stateQuery.where("campaignName", "==", null));
     }
 
     return Array.from(promotersMap.values());
@@ -371,33 +347,31 @@ export const getPromoterStats = async (options: {
   statesForScope?: string[] | null;
 }): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
     try {
-        const promotersRef = collection(firestore, "promoters");
+        let baseQuery: firebase.firestore.Query = firestore.collection("promoters");
         
-        const baseFilters: any[] = [];
         if (options.organizationId) {
-            baseFilters.push(where("organizationId", "==", options.organizationId));
+            baseQuery = baseQuery.where("organizationId", "==", options.organizationId);
         }
         if (options.statesForScope && options.statesForScope.length > 0) {
-            baseFilters.push(where("state", "in", options.statesForScope));
+            baseQuery = baseQuery.where("state", "in", options.statesForScope);
         }
 
-        const totalQuery = baseFilters.length > 0 ? query(promotersRef, ...baseFilters) : query(promotersRef);
-        const pendingQuery = query(totalQuery, where("status", "in", ["pending", "rejected_editable"]));
-        const approvedQuery = query(totalQuery, where("status", "==", "approved"));
-        const rejectedQuery = query(totalQuery, where("status", "==", "rejected"));
+        const pendingQuery = baseQuery.where("status", "in", ["pending", "rejected_editable"]);
+        const approvedQuery = baseQuery.where("status", "==", "approved");
+        const rejectedQuery = baseQuery.where("status", "==", "rejected");
 
         const [totalSnap, pendingSnap, approvedSnap, rejectedSnap] = await Promise.all([
-            getCountFromServer(totalQuery),
-            getCountFromServer(pendingQuery),
-            getCountFromServer(approvedQuery),
-            getCountFromServer(rejectedQuery)
+            baseQuery.get(),
+            pendingQuery.get(),
+            approvedQuery.get(),
+            rejectedQuery.get()
         ]);
         
         return {
-            total: totalSnap.data().count,
-            pending: pendingSnap.data().count,
-            approved: approvedSnap.data().count,
-            rejected: rejectedSnap.data().count,
+            total: totalSnap.size,
+            pending: pendingSnap.size,
+            approved: approvedSnap.size,
+            rejected: rejectedSnap.size,
         };
     } catch (error) {
         console.error("Error getting promoter stats: ", error);
@@ -408,8 +382,8 @@ export const getPromoterStats = async (options: {
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
-    const promoterDoc = doc(firestore, 'promoters', id);
-    await updateDoc(promoterDoc, data);
+    const promoterDoc = firestore.collection('promoters').doc(id);
+    await promoterDoc.update(data);
   } catch (error) {
     console.error("Error updating promoter: ", error);
     throw new Error("Não foi possível atualizar a divulgadora.");
@@ -418,7 +392,7 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
 
 export const deletePromoter = async (id: string): Promise<void> => {
     try {
-      await deleteDoc(doc(firestore, "promoters", id));
+      await firestore.collection("promoters").doc(id).delete();
     } catch (error) {
       console.error("Error deleting promoter: ", error);
       throw new Error("Não foi possível deletar a divulgadora.");
@@ -427,16 +401,15 @@ export const deletePromoter = async (id: string): Promise<void> => {
 
 export const checkPromoterStatus = async (email: string, organizationId?: string): Promise<Promoter[] | null> => {
     try {
-        let q = query(
-            collection(firestore, "promoters"), 
-            where("email", "==", email.toLowerCase().trim())
-        );
+        let q: firebase.firestore.Query = firestore
+            .collection("promoters")
+            .where("email", "==", email.toLowerCase().trim());
 
         if (organizationId) {
-            q = query(q, where("organizationId", "==", organizationId));
+            q = q.where("organizationId", "==", organizationId);
         }
 
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await q.get();
         if (querySnapshot.empty) {
             return null;
         }
@@ -462,12 +435,12 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
 
 export const getApprovedEventsForPromoter = async (email: string): Promise<Promoter[]> => {
     try {
-        const q = query(
-            collection(firestore, "promoters"),
-            where("email", "==", email.toLowerCase().trim()),
-            where("status", "==", "approved")
-        );
-        const querySnapshot = await getDocs(q);
+        const q = firestore
+            .collection("promoters")
+            .where("email", "==", email.toLowerCase().trim())
+            .where("status", "==", "approved");
+
+        const querySnapshot = await q.get();
         if (querySnapshot.empty) return [];
 
         const promoters: Promoter[] = [];
@@ -484,14 +457,14 @@ export const getApprovedEventsForPromoter = async (email: string): Promise<Promo
 
 export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
   try {
-    const q = query(
-      collection(firestore, "promoters"),
-      where("organizationId", "==", organizationId),
-      where("state", "==", state),
-      where("campaignName", "==", campaignName),
-      where("status", "==", "approved")
-    );
-    const querySnapshot = await getDocs(q);
+    const q = firestore
+      .collection("promoters")
+      .where("organizationId", "==", organizationId)
+      .where("state", "==", state)
+      .where("campaignName", "==", campaignName)
+      .where("status", "==", "approved");
+    
+    const querySnapshot = await q.get();
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
       promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
@@ -511,11 +484,11 @@ export const getApprovedPromoters = async (organizationId: string, state: string
 
 export const getRejectionReasons = async (organizationId: string): Promise<RejectionReason[]> => {
     try {
-        const q = query(
-            collection(firestore, "rejectionReasons"),
-            where("organizationId", "==", organizationId)
-        );
-        const querySnapshot = await getDocs(q);
+        const q = firestore
+            .collection("rejectionReasons")
+            .where("organizationId", "==", organizationId);
+
+        const querySnapshot = await q.get();
         // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
         const reasons = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as RejectionReason);
         
@@ -531,7 +504,7 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
 
 export const addRejectionReason = async (text: string, organizationId: string): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'rejectionReasons'), { text, organizationId });
+        const docRef = await firestore.collection('rejectionReasons').add({ text, organizationId });
         return docRef.id;
     } catch (error) {
         console.error("Error adding rejection reason: ", error);
@@ -541,7 +514,7 @@ export const addRejectionReason = async (text: string, organizationId: string): 
 
 export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
     try {
-        await updateDoc(doc(firestore, 'rejectionReasons', id), { text });
+        await firestore.collection('rejectionReasons').doc(id).update({ text });
     } catch (error) {
         console.error("Error updating rejection reason: ", error);
         throw new Error("Não foi possível atualizar o motivo de rejeição.");
@@ -550,7 +523,7 @@ export const updateRejectionReason = async (id: string, text: string): Promise<v
 
 export const deleteRejectionReason = async (id: string): Promise<void> => {
     try {
-        await deleteDoc(doc(firestore, "rejectionReasons", id));
+        await firestore.collection("rejectionReasons").doc(id).delete();
     } catch (error) {
         console.error("Error deleting rejection reason: ", error);
         throw new Error("Não foi possível deletar o motivo de rejeição.");

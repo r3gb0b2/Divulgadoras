@@ -1,18 +1,7 @@
+import firebase from '../firebase/config';
 import { firestore } from '../firebase/config';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  limit,
-  writeBatch,
-  doc,
-  runTransaction,
-  Timestamp,
-} from 'firebase/firestore';
 import { GuestListConfirmation } from '../types';
+import { Timestamp } from 'firebase/firestore';
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
@@ -23,23 +12,21 @@ export const addGuestListConfirmation = async (
   confirmationData: Omit<GuestListConfirmation, 'id' | 'confirmedAt'>
 ): Promise<void> => {
   try {
-    const confirmationsRef = collection(firestore, 'guestListConfirmations');
+    const confirmationsRef = firestore.collection('guestListConfirmations');
     
     // Check if a confirmation already exists for this promoter and campaign
-    const q = query(
-      confirmationsRef,
-      where('promoterId', '==', confirmationData.promoterId),
-      where('campaignId', '==', confirmationData.campaignId),
-      where('listName', '==', confirmationData.listName),
-      limit(1)
-    );
+    const q = confirmationsRef
+      .where('promoterId', '==', confirmationData.promoterId)
+      .where('campaignId', '==', confirmationData.campaignId)
+      .where('listName', '==', confirmationData.listName)
+      .limit(1);
     
-    const existingSnapshot = await getDocs(q);
-    const batch = writeBatch(firestore);
+    const existingSnapshot = await q.get();
+    const batch = firestore.batch();
 
     const dataWithTimestamp = {
       ...confirmationData,
-      confirmedAt: serverTimestamp(),
+      confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
     
     if (!existingSnapshot.empty) {
@@ -48,7 +35,7 @@ export const addGuestListConfirmation = async (
       batch.update(existingDocRef, dataWithTimestamp);
     } else {
       // Create new confirmation
-      const newDocRef = doc(collection(firestore, 'guestListConfirmations'));
+      const newDocRef = firestore.collection('guestListConfirmations').doc();
       batch.set(newDocRef, dataWithTimestamp);
     }
 
@@ -70,12 +57,11 @@ export const getGuestListForCampaign = async (
   campaignId: string
 ): Promise<GuestListConfirmation[]> => {
   try {
-    const q = query(
-      collection(firestore, 'guestListConfirmations'),
-      where('campaignId', '==', campaignId)
-    );
+    const q = firestore
+      .collection('guestListConfirmations')
+      .where('campaignId', '==', campaignId);
     
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await q.get();
     const confirmations: GuestListConfirmation[] = [];
     querySnapshot.forEach((doc) => {
       confirmations.push({ id: doc.id, ...doc.data() } as GuestListConfirmation);
@@ -96,11 +82,11 @@ export const getGuestListForCampaign = async (
  * @param personName The name of the person to check in.
  */
 export const checkInPerson = async (confirmationId: string, personName: string): Promise<void> => {
-  const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
+  const docRef = firestore.collection('guestListConfirmations').doc(confirmationId);
   try {
-    await runTransaction(firestore, async (transaction) => {
+    await firestore.runTransaction(async (transaction) => {
       const docSnap = await transaction.get(docRef);
-      if (!docSnap.exists()) {
+      if (!docSnap.exists) {
         throw new Error("Confirmação não encontrada.");
       }
 

@@ -34,3 +34,6 @@ export const auth = firebase.auth();
 
 // Initialize Firebase Functions and get a reference to the service using compat syntax
 export const functions = app.functions('southamerica-east1');
+
+// Export the firebase namespace for compat services like FieldValue
+export default firebase;
