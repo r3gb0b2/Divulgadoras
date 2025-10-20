@@ -186,9 +186,12 @@ export const PostDetails: React.FC = () => {
         setIsDownloading(true);
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error('Falha ao buscar o vídeo.');
+            if (!response.ok) throw new Error(`Falha ao buscar o vídeo (status: ${response.status})`);
             
-            const blob = await response.blob();
+            // Re-create blob with a generic mime type to force download on all devices
+            const originalBlob = await response.blob();
+            const blob = new Blob([originalBlob], { type: 'application/octet-stream' });
+
             const objectUrl = window.URL.createObjectURL(blob);
             
             const link = document.createElement('a');
@@ -205,7 +208,8 @@ export const PostDetails: React.FC = () => {
             window.URL.revokeObjectURL(objectUrl);
         } catch (error) {
             console.error('Download failed:', error);
-            alert('Não foi possível baixar o vídeo. Por favor, tente novamente.');
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            alert(`Não foi possível baixar o vídeo. Por favor, tente novamente. Detalhe: ${errorMessage}`);
         } finally {
             setIsDownloading(false);
         }
