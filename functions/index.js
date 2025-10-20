@@ -1326,48 +1326,49 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
         return;
     }
 
-    const fileUrl = req.query.url;
-    const fileName = req.query.name || "video.mp4";
+    const filePath = req.query.path;
+    const fileName = req.query.name || "download";
 
-    if (!fileUrl) {
-        return res.status(400).send("URL parameter is missing.");
+    if (!filePath) {
+        return res.status(400).send("`path` parameter is missing.");
     }
 
     try {
-        const decodedUrl = decodeURIComponent(fileUrl);
-        functions.logger.info(`Proxying download for URL: ${decodedUrl}`);
+        const decodedPath = decodeURIComponent(filePath);
+        functions.logger.info(`Streaming download for path: ${decodedPath}`);
 
-        const response = await fetch(decodedUrl, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            },
-            redirect: "follow",
-        });
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(decodedPath);
 
-        if (!response.ok) {
-            const errorBody = await response.text().catch(() => "Could not read error body.");
-            functions.logger.error(`Fetch failed for URL ${decodedUrl} with status: ${response.status} ${response.statusText}`, { errorBody });
-            return res.status(500).send("Failed to fetch the file.");
+        const [exists] = await file.exists();
+        if (!exists) {
+            functions.logger.error(`File not found at path: ${decodedPath}`);
+            return res.status(404).send("File not found.");
         }
+
+        const [metadata] = await file.getMetadata();
 
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-
-        const contentType = response.headers.get("content-type");
-        if (contentType) {
-            res.setHeader("Content-Type", contentType);
+        if (metadata.contentType) {
+            res.setHeader("Content-Type", metadata.contentType);
         }
-
-        const contentLength = response.headers.get("content-length");
-        if (contentLength) {
-            res.setHeader("Content-Length", contentLength);
+        if (metadata.size) {
+            res.setHeader("Content-Length", metadata.size);
         }
+        
+        const readStream = file.createReadStream();
 
-        // Use Readable.fromWeb to convert the web stream to a Node.js stream
-        const nodeStream = Readable.fromWeb(response.body);
+        readStream.on("error", (err) => {
+            functions.logger.error("Error reading file stream:", { errorMessage: err.message });
+            // Can't send headers after this point
+        });
 
-        nodeStream.pipe(res);
+        readStream.pipe(res);
+        
     } catch (e) {
         functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
-        res.status(500).send("An internal error occurred.");
+        if (!res.headersSent) {
+            res.status(500).send("An internal error occurred.");
+        }
     }
 });

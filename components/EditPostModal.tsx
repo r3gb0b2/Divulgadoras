@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Post } from '../types';
 import { LinkIcon } from './Icons';
+import { storage } from '../firebase/config';
+import { ref, uploadBytes } from 'firebase/storage';
+import StorageMedia from './StorageMedia';
 
 interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
     Icon: React.ElementType;
@@ -85,11 +88,19 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Mídia ({post.type})</label>
                             <input type="file" accept={post.type === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark mt-1" />
-                            {mediaPreview && (post.type === 'video') ? (
-                                <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
-                            ) : mediaPreview ? (
-                                <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />
-                            ) : null}
+                            {mediaPreview && (
+                                <div className="mt-4">
+                                    {mediaFile ? ( // If a new file is selected, show its preview
+                                        post.type === 'video' ? (
+                                            <video src={mediaPreview} controls className="max-h-60 rounded-md" />
+                                        ) : (
+                                            <img src={mediaPreview} alt="Preview" className="max-h-60 rounded-md" />
+                                        )
+                                    ) : ( // Otherwise, show the original media from storage path
+                                        <StorageMedia path={mediaPreview} type={post.type} className="max-h-60 rounded-md" />
+                                    )}
+                                </div>
+                            )}
                             <p className="text-xs text-yellow-400 mt-2">Selecionar um novo arquivo substituirá o atual.</p>
                         </div>
                      )}

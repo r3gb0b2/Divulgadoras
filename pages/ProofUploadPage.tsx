@@ -4,6 +4,7 @@ import { getAssignmentById, submitProof } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import StorageMedia from '../components/StorageMedia';
 
 const ProofUploadPage: React.FC = () => {
     const { assignmentId } = useParams<{ assignmentId: string }>();
@@ -121,11 +122,10 @@ const ProofUploadPage: React.FC = () => {
                 <p className="text-center text-primary font-semibold mb-6">{assignment.post.campaignName}</p>
                 
                 <div className="bg-dark/70 p-4 rounded-lg mb-6">
-                    {assignment.post.type === 'image' && assignment.post.mediaUrl && (
-                        <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
-                    )}
-                    {assignment.post.type === 'video' && assignment.post.mediaUrl && (
-                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                    {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
+                        <div className="w-full max-w-sm mx-auto rounded-md mb-4">
+                           <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                        </div>
                     )}
                      <h4 className="font-semibold text-gray-200">Instruções Originais:</h4>
                      <p className="text-gray-400 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>

@@ -10,6 +10,8 @@ import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
+import { storage } from '../firebase/config';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -98,8 +100,11 @@ const CreatePost: React.FC = () => {
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     if ((originalPost.type === 'image' || originalPost.type === 'video') && originalPost.mediaUrl) {
-                        setMediaPreview(originalPost.mediaUrl);
-                        // User will have to re-upload, but we show the preview.
+                        // mediaUrl is a path, get download URL for preview
+                        const storageRef = ref(storage, originalPost.mediaUrl);
+                        getDownloadURL(storageRef).then(url => {
+                            setMediaPreview(url);
+                        }).catch(console.error);
                     }
                 }
 
@@ -324,7 +329,7 @@ const CreatePost: React.FC = () => {
                      ) : (
                         <div>
                             <input type="file" accept={postType === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                            {mediaPreview && (mediaFile?.type.startsWith('video/') || mediaPreview.includes('videos.cibort.com')) ? (
+                            {mediaPreview && (mediaFile?.type.startsWith('video/') || mediaPreview.includes('videos.cibort.com') || (postType === 'video' && mediaPreview.startsWith('http'))) ? (
                                 <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
                             ) : mediaPreview ? (
                                 <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />

@@ -31,7 +31,7 @@ export const createPost = async (
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = ref(storage, `posts-media/${fileName}`);
       await uploadBytes(storageRef, mediaFile);
-      finalMediaUrl = await getDownloadURL(storageRef);
+      finalMediaUrl = storageRef.fullPath;
     }
 
     // 2. Prepare data for the cloud function
