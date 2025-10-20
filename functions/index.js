@@ -1354,17 +1354,21 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
     }
 
     try {
-        const decodedUrl = decodeURIComponent(fileUrl);
+        // The fileUrl from req.query is already URI-decoded by Express.
+        // A second, manual decode can cause errors if the original filename contained characters like '%'.
+        // We will match the regex against the URL as-is provided by Express.
 
         // Regex to extract the file path from a Firebase Storage URL
         const pathRegex = /\/o\/(.*?)\?alt=media/;
-        const match = decodedUrl.match(pathRegex);
+        const match = fileUrl.match(pathRegex);
 
         if (!match || !match[1]) {
-            functions.logger.error("Could not extract file path from URL.", { url: decodedUrl });
+            functions.logger.error("Could not extract file path from URL.", { url: fileUrl });
             return res.status(400).send("Invalid Firebase Storage URL format.");
         }
 
+        // The captured path is still URL-encoded (e.g., spaces as %20). We need to decode it once
+        // to get the actual path for the Storage SDK.
         const filePath = decodeURIComponent(match[1]);
         const bucket = admin.storage().bucket();
         const file = bucket.file(filePath);
@@ -1387,7 +1391,11 @@ exports.downloadFileProxy = functions.region("southamerica-east1").https.onReque
         // Redirect the user's browser to the signed URL to start the download.
         return res.redirect(302, signedUrl);
     } catch (e) {
-        functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
+        functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack, fileUrl: fileUrl });
+        if (e instanceof URIError) {
+            // This specific error suggests a problem with URL decoding.
+            return res.status(400).send("Malformed file URL detected. It may contain invalid characters.");
+        }
         if (!res.headersSent) {
            return res.status(500).send("An internal server error occurred.");
         }
