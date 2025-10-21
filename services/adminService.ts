@@ -34,7 +34,7 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
     const docRef = firestore.collection('admins').doc(uid);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-      return { uid, ...docSnap.data() } as AdminUserData;
+      return Object.assign({ uid }, docSnap.data()) as AdminUserData;
     }
     return null;
   } catch (error) {
@@ -70,7 +70,7 @@ export const getAllAdmins = async (organizationId?: string): Promise<AdminUserDa
       q = q.where('organizationIds', 'array-contains', organizationId);
     }
     const snapshot = await q.get();
-    return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as AdminUserData));
+    return snapshot.docs.map(doc => Object.assign({ uid: doc.id }, doc.data()) as AdminUserData);
   } catch (error) {
     console.error('Error getting all admins:', error);
     throw new Error('Não foi possível buscar a lista de administradores.');
@@ -102,7 +102,7 @@ export const getAdminApplications = async (): Promise<AdminApplication[]> => {
   try {
     const q = firestore.collection('adminApplications').orderBy('createdAt', 'desc');
     const snapshot = await q.get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
+    return snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as AdminApplication);
   } catch (error) {
     console.error('Error getting admin applications:', error);
     throw new Error('Não foi possível buscar as solicitações de acesso.');

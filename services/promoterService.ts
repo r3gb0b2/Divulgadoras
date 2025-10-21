@@ -58,7 +58,7 @@ export const getPromoterById = async (id: string): Promise<Promoter | null> => {
         const docRef = firestore.collection('promoters').doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) {
-            return { id: docSnap.id, ...docSnap.data() } as Promoter;
+            return Object.assign({ id: docSnap.id }, docSnap.data()) as Promoter;
         }
         return null;
     } catch (error) {
@@ -134,7 +134,7 @@ export const getPromotersByIds = async (promoterIds: string[]): Promise<Promoter
         const q = firestore.collection('promoters').where(firebase.firestore.FieldPath.documentId(), 'in', chunk);
         const snapshot = await q.get();
         snapshot.forEach(doc => {
-            promoters.push({ id: doc.id, ...doc.data() } as Promoter);
+            promoters.push(Object.assign({ id: doc.id }, doc.data()) as Promoter);
         });
     }
     return promoters;
@@ -214,7 +214,7 @@ export const getPromotersPage = async (options: {
 
     const querySnapshot = await baseQuery.get();
     
-    const promoters: Promoter[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+    const promoters: Promoter[] = querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Promoter);
     
     // Because we are fetching all results, pagination cursors are not applicable.
     // The AdminPanel handles client-side pagination.
@@ -248,7 +248,7 @@ export const getAllPromoters = async (options: {
         const snapshot = await query.get();
         snapshot.forEach(doc => {
             if (!promotersMap.has(doc.id)) {
-                promotersMap.set(doc.id, { id: doc.id, ...doc.data() } as Promoter);
+                promotersMap.set(doc.id, Object.assign({ id: doc.id }, doc.data()) as Promoter);
             }
         });
     };

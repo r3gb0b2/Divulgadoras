@@ -8,7 +8,7 @@ import { Organization } from '../types';
 export const getOrganizations = async (): Promise<Organization[]> => {
     try {
         const querySnapshot = await firestore.collection("organizations").get();
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
     } catch (error) {
         console.error("Error getting organizations: ", error);
         throw new Error("Não foi possível buscar as organizações.");
@@ -22,7 +22,7 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
         const q = firestore.collection("organizations").where("public", "==", true).where("status", "in", ["active", "trial"]);
         const querySnapshot = await q.get();
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
+        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
     } catch (error) {
         console.error("Error getting public organizations: ", error);
         throw new Error("Não foi possível buscar as organizações públicas.");
@@ -37,7 +37,7 @@ export const getOrganization = async (id: string): Promise<Organization | null> 
         const docRef = firestore.collection('organizations').doc(id);
         const docSnap = await docRef.get();
         if (docSnap.exists) {
-            return { id: docSnap.id, ...docSnap.data() } as Organization;
+            return Object.assign({ id: docSnap.id }, docSnap.data()) as Organization;
         }
         return null;
     } catch (error) {

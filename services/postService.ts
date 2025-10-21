@@ -49,7 +49,7 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
         }
 
         const snapshot = await q.get();
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+        const posts = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Post);
         posts.sort((a, b) => 
             ((b.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0) - ((a.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0)
         );
@@ -68,12 +68,12 @@ export const getPostWithAssignments = async (postId: string): Promise<{ post: Po
         if (!postSnap.exists) {
             throw new Error("Publicação não encontrada.");
         }
-        const post = { id: postSnap.id, ...postSnap.data() } as Post;
+        const post = Object.assign({ id: postSnap.id }, postSnap.data()) as Post;
 
         // Fetch assignments
         const q = firestore.collection("postAssignments").where("postId", "==", postId);
         const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+        const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
 
         return { post, assignments };
 
@@ -87,7 +87,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
     try {
         const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
         const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+        const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
         
         // Filter out inactive or expired posts
         const now = new Date();
@@ -138,7 +138,7 @@ export const getAssignmentById = async (assignmentId: string): Promise<PostAssig
         const docRef = firestore.collection('postAssignments').doc(assignmentId);
         const docSnap = await docRef.get();
         if (docSnap.exists) {
-            return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
+            return Object.assign({ id: docSnap.id }, docSnap.data()) as PostAssignment;
         }
         return null;
     } catch (error) {
@@ -185,7 +185,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
   try {
     const q = firestore.collection("postAssignments").where("promoterId", "==", promoterId);
     const snapshot = await q.get();
-    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
 
     let completed = 0;
     let missed = 0; // Post expired
@@ -257,7 +257,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
   try {
     const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
     const snapshot = await q.get();
-    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
 
     let completed = 0;
     let missed = 0; // Post expired
