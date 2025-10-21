@@ -3,54 +3,33 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
-const https = require("https");
+const { Readable } = require("stream");
+
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
-const { GoogleGenAI } = require("@google/genai");
+
+// Stripe SDK for payments
+const stripe = require("stripe")(functions.config().stripe.secret_key);
+
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
 
-// --- External SDK Initializations ---
-// This block safely initializes all external SDKs that depend on environment configuration.
-// If any config is missing, the respective SDK variable will be null, and dependent functions will handle it gracefully.
-let stripe = null;
-let brevoApiInstance = null;
-let ai = null;
 
-// We get the config object once to avoid multiple calls.
-const config = functions.config();
-
-try {
-    // Stripe Init
-    if (config.stripe && config.stripe.secret_key) {
-        stripe = require("stripe")(config.stripe.secret_key);
-    } else {
-        console.warn("Stripe config missing. Payment functions will be disabled.");
-    }
-
-    // Brevo Init
-    if (config.brevo && config.brevo.key) {
-        const defaultClient = Brevo.ApiClient.instance;
-        const apiKey = defaultClient.authentications["api-key"];
-        apiKey.apiKey = config.brevo.key;
-        brevoApiInstance = new Brevo.TransactionalEmailsApi();
-    } else {
-        console.warn("Brevo config missing. Email functions will be disabled.");
-    }
-
-    // Gemini Init
-    if (config.gemini && config.gemini.key) {
-        ai = new GoogleGenAI({ apiKey: config.gemini.key });
-    } else {
-        console.warn("Gemini config missing. AI functions will be disabled.");
-    }
-} catch (error) {
-    console.error("FATAL: Error during external SDK initialization. Some features may be disabled.", error);
+// --- Brevo API Client Initialization ---
+// The API key and sender email are configured in the Firebase environment.
+// Use the command:
+// firebase functions:config:set brevo.key="YOUR_API_KEY" brevo.sender_email="your@verified-sender.com"
+const brevoConfig = functions.config().brevo;
+let brevoApiInstance;
+if (brevoConfig && brevoConfig.key) {
+  const defaultClient = Brevo.ApiClient.instance;
+  const apiKey = defaultClient.authentications["api-key"];
+  apiKey.apiKey = brevoConfig.key;
+  brevoApiInstance = new Brevo.TransactionalEmailsApi();
 }
-
 
 /**
  * Helper function to extract detailed error messages from the Brevo SDK.
@@ -129,7 +108,7 @@ const isSuperAdmin = async (uid) => {
  * If the new status is 'approved' or 'rejected', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
-exports.promoterUpdateTrigger = functions // Renamed to avoid deployment conflicts with old function names.
+exports.promoterStatusTrigger = functions
     .region("southamerica-east1")
     .firestore.document("promoters/{promoterId}")
     .onUpdate(async (change, context) => {
@@ -165,7 +144,7 @@ exports.promoterUpdateTrigger = functions // Renamed to avoid deployment conflic
  * Triggered when a new PostAssignment document is created.
  * This function is responsible for sending the notification email to the promoter in the background.
  */
-exports.postAssignmentCreationTrigger = functions.region("southamerica-east1").firestore // Renamed to avoid deployment conflicts.
+exports.postAssignmentTrigger = functions.region("southamerica-east1").firestore
     .document("postAssignments/{assignmentId}")
     .onCreate(async (snap, context) => {
         const assignmentData = snap.data();
@@ -265,7 +244,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
   }
 
   await batch.commit();
-  // Note: Emails are now sent by the onPostAssignmentCreated trigger, so no email logic is needed here.
+  // Note: Emails are now sent by the postAssignmentTrigger, so no email logic is needed here.
   console.log(`[Auto-Assign] Created new assignments for promoter ${promoterId}.`);
 }
 
@@ -292,13 +271,13 @@ async function sendStatusChangeEmail(promoterData) {
       promoterData.campaignName,
   );
 
-  const portalLink = `https://divulgadoras.vercel.app/status?email=${encodeURIComponent(promoterData.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoterData.email, name: promoterData.name }];
   sendSmtpEmail.sender = {
     name: orgName || "Equipe de Eventos",
-    email: config.brevo.sender_email,
+    email: brevoConfig.sender_email,
   };
 
   const replacements = {
@@ -350,7 +329,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
     return;
   }
 
-  const portalLink = `https://divulgadoras.vercel.app/posts?email=${encodeURIComponent(promoter.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
   const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
   const htmlContent = `
     <!DOCTYPE html>
@@ -385,7 +364,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
   sendSmtpEmail.sender = {
     name: postDetails.orgName || "Equipe de Eventos",
-    email: config.brevo.sender_email,
+    email: brevoConfig.sender_email,
   };
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = htmlContent;
@@ -412,7 +391,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
     return;
   }
 
-  const proofLink = `https://divulgadoras.vercel.app/proof/${promoter.id}`;
+  const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
   const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
   const htmlContent = `
     <!DOCTYPE html>
@@ -447,7 +426,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
   sendSmtpEmail.to = [{ email: promoter.promoterEmail, name: promoter.promoterName }];
   sendSmtpEmail.sender = {
     name: postDetails.orgName || "Equipe de Eventos",
-    email: config.brevo.sender_email,
+    email: brevoConfig.sender_email,
   };
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = htmlContent;
@@ -610,7 +589,7 @@ exports.getSystemStatus = functions.region("southamerica-east1").https.onCall(as
     log: [],
   };
   status.log.push({ level: "INFO", message: "Iniciando verificação do sistema..." });
-  if (!config.brevo || !config.brevo.key || !config.brevo.sender_email) {
+  if (!brevoConfig || !brevoConfig.key || !brevoConfig.sender_email) {
     status.message = "As variáveis de ambiente para o serviço de e-mail (Brevo) não estão configuradas.";
     status.log.push({ level: "ERROR", message: "Configuração 'brevo.key' ou 'brevo.sender_email' não encontrada no Firebase." });
     return status;
@@ -647,12 +626,12 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
 
   const { testType, customHtmlContent } = data; // 'generic', 'approved', or 'custom_approved'
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
-  const portalLink = `https://divulgadoras.vercel.app/status?email=${encodeURIComponent(context.auth.token.email)}`;
+  const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(context.auth.token.email)}`;
 
   sendSmtpEmail.to = [{ email: context.auth.token.email, name: "Super Admin Teste" }];
   sendSmtpEmail.sender = {
     name: "Sistema Equipe Certa",
-    email: config.brevo.sender_email,
+    email: brevoConfig.sender_email,
   };
 
   const replacements = {
@@ -850,6 +829,24 @@ exports.removePromoterFromAllAssignments = functions
 
 
 // --- Gemini AI assistant function ---
+const { GoogleGenAI } = require("@google/genai");
+
+// Configure Gemini using Firebase Functions config, similar to Brevo.
+// Use the command:
+// firebase functions:config:set gemini.key="YOUR_GEMINI_API_KEY"
+const geminiConfig = functions.config().gemini;
+let ai;
+try {
+  if (geminiConfig && geminiConfig.key) {
+    ai = new GoogleGenAI({ apiKey: geminiConfig.key });
+  } else {
+    console.warn("Gemini API Key not configured in Firebase Functions config. Run: firebase functions:config:set gemini.key=\"YOUR_API_KEY\"");
+  }
+} catch (e) {
+  console.error("Could not initialize GoogleGenAI.", e);
+  ai = null; // Ensure ai is null on initialization error
+}
+
 exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Acesso não autenticado.");
@@ -883,31 +880,26 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 
 // --- Stripe Integration ---
+const stripeConfig = functions.config().stripe;
+
 exports.getStripePublishableKey = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
-    if (!config.stripe || !config.stripe.publishable_key) {
+    if (!stripeConfig || !stripeConfig.publishable_key) {
         throw new functions.https.HttpsError("failed-precondition", "A chave publicável do Stripe não está configurada no servidor.");
     }
-    return { publishableKey: config.stripe.publishable_key };
+    return { publishableKey: stripeConfig.publishable_key };
 });
 
 exports.createStripeCheckoutSession = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-    if (!stripe) {
-        throw new functions.https.HttpsError("failed-precondition", "A integração com pagamentos (Stripe) não está configurada no servidor.");
-    }
     const { orgId, planId } = data;
     if (!orgId || !planId) throw new functions.https.HttpsError("invalid-argument", "ID da Organização e do Plano são obrigatórios.");
 
-    if (!config.stripe || !config.stripe.basic_price_id || !config.stripe.professional_price_id) {
-        throw new functions.https.HttpsError("failed-precondition", "Os IDs de preço do Stripe não estão configurados no servidor.");
-    }
-
     const plans = {
-        "basic": config.stripe.basic_price_id,
-        "professional": config.stripe.professional_price_id,
+        "basic": stripeConfig.basic_price_id,
+        "professional": stripeConfig.professional_price_id,
     };
     const priceId = plans[planId];
     if (!priceId) throw new functions.https.HttpsError("not-found", "ID de preço do Stripe não encontrado para este plano.");
@@ -916,8 +908,8 @@ exports.createStripeCheckoutSession = functions.region("southamerica-east1").htt
     if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
     const orgData = orgDoc.data();
 
-    const successUrl = `https://divulgadoras.vercel.app/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `https://divulgadoras.vercel.app/admin/settings/subscription`;
+    const successUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `https://divulgadoras.vercel.app/#/admin/settings/subscription`;
 
     try {
         const session = await stripe.checkout.sessions.create({
@@ -944,20 +936,8 @@ exports.createStripeCheckoutSession = functions.region("southamerica-east1").htt
 });
 
 exports.stripeWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
-    if (!stripe) {
-        console.error("Stripe webhook received, but Stripe is not configured on the server.");
-        res.status(500).send("Stripe integration is not configured.");
-        return;
-    }
     const sig = req.headers["stripe-signature"];
-    const webhookSecret = config.stripe ? config.stripe.webhook_secret : undefined;
-
-    if (!webhookSecret) {
-        console.error("Stripe webhook secret is not configured.");
-        res.status(400).send("Stripe webhook secret is not configured.");
-        return;
-    }
-
+    const webhookSecret = stripeConfig.webhook_secret;
     let event;
 
     try {
@@ -1016,12 +996,12 @@ exports.getStripeStatus = functions.region("southamerica-east1").https.onCall(as
         professionalPriceId: false,
     };
 
-    if (config.stripe) {
-        if (config.stripe.secret_key) status.secretKey = true;
-        if (config.stripe.publishable_key) status.publishableKey = true;
-        if (config.stripe.webhook_secret) status.webhookSecret = true;
-        if (config.stripe.basic_price_id) status.basicPriceId = true;
-        if (config.stripe.professional_price_id) status.professionalPriceId = true;
+    if (stripeConfig) {
+        if (stripeConfig.secret_key) status.secretKey = true;
+        if (stripeConfig.publishable_key) status.publishableKey = true;
+        if (stripeConfig.webhook_secret) status.webhookSecret = true;
+        if (stripeConfig.basic_price_id) status.basicPriceId = true;
+        if (stripeConfig.professional_price_id) status.professionalPriceId = true;
         
         if (status.secretKey && status.publishableKey && status.basicPriceId && status.professionalPriceId) {
             status.configured = true;
@@ -1035,7 +1015,7 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
     // Return the stripe config object so the frontend can display it for debugging.
-    return config.stripe || {};
+    return functions.config().stripe || {};
 });
 
 
@@ -1062,6 +1042,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   try {
     const postDocRef = db.collection("posts").doc();
     const batch = db.batch();
+    const creationTimestamp = admin.firestore.Timestamp.now();
 
     let finalExpiresAt = null;
     if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
@@ -1078,7 +1059,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       type: postData.type,
       instructions: postData.instructions || "",
       postLink: postData.postLink || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: creationTimestamp,
       createdByEmail: postData.createdByEmail,
       isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
       expiresAt: finalExpiresAt,
@@ -1101,7 +1082,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: creationTimestamp,
     };
 
     const assignmentsCollectionRef = db.collection("postAssignments");
@@ -1335,34 +1316,60 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
   return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
 
-exports.getDownloadUrl = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Apenas usuários autenticados podem baixar arquivos.");
+exports.downloadFileProxy = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
+    // CORS headers
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+        res.status(204).send("");
+        return;
     }
-    const { filePath, fileName } = data;
-    if (!filePath || !fileName) {
-        throw new functions.https.HttpsError("invalid-argument", "filePath e fileName são obrigatórios.");
+
+    const filePath = req.query.path;
+    const fileName = req.query.name || "download";
+
+    if (!filePath) {
+        return res.status(400).send("`path` parameter is missing.");
     }
+
     try {
+        const decodedPath = decodeURIComponent(filePath);
+        functions.logger.info(`Streaming download for path: ${decodedPath}`);
+
         const bucket = admin.storage().bucket();
-        const file = bucket.file(filePath);
+        const file = bucket.file(decodedPath);
 
         const [exists] = await file.exists();
         if (!exists) {
-            functions.logger.error("File does not exist in storage.", { path: filePath });
-            throw new functions.https.HttpsError("not-found", "Arquivo não encontrado no armazenamento.");
+            functions.logger.error(`File not found at path: ${decodedPath}`);
+            return res.status(404).send("File not found.");
         }
-        const [signedUrl] = await file.getSignedUrl({
-            action: "read",
-            expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-            responseDisposition: `attachment; filename="${fileName}"`,
+
+        const [metadata] = await file.getMetadata();
+
+        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+        if (metadata.contentType) {
+            res.setHeader("Content-Type", metadata.contentType);
+        }
+        if (metadata.size) {
+            res.setHeader("Content-Length", metadata.size);
+        }
+        
+        const readStream = file.createReadStream();
+
+        readStream.on("error", (err) => {
+            functions.logger.error("Error reading file stream:", { errorMessage: err.message });
+            // Can't send headers after this point
         });
-        return { downloadUrl: signedUrl };
+
+        readStream.pipe(res);
+        
     } catch (e) {
-        functions.logger.error("Error in getDownloadUrl function:", { errorMessage: e.message, filePath });
-        if (e instanceof functions.https.HttpsError) {
-            throw e;
+        functions.logger.error("Error in download proxy function:", { errorMessage: e.message, errorStack: e.stack });
+        if (!res.headersSent) {
+            res.status(500).send("An internal error occurred.");
         }
-        throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao gerar o link de download.");
     }
 });

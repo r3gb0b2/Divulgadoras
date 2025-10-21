@@ -1,1 +1,0 @@
-export const BASE_URL = 'https://divulgadoras.vercel.app';

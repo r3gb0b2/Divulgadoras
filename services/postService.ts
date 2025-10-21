@@ -1,27 +1,47 @@
-import firebase from '../firebase/config';
 import { firestore, storage, functions } from '../firebase/config';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  query,
+  where,
+  deleteDoc,
+  Timestamp,
+  writeBatch,
+  getDoc,
+} from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter } from '../types';
 
 export const createPost = async (
-  postData: Omit<Post, 'id' | 'createdAt'>,
-  mediaFile: Blob | null, // This is now only for images
+  postData: Omit<Post, 'id' | 'createdAt' | 'mediaUrl'>,
+  mediaFile: File | null,
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    const finalPostData = { ...postData };
+    let finalMediaUrl: string | undefined = undefined;
 
-    // 1. Upload image on the client ONLY if it's an image post
-    if (mediaFile && postData.type === 'image') {
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
-      const storageRef = storage.ref(`posts-media/${fileName}`);
-      await storageRef.put(mediaFile, { contentType: 'image/jpeg' });
-      finalPostData.mediaUrl = await storageRef.getDownloadURL();
+    // 1. Upload image/video on the client if it exists
+    if (mediaFile) {
+      const fileExtension = mediaFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const storageRef = ref(storage, `posts-media/${fileName}`);
+      await uploadBytes(storageRef, mediaFile);
+      finalMediaUrl = storageRef.fullPath;
     }
-    // For video posts, we assume postData.mediaUrl is already the Google Drive link.
-    // For text posts, mediaUrl should be null/undefined.
 
-    // 2. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
-    const createPostAndAssignments = functions.httpsCallable('createPostAndAssignments');
+    // 2. Prepare data for the cloud function
+    const finalPostData = {
+        ...postData,
+        mediaUrl: finalMediaUrl || null,
+    };
+
+    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
     const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     
     const data = result.data as { success: boolean, postId?: string };
@@ -42,15 +62,15 @@ export const createPost = async (
 
 export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
     try {
-        let q: firebase.firestore.Query = firestore.collection("posts");
-        if (organizationId) {
-            q = q.where("organizationId", "==", organizationId);
-        }
+        const postsCollection = collection(firestore, "posts");
+        const q = organizationId 
+            ? query(postsCollection, where("organizationId", "==", organizationId))
+            : query(postsCollection);
 
-        const snapshot = await q.get();
-        const posts = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Post);
+        const snapshot = await getDocs(q);
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         posts.sort((a, b) => 
-            ((b.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0) - ((a.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0)
+            ((b.createdAt as Timestamp)?.toMillis() || 0) - ((a.createdAt as Timestamp)?.toMillis() || 0)
         );
         return posts;
     } catch (error) {
@@ -62,17 +82,17 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
 export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
     try {
         // Fetch post
-        const postDocRef = firestore.collection('posts').doc(postId);
-        const postSnap = await postDocRef.get();
-        if (!postSnap.exists) {
+        const postDocRef = doc(firestore, 'posts', postId);
+        const postSnap = await getDoc(postDocRef);
+        if (!postSnap.exists()) {
             throw new Error("Publicação não encontrada.");
         }
-        const post = Object.assign({ id: postSnap.id }, postSnap.data()) as Post;
+        const post = { id: postSnap.id, ...postSnap.data() } as Post;
 
         // Fetch assignments
-        const q = firestore.collection("postAssignments").where("postId", "==", postId);
-        const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
+        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
+        const snapshot = await getDocs(q);
+        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
         return { post, assignments };
 
@@ -84,9 +104,9 @@ export const getPostWithAssignments = async (postId: string): Promise<{ post: Po
 
 export const getAssignmentsForPromoterByEmail = async (email: string): Promise<PostAssignment[]> => {
     try {
-        const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
-        const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
+        const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
+        const snapshot = await getDocs(q);
+        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
         
         // Filter out inactive or expired posts
         const now = new Date();
@@ -96,7 +116,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
                 return false;
             }
             if (post.expiresAt) {
-                const expiryDate = (post.expiresAt as firebase.firestore.Timestamp).toDate();
+                const expiryDate = (post.expiresAt as Timestamp).toDate();
                 if (expiryDate < now) {
                     return false;
                 }
@@ -110,7 +130,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
             if (a.status === 'confirmed' && b.status === 'pending') return 1;
             const postA = a.post as any;
             const postB = b.post as any;
-            return ((postB.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0) - ((postA.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0)
+            return ((postB.createdAt as Timestamp)?.toMillis() || 0) - ((postA.createdAt as Timestamp)?.toMillis() || 0)
         });
         return visibleAssignments;
     } catch (error) {
@@ -121,10 +141,10 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
 
 export const confirmAssignment = async (assignmentId: string): Promise<void> => {
     try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
             status: 'confirmed',
-            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            confirmedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error("Error confirming assignment: ", error);
@@ -134,10 +154,10 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
 
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
     try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-            return Object.assign({ id: docSnap.id }, docSnap.data()) as PostAssignment;
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
         }
         return null;
     } catch (error) {
@@ -146,7 +166,7 @@ export const getAssignmentById = async (assignmentId: string): Promise<PostAssig
     }
 };
 
-export const submitProof = async (assignmentId: string, imageFiles: Blob[]): Promise<string[]> => {
+export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
     if (imageFiles.length === 0 || imageFiles.length > 2) {
         throw new Error("Você deve enviar 1 ou 2 imagens.");
     }
@@ -154,19 +174,20 @@ export const submitProof = async (assignmentId: string, imageFiles: Blob[]): Pro
     try {
         // 1. Upload images
         const proofImageUrls = await Promise.all(
-            imageFiles.map(async (photo: Blob) => {
-                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
-                const storageRef = storage.ref(`posts-proofs/${fileName}`);
-                await storageRef.put(photo, { contentType: 'image/jpeg' });
-                return await storageRef.getDownloadURL();
+            imageFiles.map(async (photo) => {
+                const fileExtension = photo.name.split('.').pop();
+                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = ref(storage, `posts-proofs/${fileName}`);
+                await uploadBytes(storageRef, photo);
+                return await getDownloadURL(storageRef);
             })
         );
         
         // 2. Update Firestore document
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
             proofImageUrls: proofImageUrls,
-            proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            proofSubmittedAt: serverTimestamp(),
         });
         
         return proofImageUrls;
@@ -181,9 +202,9 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
   assignments: PostAssignment[];
 }> => {
   try {
-    const q = firestore.collection("postAssignments").where("promoterId", "==", promoterId);
-    const snapshot = await q.get();
-    const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
+    const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
+    const snapshot = await getDocs(q);
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
     let missed = 0; // Post expired
@@ -199,7 +220,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         
         // Proof deadline is more specific, check it first for confirmed posts
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
             const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
             if (now > proofExpireTime) {
                 proofDeadlineMissed++;
@@ -210,7 +231,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         // If not caught by proof deadline, check general post expiration
         if (!deadlineHasPassed) {
             const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as firebase.firestore.Timestamp).toDate() < now) {
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
                 missed++;
                 deadlineHasPassed = true;
             }
@@ -226,8 +247,8 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
 
     // Sort assignments by date for display (most recent first)
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
         return timeB - timeA;
     });
 
@@ -253,9 +274,9 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
   assignments: PostAssignment[];
 }> => {
   try {
-    const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
-    const snapshot = await q.get();
-    const assignments = snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as PostAssignment);
+    const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
+    const snapshot = await getDocs(q);
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
 
     let completed = 0;
     let missed = 0; // Post expired
@@ -271,7 +292,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         
         // Proof deadline is more specific, check it first for confirmed posts
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
             const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
             if (now > proofExpireTime) {
                 proofDeadlineMissed++;
@@ -282,7 +303,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         // If not caught by proof deadline, check general post expiration
         if (!deadlineHasPassed) {
             const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as firebase.firestore.Timestamp).toDate() < now) {
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
                 missed++;
                 deadlineHasPassed = true;
             }
@@ -298,8 +319,8 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
 
     // Sort assignments by date for display (most recent first)
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
         return timeB - timeA;
     });
 
@@ -322,7 +343,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
 
 export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
     try {
-        const updatePostStatus = functions.httpsCallable('updatePostStatus');
+        const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
         await updatePostStatus({ postId, updateData });
     } catch (error) {
         console.error("Error updating post status:", error);
@@ -334,11 +355,11 @@ export const updatePost = async (postId: string, updateData: Partial<Post>): Pro
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
-    const batch = firestore.batch();
+    const batch = writeBatch(firestore);
     try {
         // Find all assignments for the post
-        const q = firestore.collection("postAssignments").where("postId", "==", postId);
-        const assignmentsSnapshot = await q.get();
+        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
+        const assignmentsSnapshot = await getDocs(q);
         
         // Add assignments to the batch for deletion
         assignmentsSnapshot.forEach(doc => {
@@ -346,7 +367,7 @@ export const deletePost = async (postId: string): Promise<void> => {
         });
 
         // Add the post itself to the batch for deletion
-        const postDocRef = firestore.collection('posts').doc(postId);
+        const postDocRef = doc(firestore, 'posts', postId);
         batch.delete(postDocRef);
 
         await batch.commit();
@@ -359,7 +380,7 @@ export const deletePost = async (postId: string): Promise<void> => {
 
 export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
     try {
-        const func = functions.httpsCallable('addAssignmentsToPost');
+        const func = httpsCallable(functions, 'addAssignmentsToPost');
         await func({ postId, promoterIds });
     } catch (error) {
         console.error("Error adding assignments to post: ", error);
@@ -372,7 +393,7 @@ export const addAssignmentsToPost = async (postId: string, promoterIds: string[]
 
 export const sendPostReminder = async (postId: string): Promise<{count: number, message: string}> => {
     try {
-        const func = functions.httpsCallable('sendPostReminder');
+        const func = httpsCallable(functions, 'sendPostReminder');
         const result = await func({ postId });
         return result.data as {count: number, message: string};
     } catch (error) {
@@ -386,7 +407,7 @@ export const sendPostReminder = async (postId: string): Promise<{count: number, 
 
 export const sendSinglePostReminder = async (assignmentId: string): Promise<{message: string}> => {
     try {
-        const func = functions.httpsCallable('sendSingleProofReminder');
+        const func = httpsCallable(functions, 'sendSingleProofReminder');
         const result = await func({ assignmentId });
         return result.data as {message: string};
     } catch (error) {
@@ -400,12 +421,12 @@ export const sendSinglePostReminder = async (assignmentId: string): Promise<{mes
 
 export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
     try {
-        const batch = firestore.batch();
+        const batch = writeBatch(firestore);
 
-        const promoterDocRef = firestore.collection('promoters').doc(promoterId);
+        const promoterDocRef = doc(firestore, 'promoters', promoterId);
         batch.update(promoterDocRef, { hasJoinedGroup: false });
 
-        const assignmentDocRef = firestore.collection('postAssignments').doc(assignmentId);
+        const assignmentDocRef = doc(firestore, 'postAssignments', assignmentId);
         batch.delete(assignmentDocRef);
 
         await batch.commit();
@@ -417,9 +438,9 @@ export const removePromoterFromPostAndGroup = async (assignmentId: string, promo
 
 export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
     try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
-            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            confirmedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error("Error renewing assignment deadline: ", error);

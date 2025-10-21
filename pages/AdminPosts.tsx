@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg } from '../services/postService';
@@ -5,7 +7,7 @@ import { getOrganizations } from '../services/organizationService';
 import { Post, Organization } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 

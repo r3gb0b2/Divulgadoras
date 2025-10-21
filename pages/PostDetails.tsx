@@ -3,17 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
-import { storage, functions } from '../firebase/config';
+import { storage } from '../firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
+import StorageMedia from '../components/StorageMedia';
 
 
-const timestampToInputDate = (ts: any): string => {
+const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
     let date;
     // Handle Firestore Timestamp object from SDK
@@ -33,22 +35,6 @@ const timestampToInputDate = (ts: any): string => {
     return date.toISOString().split('T')[0];
 };
 
-const getGoogleDriveDownloadUrl = (url: string): string | null => {
-    if (!url || !url.includes('drive.google.com')) return null;
-
-    const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (match && match[1]) {
-        const fileId = match[1];
-        return `https://drive.google.com/uc?export=download&id=${fileId}`;
-    }
-    const idMatch = url.match(/id=([a-zA-Z0-9_-]+)/);
-    if (idMatch && idMatch[1]) {
-         const fileId = idMatch[1];
-        return `https://drive.google.com/uc?export=download&id=${fileId}`;
-    }
-    return null;
-}
-
 const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const [textColor, setTextColor] = useState('text-gray-400');
@@ -60,7 +46,7 @@ const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) =>
             return;
         }
 
-        const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
+        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
         const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
@@ -191,9 +177,9 @@ export const PostDetails: React.FC = () => {
             if (newMediaFile) {
                 const fileExtension = newMediaFile.name.split('.').pop();
                 const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = storage.ref(`posts-media/${fileName}`);
-                await storageRef.put(newMediaFile);
-                finalUpdateData.mediaUrl = await storageRef.getDownloadURL();
+                const storageRef = ref(storage, `posts-media/${fileName}`);
+                await uploadBytes(storageRef, newMediaFile);
+                finalUpdateData.mediaUrl = await getDownloadURL(storageRef);
             }
             await updatePost(post.id, finalUpdateData);
             await fetchData();
@@ -276,50 +262,23 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = async (url: string, campaignName: string) => {
-        if (url.includes('drive.google.com')) {
-            const downloadUrl = getGoogleDriveDownloadUrl(url);
-            if (downloadUrl) {
-                window.open(downloadUrl, '_blank');
-            } else {
-                alert('O link do Google Drive parece ser inválido.');
-            }
-            return;
-        }
-
+    const handleDownload = (path: string, campaignName: string) => {
         setIsDownloading(true);
         setError('');
         try {
-            const pathRegex = /\/o\/(.*?)\?alt=media/;
-            const match = url.match(pathRegex);
-            if (!match || !match[1]) {
-                throw new Error("URL de mídia inválida.");
-            }
-            const filePath = decodeURIComponent(match[1]);
-
-            const fileExtension = url.split('.').pop()?.split('?')[0] || 'mp4';
+            const fileExtension = path.split('.').pop()?.split('?')[0] || 'mp4';
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
-
-            const getDownloadUrl = functions.httpsCallable('getDownloadUrl');
-            const result = await getDownloadUrl({ filePath, fileName });
-            const data = result.data as { downloadUrl: string };
-
-            if (!data.downloadUrl) {
-                throw new Error("A função do servidor não retornou uma URL de download.");
-            }
-
-            const link = document.createElement('a');
-            link.href = data.downloadUrl;
-            link.setAttribute('download', fileName);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (error: any) {
-            console.error('Download failed:', error);
-            const errorMessage = error.message || 'Não foi possível iniciar o download.';
-            alert(errorMessage);
-        } finally {
+            
+            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?path=${encodeURIComponent(path)}&name=${encodeURIComponent(fileName)}`;
+    
+            // Open the URL in a new tab. The browser will handle the download due to server headers.
+            window.open(proxyUrl, '_blank');
+    
+            setTimeout(() => setIsDownloading(false), 3000);
+        } catch (error) {
+            console.error('Download setup failed:', error);
+            alert(`Não foi possível iniciar o download.`);
             setIsDownloading(false);
         }
     };
@@ -334,36 +293,25 @@ export const PostDetails: React.FC = () => {
                 {/* Left Column: Post Info */}
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg flex flex-col h-full">
                     <h2 className="font-bold text-lg text-primary">{post.campaignName}</h2>
-                     <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as firebase.firestore.Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
+                     <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
 
-                    {post.type === 'image' && post.mediaUrl && (
+                    {(post.type === 'image' || post.type === 'video') && post.mediaUrl ? (
                         <div className="mb-4">
-                            <a href={post.mediaUrl} target="_blank" rel="noopener noreferrer">
-                                <img src={post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md" />
-                            </a>
-                        </div>
-                    )}
-                     {post.type === 'video' && post.mediaUrl && (
-                        <div className="mb-4">
-                            {post.mediaUrl.includes('drive.google.com') ? (
-                                <div className="text-center p-4 bg-gray-800/50 rounded-md">
-                                    <p className="text-sm text-gray-300 mb-2">Este post utiliza um vídeo do Google Drive.</p>
+                            <StorageMedia path={post.mediaUrl} type={post.type} className="w-full max-w-sm mx-auto rounded-md" controls={post.type === 'video'} />
+                             {post.type === 'video' && (
+                                <div className="flex justify-center items-center gap-4 mt-2">
+                                    <button
+                                        onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
+                                        disabled={isDownloading}
+                                        className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                        <DownloadIcon className="w-4 h-4" />
+                                        {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
+                                    </button>
                                 </div>
-                            ) : (
-                                <video src={post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
                             )}
-                            <div className="flex justify-center items-center gap-4 mt-2">
-                                <button
-                                    onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
-                                    disabled={isDownloading}
-                                    className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                                >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
-                                </button>
-                            </div>
                         </div>
-                    )}
+                    ) : null}
                     {post.type === 'text' && (
                         <div className="bg-gray-800 p-3 rounded-md mb-4">
                             <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{post.textContent}</pre>

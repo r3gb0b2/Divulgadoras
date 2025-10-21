@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PostAssignment } from '../types';
 import { getStatsForPromoter } from '../services/postService';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 
 interface PromoterPostStatsModalProps {
     isOpen: boolean;
@@ -29,7 +29,7 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
     const expiresAt = assignment.post.expiresAt;
-    if (expiresAt && (expiresAt as firebase.firestore.Timestamp).toDate() < new Date()) {
+    if (expiresAt && (expiresAt as Timestamp).toDate() < new Date()) {
         return { text: 'Perdido', color: 'bg-red-900/50 text-red-300' };
     }
     return { text: 'Pendente', color: 'bg-yellow-900/50 text-yellow-300' };

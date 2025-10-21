@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
@@ -27,7 +28,7 @@ const SuperAdminDashboard: React.FC = () => {
     const checkSystemStatus = useCallback(async () => {
         setIsCheckingStatus(true);
         try {
-            const getStatus = functions.httpsCallable('getSystemStatus');
+            const getStatus = httpsCallable(functions, 'getSystemStatus');
             const result = await getStatus();
             const statusData = result.data as SystemStatus;
             setSystemStatus(statusData);
@@ -62,7 +63,7 @@ const SuperAdminDashboard: React.FC = () => {
     const handleSendTestEmail = async (testType: 'generic' | 'approved') => {
         setTestStatuses(prev => ({ ...prev, [testType]: { type: 'loading', message: 'Enviando e-mail de teste...' } }));
         try {
-            const sendTestEmail = functions.httpsCallable('sendTestEmail');
+            const sendTestEmail = httpsCallable(functions, 'sendTestEmail');
             const result = await sendTestEmail({ testType });
             const data = result.data as { success: boolean; message: string };
             if (data.success) {

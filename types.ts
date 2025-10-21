@@ -1,4 +1,4 @@
-import firebase from 'firebase/compat/app';
+import { Timestamp, FieldValue } from 'firebase/firestore';
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable';
 
@@ -12,7 +12,7 @@ export interface Promoter {
   dateOfBirth: string;
   photoUrls: string[];
   status: PromoterStatus;
-  createdAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
+  createdAt: Timestamp | FieldValue;
   state: string;
   campaignName: string | null;
   associatedCampaigns?: string[];
@@ -22,9 +22,9 @@ export interface Promoter {
   hasJoinedGroup?: boolean;
   actionTakenByUid?: string;
   actionTakenByEmail?: string;
-  statusChangedAt?: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
+  statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
-  lastManualNotificationAt?: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
+  lastManualNotificationAt?: Timestamp | FieldValue | null;
 }
 
 export interface PromoterApplicationData {
@@ -34,7 +34,7 @@ export interface PromoterApplicationData {
   instagram: string;
   tiktok: string;
   dateOfBirth: string;
-  photos: Blob[];
+  photos: File[];
   state: string;
   campaignName?: string;
   organizationId: string;
@@ -86,8 +86,8 @@ export interface Organization {
   ownerUid: string;
   status: OrganizationStatus;
   planId: PlanId;
-  planExpiresAt?: firebase.firestore.Timestamp;
-  createdAt?: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
+  planExpiresAt?: Timestamp;
+  createdAt?: Timestamp | FieldValue;
   public: boolean;
   assignedStates: string[];
   ownerPhone?: string;
@@ -109,7 +109,7 @@ export interface AdminApplication {
   email: string;
   phone: string;
   message?: string;
-  createdAt?: firebase.firestore.Timestamp;
+  createdAt?: Timestamp;
 }
 
 export interface Plan {
@@ -132,10 +132,10 @@ export interface Post {
   textContent?: string;
   instructions: string;
   postLink?: string;
-  createdAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
+  createdAt: Timestamp | FieldValue;
   createdByEmail: string;
   isActive: boolean;
-  expiresAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
+  expiresAt: Timestamp | FieldValue | null;
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
 }
@@ -151,8 +151,8 @@ export interface PostAssignment {
     postLink?: string;
     campaignName: string;
     isActive: boolean;
-    expiresAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
-    createdAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
+    expiresAt: Timestamp | FieldValue | null;
+    createdAt: Timestamp | FieldValue;
     allowLateSubmissions?: boolean;
     autoAssignToNewPromoters?: boolean;
   };
@@ -161,9 +161,9 @@ export interface PostAssignment {
   promoterEmail: string; // lowercase
   promoterName: string;
   status: 'pending' | 'confirmed';
-  confirmedAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
+  confirmedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
-  proofSubmittedAt?: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
+  proofSubmittedAt?: Timestamp | FieldValue | null;
 }
 
 export interface GuestListConfirmation {
@@ -177,7 +177,7 @@ export interface GuestListConfirmation {
     listName: string;
     isPromoterAttending: boolean;
     guestNames: string[];
-    confirmedAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue;
-    promoterCheckedInAt?: firebase.firestore.Timestamp | firebase.firestore.FieldValue | null;
-    guestsCheckedIn?: { name: string; checkedInAt: firebase.firestore.Timestamp | firebase.firestore.FieldValue; }[];
+    confirmedAt: Timestamp | FieldValue;
+    promoterCheckedInAt?: Timestamp | FieldValue | null;
+    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; }[];
 }

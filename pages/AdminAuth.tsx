@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 // FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
@@ -20,8 +19,7 @@ import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } fro
 import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
-// FIX: Changed to a named import to resolve module export issue.
-import { CreatePost } from './CreatePost';
+import CreatePost from './CreatePost';
 // FIX: Changed to a named import to resolve module export issue.
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page

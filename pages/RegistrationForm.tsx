@@ -7,6 +7,7 @@ import { Campaign } from '../types';
 // FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 // Lista de nomes masculinos para o aviso de gênero
@@ -24,50 +25,50 @@ const MALE_NAMES = [
 // Helper function to resize and compress images and return a Blob
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
-    const blobURL = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = blobURL;
-
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height *= maxWidth / width;
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width *= maxHeight / height;
-          height = maxHeight;
-        }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      if (!event.target?.result) {
+        return reject(new Error("FileReader did not return a result."));
       }
+      const img = new Image();
+      img.src = event.target.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
 
-      canvas.width = width;
-      canvas.height = height;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(blobURL);
-        return reject(new Error('Could not get canvas context'));
-      }
-      
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(blobURL); // Clean up
-        if (!blob) {
-          return reject(new Error('Canvas to Blob conversion failed'));
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
         }
-        resolve(blob);
-      }, 'image/jpeg', quality);
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context'));
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return reject(new Error('Canvas to Blob conversion failed'));
+          }
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = (error) => reject(error);
     };
-    
-    img.onerror = (error) => {
-      URL.revokeObjectURL(blobURL);
-      reject(error);
-    };
+    reader.onerror = (error) => reject(error);
   });
 };
 
@@ -87,7 +88,7 @@ const PromoterForm: React.FC = () => {
     tiktok: '',
     dateOfBirth: '',
   });
-  const [photoFiles, setPhotoFiles] = useState<Blob[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
@@ -120,17 +121,6 @@ const PromoterForm: React.FC = () => {
         }).catch(err => setSubmitError(err.message));
     }
   }, [location.search]);
-
-  useEffect(() => {
-    // Cleanup function to revoke object URLs to prevent memory leaks
-    return () => {
-        photoPreviews.forEach(url => {
-            if (url.startsWith('blob:')) {
-                URL.revokeObjectURL(url);
-            }
-        });
-    };
-  }, [photoPreviews]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -198,14 +188,15 @@ const PromoterForm: React.FC = () => {
       
       try {
         const fileList = Array.from(files);
-        const processedBlobs = await Promise.all(
-          fileList.map((file: File) => {
-            return resizeImage(file, 800, 800, 0.8);
+        const processedFiles = await Promise.all(
+          fileList.map(async (file: File) => {
+            const compressedBlob = await resizeImage(file, 800, 800, 0.8);
+            return new File([compressedBlob], file.name, { type: 'image/jpeg' });
           })
         );
         
-        setPhotoFiles(processedBlobs);
-        const previewUrls = processedBlobs.map(blob => URL.createObjectURL(blob));
+        setPhotoFiles(processedFiles);
+        const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
         setPhotoPreviews(previewUrls);
 
       } catch (error) {
@@ -262,10 +253,11 @@ const PromoterForm: React.FC = () => {
         if (photoFiles.length > 0) {
             finalPhotoUrls = await Promise.all(
                 photoFiles.map(async (photo) => {
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
-                    const storageRef = storage.ref(`promoters-photos/${fileName}`);
-                    await storageRef.put(photo);
-                    return await storageRef.getDownloadURL();
+                    const fileExtension = photo.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = ref(storage, `promoters-photos/${fileName}`);
+                    await uploadBytes(storageRef, photo);
+                    return await getDownloadURL(storageRef);
                 })
             );
         }

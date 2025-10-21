@@ -6,7 +6,6 @@ import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { BASE_URL } from '../constants/config';
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
@@ -162,7 +161,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     
     const handleCopyLink = (campaign: Campaign) => {
         if (!stateAbbr || !orgIdForOps) return;
-        const link = `${BASE_URL}/${orgIdForOps}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
+        const link = `${window.location.origin}/#/${orgIdForOps}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedLink(campaign.id);
             setTimeout(() => setCopiedLink(null), 2500);
@@ -174,7 +173,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
 
     const handleCopyGuestListLink = (campaign: Campaign) => {
         if (!orgIdForOps) return;
-        const link = `${BASE_URL}/lista/${orgIdForOps}/${campaign.id}`;
+        const link = `${window.location.origin}/#/lista/${orgIdForOps}/${campaign.id}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedGuestListLink(campaign.id);
             setTimeout(() => setCopiedGuestListLink(null), 2500);

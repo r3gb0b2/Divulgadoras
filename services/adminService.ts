@@ -1,6 +1,19 @@
-// FIX: Add missing import for 'firebase' namespace to use compat types.
-import firebase from '../firebase/config';
+
+
 import { firestore, functions } from '../firebase/config';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  writeBatch,
+} from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { AdminUserData, AdminApplication } from '../types';
 
 /**
@@ -13,7 +26,7 @@ export const submitAdminApplication = async (
   password: string
 ): Promise<void> => {
   try {
-    const createAdminRequest = functions.httpsCallable('createAdminRequest');
+    const createAdminRequest = httpsCallable(functions, 'createAdminRequest');
     await createAdminRequest({ ...applicationData, password });
   } catch (error) {
     console.error('Error submitting admin application:', error);
@@ -31,10 +44,10 @@ export const submitAdminApplication = async (
  */
 export const getAdminUserData = async (uid: string): Promise<AdminUserData | null> => {
   try {
-    const docRef = firestore.collection('admins').doc(uid);
-    const docSnap = await docRef.get();
-    if (docSnap.exists) {
-      return Object.assign({ uid }, docSnap.data()) as AdminUserData;
+    const docRef = doc(firestore, 'admins', uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { uid, ...docSnap.data() } as AdminUserData;
     }
     return null;
   } catch (error) {
@@ -50,8 +63,8 @@ export const getAdminUserData = async (uid: string): Promise<AdminUserData | nul
  */
 export const setAdminUserData = async (uid: string, data: Partial<Omit<AdminUserData, 'uid'>>): Promise<void> => {
   try {
-    const docRef = firestore.collection('admins').doc(uid);
-    await docRef.set(data, { merge: true });
+    const docRef = doc(firestore, 'admins', uid);
+    await setDoc(docRef, data, { merge: true });
   } catch (error) {
     console.error('Error setting admin user data:', error);
     throw new Error('Não foi possível salvar os dados do administrador.');
@@ -65,12 +78,12 @@ export const setAdminUserData = async (uid: string, data: Partial<Omit<AdminUser
  */
 export const getAllAdmins = async (organizationId?: string): Promise<AdminUserData[]> => {
   try {
-    let q: firebase.firestore.Query = firestore.collection('admins');
+    let q = query(collection(firestore, 'admins'));
     if (organizationId) {
-      q = q.where('organizationIds', 'array-contains', organizationId);
+      q = query(q, where('organizationIds', 'array-contains', organizationId));
     }
-    const snapshot = await q.get();
-    return snapshot.docs.map(doc => Object.assign({ uid: doc.id }, doc.data()) as AdminUserData);
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as AdminUserData));
   } catch (error) {
     console.error('Error getting all admins:', error);
     throw new Error('Não foi possível buscar a lista de administradores.');
@@ -86,8 +99,8 @@ export const deleteAdminUser = async (uid: string): Promise<void> => {
     // Deleting the actual Firebase Auth user requires admin privileges on the backend.
     // A cloud function would be needed for a full deletion.
   try {
-    const docRef = firestore.collection('admins').doc(uid);
-    await docRef.delete();
+    const docRef = doc(firestore, 'admins', uid);
+    await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting admin user:', error);
     throw new Error('Não foi possível remover as permissões do administrador.');
@@ -100,9 +113,9 @@ export const deleteAdminUser = async (uid: string): Promise<void> => {
  */
 export const getAdminApplications = async (): Promise<AdminApplication[]> => {
   try {
-    const q = firestore.collection('adminApplications').orderBy('createdAt', 'desc');
-    const snapshot = await q.get();
-    return snapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as AdminApplication);
+    const q = query(collection(firestore, 'adminApplications'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminApplication));
   } catch (error) {
     console.error('Error getting admin applications:', error);
     throw new Error('Não foi possível buscar as solicitações de acesso.');
@@ -115,8 +128,8 @@ export const getAdminApplications = async (): Promise<AdminApplication[]> => {
  */
 export const deleteAdminApplication = async (id: string): Promise<void> => {
   try {
-    const docRef = firestore.collection('adminApplications').doc(id);
-    await docRef.delete();
+    const docRef = doc(firestore, 'adminApplications', id);
+    await deleteDoc(docRef);
   } catch (error) {
     console.error('Error deleting admin application:', error);
     throw new Error('Não foi possível remover a solicitação de acesso.');
@@ -131,10 +144,10 @@ export const deleteAdminApplication = async (id: string): Promise<void> => {
  */
 export const acceptAdminApplication = async (app: AdminApplication, orgId: string): Promise<void> => {
   try {
-    const batch = firestore.batch();
+    const batch = writeBatch(firestore);
 
     // Create the new admin document
-    const adminDocRef = firestore.collection('admins').doc(app.id);
+    const adminDocRef = doc(firestore, 'admins', app.id);
     const newAdminData: Omit<AdminUserData, 'uid'> = {
       email: app.email,
       role: 'admin', // Default role on approval
@@ -145,7 +158,7 @@ export const acceptAdminApplication = async (app: AdminApplication, orgId: strin
     batch.set(adminDocRef, newAdminData);
 
     // Delete the application document
-    const appDocRef = firestore.collection('adminApplications').doc(app.id);
+    const appDocRef = doc(firestore, 'adminApplications', app.id);
     batch.delete(appDocRef);
 
     await batch.commit();

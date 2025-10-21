@@ -4,7 +4,7 @@ import { getGuestListForCampaign, checkInPerson } from '../services/guestListSer
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter } from '../types';
 import { ArrowLeftIcon, SearchIcon, CheckCircleIcon } from '../components/Icons';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
 

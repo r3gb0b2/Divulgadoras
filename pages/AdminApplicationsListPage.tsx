@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
 import { getOrganizations } from '../services/organizationService';
 import { AdminApplication, Organization } from '../types';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 import { ArrowLeftIcon } from '../components/Icons';
 
 // Approval Modal Component
@@ -142,7 +142,7 @@ const AdminApplicationsListPage: React.FC = () => {
         }
     };
 
-    const formatDate = (timestamp: firebase.firestore.Timestamp | undefined) => {
+    const formatDate = (timestamp: Timestamp | undefined) => {
         if (!timestamp) return 'N/A';
         return timestamp.toDate().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
@@ -172,7 +172,7 @@ const AdminApplicationsListPage: React.FC = () => {
                                 {app.message && <p className="text-sm text-gray-400 mt-2 italic border-l-2 border-gray-600 pl-2">"{app.message}"</p>}
                             </div>
                             <div className="flex-shrink-0 mt-3 md:mt-0 text-right space-y-2">
-                                <p className="text-xs text-gray-500">Enviado em: {formatDate(app.createdAt as firebase.firestore.Timestamp)}</p>
+                                <p className="text-xs text-gray-500">Enviado em: {formatDate(app.createdAt)}</p>
                                 <div className="flex justify-end gap-2">
                                      <button
                                         onClick={() => handleAccept(app)}

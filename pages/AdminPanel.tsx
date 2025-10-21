@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Removed modular signOut import to use compat syntax.
-import firebase, { auth, functions } from '../firebase/config';
+import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -13,6 +14,7 @@ import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
+import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -228,7 +230,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
-                updatedData.statusChangedAt = firebase.firestore.FieldValue.serverTimestamp();
+                updatedData.statusChangedAt = serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);
@@ -269,7 +271,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // If they are leaving, confirm and then call the cloud function.
             if (window.confirm(`Tem certeza que deseja marcar "${promoter.name}" como fora do grupo? Isso a removerá de TODAS as publicações ativas para este evento.`)) {
                 try {
-                    const removePromoter = functions.httpsCallable('removePromoterFromAllAssignments');
+                    const removePromoter = httpsCallable(functions, 'removePromoterFromAllAssignments');
                     await removePromoter({ promoterId: promoter.id });
                     
                     alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
@@ -306,20 +308,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         
         setNotifyingId(promoter.id);
         try {
-            const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
+            const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
             const result = await manuallySendStatusEmail({ promoterId: promoter.id });
             const data = result.data as { success: boolean, message: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
             
             // On success, update the timestamp
-            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
+            const updateData = { lastManualNotificationAt: serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
             
             // Optimistic UI update for the timestamp
             setAllPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
-                ? { ...p, lastManualNotificationAt: firebase.firestore.Timestamp.now() } as Promoter 
+                ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
                 : p
             ));
 
@@ -418,8 +420,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const processedPromoters = useMemo(() => {
         // Sort all promoters by date first
         const sorted = [...allPromoters].sort((a, b) => {
-            const timeA = (a.createdAt instanceof firebase.firestore.Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof firebase.firestore.Timestamp) ? b.createdAt.toMillis() : 0;
+            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { plans, Plan } from './PricingPage'; // Assuming plans are exported from PricingPage
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { auth, functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 // FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
 import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 
@@ -59,7 +60,7 @@ const SubscriptionFlowPage: React.FC = () => {
 
 
         try {
-            const createOrganizationAndUser = functions.httpsCallable('createOrganizationAndUser');
+            const createOrganizationAndUser = httpsCallable(functions, 'createOrganizationAndUser');
             const result = await createOrganizationAndUser({
                 ...formData,
                 planId: plan.id

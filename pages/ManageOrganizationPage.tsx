@@ -4,11 +4,11 @@ import { getOrganization, updateOrganization, deleteOrganization } from '../serv
 import { Organization, OrganizationStatus, PlanId, AdminUserData } from '../types';
 import { getAllAdmins, setAdminUserData } from '../services/adminService';
 import { states } from '../constants/states';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 import { ArrowLeftIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
-const timestampToInputDate = (ts: firebase.firestore.Timestamp | undefined): string => {
+const timestampToInputDate = (ts: Timestamp | undefined): string => {
     if (!ts) return '';
     // toDate() converts to local time, toISOString() converts to UTC, split removes time part
     return ts.toDate().toISOString().split('T')[0];
@@ -134,19 +134,19 @@ const ManageOrganizationPage: React.FC = () => {
             // Create date in local timezone to avoid off-by-one day issues
             const [year, month, day] = value.split('-').map(Number);
             const localDate = new Date(year, month - 1, day);
-            setFormData(prev => ({ ...prev, [name]: firebase.firestore.Timestamp.fromDate(localDate) }));
+            setFormData(prev => ({ ...prev, [name]: Timestamp.fromDate(localDate) }));
         } else {
             setFormData(prev => ({ ...prev, [name]: undefined }));
         }
     };
 
     const addDaysToExpirtation = (days: number) => {
-        const currentExpiry = formData.planExpiresAt ? (formData.planExpiresAt as firebase.firestore.Timestamp).toDate() : new Date();
+        const currentExpiry = formData.planExpiresAt ? (formData.planExpiresAt as Timestamp).toDate() : new Date();
         // If current expiry date is in the past, we should add days from today
         const baseDate = currentExpiry < new Date() ? new Date() : currentExpiry;
         
         baseDate.setDate(baseDate.getDate() + days);
-        setFormData(prev => ({ ...prev, planExpiresAt: firebase.firestore.Timestamp.fromDate(baseDate) }));
+        setFormData(prev => ({ ...prev, planExpiresAt: Timestamp.fromDate(baseDate) }));
     };
     
     const handleStateToggle = (stateAbbr: string) => {
@@ -192,7 +192,7 @@ const ManageOrganizationPage: React.FC = () => {
         }
     };
     
-    const formatDate = (timestamp: firebase.firestore.Timestamp | undefined) => {
+    const formatDate = (timestamp: Timestamp | undefined) => {
         if (!timestamp) return 'N/A';
         return timestamp.toDate().toLocaleString('pt-BR');
     }
@@ -262,7 +262,7 @@ const ManageOrganizationPage: React.FC = () => {
                             <input
                                 type="date"
                                 name="planExpiresAt"
-                                value={timestampToInputDate(formData.planExpiresAt as firebase.firestore.Timestamp)}
+                                value={timestampToInputDate(formData.planExpiresAt as Timestamp)}
                                 onChange={handleDateChange}
                                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                                 style={{ colorScheme: 'dark' }}
@@ -288,8 +288,8 @@ const ManageOrganizationPage: React.FC = () => {
                            ))}
                         </div>
                     </div>
-                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as firebase.firestore.Timestamp)}</div>
-                    <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as firebase.firestore.Timestamp)}</div>
+                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
+                    <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
                 {isSuperAdmin && (

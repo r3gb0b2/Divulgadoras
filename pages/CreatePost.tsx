@@ -7,11 +7,13 @@ import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
-import firebase from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
+import { storage } from '../firebase/config';
+import { ref, getDownloadURL } from 'firebase/storage';
 
-const timestampToInputDate = (ts: any): string => {
+const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
     let date;
     if (ts.toDate) { date = ts.toDate(); }
@@ -35,57 +37,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
     </div>
 );
 
-// Helper function to resize and compress images and return a Blob
-const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const blobURL = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = blobURL;
-
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height *= maxWidth / width;
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width *= maxHeight / height;
-          height = maxHeight;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(blobURL);
-        return reject(new Error('Could not get canvas context'));
-      }
-      
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(blobURL); // Clean up
-        if (!blob) {
-          return reject(new Error('Canvas to Blob conversion failed'));
-        }
-        resolve(blob);
-      }, 'image/jpeg', quality);
-    };
-    
-    img.onerror = (error) => {
-      URL.revokeObjectURL(blobURL);
-      reject(error);
-    };
-  });
-};
-
-export const CreatePost: React.FC = () => {
+const CreatePost: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -101,9 +53,8 @@ export const CreatePost: React.FC = () => {
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [textContent, setTextContent] = useState('');
-    const [mediaFile, setMediaFile] = useState<Blob | null>(null);
+    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [videoUrl, setVideoUrl] = useState('');
     const [instructions, setInstructions] = useState('');
     const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
@@ -113,7 +64,6 @@ export const CreatePost: React.FC = () => {
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
-    const [isProcessingImages, setIsProcessingImages] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
@@ -149,12 +99,12 @@ export const CreatePost: React.FC = () => {
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
-                    if (originalPost.type === 'video' && originalPost.mediaUrl) {
-                        setVideoUrl(originalPost.mediaUrl);
-                    }
-                    if (originalPost.type === 'image' && originalPost.mediaUrl) {
-                        setMediaPreview(originalPost.mediaUrl);
-                        // User will have to re-upload, but we show the preview.
+                    if ((originalPost.type === 'image' || originalPost.type === 'video') && originalPost.mediaUrl) {
+                        // mediaUrl is a path, get download URL for preview
+                        const storageRef = ref(storage, originalPost.mediaUrl);
+                        getDownloadURL(storageRef).then(url => {
+                            setMediaPreview(url);
+                        }).catch(console.error);
                     }
                 }
 
@@ -199,15 +149,6 @@ export const CreatePost: React.FC = () => {
         };
         fetchPromoters();
     }, [selectedCampaign, selectedState, selectedOrgId, campaigns]);
-
-    useEffect(() => {
-        // Cleanup function to revoke object URLs to prevent memory leaks
-        return () => {
-            if (mediaPreview && mediaPreview.startsWith('blob:')) {
-                URL.revokeObjectURL(mediaPreview);
-            }
-        };
-    }, [mediaPreview]);
     
     const handleLogout = async () => {
         try {
@@ -240,24 +181,11 @@ export const CreatePost: React.FC = () => {
         }
     };
     
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setIsProcessingImages(true);
-            setError('');
-            
-            try {
-                const compressedBlob = await resizeImage(file, 600, 600, 0.7);
-                setMediaFile(compressedBlob);
-                setMediaPreview(URL.createObjectURL(compressedBlob));
-            } catch (err: any) {
-                console.error("Error processing image:", err);
-                setError("Houve um problema ao processar a imagem. Tente novamente.");
-                setMediaFile(null);
-                setMediaPreview(null);
-            } finally {
-                setIsProcessingImages(false);
-            }
+            setMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
         }
     }
 
@@ -275,16 +203,8 @@ export const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if (postType === 'image' && !mediaFile) {
-            if (mediaPreview) { // This means we are duplicating
-                setError('Ao duplicar um post com imagem, você deve selecionar o arquivo de imagem novamente.');
-            } else {
-                setError('Selecione uma imagem para o post.');
-            }
-            return;
-        }
-        if (postType === 'video' && !videoUrl.trim()) {
-            setError("Cole o link do Google Drive para o vídeo.");
+        if ((postType === 'image' || postType === 'video') && !mediaFile && !mediaPreview) {
+            setError(`Selecione ${postType === 'image' ? 'uma imagem' : 'um vídeo'} para o post.`);
             return;
         }
         if (postType === 'text' && !textContent.trim()) {
@@ -305,7 +225,7 @@ export const CreatePost: React.FC = () => {
                 // Set timestamp to the end of the selected day in local time
                 const [year, month, day] = expiresAt.split('-').map(Number);
                 const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
-                expiryTimestamp = firebase.firestore.Timestamp.fromDate(expiryDate);
+                expiryTimestamp = Timestamp.fromDate(expiryDate);
             }
 
             const postData = {
@@ -315,7 +235,6 @@ export const CreatePost: React.FC = () => {
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
-                mediaUrl: postType === 'video' ? videoUrl : undefined,
                 instructions,
                 postLink,
                 isActive,
@@ -324,7 +243,7 @@ export const CreatePost: React.FC = () => {
                 allowLateSubmissions: allowLateSubmissions,
             };
 
-            await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
+            await createPost(postData, mediaFile, promotersToAssign);
             
             alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
             navigate('/admin/posts');
@@ -405,20 +324,17 @@ export const CreatePost: React.FC = () => {
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label>
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo</span></label>
                      </div>
-                     {postType === 'text' && (
+                     {postType === 'text' ? (
                         <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Digite o texto da publicação aqui..." rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                     )}
-                     {postType === 'image' && (
+                     ) : (
                         <div>
-                            <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                            {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                            {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização de uma postagem duplicada. Por favor, selecione um novo arquivo.</p>}
-                        </div>
-                     )}
-                     {postType === 'video' && (
-                        <div>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="videoUrl" placeholder="Link compartilhável do Google Drive" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} />
-                             <p className="text-xs text-gray-400 mt-2">Cole o link de compartilhamento do vídeo no Google Drive. Ex: https://drive.google.com/file/d/...</p>
+                            <input type="file" accept={postType === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                            {mediaPreview && (mediaFile?.type.startsWith('video/') || mediaPreview.includes('videos.cibort.com') || (postType === 'video' && mediaPreview.startsWith('http'))) ? (
+                                <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
+                            ) : mediaPreview ? (
+                                <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />
+                            ) : null}
+                             {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
@@ -451,11 +367,13 @@ export const CreatePost: React.FC = () => {
                 </fieldset>
 
                 <div className="flex justify-end">
-                    <button type="submit" disabled={isSubmitting || isProcessingImages} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Criando...' : isProcessingImages ? 'Processando Imagem...' : 'Criar e Enviar Publicação'}
+                    <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                        {isSubmitting ? 'Criando...' : 'Criar e Enviar Publicação'}
                     </button>
                 </div>
             </form>
         </div>
     );
 };
+
+export default CreatePost;

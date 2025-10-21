@@ -3,212 +3,114 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getAssignmentById, submitProof } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
+import { Timestamp } from 'firebase/firestore';
+import StorageMedia from '../components/StorageMedia';
 
-// Helper function to resize and compress images. This utility is robust.
-const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const blobURL = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = blobURL;
-
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height *= maxWidth / width;
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width *= maxHeight / height;
-          height = maxHeight;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(blobURL);
-        return reject(new Error('Não foi possível obter o contexto do canvas.'));
-      }
-      
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(blobURL); // Clean up
-        if (!blob) {
-          return reject(new Error('Falha na conversão de canvas para Blob.'));
-        }
-        resolve(blob);
-      }, 'image/jpeg', quality);
-    };
-    
-    img.onerror = (error) => {
-      URL.revokeObjectURL(blobURL);
-      reject(error);
-    };
-  });
-};
-
-
-export const ProofUploadPage: React.FC = () => {
+const ProofUploadPage: React.FC = () => {
     const { assignmentId } = useParams<{ assignmentId: string }>();
     const navigate = useNavigate();
 
     const [assignment, setAssignment] = useState<PostAssignment | null>(null);
-    const [processedFiles, setProcessedFiles] = useState<Blob[]>([]);
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
-    const [isProcessingImages, setIsProcessingImages] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
     useEffect(() => {
         if (!assignmentId) {
-            setError("Nenhum ID de tarefa fornecido.");
+            setError("ID da tarefa não encontrado.");
             setIsLoading(false);
             return;
         }
-
         const fetchAssignment = async () => {
-            setIsLoading(true);
             try {
                 const data = await getAssignmentById(assignmentId);
-                if (!data) {
-                    throw new Error("Tarefa não encontrada ou inválida.");
+                if (!data) throw new Error("Tarefa não encontrada.");
+
+                // Check if deadline has passed and late submissions are not allowed
+                if (data.status === 'confirmed' && data.confirmedAt && !data.proofSubmittedAt) {
+                    const confirmationTime = (data.confirmedAt as Timestamp).toDate();
+                    const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+                    const now = new Date();
+                    if (now > expireTime && !data.post.allowLateSubmissions) {
+                        throw new Error("O prazo para envio da comprovação já encerrou e não foi liberado pelo organizador.");
+                    }
                 }
-                if (data.proofSubmittedAt) {
-                    setSuccess(true); // If proof is already there, show success page
-                }
+                
                 setAssignment(data);
+
+                if (data.proofImageUrls && data.proofImageUrls.length > 0) {
+                    setSuccess(true); // Already submitted
+                }
+
             } catch (err: any) {
                 setError(err.message);
             } finally {
                 setIsLoading(false);
             }
         };
-
         fetchAssignment();
     }, [assignmentId]);
 
-    useEffect(() => {
-        // Cleanup function to revoke object URLs to prevent memory leaks
-        return () => {
-            imagePreviews.forEach(url => URL.revokeObjectURL(url));
-        };
-    }, [imagePreviews]);
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        
-        // Let useEffect handle cleanup of old previews when state changes
-        setImagePreviews([]);
-        setProcessedFiles([]);
-        
-        if (!files || files.length === 0) {
-            return;
-        }
-
-        if (files.length > 2) {
-            setError("Você pode enviar no máximo 2 imagens.");
-            e.target.value = ''; // Clear the input
-            return;
-        }
-
-        setError(null);
-        setIsProcessingImages(true);
-
-        try {
-            const fileList = Array.from(files);
-            const newProcessedBlobs = await Promise.all(
-                // FIX: Explicitly type 'file' as File to resolve type inference issue.
-                fileList.map((file: File) => {
-                    return resizeImage(file, 600, 600, 0.7);
-                })
-            );
+        if (files) {
+            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            setImageFiles(fileList);
             
-            setProcessedFiles(newProcessedBlobs);
-            const previewUrls = newProcessedBlobs.map(blob => URL.createObjectURL(blob));
+            // FIX: Explicitly cast `file` to `Blob` to resolve TypeScript error where it was being inferred as `unknown`.
+            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
             setImagePreviews(previewUrls);
-
-        } catch (err) {
-            console.error("Error processing images:", err);
-            setError("Houve um problema ao processar as imagens. Tente novamente.");
-            e.target.value = '';
-        } finally {
-            setIsProcessingImages(false);
         }
     };
-
+    
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assignmentId || processedFiles.length === 0) {
-            setError("Por favor, selecione 1 ou 2 imagens para enviar.");
+        if (!assignmentId || imageFiles.length === 0) {
+            setError("Por favor, selecione pelo menos uma imagem.");
             return;
         }
-
+        
         setIsSubmitting(true);
         setError(null);
 
         try {
-            await submitProof(assignmentId, processedFiles);
+            await submitProof(assignmentId, imageFiles);
             setSuccess(true);
         } catch (err: any) {
-            setError(err.message || 'Ocorreu um erro desconhecido durante o envio.');
+            setError(err.message);
         } finally {
             setIsSubmitting(false);
         }
     };
-    
-    const buttonText = isSubmitting ? 'Enviando Print...' : isProcessingImages ? 'Processando...' : 'Enviar Comprovação';
 
-    // UI Renderings
     if (isLoading) {
-        return (
-            <div className="max-w-2xl mx-auto text-center py-10">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-4 text-gray-300">Carregando tarefa...</p>
-            </div>
-        );
+        return <div className="text-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    }
+    
+    if (error && !assignment) {
+        return <div className="text-red-400 text-center py-10">{error}</div>;
+    }
+
+    if (!assignment) {
+         return <div className="text-center py-10">Tarefa não encontrada.</div>;
     }
     
     if (success) {
         return (
             <div className="max-w-2xl mx-auto text-center">
-                 <button onClick={() => navigate('/posts')} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                    <ArrowLeftIcon className="w-5 h-5" />
-                    <span>Voltar para Publicações</span>
-                </button>
                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
                     <h1 className="text-2xl font-bold text-green-400 mb-4">Comprovação Enviada!</h1>
-                    <p className="text-gray-300 mb-6">Sua comprovação para o evento <strong>{assignment?.post.campaignName}</strong> foi enviada com sucesso.</p>
-                </div>
+                    <p className="text-gray-300 mb-6">Sua comprovação para o post do evento <strong>{assignment.post.campaignName}</strong> foi enviada com sucesso. Obrigado!</p>
+                    <button onClick={() => navigate('/posts')} className="mt-6 px-6 py-2 bg-primary text-white rounded-md">Voltar para Minhas Publicações</button>
+                 </div>
             </div>
         );
     }
 
-    if (error && !assignment) {
-        return (
-             <div className="max-w-2xl mx-auto text-center">
-                 <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                    <ArrowLeftIcon className="w-5 h-5" />
-                    <span>Voltar</span>
-                </button>
-                <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                    <h1 className="text-2xl font-bold text-red-400 mb-4">Erro</h1>
-                    <p className="text-gray-300">{error}</p>
-                </div>
-            </div>
-        );
-    }
-    
     return (
         <div className="max-w-2xl mx-auto">
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
@@ -217,53 +119,50 @@ export const ProofUploadPage: React.FC = () => {
             </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Enviar Comprovação</h1>
-                {assignment && <p className="text-center text-primary font-semibold text-lg mb-6">{assignment.post.campaignName}</p>}
-
-                {error && <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 mb-6 rounded-md">{error}</div>}
-
-                {assignment && !assignment.proofSubmittedAt ? (
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Selecione 1 ou 2 prints da postagem:</label>
-                            
-                            <div className="mt-4 flex justify-center items-center gap-4 p-4 border border-dashed border-gray-600 rounded-lg min-h-[12rem]">
-                                {isProcessingImages ? (
-                                    <div className="text-center text-gray-400">
-                                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto"></div>
-                                        <p className="mt-2 text-sm">Processando...</p>
-                                    </div>
-                                ) : imagePreviews.length > 0 ? (
+                <p className="text-center text-primary font-semibold mb-6">{assignment.post.campaignName}</p>
+                
+                <div className="bg-dark/70 p-4 rounded-lg mb-6">
+                    {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
+                        <div className="w-full max-w-sm mx-auto rounded-md mb-4">
+                           <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                        </div>
+                    )}
+                     <h4 className="font-semibold text-gray-200">Instruções Originais:</h4>
+                     <p className="text-gray-400 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {error && <div className="text-red-400 text-sm p-3 bg-red-900/30 rounded-md">{error}</div>}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Prints da postagem (máximo 2)</label>
+                        <div className="mt-2 flex items-center gap-4">
+                            <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
+                               <CameraIcon className="w-5 h-5 mr-2 inline-block" />
+                                <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Enviar prints'}</span>
+                                <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                            </label>
+                            <div className="flex-grow flex items-center gap-3">
+                                {imagePreviews.length > 0 ? (
                                     imagePreviews.map((preview, index) => (
-                                        <img key={index} className="max-h-48 w-auto rounded-lg object-contain" src={preview} alt={`Prévia ${index + 1}`} />
+                                       <img key={index} className="h-20 w-20 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                     ))
                                 ) : (
-                                    <div className="text-center text-gray-500">
-                                        <CameraIcon className="w-12 h-12 mx-auto" />
-                                        <p className="mt-2 text-sm">A prévia da imagem aparecerá aqui</p>
-                                    </div>
+                                    <p className="text-sm text-gray-400">Nenhum print selecionado.</p>
                                 )}
                             </div>
-
-                            <div className="mt-4 flex justify-center">
-                                <label htmlFor="photo-upload" className="cursor-pointer bg-gray-700 py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
-                                   <CameraIcon className="w-5 h-5 mr-2 inline-block" />
-                                    <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Selecionar prints'}</span>
-                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting || isProcessingImages} />
-                                </label>
-                            </div>
                         </div>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || isProcessingImages || processedFiles.length === 0}
-                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed"
-                        >
-                            {buttonText}
-                        </button>
-                    </form>
-                ) : (
-                    !isLoading && <p className="text-center text-gray-400">Não é possível enviar comprovação para esta tarefa. Ela já pode ter sido concluída.</p>
-                )}
+                    </div>
+                     <button
+                        type="submit"
+                        disabled={isSubmitting || imageFiles.length === 0}
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
+                    >
+                        {isSubmitting ? 'Enviando...' : 'Enviar Comprovação'}
+                    </button>
+                </form>
             </div>
         </div>
     );
 };
+
+export default ProofUploadPage;

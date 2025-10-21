@@ -1,5 +1,6 @@
-import firebase from '../firebase/config';
+
 import { firestore } from '../firebase/config';
+import { collection, doc, getDoc, getDocs, query, where, updateDoc, deleteDoc, Timestamp, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Organization } from '../types';
 
 /**
@@ -7,8 +8,8 @@ import { Organization } from '../types';
  */
 export const getOrganizations = async (): Promise<Organization[]> => {
     try {
-        const querySnapshot = await firestore.collection("organizations").get();
-        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
+        const querySnapshot = await getDocs(collection(firestore, "organizations"));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
     } catch (error) {
         console.error("Error getting organizations: ", error);
         throw new Error("Não foi possível buscar as organizações.");
@@ -20,9 +21,9 @@ export const getOrganizations = async (): Promise<Organization[]> => {
  */
 export const getPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        const q = firestore.collection("organizations").where("public", "==", true).where("status", "in", ["active", "trial"]);
-        const querySnapshot = await q.get();
-        return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Organization);
+        const q = query(collection(firestore, "organizations"), where("public", "==", true), where("status", "in", ["active", "trial"]));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Organization));
     } catch (error) {
         console.error("Error getting public organizations: ", error);
         throw new Error("Não foi possível buscar as organizações públicas.");
@@ -34,10 +35,10 @@ export const getPublicOrganizations = async (): Promise<Organization[]> => {
  */
 export const getOrganization = async (id: string): Promise<Organization | null> => {
     try {
-        const docRef = firestore.collection('organizations').doc(id);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-            return Object.assign({ id: docSnap.id }, docSnap.data()) as Organization;
+        const docRef = doc(firestore, 'organizations', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Organization;
         }
         return null;
     } catch (error) {
@@ -51,8 +52,8 @@ export const getOrganization = async (id: string): Promise<Organization | null> 
  */
 export const createOrganization = async (orgId: string, data: Omit<Organization, 'id' | 'createdAt'>): Promise<void> => {
     try {
-        const orgDoc = firestore.collection('organizations').doc(orgId);
-        await orgDoc.set({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        const orgDoc = doc(firestore, 'organizations', orgId);
+        await setDoc(orgDoc, { ...data, createdAt: serverTimestamp() });
     } catch (error) {
         console.error("Error creating organization: ", error);
         throw new Error("Não foi possível criar a organização.");
@@ -64,8 +65,8 @@ export const createOrganization = async (orgId: string, data: Omit<Organization,
  */
 export const updateOrganization = async (id: string, data: Partial<Omit<Organization, 'id'>>): Promise<void> => {
     try {
-        const orgDoc = firestore.collection('organizations').doc(id);
-        await orgDoc.update(data);
+        const orgDoc = doc(firestore, 'organizations', id);
+        await updateDoc(orgDoc, data);
     } catch (error) {
         console.error("Error updating organization: ", error);
         throw new Error("Não foi possível atualizar a organização.");
@@ -77,7 +78,7 @@ export const updateOrganization = async (id: string, data: Partial<Omit<Organiza
  */
 export const deleteOrganization = async (id: string): Promise<void> => {
     try {
-        await firestore.collection("organizations").doc(id).delete();
+        await deleteDoc(doc(firestore, "organizations", id));
     } catch (error) {
         console.error("Error deleting organization: ", error);
         throw new Error("Não foi possível deletar a organização.");
