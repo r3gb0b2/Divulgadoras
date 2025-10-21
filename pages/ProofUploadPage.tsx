@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAssignmentById, submitProof } from '../services/postService';
@@ -117,9 +118,9 @@ export const ProofUploadPage: React.FC = () => {
                     fileList.map(async (file: File) => {
                         // Using slightly higher res/quality for proofs
                         const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
-                        // Create a new name with jpeg extension to ensure consistency
-                        const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".jpeg";
-                        return new File([compressedBlob], newFileName, { type: 'image/jpeg' });
+                        // Revert to the simpler filename logic from the registration form
+                        // to ensure compatibility and fix the preview issue.
+                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
                     })
                 );
                 
