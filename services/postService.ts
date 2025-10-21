@@ -87,6 +87,10 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
     } catch (error) {
         console.error("Error getting scheduled posts: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing. The query requires a composite index on (organizationId, scheduledAt asc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
+        }
         throw new Error("Não foi possível buscar as publicações agendadas.");
     }
 };
@@ -120,6 +124,10 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
     } catch (error) {
         console.error("Error getting posts: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing. The query requires a composite index on (organizationId, createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
+        }
         throw new Error("Não foi possível buscar as publicações.");
     }
 };
@@ -243,6 +251,10 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: 
         return { stats, assignments };
     } catch (error) {
         console.error("Error getting promoter stats:", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing. The query requires a composite index on (promoterId, post.createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
+        }
         throw new Error("Não foi possível buscar as estatísticas.");
     }
 };
@@ -269,6 +281,10 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats
         return { stats, assignments };
     } catch (error) {
         console.error("Error getting promoter stats by email:", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing. The query requires a composite index on (promoterEmail, post.createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
+        }
         throw new Error("Não foi possível buscar as estatísticas.");
     }
 };
