@@ -124,7 +124,7 @@ const ProofUploadPage: React.FC = () => {
                     {assignment.post.type === 'image' && assignment.post.mediaUrl && (
                         <img src={assignment.post.mediaUrl} alt="Arte da publicação" className="w-full max-w-sm mx-auto rounded-md mb-4" />
                     )}
-                    {assignment.post.type === 'video' && assignment.post.mediaUrl && (
+                    {assignment.post.type === 'video' && assignment.post.mediaUrl && !assignment.post.mediaUrl.includes('drive.google.com') && (
                         <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md mb-4" />
                     )}
                      <h4 className="font-semibold text-gray-200">Instruções Originais:</h4>

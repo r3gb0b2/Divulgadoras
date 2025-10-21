@@ -35,6 +35,22 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
+const getGoogleDriveDownloadUrl = (url: string): string | null => {
+    if (!url || !url.includes('drive.google.com')) return null;
+
+    const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+        const fileId = match[1];
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    const idMatch = url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+         const fileId = idMatch[1];
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return null;
+}
+
 const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const [textColor, setTextColor] = useState('text-gray-400');
@@ -263,6 +279,16 @@ export const PostDetails: React.FC = () => {
     };
 
     const handleDownload = async (url: string, campaignName: string) => {
+        if (url.includes('drive.google.com')) {
+            const downloadUrl = getGoogleDriveDownloadUrl(url);
+            if (downloadUrl) {
+                window.open(downloadUrl, '_blank');
+            } else {
+                alert('O link do Google Drive parece ser inválido.');
+            }
+            return;
+        }
+
         setIsDownloading(true);
         setError('');
         try {
@@ -321,7 +347,13 @@ export const PostDetails: React.FC = () => {
                     )}
                      {post.type === 'video' && post.mediaUrl && (
                         <div className="mb-4">
-                            <video src={post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                            {post.mediaUrl.includes('drive.google.com') ? (
+                                <div className="text-center p-4 bg-gray-800/50 rounded-md">
+                                    <p className="text-sm text-gray-300 mb-2">Este post utiliza um vídeo do Google Drive.</p>
+                                </div>
+                            ) : (
+                                <video src={post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                            )}
                             <div className="flex justify-center items-center gap-4 mt-2">
                                 <button
                                     onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}

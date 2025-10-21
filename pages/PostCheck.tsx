@@ -85,6 +85,22 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
     );
 };
 
+const getGoogleDriveDownloadUrl = (url: string): string | null => {
+    if (!url || !url.includes('drive.google.com')) return null;
+
+    const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+        const fileId = match[1];
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    const idMatch = url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+         const fileId = idMatch[1];
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return null;
+}
+
 
 const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
     const [isConfirming, setIsConfirming] = useState(false);
@@ -134,6 +150,17 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     };
 
     const handleDownload = async (url: string, campaignName: string) => {
+        if (url.includes('drive.google.com')) {
+            const downloadUrl = getGoogleDriveDownloadUrl(url);
+            if (downloadUrl) {
+                window.open(downloadUrl, '_blank');
+            } else {
+                alert('O link do Google Drive parece ser inválido. Por favor, contate o organizador.');
+            }
+            return;
+        }
+
+        // Fallback for old Firebase Storage videos
         setIsDownloading(true);
         try {
             const pathRegex = /\/o\/(.*?)\?alt=media/;
@@ -199,7 +226,13 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 )}
                 {assignment.post.type === 'video' && assignment.post.mediaUrl && (
                     <div className="mb-4">
-                        <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                        {assignment.post.mediaUrl.includes('drive.google.com') ? (
+                            <div className="text-center p-4 bg-gray-800/50 rounded-md">
+                                <p className="text-sm text-gray-300 mb-2">Um vídeo do Google Drive está disponível para esta publicação.</p>
+                            </div>
+                        ) : (
+                            <video src={assignment.post.mediaUrl} controls className="w-full max-w-sm mx-auto rounded-md" />
+                        )}
                         <div className="flex justify-center items-center gap-4 mt-2">
                              <a href={assignment.post.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline flex items-center gap-1">
                                 <EyeIcon className="w-4 h-4" /> Ver
@@ -210,7 +243,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                                 className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                             >
                                 <DownloadIcon className="w-4 h-4" />
-                                {isDownloading ? 'Baixando...' : 'Baixar'}
+                                {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
                             </button>
                         </div>
                     </div>

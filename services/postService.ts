@@ -5,29 +5,25 @@ import { Post, PostAssignment, Promoter } from '../types';
 import { Timestamp } from 'firebase/firestore';
 
 export const createPost = async (
-  postData: Omit<Post, 'id' | 'createdAt' | 'mediaUrl'>,
-  mediaFile: File | null,
+  postData: Omit<Post, 'id' | 'createdAt'>,
+  mediaFile: File | null, // This is now only for images
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    let finalMediaUrl: string | undefined = undefined;
+    const finalPostData = { ...postData };
 
-    // 1. Upload image/video on the client if it exists
-    if (mediaFile) {
+    // 1. Upload image on the client ONLY if it's an image post
+    if (mediaFile && postData.type === 'image') {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = storage.ref(`posts-media/${fileName}`);
       await storageRef.put(mediaFile);
-      finalMediaUrl = await storageRef.getDownloadURL();
+      finalPostData.mediaUrl = await storageRef.getDownloadURL();
     }
+    // For video posts, we assume postData.mediaUrl is already the Google Drive link.
+    // For text posts, mediaUrl should be null/undefined.
 
-    // 2. Prepare data for the cloud function
-    const finalPostData = {
-        ...postData,
-        mediaUrl: finalMediaUrl || null,
-    };
-
-    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    // 2. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
     const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
     const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     

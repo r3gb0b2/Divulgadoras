@@ -27,15 +27,23 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [postLink, setPostLink] = useState('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [videoUrl, setVideoUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (post) {
             setInstructions(post.instructions || '');
             setTextContent(post.textContent || '');
-            setMediaPreview(post.mediaUrl || null);
             setPostLink(post.postLink || '');
             setMediaFile(null); // Reset file input on open
+
+            if (post.type === 'video') {
+                setVideoUrl(post.mediaUrl || '');
+                setMediaPreview(null);
+            } else {
+                setMediaPreview(post.mediaUrl || null);
+                setVideoUrl('');
+            }
         }
     }, [post, isOpen]);
 
@@ -59,9 +67,13 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         if (post.type === 'text') {
             updatedData.textContent = textContent;
         }
+        if (post.type === 'video') {
+            updatedData.mediaUrl = videoUrl;
+        }
 
         try {
-            await onSave(updatedData, mediaFile);
+            // For images, newMediaFile will be passed. For videos, the URL is in updatedData.
+            await onSave(updatedData, post.type === 'image' ? mediaFile : null);
             onClose();
         } catch(e) {
             // Error is handled by parent component
@@ -76,23 +88,26 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 <h2 className="text-2xl font-bold text-white mb-4">Editar Conteúdo da Publicação</h2>
                 
                 <div className="flex-grow overflow-y-auto space-y-4 pr-2">
-                    {post.type === 'text' ? (
+                    {post.type === 'text' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Conteúdo do Texto</label>
                             <textarea value={textContent} onChange={e => setTextContent(e.target.value)} rows={6} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                         </div>
-                     ) : (
+                    )}
+                    {post.type === 'image' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Mídia ({post.type})</label>
-                            <input type="file" accept={post.type === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark mt-1" />
-                            {mediaPreview && (post.type === 'video') ? (
-                                <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
-                            ) : mediaPreview ? (
-                                <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />
-                            ) : null}
+                            <label className="block text-sm font-medium text-gray-300">Mídia (imagem)</label>
+                            <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark mt-1" />
+                            {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
                             <p className="text-xs text-yellow-400 mt-2">Selecionar um novo arquivo substituirá o atual.</p>
                         </div>
-                     )}
+                    )}
+                    {post.type === 'video' && (
+                         <div>
+                            <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
+                            <InputWithIcon Icon={LinkIcon} type="url" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} />
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Instruções</label>
