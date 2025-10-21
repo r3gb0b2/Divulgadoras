@@ -138,6 +138,7 @@ export interface Post {
   expiresAt: Timestamp | FieldValue | null;
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
+  allowImmediateProof?: boolean;
 }
 
 export interface PostAssignment {
@@ -155,6 +156,7 @@ export interface PostAssignment {
     createdAt: Timestamp | FieldValue;
     allowLateSubmissions?: boolean;
     autoAssignToNewPromoters?: boolean;
+    allowImmediateProof?: boolean;
   };
   organizationId: string;
   promoterId: string;

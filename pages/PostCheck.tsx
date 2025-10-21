@@ -35,12 +35,12 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
         if (!assignment.confirmedAt) return;
 
         const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
-        const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
         const timer = setInterval(() => {
             const now = new Date();
 
+            // 1. Check for final expiration (applies to all cases)
             if (now > expireTime) {
                 if (assignment.post.allowLateSubmissions) {
                     setTimeLeft('Envio fora do prazo liberado pelo organizador.');
@@ -52,7 +52,19 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
                 clearInterval(timer);
                 return;
             }
+            
+            // 2. Check if immediate proof is allowed
+            if (assignment.post.allowImmediateProof) {
+                const diff = expireTime.getTime() - now.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                setTimeLeft(`Envio liberado! Expira em: ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
+                setIsButtonEnabled(true);
+                return; // Keep timer running to update countdown
+            }
 
+            // 3. Fallback to default 6-hour wait logic
+            const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
             if (now < enableTime) {
                 const diff = enableTime.getTime() - now.getTime();
                 const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -71,7 +83,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [assignment.confirmedAt, assignment.post.allowLateSubmissions]);
+    }, [assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof]);
 
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
         return (

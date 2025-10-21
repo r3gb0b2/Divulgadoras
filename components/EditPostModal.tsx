@@ -31,6 +31,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [mediaUrl, setMediaUrl] = useState(''); // Handles both image paths and video URLs
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -40,6 +41,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setMediaUrl(post.mediaUrl || '');
             setMediaPreview(post.mediaUrl || null);
             setPostLink(post.postLink || '');
+            setAllowImmediateProof(post.allowImmediateProof || false);
             setMediaFile(null); // Reset file input on open
         }
     }, [post, isOpen]);
@@ -62,6 +64,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         const updatedData: Partial<Post> = {
             instructions,
             postLink,
+            allowImmediateProof,
         };
         
         if (post.type === 'text') {
@@ -133,6 +136,13 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
                          <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                    </div>
+
+                    <div className="border-t border-gray-700 pt-4">
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, as divulgadoras poderão enviar a comprovação assim que confirmarem, sem esperar 6 horas.">
+                            <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Liberar envio de comprovação imediato</span>
+                        </label>
                     </div>
                 </div>
 

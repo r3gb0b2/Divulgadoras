@@ -232,6 +232,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
         expiresAt: post.expiresAt || null,
         createdAt: post.createdAt,
         allowLateSubmissions: post.allowLateSubmissions || false,
+        allowImmediateProof: post.allowImmediateProof || false,
       },
       organizationId: promoterData.organizationId,
       promoterId: promoterId,
@@ -1065,6 +1066,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       expiresAt: finalExpiresAt,
       autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true,
       allowLateSubmissions: postData.allowLateSubmissions === true,
+      allowImmediateProof: postData.allowImmediateProof === true,
       mediaUrl: postData.mediaUrl || null,
       textContent: postData.textContent || null,
     };
@@ -1080,6 +1082,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       expiresAt: newPost.expiresAt,
       allowLateSubmissions: newPost.allowLateSubmissions,
       autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
+      allowImmediateProof: newPost.allowImmediateProof,
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
       createdAt: creationTimestamp,
@@ -1158,6 +1161,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
     expiresAt: post.expiresAt || null,
     createdAt: post.createdAt,
     allowLateSubmissions: post.allowLateSubmissions || false,
+    allowImmediateProof: post.allowImmediateProof || false,
   };
 
   // 3. Fetch promoters and create assignment docs
@@ -1231,7 +1235,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
 
     // Build the denormalized update object dynamically
     const denormalizedUpdateData = {};
-    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions"];
+    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions", "allowImmediateProof"];
 
     for (const field of fieldsToSync) {
       // Check if the property exists in updateData, even if its value is null or undefined

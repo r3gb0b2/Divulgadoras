@@ -62,6 +62,7 @@ const CreatePost: React.FC = () => {
     const [expiresAt, setExpiresAt] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
+    const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
@@ -100,6 +101,7 @@ const CreatePost: React.FC = () => {
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
+                    setAllowImmediateProof(originalPost.allowImmediateProof || false);
                     if (originalPost.type === 'video' && originalPost.mediaUrl) {
                         setVideoUrl(originalPost.mediaUrl);
                     }
@@ -249,6 +251,7 @@ const CreatePost: React.FC = () => {
                 expiresAt: expiryTimestamp,
                 autoAssignToNewPromoters: autoAssign,
                 allowLateSubmissions: allowLateSubmissions,
+                allowImmediateProof: allowImmediateProof,
             };
 
             await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
@@ -365,16 +368,18 @@ const CreatePost: React.FC = () => {
                             <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                         </div>
                     </div>
-                    <div className="mt-4">
+                    <div className="space-y-4 mt-4">
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
                             <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Atribuir automaticamente para novas divulgadoras</span>
                         </label>
-                    </div>
-                    <div className="mt-4">
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, permite que as divulgadoras enviem a comprovação mesmo após o prazo de 24 horas ter expirado.">
                             <input type="checkbox" checked={allowLateSubmissions} onChange={(e) => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Permitir envio de comprovação fora do prazo</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, as divulgadoras poderão enviar a comprovação assim que confirmarem, sem esperar 6 horas.">
+                            <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Liberar envio de comprovação imediato</span>
                         </label>
                     </div>
                 </fieldset>
