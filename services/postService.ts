@@ -448,3 +448,29 @@ export const renewAssignmentDeadline = async (assignmentId: string): Promise<voi
         throw new Error("Não foi possível renovar o prazo da tarefa.");
     }
 };
+
+export const submitJustification = async (assignmentId: string, justification: string): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            justification: justification,
+            justificationStatus: 'pending',
+            justificationSubmittedAt: serverTimestamp(),
+            proofImageUrls: [], 
+            proofSubmittedAt: null,
+        });
+    } catch (error) {
+        console.error("Error submitting justification: ", error);
+        throw new Error("Não foi possível enviar a justificativa.");
+    }
+};
+
+export const updateAssignment = async (assignmentId: string, data: Partial<Omit<PostAssignment, 'id'>>): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, data);
+    } catch (error) {
+        console.error("Error updating assignment: ", error);
+        throw new Error("Não foi possível atualizar a tarefa.");
+    }
+};

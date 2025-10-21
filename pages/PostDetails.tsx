@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline } from '../services/postService';
+import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline, updateAssignment } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -280,6 +280,29 @@ export const PostDetails: React.FC = () => {
         }
     };
 
+    const handleJustification = async (status: 'accepted' | 'rejected', assignmentId: string) => {
+        setIsProcessing(`justification-${assignmentId}`);
+        try {
+            await updateAssignment(assignmentId, { justificationStatus: status });
+            await fetchData();
+        } catch (err: any) {
+            setError(err.message || 'Falha ao atualizar justificativa.');
+        } finally {
+            setIsProcessing(null);
+        }
+    };
+
+    const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
+        const styles = {
+            pending: "bg-yellow-900/50 text-yellow-300",
+            accepted: "bg-green-900/50 text-green-300",
+            rejected: "bg-red-900/50 text-red-300",
+        };
+        const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
+        if (!status) return null;
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+    };
+
     const handleDownload = (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
         setIsDownloading(true);
         setError('');
@@ -410,6 +433,23 @@ export const PostDetails: React.FC = () => {
                                         <ProofTimer assignment={a} />
                                     </div>
                                 </div>
+
+                                {a.justification && (
+                                    <div className="mt-2 pt-2 border-t border-gray-700/50">
+                                        <p className="text-xs font-semibold text-yellow-300">Justificativa Enviada:</p>
+                                        <p className="text-sm text-gray-300 italic bg-gray-900/50 p-2 rounded-md my-1">{a.justification}</p>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="text-xs flex items-center gap-2">Status: {renderJustificationStatus(a.justificationStatus)}</div>
+                                            {a.justificationStatus === 'pending' && (
+                                                <div className="flex gap-2 text-xs font-semibold">
+                                                    <button onClick={() => handleJustification('accepted', a.id)} disabled={isProcessing === `justification-${a.id}`} className="text-green-400 hover:underline disabled:opacity-50">Aceitar</button>
+                                                    <button onClick={() => handleJustification('rejected', a.id)} disabled={isProcessing === `justification-${a.id}`} className="text-red-400 hover:underline disabled:opacity-50">Rejeitar</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="mt-2 pt-2 border-t border-gray-700/50 flex flex-wrap justify-between items-center gap-2">
                                     <div className="flex items-center gap-2">
                                         {a.proofImageUrls && a.proofImageUrls.length > 0 ? (
@@ -418,7 +458,7 @@ export const PostDetails: React.FC = () => {
                                                     <img src={url} alt={`Prova ${i+1}`} className="w-10 h-10 object-cover rounded"/>
                                                 </a>
                                             ))
-                                        ) : (
+                                        ) : !a.justification && (
                                             <p className="text-xs text-gray-500">Aguardando comprovação...</p>
                                         )}
                                     </div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
@@ -115,7 +115,11 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
 };
 
 
-const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignmentId: string) => void }> = ({ assignment, onConfirm }) => {
+const PostCard: React.FC<{ 
+    assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
+    onConfirm: (assignmentId: string) => void,
+    onJustify: (assignment: PostAssignment) => void
+}> = ({ assignment, onConfirm, onJustify }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -189,6 +193,58 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         } finally {
             setIsDownloading(false);
         }
+    };
+    
+    const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
+        const styles = {
+            pending: "bg-yellow-900/50 text-yellow-300",
+            accepted: "bg-green-900/50 text-green-300",
+            rejected: "bg-red-900/50 text-red-300",
+        };
+        const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
+        if (!status) return <span className="text-gray-400">Pendente</span>;
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+    };
+
+    const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0;
+    const hasJustification = !!assignment.justification;
+
+    const renderActions = () => {
+        if (hasProof) {
+            return <ProofSection assignment={assignment} />;
+        }
+        if (hasJustification) {
+            return (
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
+                    <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
+                    <div className="text-xs">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                </div>
+            );
+        }
+        if (assignment.status === 'pending') {
+            return (
+                <div className="w-full flex flex-col sm:flex-row gap-2">
+                    <button 
+                        onClick={() => onJustify(assignment)}
+                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                    <button 
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
+                        className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                    </button>
+                </div>
+            );
+        }
+        if (assignment.status === 'confirmed') {
+            return <ProofSection assignment={assignment} />;
+        }
+        return null;
     };
 
     return (
@@ -265,22 +321,61 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 )}
 
                 <div className="mt-4 border-t border-gray-700 pt-4 text-center">
-                    {assignment.status === 'pending' ? (
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={isConfirming}
-                            className="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
-                        </button>
-                    ) : (
-                        <ProofSection assignment={assignment} />
-                    )}
+                    {renderActions()}
                 </div>
             </div>
         </div>
     );
 }
+
+const JustificationModal: React.FC<{
+    isOpen: boolean,
+    onClose: () => void,
+    onSubmit: (assignmentId: string, text: string) => Promise<void>,
+    assignment: PostAssignment | null
+}> = ({ isOpen, onClose, onSubmit, assignment }) => {
+    const [text, setText] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setText('');
+            setIsSubmitting(false);
+        }
+    }, [isOpen]);
+
+    if (!isOpen || !assignment) return null;
+
+    const handleSubmit = async () => {
+        if (!text.trim()) return;
+        setIsSubmitting(true);
+        await onSubmit(assignment.id, text);
+        setIsSubmitting(false);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-white mb-4">Justificar Ausência</h2>
+                <p className="text-gray-400 mb-4">Explique o motivo pelo qual você não conseguiu realizar esta postagem. Sua justificativa será enviada para análise.</p>
+                <textarea
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    rows={5}
+                    placeholder="Ex: Tive um imprevisto pessoal..."
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
+                />
+                <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
+                    <button onClick={handleSubmit} disabled={isSubmitting || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
+                        {isSubmitting ? 'Enviando...' : 'Enviar Justificativa'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const PostCheck: React.FC = () => {
     const navigate = useNavigate();
@@ -292,6 +387,10 @@ const PostCheck: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+    
+    // Justification Modal State
+    const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
+    const [justifyingAssignment, setJustifyingAssignment] = useState<PostAssignment | null>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -355,11 +454,30 @@ const PostCheck: React.FC = () => {
             setError(err.message || 'Falha ao confirmar.');
         }
     }
+    
+    const handleOpenJustifyModal = (assignment: PostAssignment) => {
+        setJustifyingAssignment(assignment);
+        setIsJustifyModalOpen(true);
+    };
+    
+    const handleJustifySubmit = async (assignmentId: string, text: string) => {
+        try {
+            await submitJustification(assignmentId, text);
+            await performSearch(email); // Refresh list
+        } catch (err: any) {
+            setError(err.message || 'Falha ao enviar justificativa.');
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         performSearch(email);
     };
+
+    const justificationCount = useMemo(() => {
+        if (!assignments) return 0;
+        return assignments.filter(a => !!a.justification).length;
+    }, [assignments]);
 
     const renderResult = () => {
         if (!searched) return null;
@@ -387,11 +505,17 @@ const PostCheck: React.FC = () => {
                     </button>
                 </div>
                 
+                {justificationCount > 0 && (
+                    <div className="mb-4 p-3 bg-blue-900/50 rounded-md text-blue-300 text-sm text-center">
+                        Você tem <strong>{justificationCount}</strong> justificativa(s) de não postagem. O organizador irá analisá-las.
+                    </div>
+                )}
+                
                 {(!assignments || assignments.length === 0) ? (
                     <p className="text-center text-gray-400 mt-4">Nenhuma publicação ativa encontrada para você no momento.</p>
                 ) : (
                     <div className="space-y-4">
-                        {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} />)}
+                        {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
                     </div>
                 )}
             </>
@@ -434,6 +558,12 @@ const PostCheck: React.FC = () => {
                 isOpen={isStatsModalOpen}
                 onClose={() => setIsStatsModalOpen(false)}
                 promoter={currentPromoter}
+            />
+            <JustificationModal
+                isOpen={isJustifyModalOpen}
+                onClose={() => setIsJustifyModalOpen(false)}
+                onSubmit={handleJustifySubmit}
+                assignment={justifyingAssignment}
             />
         </div>
     );

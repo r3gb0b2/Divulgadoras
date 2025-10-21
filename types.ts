@@ -168,6 +168,9 @@ export interface PostAssignment {
   confirmedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
   proofSubmittedAt?: Timestamp | FieldValue | null;
+  justification?: string;
+  justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
+  justificationSubmittedAt?: Timestamp | FieldValue | null;
 }
 
 export interface GuestListConfirmation {
