@@ -199,6 +199,15 @@ export const CreatePost: React.FC = () => {
         };
         fetchPromoters();
     }, [selectedCampaign, selectedState, selectedOrgId, campaigns]);
+
+    useEffect(() => {
+        // Cleanup function to revoke object URLs to prevent memory leaks
+        return () => {
+            if (mediaPreview && mediaPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(mediaPreview);
+            }
+        };
+    }, [mediaPreview]);
     
     const handleLogout = async () => {
         try {
@@ -236,10 +245,7 @@ export const CreatePost: React.FC = () => {
         if (file) {
             setIsProcessingImages(true);
             setError('');
-            // Revoke previous blob URL if it exists
-            if (mediaPreview && mediaPreview.startsWith('blob:')) {
-                URL.revokeObjectURL(mediaPreview);
-            }
+            
             try {
                 const compressedBlob = await resizeImage(file, 600, 600, 0.7);
                 const processedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });

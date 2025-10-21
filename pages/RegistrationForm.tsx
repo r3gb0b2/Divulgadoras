@@ -121,6 +121,17 @@ const PromoterForm: React.FC = () => {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    // Cleanup function to revoke object URLs to prevent memory leaks
+    return () => {
+        photoPreviews.forEach(url => {
+            if (url.startsWith('blob:')) {
+                URL.revokeObjectURL(url);
+            }
+        });
+    };
+  }, [photoPreviews]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({

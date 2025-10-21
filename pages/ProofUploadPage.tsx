@@ -98,11 +98,17 @@ export const ProofUploadPage: React.FC = () => {
         fetchAssignment();
     }, [assignmentId]);
 
+    useEffect(() => {
+        // Cleanup function to revoke object URLs to prevent memory leaks
+        return () => {
+            imagePreviews.forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [imagePreviews]);
+
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         
-        // Cleanup old previews
-        imagePreviews.forEach(URL.revokeObjectURL);
+        // Let useEffect handle cleanup of old previews when state changes
         setImagePreviews([]);
         setProcessedFiles([]);
         
