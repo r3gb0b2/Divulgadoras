@@ -117,7 +117,7 @@ const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) =>
 };
 
 
-export const PostDetails: React.FC = () => {
+const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
     const { adminData } = useAdminAuth();
@@ -499,4 +499,6 @@ export const PostDetails: React.FC = () => {
              <EditPostModal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} post={post} onSave={handleSavePost} />
         </div>
     );
-}
+};
+
+export default PostDetails;

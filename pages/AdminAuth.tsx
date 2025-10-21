@@ -12,7 +12,7 @@ import AdminApplicationsListPage from './AdminApplicationsListPage';
 import SettingsPage from './SettingsPage';
 import AdminPosts from './AdminPosts';
 import CreatePost from './CreatePost';
-import { PostDetails } from './PostDetails';
+import PostDetails from './PostDetails';
 import PostDashboard from './PostDashboard';
 import GuestListPage from './GuestListPage';
 import GuestListCheckinPage from './GuestListCheckinPage';
