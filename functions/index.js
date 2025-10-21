@@ -108,7 +108,7 @@ const isSuperAdmin = async (uid) => {
  * If the new status is 'approved' or 'rejected', it sends a notification email.
  * If it's a new approval, it also checks for and assigns auto-assignable posts.
  */
-exports.promoterStatusTrigger = functions
+exports.onPromoterStatusUpdate = functions
     .region("southamerica-east1")
     .firestore.document("promoters/{promoterId}")
     .onUpdate(async (change, context) => {
