@@ -1,10 +1,10 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEmailTemplate, setEmailTemplate, resetEmailTemplate, sendCustomTestEmail, getDefaultEmailTemplate } from '../services/emailService';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
 import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 
 const EmailTemplateEditor: React.FC = () => {
     const navigate = useNavigate();
@@ -164,7 +164,7 @@ const EmailTemplateEditor: React.FC = () => {
                 \`\`\`
             `;
 
-            const askGemini = httpsCallable(functions, 'askGemini');
+            const askGemini = functions.httpsCallable('askGemini');
             const result = await askGemini({ prompt: fullPrompt });
             const data = result.data as { text: string };
 

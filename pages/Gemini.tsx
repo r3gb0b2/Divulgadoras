@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 import { ArrowLeftIcon, SparklesIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
@@ -39,7 +38,7 @@ const GeminiPage: React.FC = () => {
         setResponse('');
 
         try {
-            const askGemini = httpsCallable(functions, 'askGemini');
+            const askGemini = functions.httpsCallable('askGemini');
             const result = await askGemini({ prompt: trimmedPrompt });
             const data = result.data as { text: string };
             setResponse(data.text);

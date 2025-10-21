@@ -6,7 +6,6 @@ import { PostAssignment, Promoter } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
-import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase/config';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
@@ -174,7 +173,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
 
-            const getDownloadUrl = httpsCallable(functions, 'getDownloadUrl');
+            const getDownloadUrl = functions.httpsCallable('getDownloadUrl');
             const result = await getDownloadUrl({ filePath, fileName });
             const data = result.data as { downloadUrl: string };
 

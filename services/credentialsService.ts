@@ -1,9 +1,8 @@
 import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 
 export const getStripePublishableKey = async (): Promise<string> => {
     try {
-        const func = httpsCallable(functions, 'getStripePublishableKey');
+        const func = functions.httpsCallable('getStripePublishableKey');
         const result = await func();
         const data = result.data as { publishableKey: string };
         return data.publishableKey;
@@ -16,7 +15,7 @@ export const getStripePublishableKey = async (): Promise<string> => {
 
 export const createStripeCheckoutSession = async (orgId: string, planId: string): Promise<{ sessionId: string }> => {
     try {
-        const func = httpsCallable(functions, 'createStripeCheckoutSession');
+        const func = functions.httpsCallable('createStripeCheckoutSession');
         const result = await func({ orgId, planId });
         return result.data as { sessionId: string };
     } catch (error: any) {
@@ -28,7 +27,7 @@ export const createStripeCheckoutSession = async (orgId: string, planId: string)
 
 export const getStripeStatus = async (): Promise<any> => {
     try {
-        const getStatus = httpsCallable(functions, 'getStripeStatus');
+        const getStatus = functions.httpsCallable('getStripeStatus');
         const result = await getStatus();
         return result.data;
     } catch (error: any) {
@@ -47,7 +46,7 @@ export const getStripeStatus = async (): Promise<any> => {
 
 export const getEnvironmentConfig = async (): Promise<any> => {
     try {
-        const getConfig = httpsCallable(functions, 'getEnvironmentConfig');
+        const getConfig = functions.httpsCallable('getEnvironmentConfig');
         const result = await getConfig();
         return result.data;
     } catch (error: any) {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -271,7 +270,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // If they are leaving, confirm and then call the cloud function.
             if (window.confirm(`Tem certeza que deseja marcar "${promoter.name}" como fora do grupo? Isso a removerá de TODAS as publicações ativas para este evento.`)) {
                 try {
-                    const removePromoter = httpsCallable(functions, 'removePromoterFromAllAssignments');
+                    const removePromoter = functions.httpsCallable('removePromoterFromAllAssignments');
                     await removePromoter({ promoterId: promoter.id });
                     
                     alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
@@ -308,7 +307,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         
         setNotifyingId(promoter.id);
         try {
-            const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+            const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
             const result = await manuallySendStatusEmail({ promoterId: promoter.id });
             const data = result.data as { success: boolean, message: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';

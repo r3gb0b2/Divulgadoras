@@ -11,7 +11,6 @@ import { storage, functions } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -302,7 +301,7 @@ export const PostDetails: React.FC = () => {
             const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
 
-            const getDownloadUrl = httpsCallable(functions, 'getDownloadUrl');
+            const getDownloadUrl = functions.httpsCallable('getDownloadUrl');
             const result = await getDownloadUrl({ filePath, fileName });
             const data = result.data as { downloadUrl: string };
 

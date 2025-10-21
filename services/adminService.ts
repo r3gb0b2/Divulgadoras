@@ -1,7 +1,6 @@
 // FIX: Add missing import for 'firebase' namespace to use compat types.
 import firebase from '../firebase/config';
 import { firestore, functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 import { AdminUserData, AdminApplication } from '../types';
 
 /**
@@ -14,7 +13,7 @@ export const submitAdminApplication = async (
   password: string
 ): Promise<void> => {
   try {
-    const createAdminRequest = httpsCallable(functions, 'createAdminRequest');
+    const createAdminRequest = functions.httpsCallable('createAdminRequest');
     await createAdminRequest({ ...applicationData, password });
   } catch (error) {
     console.error('Error submitting admin application:', error);

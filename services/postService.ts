@@ -1,6 +1,5 @@
 import firebase from '../firebase/config';
 import { firestore, storage, functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 import { Post, PostAssignment, Promoter } from '../types';
 import { Timestamp } from 'firebase/firestore';
 
@@ -24,7 +23,7 @@ export const createPost = async (
     // For text posts, mediaUrl should be null/undefined.
 
     // 2. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
-    const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
+    const createPostAndAssignments = functions.httpsCallable('createPostAndAssignments');
     const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     
     const data = result.data as { success: boolean, postId?: string };
@@ -326,7 +325,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
 
 export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
     try {
-        const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
+        const updatePostStatus = functions.httpsCallable('updatePostStatus');
         await updatePostStatus({ postId, updateData });
     } catch (error) {
         console.error("Error updating post status:", error);
@@ -363,7 +362,7 @@ export const deletePost = async (postId: string): Promise<void> => {
 
 export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
     try {
-        const func = httpsCallable(functions, 'addAssignmentsToPost');
+        const func = functions.httpsCallable('addAssignmentsToPost');
         await func({ postId, promoterIds });
     } catch (error) {
         console.error("Error adding assignments to post: ", error);
@@ -376,7 +375,7 @@ export const addAssignmentsToPost = async (postId: string, promoterIds: string[]
 
 export const sendPostReminder = async (postId: string): Promise<{count: number, message: string}> => {
     try {
-        const func = httpsCallable(functions, 'sendPostReminder');
+        const func = functions.httpsCallable('sendPostReminder');
         const result = await func({ postId });
         return result.data as {count: number, message: string};
     } catch (error) {
@@ -390,7 +389,7 @@ export const sendPostReminder = async (postId: string): Promise<{count: number, 
 
 export const sendSinglePostReminder = async (assignmentId: string): Promise<{message: string}> => {
     try {
-        const func = httpsCallable(functions, 'sendSingleProofReminder');
+        const func = functions.httpsCallable('sendSingleProofReminder');
         const result = await func({ assignmentId });
         return result.data as {message: string};
     } catch (error) {

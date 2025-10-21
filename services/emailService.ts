@@ -1,7 +1,6 @@
 
 
 import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 
 /**
  * Handles errors from Firebase Callable Functions, providing more specific user-facing messages.
@@ -29,7 +28,7 @@ const handleCallableError = (error: any, defaultMessage: string): Error => {
  */
 export const getEmailTemplate = async (): Promise<string> => {
     try {
-        const getTemplate = httpsCallable(functions, 'getEmailTemplate');
+        const getTemplate = functions.httpsCallable('getEmailTemplate');
         const result = await getTemplate();
         const data = result.data as { htmlContent: string };
         return data.htmlContent;
@@ -44,7 +43,7 @@ export const getEmailTemplate = async (): Promise<string> => {
  */
 export const getDefaultEmailTemplate = async (): Promise<string> => {
     try {
-        const getDefault = httpsCallable(functions, 'getDefaultEmailTemplate');
+        const getDefault = functions.httpsCallable('getDefaultEmailTemplate');
         const result = await getDefault();
         const data = result.data as { htmlContent: string };
         return data.htmlContent;
@@ -59,7 +58,7 @@ export const getDefaultEmailTemplate = async (): Promise<string> => {
  */
 export const setEmailTemplate = async (htmlContent: string): Promise<void> => {
     try {
-        const setTemplate = httpsCallable(functions, 'setEmailTemplate');
+        const setTemplate = functions.httpsCallable('setEmailTemplate');
         await setTemplate({ htmlContent });
     } catch (error) {
         throw handleCallableError(error, "Não foi possível salvar o template de e-mail");
@@ -71,7 +70,7 @@ export const setEmailTemplate = async (htmlContent: string): Promise<void> => {
  */
 export const resetEmailTemplate = async (): Promise<void> => {
     try {
-        const resetTemplate = httpsCallable(functions, 'resetEmailTemplate');
+        const resetTemplate = functions.httpsCallable('resetEmailTemplate');
         await resetTemplate();
     } catch (error) {
         throw handleCallableError(error, "Não foi possível redefinir o template de e-mail");
@@ -85,7 +84,7 @@ export const resetEmailTemplate = async (): Promise<void> => {
  */
 export const sendCustomTestEmail = async (htmlContent: string): Promise<{ success: boolean; message: string }> => {
      try {
-        const sendTest = httpsCallable(functions, 'sendTestEmail');
+        const sendTest = functions.httpsCallable('sendTestEmail');
         const result = await sendTest({ testType: 'custom_approved', customHtmlContent: htmlContent });
         return result.data as { success: boolean; message: string };
     } catch (error) {
