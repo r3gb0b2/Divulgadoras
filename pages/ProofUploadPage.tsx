@@ -124,7 +124,7 @@ export const ProofUploadPage: React.FC = () => {
             const newProcessedFiles = await Promise.all(
                 // FIX: Explicitly type 'file' as File to resolve type inference issue.
                 fileList.map(async (file: File) => {
-                    const compressedBlob = await resizeImage(file, 800, 800, 0.8);
+                    const compressedBlob = await resizeImage(file, 600, 600, 0.7);
                     // Keep original filename but ensure jpeg type for consistency
                     return new File([compressedBlob], file.name, { type: 'image/jpeg' });
                 })
