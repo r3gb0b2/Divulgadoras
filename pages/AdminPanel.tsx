@@ -5,7 +5,8 @@ import { httpsCallable } from 'firebase/functions';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign } from '../types';
+import { getAssignmentsForOrganization } from '../services/postService';
+import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment } from '../types';
 import { states } from '../constants/states';
 import { Link } from 'react-router-dom';
 import PhotoViewerModal from '../components/PhotoViewerModal';
@@ -48,9 +49,17 @@ const formatDate = (timestamp: any): string => {
     });
 };
 
+const getPerformanceColor = (rate: number): string => {
+    if (rate < 0) return 'text-white'; // Default for no data
+    if (rate > 60) return 'text-green-400';
+    if (rate > 30) return 'text-yellow-400';
+    return 'text-red-400';
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
+    const [allAssignments, setAllAssignments] = useState<PostAssignment[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -155,13 +164,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
              setError("Nenhuma organização selecionada.");
              setIsLoading(false);
              setAllPromoters([]);
+             setAllAssignments([]);
              return;
         }
+
+        const orgIdForAssignments = isSuperAdmin 
+            ? (selectedOrg !== 'all' ? selectedOrg : null) 
+            : selectedOrgId;
 
         const statesForScope = getStatesForScope();
 
         try {
-            const [promotersResult, statsResult] = await Promise.all([
+            const promises: Promise<any>[] = [
                 getAllPromoters({
                     organizationId: orgId,
                     statesForScope,
@@ -172,10 +186,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     filterState: selectedState,
                 }),
                 getPromoterStats({ organizationId: orgId, statesForScope }),
-            ]);
+            ];
+
+             if (orgIdForAssignments) {
+                promises.push(getAssignmentsForOrganization(orgIdForAssignments));
+            }
+
+            const [promotersResult, statsResult, assignmentsResult] = await Promise.all(promises);
             
             setAllPromoters(promotersResult);
             setStats(statsResult);
+            setAllAssignments(assignmentsResult || []);
 
         } catch(err: any) {
             setError(err.message);
@@ -390,10 +411,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsLookupModalOpen(false);
     };
 
+    const promotersWithStats = useMemo(() => {
+        if (allAssignments.length === 0) {
+            return allPromoters.map(p => ({ ...p, completionRate: -1 }));
+        }
+
+        const statsMap = new Map<string, { assigned: number; completed: number }>();
+        allAssignments.forEach(a => {
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0 };
+            stat.assigned++;
+            if (a.proofSubmittedAt) {
+                stat.completed++;
+            }
+            statsMap.set(a.promoterId, stat);
+        });
+
+        return allPromoters.map(p => {
+            const stats = statsMap.get(p.id);
+            const completionRate = stats && stats.assigned > 0
+                ? Math.round((stats.completed / stats.assigned) * 100)
+                : -1;
+            return { ...p, completionRate };
+        });
+    }, [allPromoters, allAssignments]);
+
+
     // Memoized calculation for filtering and pagination
     const processedPromoters = useMemo(() => {
         // Sort all promoters by date first
-        const sorted = [...allPromoters].sort((a, b) => {
+        const sorted = [...promotersWithStats].sort((a, b) => {
             const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
             const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
@@ -433,7 +479,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             displayPromoters: paginated,
             totalFilteredCount: filtered.length,
         };
-    }, [allPromoters, searchQuery, currentPage]);
+    }, [promotersWithStats, searchQuery, currentPage]);
     
     const { displayPromoters, totalFilteredCount } = processedPromoters;
     
@@ -469,12 +515,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (displayPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
         return (
-            <div className="space-y-4">
+            <div className="space-y-4 mt-4">
                 {displayPromoters.map(promoter => (
                     <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
                             <div>
-                                <p className="font-bold text-lg text-white">{promoter.name}</p>
+                                <p className={`font-bold text-lg ${getPerformanceColor((promoter as any).completionRate)}`}>{promoter.name}</p>
                                 {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
                                 {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
                                 {promoter.associatedCampaigns && promoter.associatedCampaigns.length > 0 && (
@@ -678,6 +724,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </button>
                     )}
                  </div>
+                
+                {allAssignments.length > 0 && filter === 'approved' && (
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-4 mt-4">
+                        <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                    </div>
+                )}
+                
                 {renderContent()}
 
                 {pageCount > 0 && (

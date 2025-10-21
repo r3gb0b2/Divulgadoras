@@ -13,6 +13,12 @@ import { Timestamp } from 'firebase/firestore';
 type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'state' | 'campaignName' | 'associatedCampaigns' | 'allCampaigns' | 'organizationId' | 'rejectionReason' | 'hasJoinedGroup' | 'actionTakenByUid' | 'actionTakenByEmail' | 'statusChangedAt' | 'observation' | 'lastManualNotificationAt' | 'status' | 'tiktok' | 'dateOfBirth'> | 'name';
 type SortDirection = 'asc' | 'desc';
 
+const getPerformanceColor = (rate: number): string => {
+    if (rate > 60) return 'text-green-400';
+    if (rate > 30) return 'text-yellow-400';
+    return 'text-red-400';
+};
+
 const PostDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -184,6 +190,12 @@ const PostDashboard: React.FC = () => {
                         className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                     />
                  </div>
+                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
+                    <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                </div>
                  {error && <p className="text-red-400 mb-4">{error}</p>}
                  {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (
                     <div className="overflow-x-auto">
@@ -210,7 +222,7 @@ const PostDashboard: React.FC = () => {
                             <tbody className="divide-y divide-gray-700">
                                 {processedStats.map(stat => (
                                     <tr key={stat.id} className="hover:bg-gray-700/40">
-                                        <td className="px-4 py-3 whitespace-nowrap"><div className="font-medium text-white">{stat.name}</div><div className="text-xs text-gray-400">{stat.email}</div></td>
+                                        <td className="px-4 py-3 whitespace-nowrap"><div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div><div className="text-xs text-gray-400">{stat.email}</div></td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold">{stat.assigned}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-green-400">{stat.completed}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-yellow-400">{stat.justifications}</td>
