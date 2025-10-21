@@ -1066,62 +1066,12 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
 
 
 // --- Post Management ---
-
-const _createPostAndAssignments = async (postData, assignedPromoters) => {
-    const postDocRef = db.collection("posts").doc();
-    const batch = db.batch();
-    const creationTimestamp = admin.firestore.Timestamp.now();
-
-    let finalExpiresAt = null;
-    if (postData.expiresAt && (postData.expiresAt.seconds !== undefined || postData.expiresAt._seconds !== undefined)) {
-        finalExpiresAt = new admin.firestore.Timestamp(
-            postData.expiresAt.seconds ?? postData.expiresAt._seconds,
-            postData.expiresAt.nanoseconds ?? postData.expiresAt._nanoseconds,
-        );
-    }
-
-    const newPost = {
-        ...postData,
-        createdAt: creationTimestamp,
-        expiresAt: finalExpiresAt,
-        isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
-    };
-    batch.set(postDocRef, newPost);
-    
-    // Remove fields not needed for denormalization
-    const denormalizedPostData = { ...newPost };
-    delete denormalizedPostData.organizationId;
-    delete denormalizedPostData.stateAbbr;
-    delete denormalizedPostData.createdByEmail;
-
-    const assignmentsCollectionRef = db.collection("postAssignments");
-    for (const promoter of assignedPromoters) {
-        if (!promoter.id || !promoter.email || !promoter.name) {
-            functions.logger.warn("Skipping promoter with missing data:", promoter);
-            continue;
-        }
-        const assignmentDocRef = assignmentsCollectionRef.doc();
-        const newAssignment = {
-            postId: postDocRef.id,
-            post: denormalizedPostData,
-            organizationId: postData.organizationId,
-            promoterId: promoter.id,
-            promoterEmail: promoter.email.toLowerCase(),
-            promoterName: promoter.name,
-            status: "pending",
-            confirmedAt: null,
-            proofImageUrls: [],
-            proofSubmittedAt: null,
-        };
-        batch.set(assignmentDocRef, newAssignment);
-    }
-
-    await batch.commit();
-    return postDocRef.id;
-};
-
-
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  functions.logger.info("createPostAndAssignments function v7 called with data:", {
+    hasPostData: !!data.postData,
+    assignedPromotersCount: data.assignedPromoters?.length,
+  });
+
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
   }
@@ -1136,8 +1086,80 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
   }
 
   try {
-    const postId = await _createPostAndAssignments(postData, assignedPromoters);
-    return { success: true, postId: postId };
+    const postDocRef = db.collection("posts").doc();
+    const batch = db.batch();
+    const creationTimestamp = admin.firestore.Timestamp.now();
+
+    let finalExpiresAt = null;
+    if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
+      finalExpiresAt = new admin.firestore.Timestamp(
+          postData.expiresAt.seconds,
+          postData.expiresAt.nanoseconds,
+      );
+    }
+
+    const newPost = {
+      organizationId: postData.organizationId,
+      campaignName: postData.campaignName,
+      stateAbbr: postData.stateAbbr,
+      type: postData.type,
+      instructions: postData.instructions || "",
+      postLink: postData.postLink || null,
+      createdAt: creationTimestamp,
+      createdByEmail: postData.createdByEmail,
+      isActive: typeof postData.isActive === "boolean" ? postData.isActive : true,
+      expiresAt: finalExpiresAt,
+      autoAssignToNewPromoters: postData.autoAssignToNewPromoters === true,
+      allowLateSubmissions: postData.allowLateSubmissions === true,
+      allowImmediateProof: postData.allowImmediateProof === true,
+      mediaUrl: postData.mediaUrl || null,
+      textContent: postData.textContent || null,
+      postFormats: postData.postFormats || [],
+    };
+
+    batch.set(postDocRef, newPost);
+
+    const denormalizedPostData = {
+      type: newPost.type,
+      instructions: newPost.instructions,
+      postLink: newPost.postLink,
+      campaignName: newPost.campaignName,
+      isActive: newPost.isActive,
+      expiresAt: newPost.expiresAt,
+      allowLateSubmissions: newPost.allowLateSubmissions,
+      autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
+      allowImmediateProof: newPost.allowImmediateProof,
+      mediaUrl: newPost.mediaUrl,
+      textContent: newPost.textContent,
+      createdAt: creationTimestamp,
+      postFormats: newPost.postFormats,
+    };
+
+    const assignmentsCollectionRef = db.collection("postAssignments");
+    for (const promoter of assignedPromoters) {
+      if (!promoter.id || !promoter.email || !promoter.name) {
+        functions.logger.warn("Skipping promoter with missing data:", promoter);
+        continue;
+      }
+      const assignmentDocRef = assignmentsCollectionRef.doc();
+      const newAssignment = {
+        postId: postDocRef.id,
+        post: denormalizedPostData,
+        organizationId: postData.organizationId,
+        promoterId: promoter.id,
+        promoterEmail: promoter.email.toLowerCase(),
+        promoterName: promoter.name,
+        status: "pending",
+        confirmedAt: null,
+        proofImageUrls: [],
+        proofSubmittedAt: null,
+      };
+      batch.set(assignmentDocRef, newAssignment);
+    }
+
+    await batch.commit();
+
+    return { success: true, postId: postDocRef.id };
   } catch (error) {
     functions.logger.error("Error committing post and assignments batch:", {
       errorMessage: error.message,
@@ -1147,42 +1169,6 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     throw new functions.https.HttpsError("internal", `Failed to save data. Error: ${error.message}`);
   }
 });
-
-exports.processScheduledPosts = functions
-    .region("southamerica-east1")
-    .pubsub.schedule("every 5 minutes")
-    .onRun(async (context) => {
-        const now = admin.firestore.Timestamp.now();
-        const query = db.collection("scheduledPosts")
-            .where("status", "==", "scheduled")
-            .where("scheduledAt", "<=", now);
-
-        const snapshot = await query.get();
-        if (snapshot.empty) {
-            console.log("No scheduled posts to process.");
-            return null;
-        }
-
-        const promises = snapshot.docs.map(async (doc) => {
-            const scheduledPostId = doc.id;
-            const scheduledPostData = doc.data();
-
-            try {
-                await _createPostAndAssignments(scheduledPostData, scheduledPostData.assignedPromoters);
-                return db.collection("scheduledPosts").doc(scheduledPostId).update({ status: 'sent' });
-            } catch (error) {
-                console.error(`Failed to process scheduled post ${scheduledPostId}:`, error);
-                return db.collection("scheduledPosts").doc(scheduledPostId).update({
-                    status: 'error',
-                    errorMessage: error.message,
-                });
-            }
-        });
-
-        await Promise.all(promises);
-        console.log(`Processed ${snapshot.size} scheduled posts.`);
-        return null;
-    });
 
 exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {

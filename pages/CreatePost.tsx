@@ -4,7 +4,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
-import { createPost, schedulePost, getPostWithAssignments } from '../services/postService';
+import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -66,11 +66,6 @@ const CreatePost: React.FC = () => {
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     
-    // Scheduling states
-    const [isScheduling, setIsScheduling] = useState(false);
-    const [scheduleDate, setScheduleDate] = useState('');
-    const [scheduleTime, setScheduleTime] = useState('');
-
     // UI states
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -219,108 +214,78 @@ const CreatePost: React.FC = () => {
         }
     }
 
-    const validateForm = () => {
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
         if (!selectedOrgId || !adminData?.email) {
             setError("Dados do administrador inválidos ou organização não selecionada.");
-            return false;
+            return;
         }
         if (!selectedCampaign || !selectedState) {
             setError("Selecione um estado e evento.");
-            return false;
+            return;
         }
         if (selectedPromoters.size === 0) {
             setError("Selecione ao menos uma divulgadora.");
-            return false;
+            return;
         }
         if (postType === 'image' && !mediaFile && !mediaPreview) {
             setError(`Selecione uma imagem para o post.`);
-            return false;
+            return;
         }
         if (postType === 'video' && !videoUrl.trim()) {
             setError('Cole o link compartilhável do Google Drive para o vídeo.');
-            return false;
+            return;
         }
         if (postType === 'text' && !textContent.trim()) {
             setError("Escreva o conteúdo do post de texto.");
-            return false;
-        }
-        if (isScheduling && (!scheduleDate || !scheduleTime)) {
-            setError("Para agendar, você deve preencher a data e a hora.");
-            return false;
-        }
-        return true;
-    };
-
-    const getPostPayload = () => {
-        const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
-        if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
-
-        let expiryTimestamp = null;
-        if (expiresAt) {
-            const [year, month, day] = expiresAt.split('-').map(Number);
-            const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
-            expiryTimestamp = Timestamp.fromDate(expiryDate);
+            return;
         }
 
-        return {
-            organizationId: selectedOrgId!,
-            createdByEmail: adminData!.email,
-            campaignName: campaignDetails.name,
-            stateAbbr: selectedState,
-            type: postType,
-            textContent: postType === 'text' ? textContent : '',
-            mediaUrl: postType === 'video' ? videoUrl : undefined,
-            instructions,
-            postLink,
-            isActive,
-            expiresAt: expiryTimestamp,
-            autoAssignToNewPromoters: autoAssign,
-            allowLateSubmissions: allowLateSubmissions,
-            allowImmediateProof: allowImmediateProof,
-            postFormats: postFormats,
-        };
-    };
-
-    const saveHistory = () => {
-        if (instructions.trim() && adminData?.uid) {
-            const newHistory = [instructions.trim(), ...rulesHistory.filter(r => r !== instructions.trim())].slice(0, 10);
-            setRulesHistory(newHistory);
-            localStorage.setItem(`rulesHistory_${adminData.uid}`, JSON.stringify(newHistory));
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!validateForm()) return;
-        
         setIsSubmitting(true);
         setError('');
-
         try {
-            const postData = getPostPayload();
+            const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
+            if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
+
             const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
 
-            if (isScheduling) {
-                // Handle Scheduling
-                const [hours, minutes] = scheduleTime.split(':').map(Number);
-                const scheduleDateTime = new Date(scheduleDate);
-                scheduleDateTime.setHours(hours, minutes, 0, 0);
-
-                if (scheduleDateTime < new Date()) {
-                    throw new Error("A data de agendamento deve ser no futuro.");
-                }
-                const scheduleTimestamp = Timestamp.fromDate(scheduleDateTime);
-                await schedulePost(postData, postType === 'image' ? mediaFile : null, promotersToAssign, scheduleTimestamp);
-                saveHistory();
-                alert('Publicação agendada com sucesso!');
-                navigate('/admin/schedule');
-            } else {
-                // Handle Immediate Send
-                await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
-                saveHistory();
-                alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
-                navigate('/admin/posts');
+            let expiryTimestamp = null;
+            if (expiresAt) {
+                // Set timestamp to the end of the selected day in local time
+                const [year, month, day] = expiresAt.split('-').map(Number);
+                const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
+                expiryTimestamp = Timestamp.fromDate(expiryDate);
             }
+
+            const postData = {
+                organizationId: selectedOrgId,
+                createdByEmail: adminData.email,
+                campaignName: campaignDetails.name,
+                stateAbbr: selectedState,
+                type: postType,
+                textContent: postType === 'text' ? textContent : '',
+                mediaUrl: postType === 'video' ? videoUrl : undefined,
+                instructions,
+                postLink,
+                isActive,
+                expiresAt: expiryTimestamp,
+                autoAssignToNewPromoters: autoAssign,
+                allowLateSubmissions: allowLateSubmissions,
+                allowImmediateProof: allowImmediateProof,
+                postFormats: postFormats,
+            };
+
+            await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
+            
+            if (instructions.trim() && adminData?.uid) {
+                const newHistory = [instructions.trim(), ...rulesHistory.filter(r => r !== instructions.trim())].slice(0, 10);
+                setRulesHistory(newHistory);
+                localStorage.setItem(`rulesHistory_${adminData.uid}`, JSON.stringify(newHistory));
+            }
+
+            alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
+            navigate('/admin/posts');
+
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -494,32 +459,9 @@ const CreatePost: React.FC = () => {
                     </div>
                 </fieldset>
 
-                {/* Step 5: Scheduling */}
-                <fieldset className="p-4 border border-gray-700 rounded-lg">
-                    <legend className="px-2 font-semibold text-primary">5. Envio</legend>
-                    <div className="space-y-4">
-                         <label className="flex items-center space-x-2 cursor-pointer">
-                            <input type="checkbox" checked={isScheduling} onChange={(e) => setIsScheduling(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Agendar Publicação</span>
-                        </label>
-                        {isScheduling && (
-                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6 border-l-2 border-primary/50">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400">Data do Envio</label>
-                                    <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400">Hora do Envio</label>
-                                    <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                                </div>
-                             </div>
-                        )}
-                    </div>
-                </fieldset>
-
                 <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? (isScheduling ? 'Agendando...' : 'Enviando...') : (isScheduling ? 'Agendar Publicação' : 'Enviar Agora')}
+                        {isSubmitting ? 'Criando...' : 'Criar e Enviar Publicação'}
                     </button>
                 </div>
             </form>

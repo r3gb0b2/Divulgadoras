@@ -5,161 +5,78 @@ import {
   getDocs,
   doc,
   updateDoc,
-  deleteDoc,
+  serverTimestamp,
   query,
   where,
-  orderBy,
-  serverTimestamp,
-  getDoc,
-  writeBatch,
+  deleteDoc,
   Timestamp,
+  writeBatch,
+  getDoc,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
-import { Post, PostAssignment, Promoter, ScheduledPost } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Post, PostAssignment, Promoter } from '../types';
 
-export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, mediaFile: File | null, assignedPromoters: Promoter[]): Promise<string> => {
-    try {
-        const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
+export const createPost = async (
+  postData: Omit<Post, 'id' | 'createdAt'>,
+  mediaFile: File | null,
+  assignedPromoters: Promoter[]
+): Promise<string> => {
+  try {
+    let finalMediaUrl: string | undefined = undefined;
 
-        let mediaUrl: string | null = null;
-        if (mediaFile) {
-            const fileExtension = mediaFile.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-            const storageRef = ref(storage, `posts-media/${fileName}`);
-            await uploadBytes(storageRef, mediaFile);
-            mediaUrl = storageRef.fullPath; // Send path to function, not full URL
-        }
-
-        const finalPostData = { ...postData, mediaUrl };
-
-        const result = await createPostAndAssignments({
-            postData: finalPostData,
-            assignedPromoters: assignedPromoters.map(p => ({id: p.id, name: p.name, email: p.email}))
-        });
-
-        const data = result.data as { success: boolean, postId: string };
-        if (!data.success) {
-            throw new Error('A função do servidor falhou ao criar la publicação.');
-        }
-        return data.postId;
-
-    } catch (error) {
-        console.error("Error creating post and assignments: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível criar a publicação.");
+    // 1. For images, upload on the client. For videos, the URL is already in postData.
+    if (mediaFile && postData.type === 'image') {
+      const fileExtension = mediaFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const storageRef = ref(storage, `posts-media/${fileName}`);
+      await uploadBytes(storageRef, mediaFile);
+      finalMediaUrl = storageRef.fullPath;
     }
-};
 
-export const schedulePost = async (postData: Omit<Post, 'id' | 'createdAt'>, mediaFile: File | null, assignedPromoters: Promoter[], scheduledAt: Timestamp): Promise<string> => {
-    try {
-        let mediaUrl: string | null = null;
-        if (mediaFile) {
-            const fileExtension = mediaFile.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-            const storageRef = ref(storage, `posts-media/${fileName}`);
-            await uploadBytes(storageRef, mediaFile);
-            mediaUrl = storageRef.fullPath;
-        }
+    // 2. Prepare data for the cloud function
+    const finalPostData = {
+        ...postData,
+        // Use the uploaded image path, or the provided video URL
+        mediaUrl: finalMediaUrl || postData.mediaUrl || null,
+    };
 
-        const scheduledPostData = {
-            ...postData,
-            mediaUrl,
-            assignedPromoters: assignedPromoters.map(p => ({ id: p.id, name: p.name, email: p.email })),
-            scheduledAt,
-            status: 'scheduled' as const
-        };
-        
-        const docRef = await addDoc(collection(firestore, 'scheduledPosts'), scheduledPostData);
-        return docRef.id;
-
-    } catch (error) {
-        console.error("Error scheduling post: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível agendar a publicação.");
+    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
+    const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
+    
+    const data = result.data as { success: boolean, postId?: string };
+    if (!data.success || !data.postId) {
+        throw new Error("A função do servidor falhou ao criar a publicação.");
     }
-};
+    
+    return data.postId;
 
-export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
-    try {
-        const q = query(collection(firestore, "scheduledPosts"), where("organizationId", "==", organizationId));
-        const snapshot = await getDocs(q);
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
-        
-        // Sort client-side
-        posts.sort((a, b) => {
-            const timeA = a.scheduledAt instanceof Timestamp ? a.scheduledAt.toMillis() : 0;
-            const timeB = b.scheduledAt instanceof Timestamp ? b.scheduledAt.toMillis() : 0;
-            return timeA - timeB; // ascending
-        });
-        return posts;
-
-    } catch (error) {
-        console.error("Error getting scheduled posts: ", error);
-        throw new Error("Não foi possível buscar as publicações agendadas.");
+  } catch (error) {
+    console.error("Error creating post via cloud function: ", error);
+    if (error instanceof Error) {
+        throw error;
     }
-};
-
-export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
-    try {
-        const postDoc = doc(firestore, 'scheduledPosts', id);
-        await updateDoc(postDoc, data);
-    } catch (error) {
-        console.error("Error updating scheduled post: ", error);
-        throw new Error("Não foi possível atualizar o agendamento.");
-    }
-};
-
-export const deleteScheduledPost = async (id: string): Promise<void> => {
-    try {
-        await deleteDoc(doc(firestore, "scheduledPosts", id));
-    } catch (error) {
-        console.error("Error deleting scheduled post: ", error);
-        throw new Error("Não foi possível cancelar o agendamento.");
-    }
+    throw new Error("Não foi possível criar a publicação.");
+  }
 };
 
 export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
     try {
-        let q = query(collection(firestore, "posts"));
-        if (organizationId) {
-            q = query(q, where("organizationId", "==", organizationId));
-        }
+        const postsCollection = collection(firestore, "posts");
+        const q = organizationId 
+            ? query(postsCollection, where("organizationId", "==", organizationId))
+            : query(postsCollection);
+
         const snapshot = await getDocs(q);
         const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-        
-        // Sort client-side
-        posts.sort((a, b) => {
-            const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
-            const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
-            return timeB - timeA; // descending
-        });
-
+        posts.sort((a, b) => 
+            ((b.createdAt as Timestamp)?.toMillis() || 0) - ((a.createdAt as Timestamp)?.toMillis() || 0)
+        );
         return posts;
-
     } catch (error) {
-        console.error("Error getting posts: ", error);
+        console.error("Error fetching posts for org: ", error);
         throw new Error("Não foi possível buscar as publicações.");
-    }
-};
-
-export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
-    try {
-        const postDocRef = doc(firestore, 'posts', postId);
-        const postSnap = await getDoc(postDocRef);
-        if (!postSnap.exists()) {
-            throw new Error("Publicação não encontrada.");
-        }
-        const post = { id: postSnap.id, ...postSnap.data() } as Post;
-
-        const assignmentsQuery = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
-        const assignmentsSnapshot = await getDocs(assignmentsQuery);
-        const assignments = assignmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-
-        return { post, assignments };
-    } catch (error) {
-        console.error("Error getting post with assignments: ", error);
-        throw new Error("Não foi possível buscar os detalhes da publicação.");
     }
 };
 
@@ -169,208 +86,402 @@ export const getAssignmentsForOrganization = async (organizationId: string): Pro
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
     } catch (error) {
-        console.error("Error getting assignments for organization: ", error);
-        throw new Error("Não foi possível buscar as atribuições de posts.");
+        console.error("Error fetching assignments for organization: ", error);
+        throw new Error("Não foi possível buscar as tarefas da organização.");
     }
 };
 
-
-export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
+export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
     try {
-        const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
-        await updatePostStatus({ postId, updateData });
+        // Fetch post
+        const postDocRef = doc(firestore, 'posts', postId);
+        const postSnap = await getDoc(postDocRef);
+        if (!postSnap.exists()) {
+            throw new Error("Publicação não encontrada.");
+        }
+        const post = { id: postSnap.id, ...postSnap.data() } as Post;
+
+        // Fetch assignments
+        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
+        const snapshot = await getDocs(q);
+        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+
+        return { post, assignments };
+
     } catch (error) {
-        console.error("Error updating post status: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível atualizar o post.");
+        console.error("Error fetching post details: ", error);
+        throw new Error("Não foi possível buscar os detalhes da publicação.");
     }
 };
 
-
-export const deletePost = async (postId: string): Promise<void> => {
+export const getAssignmentsForPromoterByEmail = async (email: string): Promise<PostAssignment[]> => {
     try {
-        const batch = writeBatch(firestore);
+        const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
+        const snapshot = await getDocs(q);
+        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
         
-        // Delete post
-        const postRef = doc(firestore, "posts", postId);
-        batch.delete(postRef);
-
-        // Delete assignments
-        const assignmentsQuery = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
-        const assignmentsSnapshot = await getDocs(assignmentsQuery);
-        assignmentsSnapshot.forEach(doc => batch.delete(doc.ref));
-
-        await batch.commit();
-
+        // Filter out inactive or expired posts
+        const now = new Date();
+        const visibleAssignments = assignments.filter(assignment => {
+            const post = assignment.post;
+            if (!post.isActive) {
+                return false;
+            }
+            if (post.expiresAt) {
+                const expiryDate = (post.expiresAt as Timestamp).toDate();
+                if (expiryDate < now) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        
+        // Sort by pending first, then by date
+        visibleAssignments.sort((a, b) => {
+            if (a.status === 'pending' && b.status === 'confirmed') return -1;
+            if (a.status === 'confirmed' && b.status === 'pending') return 1;
+            const postA = a.post as any;
+            const postB = b.post as any;
+            return ((postB.createdAt as Timestamp)?.toMillis() || 0) - ((postA.createdAt as Timestamp)?.toMillis() || 0)
+        });
+        return visibleAssignments;
     } catch (error) {
-        console.error("Error deleting post: ", error);
-        throw new Error("Não foi possível deletar a publicação.");
+        console.error("Error fetching promoter assignments: ", error);
+        throw new Error("Não foi possível buscar as publicações.");
     }
-};
+}
+
+export const confirmAssignment = async (assignmentId: string): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            status: 'confirmed',
+            confirmedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error("Error confirming assignment: ", error);
+        throw new Error("Não foi possível confirmar a publicação.");
+    }
+}
 
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
     try {
         const docRef = doc(firestore, 'postAssignments', assignmentId);
         const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as PostAssignment : null;
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
+        }
+        return null;
     } catch (error) {
         console.error("Error getting assignment by ID: ", error);
         throw new Error("Não foi possível buscar os dados da tarefa.");
     }
 };
 
-export const submitProof = async (assignmentId: string, files: File[]): Promise<void> => {
-    if (files.length === 0) throw new Error("Nenhum arquivo de comprovação enviado.");
-    try {
-        const imageUrls = await Promise.all(files.map(async file => {
-            const fileName = `${assignmentId}/${Date.now()}-${file.name}`;
-            const storageRef = ref(storage, `proofs/${fileName}`);
-            await uploadBytes(storageRef, file);
-            return await getDownloadURL(storageRef);
-        }));
+export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
+    if (imageFiles.length === 0 || imageFiles.length > 2) {
+        throw new Error("Você deve enviar 1 ou 2 imagens.");
+    }
 
-        await updateDoc(doc(firestore, "postAssignments", assignmentId), {
-            proofImageUrls: imageUrls,
+    try {
+        // 1. Upload images
+        const proofImageUrls = await Promise.all(
+            imageFiles.map(async (photo) => {
+                const fileExtension = photo.name.split('.').pop();
+                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = ref(storage, `posts-proofs/${fileName}`);
+                await uploadBytes(storageRef, photo);
+                return await getDownloadURL(storageRef);
+            })
+        );
+        
+        // 2. Update Firestore document
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            proofImageUrls: proofImageUrls,
             proofSubmittedAt: serverTimestamp(),
-            status: 'completed',
         });
+        
+        return proofImageUrls;
     } catch (error) {
         console.error("Error submitting proof: ", error);
         throw new Error("Não foi possível enviar a comprovação.");
     }
 };
 
-export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: any, assignments: PostAssignment[] }> => {
-    try {
-        const q = query(collection(firestore, 'postAssignments'), where('promoterId', '==', promoterId));
-        const snapshot = await getDocs(q);
-        const assignments = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as PostAssignment));
+export const getStatsForPromoter = async (promoterId: string): Promise<{
+  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
+  assignments: PostAssignment[];
+}> => {
+  try {
+    const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
+    const snapshot = await getDocs(q);
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+
+    let completed = 0;
+    let missed = 0; // Post expired
+    let proofDeadlineMissed = 0; // 24h proof window expired
+    let pending = 0;
+    const now = new Date();
+
+    assignments.forEach(assignment => {
+      if (assignment.proofSubmittedAt) {
+        completed++;
+      } else if (!assignment.post.allowLateSubmissions) {
+        let deadlineHasPassed = false;
         
-        // Client-side sort
-        assignments.sort((a, b) => {
-            const timeA = a.post.createdAt instanceof Timestamp ? a.post.createdAt.toMillis() : 0;
-            const timeB = b.post.createdAt instanceof Timestamp ? b.post.createdAt.toMillis() : 0;
-            return timeB - timeA; // descending
-        });
-
-        const now = new Date();
-        const stats = assignments.reduce((acc, a) => {
-            acc.assigned++;
-            if (a.proofSubmittedAt) {
-                acc.completed++;
-            } else {
-                 const expiresAt = a.post.expiresAt ? (a.post.expiresAt as Timestamp).toDate() : null;
-                 if (expiresAt && now > expiresAt) acc.missed++;
-                 else acc.pending++;
+        // Proof deadline is more specific, check it first for confirmed posts
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofExpireTime) {
+                proofDeadlineMissed++;
+                deadlineHasPassed = true;
             }
-            return acc;
-        }, { assigned: 0, completed: 0, missed: 0, proofDeadlineMissed: 0, pending: 0}); // proofDeadlineMissed requires more logic
+        }
 
-        return { stats, assignments };
+        // If not caught by proof deadline, check general post expiration
+        if (!deadlineHasPassed) {
+            const postExpiresAt = assignment.post.expiresAt;
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+                missed++;
+                deadlineHasPassed = true;
+            }
+        }
+
+        if (!deadlineHasPassed) {
+            pending++;
+        }
+      } else { // Late submissions are allowed, so it's always pending until submitted
+          pending++;
+      }
+    });
+
+    // Sort assignments by date for display (most recent first)
+    assignments.sort((a, b) => {
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
+
+
+    return {
+      stats: {
+        assigned: assignments.length,
+        completed,
+        missed,
+        proofDeadlineMissed,
+        pending,
+      },
+      assignments,
+    };
+  } catch (error) {
+    console.error("Error getting promoter stats: ", error);
+    throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
+  }
+};
+
+export const getStatsForPromoterByEmail = async (email: string): Promise<{
+  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
+  assignments: PostAssignment[];
+}> => {
+  try {
+    const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
+    const snapshot = await getDocs(q);
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+
+    let completed = 0;
+    let missed = 0; // Post expired
+    let proofDeadlineMissed = 0; // 24h proof window expired
+    let pending = 0;
+    const now = new Date();
+
+    assignments.forEach(assignment => {
+      if (assignment.proofSubmittedAt) {
+        completed++;
+      } else if (!assignment.post.allowLateSubmissions) {
+        let deadlineHasPassed = false;
+        
+        // Proof deadline is more specific, check it first for confirmed posts
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofExpireTime) {
+                proofDeadlineMissed++;
+                deadlineHasPassed = true;
+            }
+        }
+
+        // If not caught by proof deadline, check general post expiration
+        if (!deadlineHasPassed) {
+            const postExpiresAt = assignment.post.expiresAt;
+            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+                missed++;
+                deadlineHasPassed = true;
+            }
+        }
+
+        if (!deadlineHasPassed) {
+            pending++;
+        }
+      } else { // Late submissions are allowed, so it's always pending until submitted
+          pending++;
+      }
+    });
+
+    // Sort assignments by date for display (most recent first)
+    assignments.sort((a, b) => {
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
+
+
+    return {
+      stats: {
+        assigned: assignments.length,
+        completed,
+        missed,
+        proofDeadlineMissed,
+        pending,
+      },
+      assignments,
+    };
+  } catch (error) {
+    console.error("Error getting promoter stats by email: ", error);
+    throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
+  }
+};
+
+export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
+    try {
+        const updatePostStatus = httpsCallable(functions, 'updatePostStatus');
+        await updatePostStatus({ postId, updateData });
     } catch (error) {
-        console.error("Error getting promoter stats:", error);
-        throw new Error("Não foi possível buscar as estatísticas.");
+        console.error("Error updating post status:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível atualizar a publicação.");
     }
 };
 
-export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats: any, assignments: PostAssignment[] }> => {
+export const deletePost = async (postId: string): Promise<void> => {
+    const batch = writeBatch(firestore);
     try {
-        const q = query(collection(firestore, 'postAssignments'), where('promoterEmail', '==', email));
-        const snapshot = await getDocs(q);
-        const assignments = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as PostAssignment));
+        // Find all assignments for the post
+        const q = query(collection(firestore, "postAssignments"), where("postId", "==", postId));
+        const assignmentsSnapshot = await getDocs(q);
         
-        // Client-side sort
-        assignments.sort((a, b) => {
-            const timeA = a.post.createdAt instanceof Timestamp ? a.post.createdAt.toMillis() : 0;
-            const timeB = b.post.createdAt instanceof Timestamp ? b.post.createdAt.toMillis() : 0;
-            return timeB - timeA; // descending
+        // Add assignments to the batch for deletion
+        assignmentsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
         });
 
-        const now = new Date();
-        const stats = assignments.reduce((acc, a) => {
-            acc.assigned++;
-            if (a.proofSubmittedAt) {
-                acc.completed++;
-            } else {
-                 const expiresAt = a.post.expiresAt ? (a.post.expiresAt as Timestamp).toDate() : null;
-                 if (expiresAt && now > expiresAt) acc.missed++;
-                 else acc.pending++;
-            }
-            return acc;
-        }, { assigned: 0, completed: 0, missed: 0, proofDeadlineMissed: 0, pending: 0});
+        // Add the post itself to the batch for deletion
+        const postDocRef = doc(firestore, 'posts', postId);
+        batch.delete(postDocRef);
 
-        return { stats, assignments };
+        await batch.commit();
+
     } catch (error) {
-        console.error("Error getting promoter stats by email:", error);
-        throw new Error("Não foi possível buscar as estatísticas.");
+        console.error("Error deleting post and assignments: ", error);
+        throw new Error("Não foi possível deletar a publicação.");
     }
-};
+}
 
 export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
     try {
-        const addAssignments = httpsCallable(functions, 'addAssignmentsToPost');
-        await addAssignments({ postId, promoterIds });
+        const func = httpsCallable(functions, 'addAssignmentsToPost');
+        await func({ postId, promoterIds });
     } catch (error) {
         console.error("Error adding assignments to post: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível adicionar as atribuições.");
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível atribuir a publicação.");
     }
 };
 
-export const sendPostReminder = async (postId: string): Promise<{ success: boolean; count: number; message: string; }> => {
+export const sendPostReminder = async (postId: string): Promise<{count: number, message: string}> => {
     try {
-        const sendReminder = httpsCallable(functions, 'sendPostReminder');
-        const result = await sendReminder({ postId });
-        return result.data as { success: boolean; count: number; message: string; };
+        const func = httpsCallable(functions, 'sendPostReminder');
+        const result = await func({ postId });
+        return result.data as {count: number, message: string};
     } catch (error) {
-        console.error("Error sending post reminder: ", error);
-        if (error instanceof Error) throw error;
+        console.error("Error sending post reminder:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
         throw new Error("Não foi possível enviar os lembretes.");
     }
 };
 
-export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
-     try {
-        const batch = writeBatch(firestore);
-        // Remove assignment
-        batch.delete(doc(firestore, "postAssignments", assignmentId));
-        // Update promoter status
-        batch.update(doc(firestore, "promoters", promoterId), { hasJoinedGroup: false });
-        await batch.commit();
+export const sendSinglePostReminder = async (assignmentId: string): Promise<{message: string}> => {
+    try {
+        const func = httpsCallable(functions, 'sendSingleProofReminder');
+        const result = await func({ assignmentId });
+        return result.data as {message: string};
     } catch (error) {
-        console.error("Error removing promoter from post/group: ", error);
-        throw new Error("Não foi possível remover a divulgadora.");
+        console.error("Error sending single post reminder:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível enviar o lembrete.");
     }
 };
 
-export const sendSinglePostReminder = async (assignmentId: string): Promise<{ success: boolean, message: string }> => {
-     try {
-        const sendReminder = httpsCallable(functions, 'sendSingleProofReminder');
-        const result = await sendReminder({ assignmentId });
-        return result.data as { success: boolean, message: string };
+export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
+    try {
+        const batch = writeBatch(firestore);
+
+        const promoterDocRef = doc(firestore, 'promoters', promoterId);
+        batch.update(promoterDocRef, { hasJoinedGroup: false });
+
+        const assignmentDocRef = doc(firestore, 'postAssignments', assignmentId);
+        batch.delete(assignmentDocRef);
+
+        await batch.commit();
     } catch (error) {
-        console.error("Error sending single reminder: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível enviar o lembrete.");
+        console.error("Error removing promoter from post and group:", error);
+        throw new Error("Não foi possível remover a divulgadora.");
     }
 };
 
 export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
     try {
-        await updateDoc(doc(firestore, "postAssignments", assignmentId), {
-            confirmedAt: serverTimestamp() // Reset the confirmation time to now
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            confirmedAt: serverTimestamp(),
         });
     } catch (error) {
         console.error("Error renewing assignment deadline: ", error);
-        throw new Error("Não foi possível renovar o prazo.");
+        throw new Error("Não foi possível renovar o prazo da tarefa.");
+    }
+};
+
+export const submitJustification = async (assignmentId: string, justification: string): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, {
+            justification: justification,
+            justificationStatus: 'pending',
+            justificationSubmittedAt: serverTimestamp(),
+            proofImageUrls: [], 
+            proofSubmittedAt: null,
+        });
+    } catch (error) {
+        console.error("Error submitting justification: ", error);
+        throw new Error("Não foi possível enviar a justificativa.");
     }
 };
 
 export const updateAssignment = async (assignmentId: string, data: Partial<Omit<PostAssignment, 'id'>>): Promise<void> => {
     try {
-        await updateDoc(doc(firestore, "postAssignments", assignmentId), data);
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, data);
     } catch (error) {
         console.error("Error updating assignment: ", error);
-        throw new Error("Não foi possível atualizar a atribuição.");
+        throw new Error("Não foi possível atualizar a tarefa.");
     }
 };

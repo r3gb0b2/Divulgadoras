@@ -1,72 +1,186 @@
-import React from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, CogIcon, MapPinIcon, KeyIcon, CreditCardIcon, EnvelopeIcon, ClockIcon } from '../components/Icons';
-import ChangePasswordPage from './ChangePasswordPage';
-import SubscriptionPage from './SubscriptionPage';
-import StripeSettingsPage from './StripeSettingsPage';
-import EmailTemplateEditor from './EmailTemplateEditor';
-import StatesListPage from './StatesListPage';
-
-const SettingsDashboard: React.FC = () => {
-    const { adminData } = useAdminAuth();
-    const navigate = useNavigate();
-    const isSuperAdmin = adminData?.role === 'superadmin';
-
-    const settings = [
-        { name: "Alterar Senha", path: "password", icon: KeyIcon, for: 'all' },
-        { name: "Assinatura", path: "subscription", icon: CreditCardIcon, for: 'admin' },
-        { name: "Localidades", path: "/admin/states", icon: MapPinIcon, for: 'admin'},
-        { name: "Publicações Agendadas", path: "/admin/schedule", icon: ClockIcon, for: 'admin' },
-        // Super admin only
-        { name: "Pagamentos (Stripe)", path: "stripe", icon: CreditCardIcon, for: 'superadmin' },
-        { name: "Template de E-mail", path: "email", icon: EnvelopeIcon, for: 'superadmin' },
-    ];
-
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold flex items-center gap-3">
-                    <CogIcon className="w-8 h-8" />
-                    Configurações
-                </h1>
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    <ArrowLeftIcon className="w-4 h-4" />
-                    <span>Voltar</span>
-                </button>
-            </div>
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {settings.map(setting => {
-                        const show = setting.for === 'all' || (setting.for === 'superadmin' && isSuperAdmin) || (setting.for === 'admin' && !isSuperAdmin);
-                        if (!show) return null;
-                        return (
-                            <Link key={setting.path} to={setting.path.startsWith('/') ? setting.path : `/admin/settings/${setting.path}`} className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                                <div className="flex items-center">
-                                    <setting.icon className="w-8 h-8 text-primary" />
-                                    <h2 className="ml-4 text-xl font-semibold text-gray-100">{setting.name}</h2>
-                                </div>
-                                <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
-                            </Link>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-};
-
+import { getOrganization } from '../services/organizationService';
+import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
-    return (
-        <Routes>
-            <Route index element={<SettingsDashboard />} />
-            <Route path="password" element={<ChangePasswordPage />} />
-            <Route path="subscription" element={<SubscriptionPage />} />
-            <Route path="stripe" element={<StripeSettingsPage />} />
-            <Route path="email" element={<EmailTemplateEditor />} />
-        </Routes>
-    );
+  const navigate = useNavigate();
+  const { adminData, selectedOrgId } = useAdminAuth();
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrgId) {
+      getOrganization(selectedOrgId).then(orgData => {
+        if (orgData && adminData?.uid === orgData.ownerUid) {
+          setIsOwner(true);
+        } else {
+          setIsOwner(false);
+        }
+      }).catch(err => {
+        console.error("Could not fetch organization data for owner check:", err);
+        setIsOwner(false);
+      });
+    } else {
+      setIsOwner(false);
+    }
+  }, [adminData, selectedOrgId]);
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Configurações da Organização</h1>
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+          <ArrowLeftIcon className="w-4 h-4" />
+          <span>Voltar ao Painel</span>
+        </button>
+      </div>
+      <div className="bg-secondary shadow-lg rounded-lg p-6">
+        <p className="text-gray-400 mb-6">
+          Gerencie os usuários, localidades, eventos e sua assinatura na plataforma.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {isOwner && (
+            <Link
+              to={`/admin/organization/${selectedOrgId}`}
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <BuildingOfficeIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Dados da Organização</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Edite o nome da sua organização, localidades, administradores associados e outras configurações gerais.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Gerenciar &rarr;
+              </div>
+            </Link>
+          )}
+
+           {/* Gerenciar Localidades e Eventos */}
+          <Link
+            to="/admin/states"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <MapPinIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Localidades e Eventos</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Visualize suas localidades ativas e crie ou edite eventos/gêneros para receber cadastros.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Gerenciar Usuários */}
+          <Link
+            to="/admin/users"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <UsersIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Usuários</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Adicione, edite ou remova membros da sua equipe que podem acessar este painel.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Gerenciar Posts */}
+          <Link
+            to="/admin/posts"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <MegaphoneIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Crie publicações de texto ou imagem e designe para suas divulgadoras aprovadas.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+          
+           {/* Desempenho de Postagens */}
+          <Link
+            to="/admin/dashboard"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <ChartBarIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Desempenho de Postagens</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Analisar &rarr;
+            </div>
+          </Link>
+
+           {/* Alterar Senha */}
+           <Link
+              to="/admin/settings/change-password"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <KeyIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Alterar Senha</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Modifique sua senha de acesso ao painel de administrador.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
+
+          {/* Gerenciar Assinatura */}
+          <Link
+            to="/admin/settings/subscription"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <CreditCardIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Assinatura</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Visualize seu plano atual, histórico de faturas e gerencie sua forma de pagamento.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Assistente Gemini */}
+          <Link
+            to="/admin/gemini"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <SparklesIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Use a inteligência artificial do Google para gerar textos criativos, ideias para redes sociais, regras de eventos e muito mais.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default SettingsPage;
