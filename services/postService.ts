@@ -15,7 +15,7 @@ export const createPost = async (
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = storage.ref(`posts-media/${fileName}`);
-      await storageRef.put(mediaFile);
+      await storageRef.put(mediaFile, { contentType: 'image/jpeg' });
       finalPostData.mediaUrl = await storageRef.getDownloadURL();
     }
     // For video posts, we assume postData.mediaUrl is already the Google Drive link.
@@ -159,7 +159,7 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
                 const fileExtension = photo.name.split('.').pop();
                 const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                 const storageRef = storage.ref(`posts-proofs/${fileName}`);
-                await storageRef.put(photo);
+                await storageRef.put(photo, { contentType: 'image/jpeg' });
                 return await storageRef.getDownloadURL();
             })
         );

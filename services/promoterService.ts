@@ -27,7 +27,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
           .toString(36)
           .substring(2)}.${fileExtension}`;
         const storageRef = storage.ref(`promoters-photos/${fileName}`);
-        await storageRef.put(photo);
+        await storageRef.put(photo, { contentType: 'image/jpeg' });
         return await storageRef.getDownloadURL();
       })
     );
