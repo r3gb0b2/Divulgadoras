@@ -59,6 +59,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [filter, setFilter] = useState<PromoterStatus | 'all'>('pending');
     const [searchQuery, setSearchQuery] = useState('');
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
+    const [processingId, setProcessingId] = useState<string | null>(null);
 
     // Pagination state (client-side)
     const [currentPage, setCurrentPage] = useState(1);
@@ -145,48 +146,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
-    const fetchStats = useCallback(async () => {
+    const fetchAllData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
-        if (!isSuperAdmin && !orgId) return;
+        if (!isSuperAdmin && !orgId) {
+             setError("Nenhuma organização selecionada.");
+             setIsLoading(false);
+             setAllPromoters([]);
+             return;
+        }
 
         const statesForScope = getStatesForScope();
-        if (!isSuperAdmin && (!statesForScope || statesForScope.length === 0)) {
-            setStats({ total: 0, pending: 0, approved: 0, rejected: 0 });
-            return;
-        }
+
         try {
-            const newStats = await getPromoterStats({ organizationId: orgId, statesForScope });
-            setStats(newStats);
-        } catch (err: any) {
-            // Avoid overwriting a more specific error from the main fetch
-            if (!error) setError(err.message);
-        }
-    }, [adminData, organization, isSuperAdmin, getStatesForScope, error, selectedOrgId]);
-
-
-    // Fetch stats
-    useEffect(() => {
-        fetchStats();
-    }, [fetchStats]);
-
-    // Fetch all promoters based on filters
-    useEffect(() => {
-        const fetchAllPromoters = async () => {
-            setIsLoading(true);
-            setError(null);
-            
-            const orgId = isSuperAdmin ? undefined : selectedOrgId;
-            if (!isSuperAdmin && !orgId) {
-                 setError("Nenhuma organização selecionada.");
-                 setIsLoading(false);
-                 setAllPromoters([]);
-                 return;
-            }
-
-            const statesForScope = getStatesForScope();
-
-            try {
-                const result = await getAllPromoters({
+            const [promotersResult, statsResult] = await Promise.all([
+                getAllPromoters({
                     organizationId: orgId,
                     statesForScope,
                     status: filter,
@@ -194,19 +170,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     selectedCampaign: selectedCampaign,
                     filterOrgId: selectedOrg,
                     filterState: selectedState,
-                });
-                
-                setAllPromoters(result);
+                }),
+                getPromoterStats({ organizationId: orgId, statesForScope }),
+            ]);
+            
+            setAllPromoters(promotersResult);
+            setStats(statsResult);
 
-            } catch(err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchAllPromoters();
+        } catch(err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
     }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
+
+
+    // Fetch all promoters and stats based on filters
+    useEffect(() => {
+        fetchAllData();
+    }, [fetchAllData]);
 
 
     // Reset page number whenever filters or search query change
@@ -236,26 +218,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             await updatePromoter(id, updatedData);
             
             alert("Divulgadora atualizada com sucesso.");
-
-            // Optimistic UI update
-            if (data.status && filter !== 'all' && data.status !== filter) {
-                // If filter is 'pending' and we change status to 'approved', it should be removed.
-                // If filter is 'pending' and status is now 'rejected_editable', it should STAY.
-                if (filter === 'pending' && data.status === 'rejected_editable') {
-                     setAllPromoters(prev => prev.map(p => 
-                        p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
-                    ));
-                } else {
-                    setAllPromoters(prev => prev.filter(p => p.id !== id));
-                }
-            } else {
-                setAllPromoters(prev => prev.map(p => 
-                    p.id === id ? { ...currentPromoter, ...updatedData } as Promoter : p
-                ));
-            }
-            
-            // Refetch dashboard stats in the background
-            fetchStats();
+            await fetchAllData(); // Refresh all data to ensure consistency
 
         } catch (error) {
             alert("Falha ao atualizar a divulgadora.");
@@ -265,7 +228,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleGroupStatusChange = async (promoter: Promoter, hasJoined: boolean) => {
         if (hasJoined) {
-            // If they are joining, just update the flag. No need to delete anything.
+            // If they are joining, just update the flag.
             await handleUpdatePromoter(promoter.id, { hasJoinedGroup: true });
         } else {
             // If they are leaving, confirm and then call the cloud function.
@@ -275,13 +238,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     await removePromoter({ promoterId: promoter.id });
                     
                     alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
-    
-                    // Optimistic UI update for the checkbox.
-                    setAllPromoters(prev => prev.map(p => 
-                        p.id === promoter.id ? { ...p, hasJoinedGroup: false } as Promoter : p
-                    ));
-                     // Also refetch dashboard stats in the background
-                    fetchStats();
+                    await fetchAllData(); // Refresh all data
     
                 } catch (error: any) {
                     console.error("Failed to remove promoter from all assignments:", error);
@@ -335,13 +292,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
+    const handleRemoveFromTeam = async (promoter: Promoter) => {
+        if (!canManage) return;
+        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
+            setProcessingId(promoter.id);
+            try {
+                const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
+                await setPromoterStatusToRemoved({ promoterId: promoter.id });
+                alert(`${promoter.name} foi removida com sucesso.`);
+                await fetchAllData(); // Refresh the entire view
+            } catch (err: any) {
+                alert(`Falha ao remover divulgadora: ${err.message}`);
+            } finally {
+                setProcessingId(null);
+            }
+        }
+    };
+
     const handleDeletePromoter = async (id: string) => {
         if (!isSuperAdmin) return;
         if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
             try {
                 await deletePromoter(id);
                 setAllPromoters(prev => prev.filter(p => p.id !== id));
-                fetchStats(); // Also refetch stats in the background
+                await fetchAllData(); // Refresh stats
             } catch (error) {
                 alert("Falha ao excluir a inscrição.");
             }
@@ -483,8 +457,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             approved: "bg-green-900/50 text-green-300",
             rejected: "bg-red-900/50 text-red-300",
             rejected_editable: "bg-orange-900/50 text-orange-300",
+            removed: "bg-gray-700 text-gray-400",
         };
-        const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada" };
+        const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada", removed: "Removida" };
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
     
@@ -584,6 +559,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                             >
                                                 {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
                                             </button>
+                                            <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="text-red-500 hover:text-red-400 disabled:opacity-50">
+                                                {processingId === promoter.id ? 'Removendo...' : 'Remover da Equipe'}
+                                            </button>
                                         </div>
                                     )}
                                     <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
@@ -625,9 +603,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                        {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
+                        {(['pending', 'approved', 'rejected', 'removed', 'all'] as const).map(f => (
                             <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'all': 'Todos'}[f]}
+                                {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'removed': 'Removidos', 'all': 'Todos'}[f]}
                             </button>
                         ))}
                     </div>

@@ -20,15 +20,22 @@ const formatDate = (timestamp: any): string => {
 };
 
 const getStatusBadge = (status: PromoterStatus) => {
-    // FIX: Added 'rejected_editable' to the styles record to match the PromoterStatus type.
+    // FIX: Added 'removed' to the styles record to match the PromoterStatus type.
     const styles: Record<PromoterStatus, string> = {
         pending: "bg-yellow-900/50 text-yellow-300",
         approved: "bg-green-900/50 text-green-300",
         rejected: "bg-red-900/50 text-red-300",
         rejected_editable: "bg-orange-900/50 text-orange-300",
+        removed: "bg-gray-700 text-gray-400",
     };
-    // FIX: Added 'rejected_editable' to the text record to match the PromoterStatus type.
-    const text: Record<PromoterStatus, string> = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada" };
+    // FIX: Added 'removed' to the text record to match the PromoterStatus type.
+    const text: Record<PromoterStatus, string> = { 
+        pending: "Pendente", 
+        approved: "Aprovado", 
+        rejected: "Rejeitado", 
+        rejected_editable: "Correção Solicitada",
+        removed: "Removida",
+    };
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
 };
 

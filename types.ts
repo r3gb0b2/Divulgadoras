@@ -1,6 +1,6 @@
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
-export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable';
+export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 
 export interface Promoter {
   id: string;
@@ -187,4 +187,12 @@ export interface GuestListConfirmation {
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; }[];
+}
+
+export interface PromoterStats extends Promoter {
+  assigned: number;
+  completed: number;
+  justifications: number;
+  missed: number;
+  completionRate: number;
 }

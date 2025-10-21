@@ -829,6 +829,50 @@ exports.removePromoterFromAllAssignments = functions
         return { success: true, deletedCount: assignmentsSnapshot.size };
     });
 
+exports.setPromoterStatusToRemoved = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+      }
+      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+      }
+
+      const { promoterId } = data;
+      if (!promoterId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+      }
+
+      const batch = db.batch();
+
+      // 1. Update the promoter document
+      const promoterRef = db.collection("promoters").doc(promoterId);
+      batch.update(promoterRef, {
+        status: "removed",
+        hasJoinedGroup: false,
+        actionTakenByUid: context.auth.uid,
+        actionTakenByEmail: adminDoc.data().email,
+        statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 2. Find and delete all their post assignments
+      const assignmentsQuery = db.collection("postAssignments").where("promoterId", "==", promoterId);
+      const assignmentsSnapshot = await assignmentsQuery.get();
+
+      if (!assignmentsSnapshot.empty) {
+        assignmentsSnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+      }
+
+      // 3. Commit the batch
+      await batch.commit();
+
+      return { success: true, message: "Divulgadora removida e suas publicações foram limpas.", deletedAssignments: assignmentsSnapshot.size };
+    });
+
 
 // --- Gemini AI assistant function ---
 const { GoogleGenAI } = require("@google/genai");

@@ -80,6 +80,17 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
     }
 };
 
+export const getAssignmentsForOrganization = async (organizationId: string): Promise<PostAssignment[]> => {
+    try {
+        const q = query(collection(firestore, "postAssignments"), where("organizationId", "==", organizationId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    } catch (error) {
+        console.error("Error fetching assignments for organization: ", error);
+        throw new Error("Não foi possível buscar as tarefas da organização.");
+    }
+};
+
 export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
     try {
         // Fetch post
