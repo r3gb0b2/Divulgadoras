@@ -117,7 +117,9 @@ export const ProofUploadPage: React.FC = () => {
                     fileList.map(async (file: File) => {
                         // Using slightly higher res/quality for proofs
                         const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
-                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                        // Create a new name with jpeg extension to ensure consistency
+                        const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".jpeg";
+                        return new File([compressedBlob], newFileName, { type: 'image/jpeg' });
                     })
                 );
                 

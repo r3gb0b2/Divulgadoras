@@ -202,8 +202,12 @@ const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if (postType === 'image' && !mediaFile && !mediaPreview) {
-            setError(`Selecione uma imagem para o post.`);
+        if (postType === 'image' && !mediaFile) {
+            if (mediaPreview) { // This means we are duplicating
+                setError('Ao duplicar um post com imagem, você deve selecionar o arquivo de imagem novamente.');
+            } else {
+                setError('Selecione uma imagem para o post.');
+            }
             return;
         }
         if (postType === 'video' && !videoUrl.trim()) {
