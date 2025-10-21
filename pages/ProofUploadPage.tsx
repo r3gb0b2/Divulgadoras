@@ -54,7 +54,8 @@ export const ProofUploadPage: React.FC = () => {
                 return;
             }
             setImageFiles(fileList);
-            const previewUrls = fileList.map(file => URL.createObjectURL(file));
+            // FIX: Explicitly type `file` as `File` to resolve TypeScript error where it was being inferred as `unknown`.
+            const previewUrls = fileList.map((file: File) => URL.createObjectURL(file));
             setImagePreviews(previewUrls);
             setError(null);
         }
