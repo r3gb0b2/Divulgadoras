@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
