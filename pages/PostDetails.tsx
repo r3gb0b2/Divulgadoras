@@ -8,7 +8,6 @@ import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
 import { storage, functions } from '../firebase/config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
@@ -193,9 +192,9 @@ export const PostDetails: React.FC = () => {
             if (newMediaFile) {
                 const fileExtension = newMediaFile.name.split('.').pop();
                 const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = ref(storage, `posts-media/${fileName}`);
-                await uploadBytes(storageRef, newMediaFile);
-                finalUpdateData.mediaUrl = await getDownloadURL(storageRef);
+                const storageRef = storage.ref(`posts-media/${fileName}`);
+                await storageRef.put(newMediaFile);
+                finalUpdateData.mediaUrl = await storageRef.getDownloadURL();
             }
             await updatePost(post.id, finalUpdateData);
             await fetchData();
