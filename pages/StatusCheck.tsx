@@ -294,6 +294,15 @@ const StatusCheck: React.FC = () => {
         setSearched(true);
         try {
             const result = await checkPromoterStatus(searchEmail);
+
+            // If promoter has no applications or is already approved and in a group, redirect to posts
+            const shouldRedirect = !result || result.length === 0 || result.some(p => p.status === 'approved' && p.hasJoinedGroup);
+
+            if (shouldRedirect) {
+                navigate(`/posts?email=${encodeURIComponent(searchEmail)}`);
+                return; // Redirect will unmount, so we stop here. Finally will still run.
+            }
+
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');

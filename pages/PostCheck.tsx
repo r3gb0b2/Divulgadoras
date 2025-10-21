@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
@@ -284,6 +284,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
 
 const PostCheck: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
     const [currentPromoter, setCurrentPromoter] = useState<Promoter | null>(null);
@@ -292,7 +293,7 @@ const PostCheck: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
-    const performSearch = async (searchEmail: string) => {
+    const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true);
         setError(null);
@@ -333,7 +334,17 @@ const PostCheck: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
+
+    // Handle email from query parameter on initial load or navigation
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const emailFromQuery = queryParams.get('email');
+        if (emailFromQuery && emailFromQuery !== email) {
+            setEmail(emailFromQuery);
+            performSearch(emailFromQuery);
+        }
+    }, [location.search, performSearch, email]);
 
     const handleConfirmPost = async (assignmentId: string) => {
         try {
