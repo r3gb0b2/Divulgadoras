@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { Campaign, Promoter } from '../types';
+import { Campaign, Promoter, PostAssignment } from '../types';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAllCampaigns, updateCampaign } from '../services/settingsService';
+import { getAssignmentsForOrganization } from '../services/postService';
 import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
+
+const getPerformanceColor = (rate: number): string => {
+    if (rate < 0) return 'text-gray-300';
+    if (rate > 60) return 'text-green-400';
+    if (rate > 30) return 'text-yellow-400';
+    return 'text-red-400';
+};
 
 const GuestListAccessPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
@@ -13,6 +21,7 @@ const GuestListAccessPage: React.FC = () => {
 
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
+    const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
     const [accessMode, setAccessMode] = useState<'all' | 'specific'>('all');
     const [assignments, setAssignments] = useState<{ [promoterId: string]: string[] }>({});
     const [searchQuery, setSearchQuery] = useState('');
@@ -38,16 +47,20 @@ const GuestListAccessPage: React.FC = () => {
                 throw new Error("Evento não encontrado.");
             }
 
-            const approvedPromoters = await getApprovedPromoters(
-                currentCampaign.organizationId,
-                currentCampaign.stateAbbr,
-                currentCampaign.name
-            );
+            const [approvedPromoters, orgAssignments] = await Promise.all([
+                getApprovedPromoters(
+                    currentCampaign.organizationId,
+                    currentCampaign.stateAbbr,
+                    currentCampaign.name
+                ),
+                getAssignmentsForOrganization(currentCampaign.organizationId)
+            ]);
 
             setCampaign(currentCampaign);
             // Sort promoters alphabetically by name or instagram handle
             approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
             setPromoters(approvedPromoters);
+            setPostAssignments(orgAssignments);
             setAccessMode(currentCampaign.guestListAccess || 'all');
             setAssignments(currentCampaign.guestListAssignments || {});
 
@@ -61,17 +74,41 @@ const GuestListAccessPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const promotersWithStats = useMemo(() => {
+        if (postAssignments.length === 0) {
+            return promoters.map(p => ({ ...p, completionRate: -1 }));
+        }
+
+        const statsMap = new Map<string, { assigned: number; completed: number }>();
+        postAssignments.forEach(a => {
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0 };
+            stat.assigned++;
+            if (a.proofSubmittedAt) {
+                stat.completed++;
+            }
+            statsMap.set(a.promoterId, stat);
+        });
+
+        return promoters.map(p => {
+            const stats = statsMap.get(p.id);
+            const completionRate = stats && stats.assigned > 0
+                ? Math.round((stats.completed / stats.assigned) * 100)
+                : -1;
+            return { ...p, completionRate };
+        });
+    }, [promoters, postAssignments]);
     
     const filteredPromoters = useMemo(() => {
         if (!searchQuery.trim()) {
-            return promoters;
+            return promotersWithStats;
         }
         const lowerQuery = searchQuery.toLowerCase();
-        return promoters.filter(p => 
+        return promotersWithStats.filter(p => 
             p.name.toLowerCase().includes(lowerQuery) || 
             (p.instagram && p.instagram.toLowerCase().includes(lowerQuery))
         );
-    }, [promoters, searchQuery]);
+    }, [promotersWithStats, searchQuery]);
 
     const handleAssignmentToggle = (promoterId: string, listName: string) => {
         setAssignments(prev => {
@@ -176,6 +213,12 @@ const GuestListAccessPage: React.FC = () => {
                         <h2 className="text-lg font-semibold text-white">Atribuir Listas</h2>
                          {(promoters.length > 0 && (campaign?.guestListTypes?.length ?? 0) > 0) ? (
                             <>
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 my-4">
+                                    <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                                </div>
                                 <div className="relative my-4">
                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                                         <SearchIcon className="h-5 w-5 text-gray-400" />
@@ -217,7 +260,7 @@ const GuestListAccessPage: React.FC = () => {
                                                                 className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
                                                             />
                                                             <span 
-                                                                className={`truncate text-sm ${p.hasJoinedGroup ? 'text-green-400' : 'text-gray-300'}`}
+                                                                className={`truncate text-sm font-semibold ${getPerformanceColor(p.completionRate)}`}
                                                                 title={p.name}
                                                             >
                                                                 {p.instagram || p.name}
