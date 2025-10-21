@@ -1,19 +1,17 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAssignmentById, submitProof } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
 
-// Helper function to resize and compress images and return a Blob
-// Copied from RegistrationForm.tsx to optimize uploads
+// Helper function to resize and compress images. This utility is robust.
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
       if (!event.target?.result) {
-        return reject(new Error("FileReader did not return a result."));
+        return reject(new Error("FileReader não conseguiu ler o arquivo."));
       }
       const img = new Image();
       img.src = event.target.result as string;
@@ -38,14 +36,14 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          return reject(new Error('Could not get canvas context'));
+          return reject(new Error('Não foi possível obter o contexto do canvas.'));
         }
         
         ctx.drawImage(img, 0, 0, width, height);
         
         canvas.toBlob((blob) => {
           if (!blob) {
-            return reject(new Error('Canvas to Blob conversion failed'));
+            return reject(new Error('Falha na conversão de canvas para Blob.'));
           }
           resolve(blob);
         }, 'image/jpeg', quality);
@@ -62,11 +60,13 @@ export const ProofUploadPage: React.FC = () => {
     const navigate = useNavigate();
 
     const [assignment, setAssignment] = useState<PostAssignment | null>(null);
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+    
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+    const [submitStatus, setSubmitStatus] = useState(''); // For detailed feedback during submission
+    
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
@@ -82,10 +82,10 @@ export const ProofUploadPage: React.FC = () => {
             try {
                 const data = await getAssignmentById(assignmentId);
                 if (!data) {
-                    throw new Error("Tarefa não encontrada.");
+                    throw new Error("Tarefa não encontrada ou inválida.");
                 }
                 if (data.proofSubmittedAt) {
-                    setSuccess(true);
+                    setSuccess(true); // If proof is already there, show success page
                 }
                 setAssignment(data);
             } catch (err: any) {
@@ -98,71 +98,73 @@ export const ProofUploadPage: React.FC = () => {
         fetchAssignment();
     }, [assignmentId]);
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files && files.length > 0) {
-            if (files.length > 2) {
-                setError("Você pode enviar no máximo 2 imagens.");
-                e.target.value = ''; // Clear the input
-                return;
-            }
-
-            setIsProcessingPhoto(true);
-            setError(null);
+        
+        // Cleanup old previews
+        imagePreviews.forEach(URL.revokeObjectURL);
+        
+        if (!files || files.length === 0) {
+            setSelectedFiles(null);
             setImagePreviews([]);
-            setImageFiles([]);
-            
-            try {
-                const fileList = Array.from(files);
-                const processedFiles = await Promise.all(
-                    fileList.map(async (file: File) => {
-                        const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
-                        // Create a more robust filename to avoid issues with extensions or special characters.
-                        // This ensures the filename matches the jpeg content type, fixing the upload hanging issue.
-                        const originalNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
-                        const safeName = `${originalNameWithoutExt.replace(/[^a-zA-Z0-9-_\.]/g, '')}-${Date.now()}.jpeg`;
-                        return new File([compressedBlob], safeName, { type: 'image/jpeg' });
-                    })
-                );
-                
-                setImageFiles(processedFiles);
-                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
-                setImagePreviews(previewUrls);
-
-            } catch (error) {
-                console.error("Error processing image:", error);
-                setError("Houve um problema com uma das fotos. Por favor, tente novamente.");
-                e.target.value = '';
-            } finally {
-                setIsProcessingPhoto(false);
-            }
+            return;
         }
+
+        if (files.length > 2) {
+            setError("Você pode enviar no máximo 2 imagens.");
+            setSelectedFiles(null);
+            setImagePreviews([]);
+            e.target.value = ''; // Clear the input
+            return;
+        }
+
+        setError(null);
+        setSelectedFiles(files);
+
+        // Generate new previews immediately
+        // FIX: Explicitly type 'file' as File to resolve type inference issue.
+        const previewUrls = Array.from(files).map((file: File) => URL.createObjectURL(file));
+        setImagePreviews(previewUrls);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assignmentId || imageFiles.length === 0) {
+        if (!assignmentId || !selectedFiles || selectedFiles.length === 0) {
             setError("Por favor, selecione 1 ou 2 imagens para enviar.");
             return;
         }
+
         setIsSubmitting(true);
         setError(null);
+
         try {
-            await submitProof(assignmentId, imageFiles);
+            // 1. Process images (resize/compress)
+            setSubmitStatus('Otimizando imagens...');
+            const fileList = Array.from(selectedFiles);
+            const processedFiles = await Promise.all(
+                // FIX: Explicitly type 'file' as File to resolve type inference issue.
+                fileList.map(async (file: File, index) => {
+                    const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
+                    // Use a simple, clean, and unique filename. This is more robust.
+                    return new File([compressedBlob], `proof_${index + 1}_${Date.now()}.jpeg`, { type: 'image/jpeg' });
+                })
+            );
+
+            // 2. Upload images via the service function
+            setSubmitStatus('Enviando comprovação...');
+            await submitProof(assignmentId, processedFiles);
             setSuccess(true);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Ocorreu um erro desconhecido durante o envio.');
         } finally {
             setIsSubmitting(false);
+            setSubmitStatus('');
         }
     };
     
-    const getButtonText = () => {
-        if (isSubmitting) return 'Enviando...';
-        if (isProcessingPhoto) return 'Processando fotos...';
-        return 'Enviar Comprovação';
-    };
+    const buttonText = isSubmitting ? (submitStatus || 'Enviando...') : 'Enviar Comprovação';
 
+    // UI Renderings
     if (isLoading) {
         return (
             <div className="max-w-2xl mx-auto text-center py-10">
@@ -181,7 +183,7 @@ export const ProofUploadPage: React.FC = () => {
                 </button>
                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
                     <h1 className="text-2xl font-bold text-green-400 mb-4">Comprovação Enviada!</h1>
-                    <p className="text-gray-300 mb-6">Sua comprovação foi enviada com sucesso.</p>
+                    <p className="text-gray-300 mb-6">Sua comprovação para o evento <strong>{assignment?.post.campaignName}</strong> foi enviada com sucesso.</p>
                 </div>
             </div>
         );
@@ -218,37 +220,38 @@ export const ProofUploadPage: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">Selecione 1 ou 2 prints da postagem:</label>
-                            <div className="mt-2 flex items-center gap-4">
-                                <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
+                            
+                            <div className="mt-4 flex justify-center items-center gap-4 p-4 border border-dashed border-gray-600 rounded-lg min-h-[12rem]">
+                                {imagePreviews.length > 0 ? (
+                                    imagePreviews.map((preview, index) => (
+                                        <img key={index} className="max-h-48 w-auto rounded-lg object-contain" src={preview} alt={`Prévia ${index + 1}`} />
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-500">
+                                        <CameraIcon className="w-12 h-12 mx-auto" />
+                                        <p className="mt-2 text-sm">A prévia da imagem aparecerá aqui</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-4 flex justify-center">
+                                <label htmlFor="photo-upload" className="cursor-pointer bg-gray-700 py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                                    <CameraIcon className="w-5 h-5 mr-2 inline-block" />
-                                    <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Enviar prints'}</span>
-                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting || isProcessingPhoto} />
+                                    <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Selecionar prints'}</span>
+                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting} />
                                 </label>
-                                <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1">
-                                    {isProcessingPhoto ? (
-                                        <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-700 flex items-center justify-center">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                        </span>
-                                    ) : imagePreviews.length > 0 ? (
-                                        imagePreviews.map((preview, index) => (
-                                           <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
-                                        ))
-                                    ) : (
-                                        <p className="text-sm text-gray-400">Nenhum arquivo selecionado.</p>
-                                    )}
-                                </div>
                             </div>
                         </div>
                         <button
                             type="submit"
-                            disabled={isSubmitting || isProcessingPhoto || imageFiles.length === 0}
-                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
+                            disabled={isSubmitting || !selectedFiles || selectedFiles.length === 0}
+                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed"
                         >
-                            {getButtonText()}
+                            {buttonText}
                         </button>
                     </form>
                 ) : (
-                    !isLoading && <p className="text-center text-gray-400">Não é possível enviar comprovação para esta tarefa.</p>
+                    !isLoading && <p className="text-center text-gray-400">Não é possível enviar comprovação para esta tarefa. Ela já pode ter sido concluída.</p>
                 )}
             </div>
         </div>
