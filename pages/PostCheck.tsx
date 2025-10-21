@@ -7,8 +7,24 @@ import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase/config';
+
+// Helper to extract Google Drive file ID from various URL formats
+const extractGoogleDriveId = (url: string): string | null => {
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    return id;
+};
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const navigate = useNavigate();
@@ -134,34 +150,30 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         });
     };
 
-    const handleDownload = async (path: string, campaignName: string, type: 'image' | 'video') => {
+    const handleDownload = (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
         setIsDownloading(true);
         try {
-            const fileRef = ref(storage, path);
-            const downloadUrl = await getDownloadURL(fileRef);
-
-            const response = await fetch(downloadUrl);
-            if (!response.ok) {
-                throw new Error('Não foi possível buscar o arquivo para download.');
-            }
-            const blob = await response.blob();
-            const objectUrl = window.URL.createObjectURL(blob);
+            let downloadUrl = mediaUrl;
             
-            const fileExtension = path.split('.').pop()?.split('?')[0] || (type === 'video' ? 'mp4' : 'jpg');
+            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
+                const fileId = extractGoogleDriveId(mediaUrl);
+                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
+                downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            }
+
             const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const fileName = `${type}_${safeCampaignName}.${fileExtension}`;
+            const fileName = `${type}_${safeCampaignName}.${type === 'video' ? 'mp4' : 'jpg'}`;
             
             const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = fileName;
+            link.href = downloadUrl;
+            link.setAttribute('download', fileName);
+            link.setAttribute('target', '_blank'); // Open in new tab as a fallback
             document.body.appendChild(link);
             link.click();
-            
             document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
-        } catch (error) {
-            console.error('Download setup failed:', error);
-            alert(`Não foi possível iniciar o download.`);
+        } catch (error: any) {
+            console.error('Download failed:', error);
+            alert(`Não foi possível iniciar o download: ${error.message}`);
         } finally {
             setIsDownloading(false);
         }
@@ -179,31 +191,17 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
             </div>
             
             <div className="border-t border-gray-700 pt-3">
-                {assignment.post.type === 'image' && assignment.post.mediaUrl && (
-                    <div className="mb-4">
-                        <StorageMedia path={assignment.post.mediaUrl} type="image" className="w-full max-w-sm mx-auto rounded-md" />
+                {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
+                     <div className="mb-4">
+                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
                         <div className="flex justify-center items-center gap-4 mt-2">
                             <button
-                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, 'image')}
+                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, assignment.post.type)}
                                 disabled={isDownloading}
                                 className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                             >
-                                <DownloadIcon className="w-4 h-4" /> Baixar
-                            </button>
-                        </div>
-                    </div>
-                )}
-                {assignment.post.type === 'video' && assignment.post.mediaUrl && (
-                    <div className="mb-4">
-                        <StorageMedia path={assignment.post.mediaUrl} type="video" controls className="w-full max-w-sm mx-auto rounded-md" />
-                        <div className="flex justify-center items-center gap-4 mt-2">
-                            <button
-                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, 'video')}
-                                disabled={isDownloading}
-                                className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                            >
-                                <DownloadIcon className="w-4 h-4" />
-                                {isDownloading ? 'Baixando...' : 'Baixar'}
+                                <DownloadIcon className="w-4 h-4" /> 
+                                {isDownloading ? 'Baixando...' : `Baixar ${assignment.post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
                             </button>
                         </div>
                     </div>

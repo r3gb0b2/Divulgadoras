@@ -2,6 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
+// Helper to extract Google Drive file ID from various URL formats
+const extractGoogleDriveId = (url: string): string | null => {
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    return id;
+};
+
+
 interface StorageMediaProps {
     path: string;
     type: 'image' | 'video';
@@ -16,13 +35,28 @@ const StorageMedia: React.FC<StorageMediaProps> = ({ path, type, ...props }) => 
 
     useEffect(() => {
         let isMounted = true;
+        setUrl(null);
+        setError(null);
+
         if (path) {
-            // Check if it's already a full URL (for previews of unsaved files)
+            // Check if it's a full URL
             if (path.startsWith('http') || path.startsWith('blob:')) {
-                setUrl(path);
+                if (path.includes('drive.google.com')) {
+                    const fileId = extractGoogleDriveId(path);
+                    if (fileId) {
+                         // Use the embed preview URL for videos
+                        if (isMounted) setUrl(`https://drive.google.com/file/d/${fileId}/preview`);
+                    } else {
+                        if (isMounted) setError('Link do Google Drive inválido.');
+                    }
+                } else {
+                    // For other http links like blob previews or existing Firebase URLs
+                    if (isMounted) setUrl(path);
+                }
                 return;
             }
 
+            // If it's not a full URL, assume it's a Firebase Storage path (for images)
             const storageRef = ref(storage, path);
             getDownloadURL(storageRef)
                 .then(downloadUrl => {
@@ -57,6 +91,11 @@ const StorageMedia: React.FC<StorageMediaProps> = ({ path, type, ...props }) => 
     }
 
     if (type === 'video') {
+        // Use an iframe for Google Drive embeds for better compatibility
+        if (url.includes('drive.google.com')) {
+            return <iframe src={url} allow="autoplay" {...props} ></iframe>
+        }
+        // Fallback to video tag for other video URLs
         return <video src={url} controls={props.controls !== false} {...props} />;
     }
 

@@ -8,12 +8,30 @@ import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
 import { storage } from '../firebase/config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// FIX: Import 'uploadBytes' to handle file uploads.
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 import StorageMedia from '../components/StorageMedia';
 
+// Helper to extract Google Drive file ID from various URL formats
+const extractGoogleDriveId = (url: string): string | null => {
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    return id;
+};
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -173,13 +191,13 @@ export const PostDetails: React.FC = () => {
         setError('');
         try {
             let finalUpdateData = { ...updatedData };
-            // If new media is uploaded, upload it and get URL
+            // If new media is uploaded (only for images now), upload it and get URL
             if (newMediaFile) {
                 const fileExtension = newMediaFile.name.split('.').pop();
                 const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                 const storageRef = ref(storage, `posts-media/${fileName}`);
                 await uploadBytes(storageRef, newMediaFile);
-                finalUpdateData.mediaUrl = await getDownloadURL(storageRef);
+                finalUpdateData.mediaUrl = storageRef.fullPath;
             }
             await updatePost(post.id, finalUpdateData);
             await fetchData();
@@ -262,43 +280,50 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = async (path: string, campaignName: string) => {
+    const handleDownload = (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
         setIsDownloading(true);
         setError('');
         try {
-            const fileRef = ref(storage, path);
-            const downloadUrl = await getDownloadURL(fileRef);
+            let downloadUrl = mediaUrl;
 
-            // Using fetch to get the file as a blob
-            const response = await fetch(downloadUrl);
-            if (!response.ok) {
-                throw new Error('Não foi possível buscar o arquivo para download.');
+            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
+                const fileId = extractGoogleDriveId(mediaUrl);
+                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
+                downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            } else if (type === 'image') {
+                // For images from Firebase Storage, we still need to get the download URL
+                const imageRef = ref(storage, mediaUrl);
+                getDownloadURL(imageRef).then(url => {
+                    triggerDownload(url, campaignName, type);
+                }).catch(err => {
+                    throw new Error("Não foi possível obter o link de download da imagem.");
+                });
+                return; // The promise will handle the rest
+            } else {
+                 throw new Error("Tipo de mídia não suportado para download direto.");
             }
-            const blob = await response.blob();
 
-            // Creating an object URL for the blob
-            const objectUrl = window.URL.createObjectURL(blob);
+            triggerDownload(downloadUrl, campaignName, type);
 
-            const fileExtension = path.split('.').pop()?.split('?')[0] || 'mp4';
-            const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const fileName = `video_${safeCampaignName}.${fileExtension}`;
-            
-            // Triggering download using a temporary anchor element
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            
-            // Clean up
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Download failed:', error);
-            alert(`Não foi possível iniciar o download.`);
+            alert(`Não foi possível iniciar o download: ${error.message}`);
         } finally {
             setIsDownloading(false);
         }
+    };
+
+    const triggerDownload = (url: string, campaignName: string, type: 'image' | 'video') => {
+        const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const fileName = `${type}_${safeCampaignName}.${type === 'video' ? 'mp4' : 'jpg'}`;
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.setAttribute('target', '_blank'); // Good fallback
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const renderContent = () => {
@@ -316,18 +341,16 @@ export const PostDetails: React.FC = () => {
                     {(post.type === 'image' || post.type === 'video') && post.mediaUrl ? (
                         <div className="mb-4">
                             <StorageMedia path={post.mediaUrl} type={post.type} className="w-full max-w-sm mx-auto rounded-md" controls={post.type === 'video'} />
-                             {post.type === 'video' && (
-                                <div className="flex justify-center items-center gap-4 mt-2">
-                                    <button
-                                        onClick={() => handleDownload(post.mediaUrl!, post.campaignName)}
-                                        disabled={isDownloading}
-                                        className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                                    >
-                                        <DownloadIcon className="w-4 h-4" />
-                                        {isDownloading ? 'Baixando...' : 'Baixar Vídeo'}
-                                    </button>
-                                </div>
-                            )}
+                            <div className="flex justify-center items-center gap-4 mt-2">
+                                <button
+                                    onClick={() => handleDownload(post.mediaUrl!, post.campaignName, post.type)}
+                                    disabled={isDownloading}
+                                    className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    {isDownloading ? 'Baixando...' : `Baixar ${post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
+                                </button>
+                            </div>
                         </div>
                     ) : null}
                     {post.type === 'text' && (

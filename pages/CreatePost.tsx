@@ -55,6 +55,7 @@ const CreatePost: React.FC = () => {
     const [textContent, setTextContent] = useState('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [videoUrl, setVideoUrl] = useState('');
     const [instructions, setInstructions] = useState('');
     const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
@@ -99,8 +100,10 @@ const CreatePost: React.FC = () => {
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
-                    if ((originalPost.type === 'image' || originalPost.type === 'video') && originalPost.mediaUrl) {
-                        // mediaUrl is a path, get download URL for preview
+                    if (originalPost.type === 'video' && originalPost.mediaUrl) {
+                        setVideoUrl(originalPost.mediaUrl);
+                    }
+                    if (originalPost.type === 'image' && originalPost.mediaUrl) {
                         const storageRef = ref(storage, originalPost.mediaUrl);
                         getDownloadURL(storageRef).then(url => {
                             setMediaPreview(url);
@@ -203,8 +206,12 @@ const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if ((postType === 'image' || postType === 'video') && !mediaFile && !mediaPreview) {
-            setError(`Selecione ${postType === 'image' ? 'uma imagem' : 'um vídeo'} para o post.`);
+        if (postType === 'image' && !mediaFile && !mediaPreview) {
+            setError(`Selecione uma imagem para o post.`);
+            return;
+        }
+        if (postType === 'video' && !videoUrl.trim()) {
+            setError('Cole o link compartilhável do Google Drive para o vídeo.');
             return;
         }
         if (postType === 'text' && !textContent.trim()) {
@@ -235,6 +242,7 @@ const CreatePost: React.FC = () => {
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
+                mediaUrl: postType === 'video' ? videoUrl : undefined,
                 instructions,
                 postLink,
                 isActive,
@@ -243,7 +251,7 @@ const CreatePost: React.FC = () => {
                 allowLateSubmissions: allowLateSubmissions,
             };
 
-            await createPost(postData, mediaFile, promotersToAssign);
+            await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
             
             alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
             navigate('/admin/posts');
@@ -322,19 +330,24 @@ const CreatePost: React.FC = () => {
                      <div className="flex gap-4 mb-4">
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /><span>Texto</span></label>
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label>
-                        <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo</span></label>
+                        <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo (Google Drive)</span></label>
                      </div>
-                     {postType === 'text' ? (
+                     {postType === 'text' && (
                         <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Digite o texto da publicação aqui..." rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                     ) : (
+                     )}
+                     {postType === 'image' && (
                         <div>
-                            <input type="file" accept={postType === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                            {mediaPreview && (mediaFile?.type.startsWith('video/') || mediaPreview.includes('videos.cibort.com') || (postType === 'video' && mediaPreview.startsWith('http'))) ? (
-                                <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />
-                            ) : mediaPreview ? (
-                                <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />
-                            ) : null}
-                             {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
+                            <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                            {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                            {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
+                        </div>
+                     )}
+                     {postType === 'video' && (
+                        <div>
+                            <input type="text" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="Cole o link compartilhável do Google Drive" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                            <p className="text-xs text-gray-400 mt-2">
+                                No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" pode ser "Leitor" &gt; Copiar link.
+                            </p>
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />

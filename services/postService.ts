@@ -18,15 +18,15 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter } from '../types';
 
 export const createPost = async (
-  postData: Omit<Post, 'id' | 'createdAt' | 'mediaUrl'>,
+  postData: Omit<Post, 'id' | 'createdAt'>,
   mediaFile: File | null,
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
     let finalMediaUrl: string | undefined = undefined;
 
-    // 1. Upload image/video on the client if it exists
-    if (mediaFile) {
+    // 1. For images, upload on the client. For videos, the URL is already in postData.
+    if (mediaFile && postData.type === 'image') {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = ref(storage, `posts-media/${fileName}`);
@@ -37,7 +37,8 @@ export const createPost = async (
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl || null,
+        // Use the uploaded image path, or the provided video URL
+        mediaUrl: finalMediaUrl || postData.mediaUrl || null,
     };
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
