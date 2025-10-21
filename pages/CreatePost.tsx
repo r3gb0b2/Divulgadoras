@@ -46,6 +46,7 @@ const CreatePost: React.FC = () => {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
+    const [rulesHistory, setRulesHistory] = useState<string[]>([]);
     
     // Form states
     const [selectedState, setSelectedState] = useState('');
@@ -71,8 +72,8 @@ const CreatePost: React.FC = () => {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            if (!selectedOrgId) {
-                setError("Nenhuma organização selecionada.");
+            if (!selectedOrgId || !adminData?.uid) {
+                setError("Nenhuma organização selecionada ou admin não identificado.");
                 setIsLoading(false);
                 return;
             }
@@ -87,6 +88,11 @@ const CreatePost: React.FC = () => {
                 }
                 setCampaigns(allCampaigns);
                 
+                const storedHistory = localStorage.getItem(`rulesHistory_${adminData.uid}`);
+                if (storedHistory) {
+                    setRulesHistory(JSON.parse(storedHistory));
+                }
+
                 // Check for duplication request
                 const queryParams = new URLSearchParams(location.search);
                 const fromPostId = queryParams.get('fromPost');
@@ -256,6 +262,12 @@ const CreatePost: React.FC = () => {
 
             await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
             
+            if (instructions.trim() && adminData?.uid) {
+                const newHistory = [instructions.trim(), ...rulesHistory.filter(r => r !== instructions.trim())].slice(0, 10);
+                setRulesHistory(newHistory);
+                localStorage.setItem(`rulesHistory_${adminData.uid}`, JSON.stringify(newHistory));
+            }
+
             alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
             navigate('/admin/posts');
 
@@ -351,6 +363,27 @@ const CreatePost: React.FC = () => {
                             <p className="text-xs text-gray-400 mt-2">
                                 No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" pode ser "Leitor" &gt; Copiar link.
                             </p>
+                        </div>
+                     )}
+                     {rulesHistory.length > 0 && (
+                        <div className="mt-4">
+                            <label htmlFor="rules-history" className="block text-sm font-medium text-gray-400">Usar regras recentes:</label>
+                            <select
+                                id="rules-history"
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        setInstructions(e.target.value);
+                                    }
+                                }}
+                                className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            >
+                                <option value="">Selecione para preencher...</option>
+                                {rulesHistory.map((rule, index) => (
+                                    <option key={index} value={rule}>
+                                        {rule.substring(0, 80)}{rule.length > 80 ? '...' : ''}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                      )}
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
