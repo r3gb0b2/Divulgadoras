@@ -35,7 +35,57 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
     </div>
 );
 
-const CreatePost: React.FC = () => {
+// Helper function to resize and compress images and return a Blob
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const blobURL = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = blobURL;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(blobURL);
+        return reject(new Error('Could not get canvas context'));
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(blobURL); // Clean up
+        if (!blob) {
+          return reject(new Error('Canvas to Blob conversion failed'));
+        }
+        resolve(blob);
+      }, 'image/jpeg', quality);
+    };
+    
+    img.onerror = (error) => {
+      URL.revokeObjectURL(blobURL);
+      reject(error);
+    };
+  });
+};
+
+export const CreatePost: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -63,6 +113,7 @@ const CreatePost: React.FC = () => {
     
     // UI states
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessingImages, setIsProcessingImages] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
@@ -180,11 +231,29 @@ const CreatePost: React.FC = () => {
         }
     };
     
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setMediaFile(file);
-            setMediaPreview(URL.createObjectURL(file));
+            setIsProcessingImages(true);
+            setError('');
+            // Revoke previous blob URL if it exists
+            if (mediaPreview && mediaPreview.startsWith('blob:')) {
+                URL.revokeObjectURL(mediaPreview);
+            }
+            try {
+                const compressedBlob = await resizeImage(file, 600, 600, 0.7);
+                const processedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                
+                setMediaFile(processedFile);
+                setMediaPreview(URL.createObjectURL(processedFile));
+            } catch (err: any) {
+                console.error("Error processing image:", err);
+                setError("Houve um problema ao processar a imagem. Tente novamente.");
+                setMediaFile(null);
+                setMediaPreview(null);
+            } finally {
+                setIsProcessingImages(false);
+            }
         }
     }
 
@@ -378,13 +447,11 @@ const CreatePost: React.FC = () => {
                 </fieldset>
 
                 <div className="flex justify-end">
-                    <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Criando...' : 'Criar e Enviar Publicação'}
+                    <button type="submit" disabled={isSubmitting || isProcessingImages} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                        {isSubmitting ? 'Criando...' : isProcessingImages ? 'Processando Imagem...' : 'Criar e Enviar Publicação'}
                     </button>
                 </div>
             </form>
         </div>
     );
 };
-
-export default CreatePost;

@@ -7,50 +7,50 @@ import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
 // Helper function to resize and compress images. This utility is robust.
 const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      if (!event.target?.result) {
-        return reject(new Error("FileReader não conseguiu ler o arquivo."));
+    const blobURL = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = blobURL;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let { width, height } = img;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
       }
-      const img = new Image();
-      img.src = event.target.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
 
-        if (width > height) {
-          if (width > maxWidth) {
-            height *= maxWidth / width;
-            width = maxWidth;
-          }
-        } else {
-          if (height > maxHeight) {
-            width *= maxHeight / height;
-            height = maxHeight;
-          }
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(blobURL);
+        return reject(new Error('Não foi possível obter o contexto do canvas.'));
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(blobURL); // Clean up
+        if (!blob) {
+          return reject(new Error('Falha na conversão de canvas para Blob.'));
         }
-
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          return reject(new Error('Não foi possível obter o contexto do canvas.'));
-        }
-        
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            return reject(new Error('Falha na conversão de canvas para Blob.'));
-          }
-          resolve(blob);
-        }, 'image/jpeg', quality);
-      };
-      img.onerror = (error) => reject(error);
+        resolve(blob);
+      }, 'image/jpeg', quality);
     };
-    reader.onerror = (error) => reject(error);
+    
+    img.onerror = (error) => {
+      URL.revokeObjectURL(blobURL);
+      reject(error);
+    };
   });
 };
 
