@@ -163,7 +163,7 @@ export const ProofUploadPage: React.FC = () => {
         }
     };
     
-    const buttonText = isSubmitting ? 'Enviando...' : isProcessingImages ? 'Processando...' : 'Enviar Comprovação';
+    const buttonText = isSubmitting ? 'Enviando Print...' : isProcessingImages ? 'Processando...' : 'Enviar Comprovação';
 
     // UI Renderings
     if (isLoading) {
