@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Post, PostAssignment, Promoter } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost } from '../types';
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
@@ -217,6 +217,12 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
     const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
     const snapshot = await getDocs(q);
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    
+    assignments.sort((a, b) => {
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
 
     let completed = 0;
     let missed = 0; // Post expired
@@ -256,14 +262,6 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
           pending++;
       }
     });
-
-    // Sort assignments by date for display (most recent first)
-    assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
-        return timeB - timeA;
-    });
-
 
     return {
       stats: {
@@ -289,6 +287,12 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
     const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
     const snapshot = await getDocs(q);
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    
+    assignments.sort((a, b) => {
+        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
 
     let completed = 0;
     let missed = 0; // Post expired
@@ -327,13 +331,6 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
       } else { // Late submissions are allowed, so it's always pending until submitted
           pending++;
       }
-    });
-
-    // Sort assignments by date for display (most recent first)
-    assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
-        return timeB - timeA;
     });
 
 
@@ -483,5 +480,56 @@ export const updateAssignment = async (assignmentId: string, data: Partial<Omit<
     } catch (error) {
         console.error("Error updating assignment: ", error);
         throw new Error("Não foi possível atualizar a tarefa.");
+    }
+};
+
+// --- Scheduled Post Functions ---
+
+export const schedulePost = async (
+  data: Omit<ScheduledPost, 'id'>
+): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(firestore, 'scheduledPosts'), data);
+        return docRef.id;
+    } catch (error) {
+        console.error("Error scheduling post: ", error);
+        throw new Error("Não foi possível agendar a publicação.");
+    }
+};
+
+export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
+    try {
+        const q = query(
+            collection(firestore, "scheduledPosts"),
+            where("organizationId", "==", organizationId)
+        );
+        const snapshot = await getDocs(q);
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+        posts.sort((a, b) => 
+            ((b.scheduledAt as Timestamp)?.toMillis() || 0) - ((a.scheduledAt as Timestamp)?.toMillis() || 0)
+        );
+        return posts;
+    } catch (error) {
+        console.error("Error fetching scheduled posts: ", error);
+        throw new Error("Não foi possível buscar as publicações agendadas.");
+    }
+};
+
+export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'scheduledPosts', id);
+        await updateDoc(docRef, data);
+    } catch (error) {
+        console.error("Error updating scheduled post: ", error);
+        throw new Error("Não foi possível atualizar o agendamento.");
+    }
+};
+
+export const deleteScheduledPost = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "scheduledPosts", id));
+    } catch (error) {
+        console.error("Error deleting scheduled post: ", error);
+        throw new Error("Não foi possível cancelar o agendamento.");
     }
 };

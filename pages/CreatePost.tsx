@@ -4,8 +4,8 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
-import { createPost, getPostWithAssignments } from '../services/postService';
-import { Campaign, Promoter } from '../types';
+import { createPost, getPostWithAssignments, schedulePost } from '../services/postService';
+import { Campaign, Promoter, ScheduledPostData } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
@@ -66,6 +66,11 @@ const CreatePost: React.FC = () => {
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     
+    // Scheduling state
+    const [isScheduling, setIsScheduling] = useState(false);
+    const [scheduleDate, setScheduleDate] = useState('');
+    const [scheduleTime, setScheduleTime] = useState('');
+
     // UI states
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,19 +252,18 @@ const CreatePost: React.FC = () => {
             const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
             if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
 
-            const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
+            const promotersToAssign = promoters
+                .filter(p => selectedPromoters.has(p.id))
+                .map(p => ({ id: p.id, email: p.email, name: p.name }));
 
             let expiryTimestamp = null;
             if (expiresAt) {
-                // Set timestamp to the end of the selected day in local time
                 const [year, month, day] = expiresAt.split('-').map(Number);
                 const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
                 expiryTimestamp = Timestamp.fromDate(expiryDate);
             }
 
-            const postData = {
-                organizationId: selectedOrgId,
-                createdByEmail: adminData.email,
+            const postData: ScheduledPostData = {
                 campaignName: campaignDetails.name,
                 stateAbbr: selectedState,
                 type: postType,
@@ -274,8 +278,6 @@ const CreatePost: React.FC = () => {
                 allowImmediateProof: allowImmediateProof,
                 postFormats: postFormats,
             };
-
-            await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
             
             if (instructions.trim() && adminData?.uid) {
                 const newHistory = [instructions.trim(), ...rulesHistory.filter(r => r !== instructions.trim())].slice(0, 10);
@@ -283,8 +285,35 @@ const CreatePost: React.FC = () => {
                 localStorage.setItem(`rulesHistory_${adminData.uid}`, JSON.stringify(newHistory));
             }
 
-            alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
-            navigate('/admin/posts');
+            if (isScheduling) {
+                 if (!scheduleDate || !scheduleTime) {
+                    throw new Error("Por favor, selecione data e hora para agendar.");
+                }
+                const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                if (scheduledDateTime < new Date()) {
+                    throw new Error("A data de agendamento não pode ser no passado.");
+                }
+                const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
+                
+                // Firestore doesn't like 'undefined' values, so we clean the object.
+                const cleanPostData = JSON.parse(JSON.stringify(postData));
+
+                await schedulePost({
+                    postData: cleanPostData,
+                    assignedPromoters: promotersToAssign,
+                    scheduledAt: scheduledTimestamp,
+                    organizationId: selectedOrgId,
+                    createdByEmail: adminData.email,
+                    status: 'pending'
+                });
+                alert('Publicação agendada com sucesso!');
+                navigate('/admin/scheduled-posts');
+
+            } else {
+                await createPost({ ...postData, organizationId: selectedOrgId, createdByEmail: adminData.email }, postType === 'image' ? mediaFile : null, promotersToAssign);
+                alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
+                navigate('/admin/posts');
+            }
 
         } catch (err: any) {
             setError(err.message);
@@ -459,9 +488,30 @@ const CreatePost: React.FC = () => {
                     </div>
                 </fieldset>
 
+                {/* Step 5: Scheduling */}
+                <fieldset className="p-4 border border-gray-700 rounded-lg">
+                    <legend className="px-2 font-semibold text-primary">5. Envio</legend>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" checked={isScheduling} onChange={(e) => setIsScheduling(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                        <span>Agendar Publicação</span>
+                    </label>
+                    {isScheduling && (
+                        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Data do Envio</label>
+                                <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Hora do Envio</label>
+                                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
+                        </div>
+                    )}
+                </fieldset>
+
                 <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Criando...' : 'Criar e Enviar Publicação'}
+                        {isSubmitting ? (isScheduling ? 'Agendando...' : 'Criando...') : (isScheduling ? 'Agendar Publicação' : 'Criar e Enviar Publicação')}
                     </button>
                 </div>
             </form>
