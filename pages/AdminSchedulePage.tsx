@@ -7,10 +7,21 @@ import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 const timestampToDateTimeLocal = (ts: any): { date: string, time: string } => {
-    if (!ts || typeof ts.toDate !== 'function') return { date: '', time: '' };
+    if (!ts) return { date: '', time: '' };
     try {
-        const d = ts.toDate();
-        // Adjust for timezone offset to show the correct local date in the input
+        let d: Date;
+        if (typeof ts.toDate === 'function') {
+            d = ts.toDate();
+        } else if (ts.seconds) {
+            d = new Date(ts.seconds * 1000);
+        } else {
+            d = new Date(ts);
+        }
+
+        if (isNaN(d.getTime())) {
+            return { date: '', time: '' };
+        }
+        
         const tzOffset = d.getTimezoneOffset() * 60000;
         const localDate = new Date(d.getTime() - tzOffset);
         const date = localDate.toISOString().split('T')[0];
@@ -23,17 +34,29 @@ const timestampToDateTimeLocal = (ts: any): { date: string, time: string } => {
 };
 
 const formatScheduledDate = (ts: any): string => {
-    if (ts && typeof ts.toDate === 'function') {
-        try {
-            return ts.toDate().toLocaleString('pt-BR', {
-                day: '2-digit', month: '2-digit', year: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            });
-        } catch (e) {
+    if (!ts) return "Não agendado";
+    try {
+        let date: Date;
+        if (typeof ts.toDate === 'function') {
+            date = ts.toDate();
+        } else if (ts.seconds) {
+            date = new Date(ts.seconds * 1000);
+        } else {
+            date = new Date(ts);
+        }
+
+        if (isNaN(date.getTime())) {
             return "Data inválida";
         }
+
+        return date.toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch (e) {
+        console.error("Failed to format date:", ts, e);
+        return "Erro na data";
     }
-    return "Não agendado";
 };
 
 
