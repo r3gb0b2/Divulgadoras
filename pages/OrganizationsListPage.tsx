@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getOrganizations } from '../services/organizationService';
 import { Organization, OrganizationStatus } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import firebase from '../firebase/config';
 import { ArrowLeftIcon } from '../components/Icons';
 
 const OrganizationsListPage: React.FC = () => {
@@ -17,7 +17,7 @@ const OrganizationsListPage: React.FC = () => {
     try {
       const orgs = await getOrganizations();
       // Sort by creation date descending
-      orgs.sort((a, b) => (b.createdAt as Timestamp).toMillis() - (a.createdAt as Timestamp).toMillis());
+      orgs.sort((a, b) => (b.createdAt as firebase.firestore.Timestamp).toMillis() - (a.createdAt as firebase.firestore.Timestamp).toMillis());
       setOrganizations(orgs);
     } catch (err: any) {
       setError(err.message || "Não foi possível carregar as organizações.");
@@ -46,7 +46,7 @@ const OrganizationsListPage: React.FC = () => {
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
   };
   
-  const formatDate = (timestamp: Timestamp | undefined) => {
+  const formatDate = (timestamp: firebase.firestore.Timestamp | undefined) => {
     if (!timestamp) return 'N/A';
     return timestamp.toDate().toLocaleDateString('pt-BR');
   }
@@ -85,7 +85,7 @@ const OrganizationsListPage: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(org.status)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 capitalize">{org.planId}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatDate(org.createdAt as Timestamp)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatDate(org.createdAt as firebase.firestore.Timestamp)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <Link to={`/admin/organization/${org.id}`} className="text-primary hover:text-primary-dark">
                     Gerenciar
