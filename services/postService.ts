@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
-import { Post, PostAssignment, Promoter, PromoterStats } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost } from '../types';
 
 export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, mediaFile: File | null, assignedPromoters: Promoter[]): Promise<string> => {
     try {
@@ -48,6 +48,65 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, media
         console.error("Error creating post and assignments: ", error);
         if (error instanceof Error) throw error;
         throw new Error("Não foi possível criar a publicação.");
+    }
+};
+
+export const schedulePost = async (postData: Omit<Post, 'id' | 'createdAt'>, mediaFile: File | null, assignedPromoters: Promoter[], scheduledAt: Timestamp): Promise<string> => {
+    try {
+        let mediaUrl: string | null = null;
+        if (mediaFile) {
+            const fileExtension = mediaFile.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+            const storageRef = ref(storage, `posts-media/${fileName}`);
+            await uploadBytes(storageRef, mediaFile);
+            mediaUrl = storageRef.fullPath;
+        }
+
+        const scheduledPostData = {
+            ...postData,
+            mediaUrl,
+            assignedPromoters: assignedPromoters.map(p => ({ id: p.id, name: p.name, email: p.email })),
+            scheduledAt,
+            status: 'scheduled' as const
+        };
+        
+        const docRef = await addDoc(collection(firestore, 'scheduledPosts'), scheduledPostData);
+        return docRef.id;
+
+    } catch (error) {
+        console.error("Error scheduling post: ", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Não foi possível agendar a publicação.");
+    }
+};
+
+export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
+    try {
+        const q = query(collection(firestore, "scheduledPosts"), where("organizationId", "==", organizationId), orderBy("scheduledAt", "asc"));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+    } catch (error) {
+        console.error("Error getting scheduled posts: ", error);
+        throw new Error("Não foi possível buscar as publicações agendadas.");
+    }
+};
+
+export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
+    try {
+        const postDoc = doc(firestore, 'scheduledPosts', id);
+        await updateDoc(postDoc, data);
+    } catch (error) {
+        console.error("Error updating scheduled post: ", error);
+        throw new Error("Não foi possível atualizar o agendamento.");
+    }
+};
+
+export const deleteScheduledPost = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "scheduledPosts", id));
+    } catch (error) {
+        console.error("Error deleting scheduled post: ", error);
+        throw new Error("Não foi possível cancelar o agendamento.");
     }
 };
 

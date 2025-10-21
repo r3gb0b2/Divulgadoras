@@ -168,3 +168,30 @@ export interface PromoterStats extends Promoter {
     missed: number;
     completionRate: number;
 }
+
+export interface ScheduledPost {
+    id: string;
+    organizationId: string;
+    campaignName: string;
+    stateAbbr: string;
+    type: 'text' | 'image' | 'video';
+    textContent?: string | null;
+    mediaUrl?: string | null;
+    instructions: string;
+    postLink?: string | null;
+    createdByEmail: string;
+    isActive: boolean;
+    expiresAt?: Timestamp | FieldValue | null;
+    autoAssignToNewPromoters?: boolean;
+    allowLateSubmissions?: boolean;
+    allowImmediateProof?: boolean;
+    postFormats?: ('story' | 'reels')[];
+
+    // Scheduling specific fields
+    scheduledAt: Timestamp | FieldValue;
+    status: 'scheduled' | 'sent' | 'error';
+    errorMessage?: string;
+    
+    // Assigned promoters data needed for sending
+    assignedPromoters: { id: string, name: string, email: string }[];
+}

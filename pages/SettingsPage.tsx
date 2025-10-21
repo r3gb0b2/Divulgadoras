@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, CogIcon, MapPinIcon, KeyIcon, CreditCardIcon, EnvelopeIcon } from '../components/Icons';
+import { ArrowLeftIcon, CogIcon, MapPinIcon, KeyIcon, CreditCardIcon, EnvelopeIcon, ClockIcon } from '../components/Icons';
 import ChangePasswordPage from './ChangePasswordPage';
 import SubscriptionPage from './SubscriptionPage';
 import StripeSettingsPage from './StripeSettingsPage';
@@ -17,6 +17,7 @@ const SettingsDashboard: React.FC = () => {
         { name: "Alterar Senha", path: "password", icon: KeyIcon, for: 'all' },
         { name: "Assinatura", path: "subscription", icon: CreditCardIcon, for: 'admin' },
         { name: "Localidades", path: "/admin/states", icon: MapPinIcon, for: 'admin'},
+        { name: "Publicações Agendadas", path: "/admin/schedule", icon: ClockIcon, for: 'admin' },
         // Super admin only
         { name: "Pagamentos (Stripe)", path: "stripe", icon: CreditCardIcon, for: 'superadmin' },
         { name: "Template de E-mail", path: "email", icon: EnvelopeIcon, for: 'superadmin' },

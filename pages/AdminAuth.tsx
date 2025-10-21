@@ -17,6 +17,7 @@ import PostDashboard from './PostDashboard';
 import GuestListPage from './GuestListPage';
 import GuestListCheckinPage from './GuestListCheckinPage';
 import GuestListAccessPage from './GuestListAccessPage';
+import AdminSchedulePage from './AdminSchedulePage';
 import { auth } from '../firebase/config';
 import GeminiPage from './Gemini';
 
@@ -125,6 +126,7 @@ const AdminAuth: React.FC = () => {
              <Route path="posts/new" element={<ProtectedRoute requiredRole="poster"><CreatePost /></ProtectedRoute>} />
              <Route path="posts/:postId" element={<ProtectedRoute requiredRole="poster"><PostDetails /></ProtectedRoute>} />
              <Route path="dashboard" element={<ProtectedRoute requiredRole="admin"><PostDashboard /></ProtectedRoute>} />
+             <Route path="schedule" element={<ProtectedRoute requiredRole="poster"><AdminSchedulePage /></ProtectedRoute>} />
 
             <Route path="guestlist/:campaignId" element={<ProtectedRoute requiredRole="admin"><GuestListPage /></ProtectedRoute>} />
             <Route path="guestlist-access/:campaignId" element={<ProtectedRoute requiredRole="admin"><GuestListAccessPage /></ProtectedRoute>} />
