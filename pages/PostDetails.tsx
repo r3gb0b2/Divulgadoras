@@ -262,23 +262,41 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleDownload = (path: string, campaignName: string) => {
+    const handleDownload = async (path: string, campaignName: string) => {
         setIsDownloading(true);
         setError('');
         try {
+            const fileRef = ref(storage, path);
+            const downloadUrl = await getDownloadURL(fileRef);
+
+            // Using fetch to get the file as a blob
+            const response = await fetch(downloadUrl);
+            if (!response.ok) {
+                throw new Error('Não foi possível buscar o arquivo para download.');
+            }
+            const blob = await response.blob();
+
+            // Creating an object URL for the blob
+            const objectUrl = window.URL.createObjectURL(blob);
+
             const fileExtension = path.split('.').pop()?.split('?')[0] || 'mp4';
-            const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             const fileName = `video_${safeCampaignName}.${fileExtension}`;
             
-            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?path=${encodeURIComponent(path)}&name=${encodeURIComponent(fileName)}`;
-    
-            // Open the URL in a new tab. The browser will handle the download due to server headers.
-            window.open(proxyUrl, '_blank');
-    
-            setTimeout(() => setIsDownloading(false), 3000);
+            // Triggering download using a temporary anchor element
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            
+            // Clean up
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
         } catch (error) {
-            console.error('Download setup failed:', error);
+            console.error('Download failed:', error);
             alert(`Não foi possível iniciar o download.`);
+        } finally {
             setIsDownloading(false);
         }
     };

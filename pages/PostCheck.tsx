@@ -7,6 +7,8 @@ import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase/config';
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const navigate = useNavigate();
@@ -132,21 +134,35 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         });
     };
 
-    const handleDownload = (path: string, campaignName: string, type: 'image' | 'video') => {
+    const handleDownload = async (path: string, campaignName: string, type: 'image' | 'video') => {
         setIsDownloading(true);
         try {
+            const fileRef = ref(storage, path);
+            const downloadUrl = await getDownloadURL(fileRef);
+
+            const response = await fetch(downloadUrl);
+            if (!response.ok) {
+                throw new Error('Não foi possível buscar o arquivo para download.');
+            }
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            
             const fileExtension = path.split('.').pop()?.split('?')[0] || (type === 'video' ? 'mp4' : 'jpg');
-            const safeCampaignName = campaignName.replace(/[^a-zA-Z0-9]/g, '_');
+            const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             const fileName = `${type}_${safeCampaignName}.${fileExtension}`;
             
-            const proxyUrl = `https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/downloadFileProxy?path=${encodeURIComponent(path)}&name=${encodeURIComponent(fileName)}`;
-
-            window.open(proxyUrl, '_blank');
-
-            setTimeout(() => setIsDownloading(false), 3000);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
         } catch (error) {
             console.error('Download setup failed:', error);
             alert(`Não foi possível iniciar o download.`);
+        } finally {
             setIsDownloading(false);
         }
     };
