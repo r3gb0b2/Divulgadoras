@@ -6,6 +6,7 @@ import { Promoter, Campaign, Organization } from '../types';
 import { WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
+import firebase from '../firebase/config';
 
 // Modal Component defined within the same file for simplicity
 interface RulesModalProps {

@@ -4,7 +4,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment } from '../services
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
 import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
+import firebase from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import { functions } from '../firebase/config';
 
@@ -16,7 +16,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
     useEffect(() => {
         if (!assignment.confirmedAt) return;
 
-        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
         const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 

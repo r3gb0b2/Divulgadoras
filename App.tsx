@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
@@ -12,7 +13,8 @@ import { LogoIcon, MenuIcon, XIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
-import ProofUploadPage from './pages/ProofUploadPage';
+// FIX: Changed to a named import to resolve module export issue.
+import { ProofUploadPage } from './pages/ProofUploadPage';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();

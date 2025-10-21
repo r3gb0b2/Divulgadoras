@@ -7,11 +7,11 @@ import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
+import firebase from '../firebase/config';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 
-const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
+const timestampToInputDate = (ts: any): string => {
     if (!ts) return '';
     let date;
     if (ts.toDate) { date = ts.toDate(); }
@@ -228,7 +228,7 @@ const CreatePost: React.FC = () => {
                 // Set timestamp to the end of the selected day in local time
                 const [year, month, day] = expiresAt.split('-').map(Number);
                 const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
-                expiryTimestamp = Timestamp.fromDate(expiryDate);
+                expiryTimestamp = firebase.firestore.Timestamp.fromDate(expiryDate);
             }
 
             const postData = {

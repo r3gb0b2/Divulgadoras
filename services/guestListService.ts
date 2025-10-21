@@ -1,7 +1,6 @@
 import firebase from '../firebase/config';
 import { firestore } from '../firebase/config';
 import { GuestListConfirmation } from '../types';
-import { Timestamp } from 'firebase/firestore';
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
@@ -91,7 +90,7 @@ export const checkInPerson = async (confirmationId: string, personName: string):
       }
 
       const data = docSnap.data() as GuestListConfirmation;
-      const now = Timestamp.now();
+      const now = firebase.firestore.Timestamp.now();
 
       if (personName === data.promoterName) {
         if (data.promoterCheckedInAt) {

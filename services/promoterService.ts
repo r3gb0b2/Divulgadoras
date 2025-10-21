@@ -1,7 +1,7 @@
 import firebase from '../firebase/config';
 import { firestore, storage } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
-import { Timestamp, DocumentData } from 'firebase/firestore';
+import { DocumentData } from 'firebase/firestore';
 
 type QueryDocumentSnapshot<T> = firebase.firestore.QueryDocumentSnapshot<T>;
 
@@ -83,8 +83,8 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         const promoterDocs = querySnapshot.docs.sort((a, b) => {
             const dataA = a.data();
             const dataB = b.data();
-            const timeA = (dataA.createdAt instanceof Timestamp) ? dataA.createdAt.toMillis() : 0;
-            const timeB = (dataB.createdAt instanceof Timestamp) ? dataB.createdAt.toMillis() : 0;
+            const timeA = (dataA.createdAt instanceof firebase.firestore.Timestamp) ? dataA.createdAt.toMillis() : 0;
+            const timeB = (dataB.createdAt instanceof firebase.firestore.Timestamp) ? dataB.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 
@@ -112,8 +112,8 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
         
         // Sort by most recent first
         promoters.sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            const timeA = (a.createdAt instanceof firebase.firestore.Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof firebase.firestore.Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 
@@ -421,8 +421,8 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
         });
 
         promoters.sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            const timeA = (a.createdAt instanceof firebase.firestore.Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof firebase.firestore.Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 

@@ -1,7 +1,6 @@
 import firebase from '../firebase/config';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter } from '../types';
-import { Timestamp } from 'firebase/firestore';
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
@@ -52,7 +51,7 @@ export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> =
         const snapshot = await q.get();
         const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         posts.sort((a, b) => 
-            ((b.createdAt as Timestamp)?.toMillis() || 0) - ((a.createdAt as Timestamp)?.toMillis() || 0)
+            ((b.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0) - ((a.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0)
         );
         return posts;
     } catch (error) {
@@ -98,7 +97,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
                 return false;
             }
             if (post.expiresAt) {
-                const expiryDate = (post.expiresAt as Timestamp).toDate();
+                const expiryDate = (post.expiresAt as firebase.firestore.Timestamp).toDate();
                 if (expiryDate < now) {
                     return false;
                 }
@@ -112,7 +111,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
             if (a.status === 'confirmed' && b.status === 'pending') return 1;
             const postA = a.post as any;
             const postB = b.post as any;
-            return ((postB.createdAt as Timestamp)?.toMillis() || 0) - ((postA.createdAt as Timestamp)?.toMillis() || 0)
+            return ((postB.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0) - ((postA.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0)
         });
         return visibleAssignments;
     } catch (error) {
@@ -202,7 +201,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         
         // Proof deadline is more specific, check it first for confirmed posts
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
             const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
             if (now > proofExpireTime) {
                 proofDeadlineMissed++;
@@ -213,7 +212,7 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         // If not caught by proof deadline, check general post expiration
         if (!deadlineHasPassed) {
             const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+            if (postExpiresAt && (postExpiresAt as firebase.firestore.Timestamp).toDate() < now) {
                 missed++;
                 deadlineHasPassed = true;
             }
@@ -229,8 +228,8 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
 
     // Sort assignments by date for display (most recent first)
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeA = (a.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
         return timeB - timeA;
     });
 
@@ -274,7 +273,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         
         // Proof deadline is more specific, check it first for confirmed posts
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+            const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
             const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
             if (now > proofExpireTime) {
                 proofDeadlineMissed++;
@@ -285,7 +284,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         // If not caught by proof deadline, check general post expiration
         if (!deadlineHasPassed) {
             const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+            if (postExpiresAt && (postExpiresAt as firebase.firestore.Timestamp).toDate() < now) {
                 missed++;
                 deadlineHasPassed = true;
             }
@@ -301,8 +300,8 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
 
     // Sort assignments by date for display (most recent first)
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        const timeA = (a.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
+        const timeB = (b.post.createdAt as firebase.firestore.Timestamp)?.toMillis() || 0;
         return timeB - timeA;
     });
 

@@ -1,7 +1,6 @@
 import firebase from '../firebase/config';
 import { firestore } from '../firebase/config';
 import { Organization } from '../types';
-import { Timestamp } from 'firebase/firestore';
 
 /**
  * Fetches all organizations.

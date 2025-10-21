@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline } from '../services/postService';
 import { Post, PostAssignment } from '../types';
 import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
+import firebase from '../firebase/config';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
@@ -13,7 +13,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { auth } from '../firebase/config';
 
 
-const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
+const timestampToInputDate = (ts: any): string => {
     if (!ts) return '';
     let date;
     // Handle Firestore Timestamp object from SDK
@@ -60,7 +60,7 @@ const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) =>
             return;
         }
 
-        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const confirmationTime = (assignment.confirmedAt as firebase.firestore.Timestamp).toDate();
         const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
@@ -334,7 +334,7 @@ export const PostDetails: React.FC = () => {
                 {/* Left Column: Post Info */}
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg flex flex-col h-full">
                     <h2 className="font-bold text-lg text-primary">{post.campaignName}</h2>
-                     <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
+                     <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as firebase.firestore.Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
 
                     {post.type === 'image' && post.mediaUrl && (
                         <div className="mb-4">

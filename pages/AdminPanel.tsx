@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 // FIX: Removed modular signOut import to use compat syntax.
-import { auth, functions } from '../firebase/config';
+import firebase, { auth, functions } from '../firebase/config';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -13,7 +13,6 @@ import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
-import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -229,7 +228,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
-                updatedData.statusChangedAt = serverTimestamp();
+                updatedData.statusChangedAt = firebase.firestore.FieldValue.serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);
@@ -314,13 +313,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
             
             // On success, update the timestamp
-            const updateData = { lastManualNotificationAt: serverTimestamp() };
+            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
             
             // Optimistic UI update for the timestamp
             setAllPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
-                ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
+                ? { ...p, lastManualNotificationAt: firebase.firestore.Timestamp.now() } as Promoter 
                 : p
             ));
 
@@ -419,8 +418,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const processedPromoters = useMemo(() => {
         // Sort all promoters by date first
         const sorted = [...allPromoters].sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            const timeA = (a.createdAt instanceof firebase.firestore.Timestamp) ? a.createdAt.toMillis() : 0;
+            const timeB = (b.createdAt instanceof firebase.firestore.Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 

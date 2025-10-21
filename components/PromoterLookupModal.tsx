@@ -1,6 +1,6 @@
 import React from 'react';
 import { Promoter, PromoterStatus } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import firebase from 'firebase/compat/app';
 
 interface PromoterLookupModalProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ const PromoterLookupModal: React.FC<PromoterLookupModalProps> = ({
                         {getStatusBadge(promoter.status)}
                     </div>
                     <div className="text-xs text-gray-500 mt-2">
-                        Cadastrado em: {formatDate(promoter.createdAt as Timestamp)}
+                        Cadastrado em: {formatDate(promoter.createdAt as firebase.firestore.Timestamp)}
                     </div>
                     <div className="text-right mt-2">
                         <button 

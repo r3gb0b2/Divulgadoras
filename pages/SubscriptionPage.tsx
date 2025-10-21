@@ -1,12 +1,10 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization, updateOrganization } from '../services/organizationService';
 import { getStripePublishableKey, createStripeCheckoutSession } from '../services/credentialsService';
 import { Organization } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import firebase from '../firebase/config';
 import { plans } from './PricingPage';
 import { ArrowLeftIcon, CreditCardIcon, UserIcon, PhoneIcon } from '../components/Icons';
 
@@ -125,7 +123,7 @@ const SubscriptionPage: React.FC = () => {
         }
     };
 
-    const formatDate = (timestamp?: Timestamp) => {
+    const formatDate = (timestamp?: firebase.firestore.Timestamp) => {
         if (!timestamp) return 'N/A';
         return timestamp.toDate().toLocaleDateString('pt-BR');
     };
