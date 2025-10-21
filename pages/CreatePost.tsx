@@ -101,7 +101,7 @@ export const CreatePost: React.FC = () => {
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [textContent, setTextContent] = useState('');
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
+    const [mediaFile, setMediaFile] = useState<Blob | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [videoUrl, setVideoUrl] = useState('');
     const [instructions, setInstructions] = useState('');
@@ -248,10 +248,8 @@ export const CreatePost: React.FC = () => {
             
             try {
                 const compressedBlob = await resizeImage(file, 600, 600, 0.7);
-                const processedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
-                
-                setMediaFile(processedFile);
-                setMediaPreview(URL.createObjectURL(processedFile));
+                setMediaFile(compressedBlob);
+                setMediaPreview(URL.createObjectURL(compressedBlob));
             } catch (err: any) {
                 console.error("Error processing image:", err);
                 setError("Houve um problema ao processar a imagem. Tente novamente.");

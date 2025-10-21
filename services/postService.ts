@@ -4,7 +4,7 @@ import { Post, PostAssignment, Promoter } from '../types';
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
-  mediaFile: File | null, // This is now only for images
+  mediaFile: Blob | null, // This is now only for images
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
@@ -12,8 +12,7 @@ export const createPost = async (
 
     // 1. Upload image on the client ONLY if it's an image post
     if (mediaFile && postData.type === 'image') {
-      const fileExtension = mediaFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
       const storageRef = storage.ref(`posts-media/${fileName}`);
       await storageRef.put(mediaFile, { contentType: 'image/jpeg' });
       finalPostData.mediaUrl = await storageRef.getDownloadURL();
@@ -147,7 +146,7 @@ export const getAssignmentById = async (assignmentId: string): Promise<PostAssig
     }
 };
 
-export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
+export const submitProof = async (assignmentId: string, imageFiles: Blob[]): Promise<string[]> => {
     if (imageFiles.length === 0 || imageFiles.length > 2) {
         throw new Error("Você deve enviar 1 ou 2 imagens.");
     }
@@ -155,9 +154,8 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
     try {
         // 1. Upload images
         const proofImageUrls = await Promise.all(
-            imageFiles.map(async (photo) => {
-                const fileExtension = photo.name.split('.').pop();
-                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+            imageFiles.map(async (photo: Blob) => {
+                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
                 const storageRef = storage.ref(`posts-proofs/${fileName}`);
                 await storageRef.put(photo, { contentType: 'image/jpeg' });
                 return await storageRef.getDownloadURL();

@@ -21,11 +21,10 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     }
 
     const photoUrls = await Promise.all(
-      promoterData.photos.map(async (photo) => {
-        const fileExtension = photo.name.split('.').pop();
+      promoterData.photos.map(async (photo: Blob) => {
         const fileName = `${Date.now()}-${Math.random()
           .toString(36)
-          .substring(2)}.${fileExtension}`;
+          .substring(2)}.jpeg`;
         const storageRef = storage.ref(`promoters-photos/${fileName}`);
         await storageRef.put(photo, { contentType: 'image/jpeg' });
         return await storageRef.getDownloadURL();

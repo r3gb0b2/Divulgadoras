@@ -87,7 +87,7 @@ const PromoterForm: React.FC = () => {
     tiktok: '',
     dateOfBirth: '',
   });
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<Blob[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
@@ -198,15 +198,14 @@ const PromoterForm: React.FC = () => {
       
       try {
         const fileList = Array.from(files);
-        const processedFiles = await Promise.all(
-          fileList.map(async (file: File) => {
-            const compressedBlob = await resizeImage(file, 800, 800, 0.8);
-            return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        const processedBlobs = await Promise.all(
+          fileList.map((file: File) => {
+            return resizeImage(file, 800, 800, 0.8);
           })
         );
         
-        setPhotoFiles(processedFiles);
-        const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
+        setPhotoFiles(processedBlobs);
+        const previewUrls = processedBlobs.map(blob => URL.createObjectURL(blob));
         setPhotoPreviews(previewUrls);
 
       } catch (error) {
@@ -263,8 +262,7 @@ const PromoterForm: React.FC = () => {
         if (photoFiles.length > 0) {
             finalPhotoUrls = await Promise.all(
                 photoFiles.map(async (photo) => {
-                    const fileExtension = photo.name.split('.').pop();
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpeg`;
                     const storageRef = storage.ref(`promoters-photos/${fileName}`);
                     await storageRef.put(photo);
                     return await storageRef.getDownloadURL();

@@ -34,7 +34,7 @@ export interface PromoterApplicationData {
   instagram: string;
   tiktok: string;
   dateOfBirth: string;
-  photos: File[];
+  photos: Blob[];
   state: string;
   campaignName?: string;
   organizationId: string;

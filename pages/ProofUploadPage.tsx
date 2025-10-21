@@ -60,7 +60,7 @@ export const ProofUploadPage: React.FC = () => {
     const navigate = useNavigate();
 
     const [assignment, setAssignment] = useState<PostAssignment | null>(null);
-    const [processedFiles, setProcessedFiles] = useState<File[]>([]);
+    const [processedFiles, setProcessedFiles] = useState<Blob[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
@@ -127,17 +127,15 @@ export const ProofUploadPage: React.FC = () => {
 
         try {
             const fileList = Array.from(files);
-            const newProcessedFiles = await Promise.all(
+            const newProcessedBlobs = await Promise.all(
                 // FIX: Explicitly type 'file' as File to resolve type inference issue.
-                fileList.map(async (file: File) => {
-                    const compressedBlob = await resizeImage(file, 600, 600, 0.7);
-                    // Keep original filename but ensure jpeg type for consistency
-                    return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                fileList.map((file: File) => {
+                    return resizeImage(file, 600, 600, 0.7);
                 })
             );
             
-            setProcessedFiles(newProcessedFiles);
-            const previewUrls = newProcessedFiles.map(file => URL.createObjectURL(file));
+            setProcessedFiles(newProcessedBlobs);
+            const previewUrls = newProcessedBlobs.map(blob => URL.createObjectURL(blob));
             setImagePreviews(previewUrls);
 
         } catch (err) {
