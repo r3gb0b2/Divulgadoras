@@ -80,6 +80,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [selectedOrg, setSelectedOrg] = useState('all');
     const [selectedState, setSelectedState] = useState('all');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
+    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
     // State for email lookup
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
@@ -215,7 +216,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Reset page number whenever filters or search query change
     useEffect(() => {
         setCurrentPage(1);
-    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery]);
+    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery, colorFilter]);
 
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
@@ -439,47 +440,52 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Memoized calculation for filtering and pagination
     const processedPromoters = useMemo(() => {
         // Sort all promoters by date first
-        const sorted = [...promotersWithStats].sort((a, b) => {
+        let sorted = [...promotersWithStats].sort((a, b) => {
             const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
             const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
             return timeB - timeA;
         });
 
         const lowercasedQuery = searchQuery.toLowerCase().trim();
-        if (lowercasedQuery === '') {
-            const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
-            return {
-                displayPromoters: sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE),
-                totalFilteredCount: sorted.length,
-            };
+        if (lowercasedQuery !== '') {
+            sorted = sorted.filter(p => {
+                // Standard text search on name, email, campaign
+                const textSearch =
+                    (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
+                    (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
+                    (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
+
+                // Phone number search, only triggered if the search query contains digits
+                const searchDigits = lowercasedQuery.replace(/\D/g, '');
+                const phoneSearch =
+                    searchDigits.length > 0 &&
+                    p.whatsapp &&
+                    String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
+
+                return textSearch || phoneSearch;
+            });
         }
-
-        const filtered = sorted.filter(p => {
-            // Standard text search on name, email, campaign
-            const textSearch =
-                (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
-                (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
-                (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
-
-            // Phone number search, only triggered if the search query contains digits
-            const searchDigits = lowercasedQuery.replace(/\D/g, '');
-            const phoneSearch =
-                searchDigits.length > 0 &&
-                p.whatsapp &&
-                String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
-
-            return textSearch || phoneSearch;
-        });
+        
+        if (colorFilter !== 'all' && filter === 'approved') {
+            sorted = sorted.filter(p => {
+                const rate = (p as any).completionRate;
+                if (rate < 0) return false;
+                if (colorFilter === 'green') return rate > 60;
+                if (colorFilter === 'yellow') return rate > 30 && rate <= 60;
+                if (colorFilter === 'red') return rate >= 0 && rate <= 30;
+                return true;
+            });
+        }
 
         // Apply pagination to the filtered results
         const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
-        const paginated = filtered.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
+        const paginated = sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
 
         return {
             displayPromoters: paginated,
-            totalFilteredCount: filtered.length,
+            totalFilteredCount: sorted.length,
         };
-    }, [promotersWithStats, searchQuery, currentPage]);
+    }, [promotersWithStats, searchQuery, currentPage, colorFilter, filter]);
     
     const { displayPromoters, totalFilteredCount } = processedPromoters;
     
@@ -726,11 +732,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                  </div>
                 
                 {allAssignments.length > 0 && filter === 'approved' && (
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-4 mt-4">
-                        <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-4 mt-4">
+                        <div className="flex items-center gap-x-4">
+                            <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                        </div>
+                        <div className="flex items-center gap-x-2">
+                            <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
+                            <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                                {(['all', 'green', 'yellow', 'red'] as const).map(f => (
+                                    <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                        {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
+                                        <span>{{'all': 'Todos', 'green': 'Verde', 'yellow': 'Amarelo', 'red': 'Vermelho'}[f]}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
                 

@@ -25,6 +25,7 @@ const GuestListAccessPage: React.FC = () => {
     const [accessMode, setAccessMode] = useState<'all' | 'specific'>('all');
     const [assignments, setAssignments] = useState<{ [promoterId: string]: string[] }>({});
     const [searchQuery, setSearchQuery] = useState('');
+    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -100,15 +101,29 @@ const GuestListAccessPage: React.FC = () => {
     }, [promoters, postAssignments]);
     
     const filteredPromoters = useMemo(() => {
-        if (!searchQuery.trim()) {
-            return promotersWithStats;
+        let results = promotersWithStats;
+
+        if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.toLowerCase();
+            results = results.filter(p => 
+                p.name.toLowerCase().includes(lowerQuery) || 
+                (p.instagram && p.instagram.toLowerCase().includes(lowerQuery))
+            );
         }
-        const lowerQuery = searchQuery.toLowerCase();
-        return promotersWithStats.filter(p => 
-            p.name.toLowerCase().includes(lowerQuery) || 
-            (p.instagram && p.instagram.toLowerCase().includes(lowerQuery))
-        );
-    }, [promotersWithStats, searchQuery]);
+
+        if (colorFilter !== 'all') {
+            results = results.filter(p => {
+                const rate = p.completionRate;
+                if (rate < 0) return false;
+                if (colorFilter === 'green') return rate > 60;
+                if (colorFilter === 'yellow') return rate > 30 && rate <= 60;
+                if (colorFilter === 'red') return rate >= 0 && rate <= 30;
+                return true;
+            });
+        }
+        
+        return results;
+    }, [promotersWithStats, searchQuery, colorFilter]);
 
     const handleAssignmentToggle = (promoterId: string, listName: string) => {
         setAssignments(prev => {
@@ -213,11 +228,24 @@ const GuestListAccessPage: React.FC = () => {
                         <h2 className="text-lg font-semibold text-white">Atribuir Listas</h2>
                          {(promoters.length > 0 && (campaign?.guestListTypes?.length ?? 0) > 0) ? (
                             <>
-                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 my-4">
-                                    <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 my-4">
+                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400">
+                                        <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                                    </div>
+                                     <div className="flex items-center gap-x-2">
+                                        <span className="font-semibold text-gray-300 text-xs">Filtrar por Cor:</span>
+                                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                                            {(['all', 'green', 'yellow', 'red'] as const).map(f => (
+                                                <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
+                                                    <span>{{'all': 'Todos', 'green': 'Verde', 'yellow': 'Amarelo', 'red': 'Vermelho'}[f]}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="relative my-4">
                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3">

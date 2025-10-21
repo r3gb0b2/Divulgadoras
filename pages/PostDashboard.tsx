@@ -34,6 +34,7 @@ const PostDashboard: React.FC = () => {
     const [filterCampaign, setFilterCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
+    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -109,9 +110,20 @@ const PostDashboard: React.FC = () => {
 
         // Search Filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
-        const searched = lowercasedQuery
+        let searched = lowercasedQuery
             ? finalStats.filter(s => s.name.toLowerCase().includes(lowercasedQuery) || s.email.toLowerCase().includes(lowercasedQuery))
             : finalStats;
+
+        if (colorFilter !== 'all') {
+            searched = searched.filter(s => {
+                const rate = s.completionRate;
+                if (rate < 0) return false;
+                if (colorFilter === 'green') return rate > 60;
+                if (colorFilter === 'yellow') return rate > 30 && rate <= 60;
+                if (colorFilter === 'red') return rate >= 0 && rate <= 30;
+                return true;
+            });
+        }
 
         // Sorting
         searched.sort((a, b) => {
@@ -126,7 +138,7 @@ const PostDashboard: React.FC = () => {
 
         return searched;
 
-    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig]);
+    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig, colorFilter]);
 
     const requestSort = (key: SortKey) => {
         let direction: SortDirection = 'asc';
@@ -190,11 +202,24 @@ const PostDashboard: React.FC = () => {
                         className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                     />
                  </div>
-                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
-                    <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
-                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
+                    <div className="flex items-center gap-x-4">
+                        <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                    </div>
+                    <div className="flex items-center gap-x-2">
+                        <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
+                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                            {(['all', 'green', 'yellow', 'red'] as const).map(f => (
+                                <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
+                                    <span>{{'all': 'Todos', 'green': 'Verde', 'yellow': 'Amarelo', 'red': 'Vermelho'}[f]}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
                  {error && <p className="text-red-400 mb-4">{error}</p>}
                  {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (
