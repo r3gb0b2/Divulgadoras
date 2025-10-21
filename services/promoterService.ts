@@ -1,7 +1,6 @@
 import firebase from '../firebase/config';
 import { firestore, storage } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus } from '../types';
-import { DocumentData } from 'firebase/firestore';
 
 type QueryDocumentSnapshot<T> = firebase.firestore.QueryDocumentSnapshot<T>;
 
@@ -151,8 +150,8 @@ export const getPromotersPage = async (options: {
   filterOrgId: string | 'all';
   filterState: string | 'all';
   limitPerPage: number;
-  cursor?: QueryDocumentSnapshot<DocumentData>;
-}): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<DocumentData> | null, totalCount: number }> => {
+  cursor?: QueryDocumentSnapshot<firebase.firestore.DocumentData>;
+}): Promise<{ promoters: Promoter[], lastVisible: QueryDocumentSnapshot<firebase.firestore.DocumentData> | null, totalCount: number }> => {
   // This function is complex because Firestore does not allow 'in' queries on multiple fields.
   // To work around this, if we need to filter by multiple states AND multiple campaigns,
   // we must issue multiple queries (one for each state) and merge the results.
