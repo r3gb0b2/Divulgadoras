@@ -4,6 +4,58 @@ import { getAssignmentById, submitProof } from '../services/postService';
 import { PostAssignment } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
 
+// Helper function to resize and compress images and return a Blob
+// Copied from RegistrationForm.tsx to optimize uploads
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      if (!event.target?.result) {
+        return reject(new Error("FileReader did not return a result."));
+      }
+      const img = new Image();
+      img.src = event.target.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context'));
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            return reject(new Error('Canvas to Blob conversion failed'));
+          }
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+
 export const ProofUploadPage: React.FC = () => {
     const { assignmentId } = useParams<{ assignmentId: string }>();
     const navigate = useNavigate();
@@ -13,6 +65,7 @@ export const ProofUploadPage: React.FC = () => {
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
@@ -44,20 +97,41 @@ export const ProofUploadPage: React.FC = () => {
         fetchAssignment();
     }, [assignmentId]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files) {
-            const fileList = Array.from(files);
-            if (fileList.length > 2) {
+        if (files && files.length > 0) {
+            if (files.length > 2) {
                 setError("Você pode enviar no máximo 2 imagens.");
-                e.target.value = '';
+                e.target.value = ''; // Clear the input
                 return;
             }
-            setImageFiles(fileList);
-            // FIX: Explicitly type `file` as `File` to resolve TypeScript error where it was being inferred as `unknown`.
-            const previewUrls = fileList.map((file: File) => URL.createObjectURL(file));
-            setImagePreviews(previewUrls);
+
+            setIsProcessingPhoto(true);
             setError(null);
+            setImagePreviews([]);
+            setImageFiles([]);
+            
+            try {
+                const fileList = Array.from(files);
+                const processedFiles = await Promise.all(
+                    fileList.map(async (file: File) => {
+                        // Using slightly higher res/quality for proofs
+                        const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
+                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                    })
+                );
+                
+                setImageFiles(processedFiles);
+                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
+                setImagePreviews(previewUrls);
+
+            } catch (error) {
+                console.error("Error processing image:", error);
+                setError("Houve um problema com uma das fotos. Por favor, tente novamente.");
+                e.target.value = '';
+            } finally {
+                setIsProcessingPhoto(false);
+            }
         }
     };
 
@@ -77,6 +151,12 @@ export const ProofUploadPage: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+    
+    const getButtonText = () => {
+        if (isSubmitting) return 'Enviando...';
+        if (isProcessingPhoto) return 'Processando fotos...';
+        return 'Enviar Comprovação';
     };
 
     if (isLoading) {
@@ -138,10 +218,14 @@ export const ProofUploadPage: React.FC = () => {
                                 <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                                    <CameraIcon className="w-5 h-5 mr-2 inline-block" />
                                     <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Enviar prints'}</span>
-                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting} />
+                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting || isProcessingPhoto} />
                                 </label>
                                 <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1">
-                                  {imagePreviews.length > 0 ? (
+                                    {isProcessingPhoto ? (
+                                        <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-700 flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                        </span>
+                                    ) : imagePreviews.length > 0 ? (
                                         imagePreviews.map((preview, index) => (
                                            <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                         ))
@@ -153,10 +237,10 @@ export const ProofUploadPage: React.FC = () => {
                         </div>
                         <button
                             type="submit"
-                            disabled={isSubmitting || imageFiles.length === 0}
+                            disabled={isSubmitting || isProcessingPhoto || imageFiles.length === 0}
                             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
                         >
-                            {isSubmitting ? 'Enviando...' : 'Enviar Comprovação'}
+                            {getButtonText()}
                         </button>
                     </form>
                 ) : (
