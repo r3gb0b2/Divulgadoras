@@ -40,7 +40,7 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, media
 
         const data = result.data as { success: boolean, postId: string };
         if (!data.success) {
-            throw new Error('A função do servidor falhou ao criar a publicação.');
+            throw new Error('A função do servidor falhou ao criar la publicação.');
         }
         return data.postId;
 
@@ -82,15 +82,20 @@ export const schedulePost = async (postData: Omit<Post, 'id' | 'createdAt'>, med
 
 export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
     try {
-        const q = query(collection(firestore, "scheduledPosts"), where("organizationId", "==", organizationId), orderBy("scheduledAt", "asc"));
+        const q = query(collection(firestore, "scheduledPosts"), where("organizationId", "==", organizationId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+        
+        // Sort client-side
+        posts.sort((a, b) => {
+            const timeA = a.scheduledAt instanceof Timestamp ? a.scheduledAt.toMillis() : 0;
+            const timeB = b.scheduledAt instanceof Timestamp ? b.scheduledAt.toMillis() : 0;
+            return timeA - timeB; // ascending
+        });
+        return posts;
+
     } catch (error) {
         console.error("Error getting scheduled posts: ", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            console.error("Firestore index missing. The query requires a composite index on (organizationId, scheduledAt asc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
-            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
-        }
         throw new Error("Não foi possível buscar as publicações agendadas.");
     }
 };
@@ -116,18 +121,24 @@ export const deleteScheduledPost = async (id: string): Promise<void> => {
 
 export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
     try {
-        let q = query(collection(firestore, "posts"), orderBy("createdAt", "desc"));
+        let q = query(collection(firestore, "posts"));
         if (organizationId) {
             q = query(q, where("organizationId", "==", organizationId));
         }
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+        
+        // Sort client-side
+        posts.sort((a, b) => {
+            const timeA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
+            const timeB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
+            return timeB - timeA; // descending
+        });
+
+        return posts;
+
     } catch (error) {
         console.error("Error getting posts: ", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            console.error("Firestore index missing. The query requires a composite index on (organizationId, createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
-            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
-        }
         throw new Error("Não foi possível buscar as publicações.");
     }
 };
@@ -231,10 +242,17 @@ export const submitProof = async (assignmentId: string, files: File[]): Promise<
 
 export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: any, assignments: PostAssignment[] }> => {
     try {
-        const q = query(collection(firestore, 'postAssignments'), where('promoterId', '==', promoterId), orderBy('post.createdAt', 'desc'));
+        const q = query(collection(firestore, 'postAssignments'), where('promoterId', '==', promoterId));
         const snapshot = await getDocs(q);
         const assignments = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as PostAssignment));
         
+        // Client-side sort
+        assignments.sort((a, b) => {
+            const timeA = a.post.createdAt instanceof Timestamp ? a.post.createdAt.toMillis() : 0;
+            const timeB = b.post.createdAt instanceof Timestamp ? b.post.createdAt.toMillis() : 0;
+            return timeB - timeA; // descending
+        });
+
         const now = new Date();
         const stats = assignments.reduce((acc, a) => {
             acc.assigned++;
@@ -251,20 +269,23 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: 
         return { stats, assignments };
     } catch (error) {
         console.error("Error getting promoter stats:", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            console.error("Firestore index missing. The query requires a composite index on (promoterId, post.createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
-            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
-        }
         throw new Error("Não foi possível buscar as estatísticas.");
     }
 };
 
 export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats: any, assignments: PostAssignment[] }> => {
     try {
-        const q = query(collection(firestore, 'postAssignments'), where('promoterEmail', '==', email), orderBy('post.createdAt', 'desc'));
+        const q = query(collection(firestore, 'postAssignments'), where('promoterEmail', '==', email));
         const snapshot = await getDocs(q);
         const assignments = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()} as PostAssignment));
         
+        // Client-side sort
+        assignments.sort((a, b) => {
+            const timeA = a.post.createdAt instanceof Timestamp ? a.post.createdAt.toMillis() : 0;
+            const timeB = b.post.createdAt instanceof Timestamp ? b.post.createdAt.toMillis() : 0;
+            return timeB - timeA; // descending
+        });
+
         const now = new Date();
         const stats = assignments.reduce((acc, a) => {
             acc.assigned++;
@@ -281,10 +302,6 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats
         return { stats, assignments };
     } catch (error) {
         console.error("Error getting promoter stats by email:", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            console.error("Firestore index missing. The query requires a composite index on (promoterEmail, post.createdAt desc). Please create it in your Firebase console. The error message in the browser console contains a direct link to create it.");
-            throw new Error("Erro de configuração do banco de dados (índice ausente). Verifique o console do navegador para o link de criação do índice no Firebase.");
-        }
         throw new Error("Não foi possível buscar as estatísticas.");
     }
 };
