@@ -4,7 +4,6 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
-// FIX: Import 'getPostWithAssignments' to handle post duplication logic.
 import { createPost, schedulePost, getPostWithAssignments } from '../services/postService';
 import { Campaign, Promoter } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
