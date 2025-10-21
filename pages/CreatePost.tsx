@@ -357,18 +357,22 @@ const CreatePost: React.FC = () => {
                     <div className="mt-4">
                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
                     </div>
-                    
-                     <div className="flex flex-col sm:flex-row items-center gap-6 mt-4">
-                        <label className="flex items-center space-x-2">
-                            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Ativo (visível para divulgadoras)</span>
-                        </label>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
-                            <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                </fieldset>
+                
+                {/* Step 4: Options */}
+                <fieldset className="p-4 border border-gray-700 rounded-lg">
+                    <legend className="px-2 font-semibold text-primary">4. Opções da Publicação</legend>
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                            <label className="flex items-center space-x-2 pt-2">
+                                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                                <span>Ativo (visível para divulgadoras)</span>
+                            </label>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
                         </div>
-                    </div>
-                    <div className="space-y-4 mt-4">
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
                             <input type="checkbox" checked={autoAssign} onChange={(e) => setAutoAssign(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Atribuir automaticamente para novas divulgadoras</span>

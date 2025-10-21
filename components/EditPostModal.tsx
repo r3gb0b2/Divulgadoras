@@ -4,6 +4,24 @@ import { LinkIcon } from './Icons';
 import { storage } from '../firebase/config';
 import { ref, uploadBytes } from 'firebase/storage';
 import StorageMedia from './StorageMedia';
+import { Timestamp } from 'firebase/firestore';
+
+const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
+    if (!ts) return '';
+    let date;
+    if (ts.toDate) {
+        date = ts.toDate();
+    }
+    else if (typeof ts === 'object' && (ts.seconds || ts._seconds)) {
+        const seconds = ts.seconds || ts._seconds;
+        date = new Date(seconds * 1000);
+    }
+    else {
+        date = new Date(ts);
+    }
+    if (isNaN(date.getTime())) return '';
+    return date.toISOString().split('T')[0];
+};
 
 interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
     Icon: React.ElementType;
@@ -31,8 +49,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [mediaUrl, setMediaUrl] = useState(''); // Handles both image paths and video URLs
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // All post options
+    const [isActive, setIsActive] = useState(true);
+    const [expiresAt, setExpiresAt] = useState('');
+    const [autoAssignToNewPromoters, setAutoAssignToNewPromoters] = useState(false);
+    const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
+    const [allowImmediateProof, setAllowImmediateProof] = useState(false);
 
     useEffect(() => {
         if (post) {
@@ -41,7 +65,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setMediaUrl(post.mediaUrl || '');
             setMediaPreview(post.mediaUrl || null);
             setPostLink(post.postLink || '');
+            
+            // Set all options from post data
+            setIsActive(post.isActive);
+            setExpiresAt(timestampToInputDate(post.expiresAt));
+            setAutoAssignToNewPromoters(post.autoAssignToNewPromoters || false);
+            setAllowLateSubmissions(post.allowLateSubmissions || false);
             setAllowImmediateProof(post.allowImmediateProof || false);
+
             setMediaFile(null); // Reset file input on open
         }
     }, [post, isOpen]);
@@ -61,9 +92,21 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
 
     const handleSave = async () => {
         setIsSaving(true);
+        
+        let expiryTimestamp: Timestamp | null = null;
+        if (expiresAt) {
+            const [year, month, day] = expiresAt.split('-').map(Number);
+            const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
+            expiryTimestamp = Timestamp.fromDate(expiryDate);
+        }
+
         const updatedData: Partial<Post> = {
             instructions,
             postLink,
+            isActive,
+            expiresAt: expiryTimestamp,
+            autoAssignToNewPromoters,
+            allowLateSubmissions,
             allowImmediateProof,
         };
         
@@ -71,17 +114,11 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             updatedData.textContent = textContent;
         }
         
-        // Only update mediaUrl if it's a video or a new image is being uploaded
         if (post.type === 'video') {
             updatedData.mediaUrl = mediaUrl;
-        } else if (post.type === 'image' && mediaFile) {
-            // If it's an image, the onSave function will handle the upload
-            // and set the mediaUrl from the storage path. We don't set it here.
         }
 
-
         try {
-            // For images, pass the file; for videos, the URL is in updatedData
             await onSave(updatedData, post.type === 'image' ? mediaFile : null);
             onClose();
         } catch(e) {
@@ -138,7 +175,26 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                          <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
                     </div>
 
-                    <div className="border-t border-gray-700 pt-4">
+                    <div className="border-t border-gray-700 pt-4 space-y-4">
+                        <h3 className="text-lg font-semibold text-white">Opções da Publicação</h3>
+                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                            <label className="flex items-center space-x-2 pt-2">
+                                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                                <span>Ativo (visível para divulgadoras)</span>
+                            </label>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
+                        </div>
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
+                            <input type="checkbox" checked={autoAssignToNewPromoters} onChange={(e) => setAutoAssignToNewPromoters(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Atribuir automaticamente para novas divulgadoras</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, permite que as divulgadoras enviem a comprovação mesmo após o prazo de 24 horas ter expirado.">
+                            <input type="checkbox" checked={allowLateSubmissions} onChange={(e) => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Permitir envio de comprovação fora do prazo</span>
+                        </label>
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, as divulgadoras poderão enviar a comprovação assim que confirmarem, sem esperar 6 horas.">
                             <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Liberar envio de comprovação imediato</span>
