@@ -7,11 +7,33 @@ import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 const timestampToDateTimeLocal = (ts: any): { date: string, time: string } => {
-    if (!ts) return { date: '', time: '' };
-    const d = (ts as Timestamp).toDate();
-    const date = d.toISOString().split('T')[0];
-    const time = d.toTimeString().split(' ')[0].substring(0, 5);
-    return { date, time };
+    if (!ts || typeof ts.toDate !== 'function') return { date: '', time: '' };
+    try {
+        const d = ts.toDate();
+        // Adjust for timezone offset to show the correct local date in the input
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        const localDate = new Date(d.getTime() - tzOffset);
+        const date = localDate.toISOString().split('T')[0];
+        const time = d.toTimeString().split(' ')[0].substring(0, 5);
+        return { date, time };
+    } catch (e) {
+        console.error("Failed to parse timestamp:", ts, e);
+        return { date: '', time: '' };
+    }
+};
+
+const formatScheduledDate = (ts: any): string => {
+    if (ts && typeof ts.toDate === 'function') {
+        try {
+            return ts.toDate().toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        } catch (e) {
+            return "Data inválida";
+        }
+    }
+    return "Não agendado";
 };
 
 
@@ -162,7 +184,7 @@ const AdminSchedulePage: React.FC = () => {
                                         <div>
                                             <p className="font-bold text-lg text-primary">{post.postData.campaignName}</p>
                                             <p className="text-sm text-gray-300">
-                                                Agendado para: <span className="font-semibold">{(post.scheduledAt as Timestamp).toDate().toLocaleString('pt-BR')}</span>
+                                                Agendado para: <span className="font-semibold">{formatScheduledDate(post.scheduledAt)}</span>
                                             </p>
                                             <p className="text-xs text-gray-400">
                                                 Para {post.assignedPromoters.length} divulgadora(s)
