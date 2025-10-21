@@ -139,6 +139,7 @@ export interface Post {
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
+  postFormats?: ('story' | 'reels')[];
 }
 
 export interface PostAssignment {
@@ -157,6 +158,7 @@ export interface PostAssignment {
     allowLateSubmissions?: boolean;
     autoAssignToNewPromoters?: boolean;
     allowImmediateProof?: boolean;
+    postFormats?: ('story' | 'reels')[];
   };
   organizationId: string;
   promoterId: string;

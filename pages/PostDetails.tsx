@@ -336,7 +336,16 @@ export const PostDetails: React.FC = () => {
                 {/* Left Column: Post Info */}
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg flex flex-col h-full">
                     <h2 className="font-bold text-lg text-primary">{post.campaignName}</h2>
-                     <p className="text-sm text-gray-400 mb-4">Criado em: {new Date((post.createdAt as Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
+                    {post.postFormats && post.postFormats.length > 0 && (
+                        <div className="flex gap-2 mt-1">
+                            {post.postFormats.map(format => (
+                                <span key={format} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-600 text-gray-200 capitalize">
+                                    {format}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                     <p className="text-sm text-gray-400 my-2">Criado em: {new Date((post.createdAt as Timestamp).seconds * 1000).toLocaleDateString('pt-BR')}</p>
 
                     {(post.type === 'image' || post.type === 'video') && post.mediaUrl ? (
                         <div className="mb-4">

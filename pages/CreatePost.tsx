@@ -53,6 +53,7 @@ const CreatePost: React.FC = () => {
     const [selectedCampaign, setSelectedCampaign] = useState('');
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
+    const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
     const [textContent, setTextContent] = useState('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -108,6 +109,9 @@ const CreatePost: React.FC = () => {
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     setAllowImmediateProof(originalPost.allowImmediateProof || false);
+                    if (originalPost.postFormats) {
+                        setPostFormats(originalPost.postFormats);
+                    }
                     if (originalPost.type === 'video' && originalPost.mediaUrl) {
                         setVideoUrl(originalPost.mediaUrl);
                     }
@@ -191,6 +195,16 @@ const CreatePost: React.FC = () => {
             setSelectedPromoters(new Set());
         }
     };
+
+    const handleFormatChange = (format: 'story' | 'reels') => {
+        setPostFormats(prev => {
+            if (prev.includes(format)) {
+                return prev.filter(f => f !== format);
+            } else {
+                return [...prev, format];
+            }
+        });
+    };
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -258,6 +272,7 @@ const CreatePost: React.FC = () => {
                 autoAssignToNewPromoters: autoAssign,
                 allowLateSubmissions: allowLateSubmissions,
                 allowImmediateProof: allowImmediateProof,
+                postFormats: postFormats,
             };
 
             await createPost(postData, postType === 'image' ? mediaFile : null, promotersToAssign);
@@ -347,6 +362,29 @@ const CreatePost: React.FC = () => {
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label>
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo (Google Drive)</span></label>
                      </div>
+                     <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Formato (informativo):</label>
+                        <div className="flex gap-6">
+                            <label className="flex items-center space-x-2">
+                                <input 
+                                    type="checkbox"
+                                    checked={postFormats.includes('story')}
+                                    onChange={() => handleFormatChange('story')}
+                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                />
+                                <span>Story</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                                <input 
+                                    type="checkbox"
+                                    checked={postFormats.includes('reels')}
+                                    onChange={() => handleFormatChange('reels')}
+                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                />
+                                <span>Reels</span>
+                            </label>
+                        </div>
+                    </div>
                      {postType === 'text' && (
                         <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Digite o texto da publicação aqui..." rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                      )}

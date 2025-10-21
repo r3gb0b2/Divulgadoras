@@ -50,6 +50,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
 
     // All post options
     const [isActive, setIsActive] = useState(true);
@@ -65,6 +66,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setMediaUrl(post.mediaUrl || '');
             setMediaPreview(post.mediaUrl || null);
             setPostLink(post.postLink || '');
+            setPostFormats(post.postFormats || []);
             
             // Set all options from post data
             setIsActive(post.isActive);
@@ -78,6 +80,16 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     }, [post, isOpen]);
 
     if (!isOpen || !post) return null;
+
+    const handleFormatChange = (format: 'story' | 'reels') => {
+        setPostFormats(prev => {
+            if (prev.includes(format)) {
+                return prev.filter(f => f !== format);
+            } else {
+                return [...prev, format];
+            }
+        });
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -108,6 +120,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             autoAssignToNewPromoters,
             allowLateSubmissions,
             allowImmediateProof,
+            postFormats,
         };
         
         if (post.type === 'text') {
@@ -163,6 +176,30 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                             )}
                         </div>
                      )}
+
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300">Formato (informativo)</label>
+                        <div className="flex gap-6 mt-2">
+                            <label className="flex items-center space-x-2">
+                                <input 
+                                    type="checkbox"
+                                    checked={postFormats.includes('story')}
+                                    onChange={() => handleFormatChange('story')}
+                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                />
+                                <span>Story</span>
+                            </label>
+                            <label className="flex items-center space-x-2">
+                                <input 
+                                    type="checkbox"
+                                    checked={postFormats.includes('reels')}
+                                    onChange={() => handleFormatChange('reels')}
+                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                />
+                                <span>Reels</span>
+                            </label>
+                        </div>
+                    </div>
 
 
                     <div>

@@ -70,7 +70,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
                 const hours = Math.floor(diff / (1000 * 60 * 60));
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                setTimeLeft(`Disponível em: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+                setTimeLeft(`liberação para envio de print em ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
                 setIsButtonEnabled(false);
             } else {
                 const diff = expireTime.getTime() - now.getTime();
@@ -194,7 +194,18 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
             <div className="flex justify-between items-start mb-3">
-                <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                <div>
+                    <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                    {assignment.post.postFormats && assignment.post.postFormats.length > 0 && (
+                        <div className="flex gap-2 mt-1">
+                            {assignment.post.postFormats.map(format => (
+                                <span key={format} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-600 text-gray-200 capitalize">
+                                    {format}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 {assignment.status === 'confirmed' ? (
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
                 ) : (

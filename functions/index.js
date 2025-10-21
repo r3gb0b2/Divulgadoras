@@ -233,6 +233,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
         createdAt: post.createdAt,
         allowLateSubmissions: post.allowLateSubmissions || false,
         allowImmediateProof: post.allowImmediateProof || false,
+        postFormats: post.postFormats || [],
       },
       organizationId: promoterData.organizationId,
       promoterId: promoterId,
@@ -1069,6 +1070,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       allowImmediateProof: postData.allowImmediateProof === true,
       mediaUrl: postData.mediaUrl || null,
       textContent: postData.textContent || null,
+      postFormats: postData.postFormats || [],
     };
 
     batch.set(postDocRef, newPost);
@@ -1086,6 +1088,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
       mediaUrl: newPost.mediaUrl,
       textContent: newPost.textContent,
       createdAt: creationTimestamp,
+      postFormats: newPost.postFormats,
     };
 
     const assignmentsCollectionRef = db.collection("postAssignments");
@@ -1162,6 +1165,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
     createdAt: post.createdAt,
     allowLateSubmissions: post.allowLateSubmissions || false,
     allowImmediateProof: post.allowImmediateProof || false,
+    postFormats: post.postFormats || [],
   };
 
   // 3. Fetch promoters and create assignment docs
@@ -1235,7 +1239,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
 
     // Build the denormalized update object dynamically
     const denormalizedUpdateData = {};
-    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions", "allowImmediateProof"];
+    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions", "allowImmediateProof", "postFormats"];
 
     for (const field of fieldsToSync) {
       // Check if the property exists in updateData, even if its value is null or undefined
