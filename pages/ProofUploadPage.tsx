@@ -116,11 +116,12 @@ export const ProofUploadPage: React.FC = () => {
                 const fileList = Array.from(files);
                 const processedFiles = await Promise.all(
                     fileList.map(async (file: File) => {
-                        // Using slightly higher res/quality for proofs
                         const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
-                        // Revert to the simpler filename logic from the registration form
-                        // to ensure compatibility and fix the preview issue.
-                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                        // Create a more robust filename to avoid issues with extensions or special characters.
+                        // This ensures the filename matches the jpeg content type, fixing the upload hanging issue.
+                        const originalNameWithoutExt = file.name.split('.').slice(0, -1).join('.') || file.name;
+                        const safeName = `${originalNameWithoutExt.replace(/[^a-zA-Z0-9-_\.]/g, '')}-${Date.now()}.jpeg`;
+                        return new File([compressedBlob], safeName, { type: 'image/jpeg' });
                     })
                 );
                 
