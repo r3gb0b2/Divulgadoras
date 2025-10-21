@@ -60,12 +60,12 @@ export const ProofUploadPage: React.FC = () => {
     const navigate = useNavigate();
 
     const [assignment, setAssignment] = useState<PostAssignment | null>(null);
-    const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+    const [processedFiles, setProcessedFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessingImages, setIsProcessingImages] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [submitStatus, setSubmitStatus] = useState(''); // For detailed feedback during submission
     
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -98,38 +98,54 @@ export const ProofUploadPage: React.FC = () => {
         fetchAssignment();
     }, [assignmentId]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         
         // Cleanup old previews
         imagePreviews.forEach(URL.revokeObjectURL);
+        setImagePreviews([]);
+        setProcessedFiles([]);
         
         if (!files || files.length === 0) {
-            setSelectedFiles(null);
-            setImagePreviews([]);
             return;
         }
 
         if (files.length > 2) {
             setError("Você pode enviar no máximo 2 imagens.");
-            setSelectedFiles(null);
-            setImagePreviews([]);
             e.target.value = ''; // Clear the input
             return;
         }
 
         setError(null);
-        setSelectedFiles(files);
+        setIsProcessingImages(true);
 
-        // Generate new previews immediately
-        // FIX: Explicitly type 'file' as File to resolve type inference issue.
-        const previewUrls = Array.from(files).map((file: File) => URL.createObjectURL(file));
-        setImagePreviews(previewUrls);
+        try {
+            const fileList = Array.from(files);
+            const newProcessedFiles = await Promise.all(
+                // FIX: Explicitly type 'file' as File to resolve type inference issue.
+                fileList.map(async (file: File) => {
+                    const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
+                    // Keep original filename but ensure jpeg type for consistency
+                    return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                })
+            );
+            
+            setProcessedFiles(newProcessedFiles);
+            const previewUrls = newProcessedFiles.map(file => URL.createObjectURL(file));
+            setImagePreviews(previewUrls);
+
+        } catch (err) {
+            console.error("Error processing images:", err);
+            setError("Houve um problema ao processar as imagens. Tente novamente.");
+            e.target.value = '';
+        } finally {
+            setIsProcessingImages(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assignmentId || !selectedFiles || selectedFiles.length === 0) {
+        if (!assignmentId || processedFiles.length === 0) {
             setError("Por favor, selecione 1 ou 2 imagens para enviar.");
             return;
         }
@@ -138,31 +154,16 @@ export const ProofUploadPage: React.FC = () => {
         setError(null);
 
         try {
-            // 1. Process images (resize/compress)
-            setSubmitStatus('Otimizando imagens...');
-            const fileList = Array.from(selectedFiles);
-            const processedFiles = await Promise.all(
-                // FIX: Explicitly type 'file' as File to resolve type inference issue.
-                fileList.map(async (file: File, index) => {
-                    const compressedBlob = await resizeImage(file, 1024, 1024, 0.85);
-                    // Use a simple, clean, and unique filename. This is more robust.
-                    return new File([compressedBlob], `proof_${index + 1}_${Date.now()}.jpeg`, { type: 'image/jpeg' });
-                })
-            );
-
-            // 2. Upload images via the service function
-            setSubmitStatus('Enviando comprovação...');
             await submitProof(assignmentId, processedFiles);
             setSuccess(true);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro desconhecido durante o envio.');
         } finally {
             setIsSubmitting(false);
-            setSubmitStatus('');
         }
     };
     
-    const buttonText = isSubmitting ? (submitStatus || 'Enviando...') : 'Enviar Comprovação';
+    const buttonText = isSubmitting ? 'Enviando...' : isProcessingImages ? 'Processando...' : 'Enviar Comprovação';
 
     // UI Renderings
     if (isLoading) {
@@ -222,7 +223,12 @@ export const ProofUploadPage: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-300 mb-2">Selecione 1 ou 2 prints da postagem:</label>
                             
                             <div className="mt-4 flex justify-center items-center gap-4 p-4 border border-dashed border-gray-600 rounded-lg min-h-[12rem]">
-                                {imagePreviews.length > 0 ? (
+                                {isProcessingImages ? (
+                                    <div className="text-center text-gray-400">
+                                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto"></div>
+                                        <p className="mt-2 text-sm">Processando...</p>
+                                    </div>
+                                ) : imagePreviews.length > 0 ? (
                                     imagePreviews.map((preview, index) => (
                                         <img key={index} className="max-h-48 w-auto rounded-lg object-contain" src={preview} alt={`Prévia ${index + 1}`} />
                                     ))
@@ -238,13 +244,13 @@ export const ProofUploadPage: React.FC = () => {
                                 <label htmlFor="photo-upload" className="cursor-pointer bg-gray-700 py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                                    <CameraIcon className="w-5 h-5 mr-2 inline-block" />
                                     <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Selecionar prints'}</span>
-                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting} />
+                                    <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isSubmitting || isProcessingImages} />
                                 </label>
                             </div>
                         </div>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !selectedFiles || selectedFiles.length === 0}
+                            disabled={isSubmitting || isProcessingImages || processedFiles.length === 0}
                             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed"
                         >
                             {buttonText}
