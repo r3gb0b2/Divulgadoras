@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getPostWithAssignments, deletePost, updatePost, sendPostReminder, removePromoterFromPostAndGroup, sendSinglePostReminder, renewAssignmentDeadline, updateAssignment } from '../services/postService';
 import { Post, PostAssignment } from '../types';
-import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, EyeIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -129,7 +129,8 @@ export const PostDetails: React.FC = () => {
     const [error, setError] = useState('');
     const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'missed' | 'justifications'>('all');
     const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, completed: 0, missed: 0, justifications: 0 });
-    const [isDownloading, setIsDownloading] = useState(false);
+    const [isDownloadingId, setIsDownloadingId] = useState<string | null>(null);
+
 
     // Modal states
     const [isStatsModalOpen, setStatsModalOpen] = useState(false);
@@ -340,8 +341,9 @@ export const PostDetails: React.FC = () => {
     };
 
     const handleOpenMedia = async (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
-        if (isDownloading) return;
-        setIsDownloading(true);
+        const viewKey = `${post!.id}-view`;
+        if (isDownloadingId === viewKey) return;
+        setIsDownloadingId(viewKey);
         setError('');
         try {
             let finalUrl = mediaUrl;
@@ -361,7 +363,108 @@ export const PostDetails: React.FC = () => {
             console.error('Failed to open media:', error);
             setError(`Não foi possível abrir a mídia: ${error.message}`);
         } finally {
-            setIsDownloading(false);
+            setIsDownloadingId(null);
+        }
+    };
+    
+    const handleDownloadPostMedia = async (url: string, campaignName: string, type: 'image' | 'video') => {
+        const downloadKey = `${post!.id}-download`;
+        if (isDownloadingId === downloadKey) return;
+        setIsDownloadingId(downloadKey);
+        setError('');
+
+        try {
+            if (type === 'video' && url.includes('drive.google.com')) {
+                const fileId = extractGoogleDriveId(url);
+                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
+                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                window.open(downloadUrl, '_blank');
+                return;
+            }
+            
+            let finalUrl = url;
+            if (type === 'image' && !url.startsWith('http')) {
+                const storageRef = ref(storage, url);
+                finalUrl = await getDownloadURL(storageRef);
+            }
+            
+            const response = await fetch(finalUrl);
+            if (!response.ok) {
+                throw new Error(`Erro ao buscar mídia: ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || `download.jpg`;
+            link.setAttribute('download', filename);
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+
+        } catch (error: any) {
+            setError(`Falha no download: ${error.message}`);
+        } finally {
+            setIsDownloadingId(null);
+        }
+    };
+
+
+    const handleDownloadProof = async (url: string, assignmentId: string, index: number) => {
+        const downloadKey = `${assignmentId}-${index}`;
+        if (isDownloadingId === downloadKey) return;
+        setIsDownloadingId(downloadKey);
+        setError('');
+    
+        const getFreshUrl = async (originalUrl: string): Promise<string> => {
+            if (originalUrl.includes('firebasestorage.googleapis.com')) {
+                try {
+                    const pathName = new URL(originalUrl).pathname;
+                    const pathParts = pathName.split('/o/');
+                    if (pathParts.length > 1) {
+                        const encodedPath = pathParts[1];
+                        const decodedPath = decodeURIComponent(encodedPath.split('?')[0]);
+                        const storageRef = ref(storage, decodedPath);
+                        return await getDownloadURL(storageRef);
+                    }
+                } catch (e) {
+                    console.warn("Could not generate a fresh download URL, falling back to original.", e);
+                }
+            }
+            return originalUrl;
+        };
+    
+        try {
+            const freshUrl = await getFreshUrl(url);
+            
+            const response = await fetch(freshUrl);
+            if (!response.ok) {
+                throw new Error(`Erro ao buscar imagem: ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            const filename = freshUrl.split('/').pop()?.split('#')[0].split('?')[0] || `download-${downloadKey}.jpg`;
+            link.setAttribute('download', filename);
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+    
+        } catch (error: any) {
+            setError(`Falha no download: ${error.message}`);
+        } finally {
+            setIsDownloadingId(null);
         }
     };
 
@@ -393,11 +496,19 @@ export const PostDetails: React.FC = () => {
                             <div className="flex justify-center items-center gap-4 mt-2">
                                 <button
                                     onClick={() => handleOpenMedia(post.mediaUrl!, post.campaignName, post.type)}
-                                    disabled={isDownloading}
+                                    disabled={!!isDownloadingId}
                                     className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                                 >
+                                    <EyeIcon className="w-4 h-4" />
+                                    {isDownloadingId === `${post.id}-view` ? 'Abrindo...' : 'Visualizar'}
+                                </button>
+                                <button
+                                    onClick={() => handleDownloadPostMedia(post.mediaUrl!, post.campaignName, post.type)}
+                                    disabled={!!isDownloadingId}
+                                    className="text-sm text-green-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                >
                                     <DownloadIcon className="w-4 h-4" />
-                                    {isDownloading ? 'Abrindo...' : `Abrir ${post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
+                                    {isDownloadingId === `${post.id}-download` ? 'Baixando...' : 'Baixar'}
                                 </button>
                             </div>
                         </div>
@@ -459,18 +570,25 @@ export const PostDetails: React.FC = () => {
                                 </div>
 
                                 {a.justification && (
-                                    <div className="mt-2 pt-2 border-t border-gray-700/50">
+                                    <div className="mt-3 pt-3 border-t border-gray-700/50">
                                         <p className="text-xs font-semibold text-yellow-300">Justificativa Enviada:</p>
                                         <p className="text-sm text-gray-300 italic bg-gray-900/50 p-2 rounded-md my-1">{a.justification}</p>
                                         
                                         {a.justificationImageUrls && a.justificationImageUrls.length > 0 && (
                                             <div className="mt-2">
-                                                <p className="text-xs font-semibold text-gray-300">Anexos:</p>
-                                                <div className="flex items-center gap-2 mt-1">
+                                                <p className="text-xs font-semibold text-gray-300 mb-2">Anexos:</p>
+                                                <div className="flex flex-wrap items-start gap-4">
                                                     {a.justificationImageUrls.map((url, i) => (
-                                                        <button key={i} type="button" onClick={() => openPhotoViewer(a.justificationImageUrls!, i)}>
-                                                            <img src={url} alt={`Anexo ${i + 1}`} className="w-10 h-10 object-cover rounded cursor-pointer"/>
-                                                        </button>
+                                                        <div key={i} className="flex flex-col items-center text-center">
+                                                            <img src={url} alt={`Anexo ${i + 1}`} className="w-24 h-24 object-cover rounded-md"/>
+                                                            <div className="mt-1.5 flex gap-4">
+                                                                <button type="button" onClick={() => openPhotoViewer(a.justificationImageUrls!, i)} className="flex items-center gap-1 text-xs font-medium text-blue-400 hover:underline"><EyeIcon className="w-4 h-4"/>Visualizar</button>
+                                                                <button type="button" onClick={() => handleDownloadProof(url, `${a.id}-just`, i)} disabled={isDownloadingId === `${a.id}-just-${i}`} className="flex items-center gap-1 text-xs font-medium text-green-400 hover:underline disabled:opacity-50">
+                                                                    <DownloadIcon className="w-4 h-4"/>
+                                                                    {isDownloadingId === `${a.id}-just-${i}` ? '...' : 'Baixar'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     ))}
                                                 </div>
                                             </div>
@@ -487,25 +605,38 @@ export const PostDetails: React.FC = () => {
                                         </div>
                                     </div>
                                 )}
+                                
+                                {a.proofImageUrls && a.proofImageUrls.length > 0 && !a.justification && (
+                                    <div className="mt-3 pt-3 border-t border-gray-700/50">
+                                        <p className="text-xs font-semibold text-gray-300 mb-2">Comprovação:</p>
+                                        <div className="flex flex-wrap items-start gap-4">
+                                            {a.proofImageUrls.map((url, i) => (
+                                                <div key={i} className="flex flex-col items-center text-center">
+                                                    <img src={url} alt={`Prova ${i + 1}`} className="w-24 h-24 object-cover rounded-md"/>
+                                                    <div className="mt-1.5 flex gap-4">
+                                                        <button type="button" onClick={() => openPhotoViewer(a.proofImageUrls!, i)} className="flex items-center gap-1 text-xs font-medium text-blue-400 hover:underline"><EyeIcon className="w-4 h-4"/>Visualizar</button>
+                                                        <button type="button" onClick={() => handleDownloadProof(url, a.id, i)} disabled={isDownloadingId === `${a.id}-${i}`} className="flex items-center gap-1 text-xs font-medium text-green-400 hover:underline disabled:opacity-50">
+                                                            <DownloadIcon className="w-4 h-4"/>
+                                                            {isDownloadingId === `${a.id}-${i}` ? '...' : 'Baixar'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
-                                <div className="mt-2 pt-2 border-t border-gray-700/50 flex flex-wrap justify-between items-center gap-2">
-                                    <div className="flex items-center gap-2">
-                                        {a.proofImageUrls && a.proofImageUrls.length > 0 ? (
-                                            a.proofImageUrls.map((url, i) => (
-                                                <button key={i} type="button" onClick={() => openPhotoViewer(a.proofImageUrls!, i)}>
-                                                    <img src={url} alt={`Prova ${i + 1}`} className="w-10 h-10 object-cover rounded cursor-pointer"/>
-                                                </button>
-                                            ))
-                                        ) : !a.justification && (
-                                            <p className="text-xs text-gray-500">Aguardando comprovação...</p>
-                                        )}
+                                {a.status === 'confirmed' && !a.proofImageUrls?.length && !a.justification && (
+                                    <div className="mt-3 pt-3 border-t border-gray-700/50">
+                                        <p className="text-xs text-gray-500">Aguardando envio da comprovação...</p>
                                     </div>
-                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
-                                        <button onClick={() => handleOpenStatsModal(a)} className="text-blue-400 hover:underline">Estatísticas</button>
-                                        {a.status === 'confirmed' && !a.proofSubmittedAt && <button onClick={() => handleSingleReminder(a)} disabled={isProcessing === `single-reminder-${a.id}`} className="text-yellow-400 hover:underline disabled:opacity-50">Lembrete</button>}
-                                        {a.status === 'confirmed' && !a.proofSubmittedAt && <button onClick={() => handleRenewDeadline(a)} disabled={isProcessing === `renew-${a.id}`} className="text-green-400 hover:underline disabled:opacity-50">Renovar Prazo</button>}
-                                        <button onClick={() => handleRemovePromoter(a)} disabled={isProcessing === `remove-${a.id}`} className="text-red-400 hover:underline disabled:opacity-50">Remover</button>
-                                    </div>
+                                )}
+
+                                <div className="mt-3 pt-3 border-t border-gray-700/50 flex flex-wrap justify-end items-center gap-x-4 gap-y-1 text-xs font-medium">
+                                    <button onClick={() => handleOpenStatsModal(a)} className="text-blue-400 hover:underline">Estatísticas</button>
+                                    {a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification && <button onClick={() => handleSingleReminder(a)} disabled={isProcessing === `single-reminder-${a.id}`} className="text-yellow-400 hover:underline disabled:opacity-50">Lembrete</button>}
+                                    {a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification && <button onClick={() => handleRenewDeadline(a)} disabled={isProcessing === `renew-${a.id}`} className="text-green-400 hover:underline disabled:opacity-50">Renovar Prazo</button>}
+                                    <button onClick={() => handleRemovePromoter(a)} disabled={isProcessing === `remove-${a.id}`} className="text-red-400 hover:underline disabled:opacity-50">Remover</button>
                                 </div>
                             </div>
                         ))}
