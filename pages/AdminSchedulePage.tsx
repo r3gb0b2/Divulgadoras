@@ -88,10 +88,6 @@ const EditScheduleModal: React.FC<{
             return;
         }
         const newDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-        if (newDateTime < new Date()) {
-            setError('A data de agendamento não pode ser no passado.');
-            return;
-        }
         setIsSaving(true);
         try {
             await onSave(post.id, Timestamp.fromDate(newDateTime));

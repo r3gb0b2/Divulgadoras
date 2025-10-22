@@ -310,9 +310,6 @@ const CreatePost: React.FC = () => {
                     throw new Error("Por favor, selecione data e hora para agendar.");
                 }
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                if (scheduledDateTime < new Date()) {
-                    throw new Error("A data de agendamento não pode ser no passado.");
-                }
                 const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
                 
                 // Firestore doesn't like 'undefined' values, so we clean the object.
