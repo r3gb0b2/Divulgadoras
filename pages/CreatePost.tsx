@@ -70,6 +70,7 @@ const CreatePost: React.FC = () => {
     const [isScheduling, setIsScheduling] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
     const [scheduleTime, setScheduleTime] = useState('');
+    const [utcDisplayTime, setUtcDisplayTime] = useState<string | null>(null);
 
 
     // UI states
@@ -77,6 +78,24 @@ const CreatePost: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     
+    useEffect(() => {
+        if (isScheduling && scheduleDate && scheduleTime) {
+            const localDate = new Date(`${scheduleDate}T${scheduleTime}`);
+            if (!isNaN(localDate.getTime())) {
+                const utcHours = localDate.getUTCHours().toString().padStart(2, '0');
+                const utcMinutes = localDate.getUTCMinutes().toString().padStart(2, '0');
+                const userTimezoneOffset = -localDate.getTimezoneOffset() / 60;
+                const timezoneString = `GMT${userTimezoneOffset >= 0 ? '+' : ''}${userTimezoneOffset}`;
+                
+                setUtcDisplayTime(`O envio ocorrerá às ${utcHours}:${utcMinutes} UTC (seu fuso horário: ${timezoneString}).`);
+            } else {
+                setUtcDisplayTime(null);
+            }
+        } else {
+            setUtcDisplayTime(null);
+        }
+    }, [scheduleDate, scheduleTime, isScheduling]);
+
     useEffect(() => {
         const loadInitialData = async () => {
             if (!selectedOrgId || !adminData?.uid) {
@@ -494,21 +513,21 @@ const CreatePost: React.FC = () => {
                         <span>Agendar Publicação</span>
                     </label>
                     {isScheduling && (
-                        <div className="mt-4">
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400">Data do Envio</label>
-                                    <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400">Hora do Envio</label>
-                                    <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                                </div>
+                        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Data do Envio</label>
+                                <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                             </div>
-                            <p className="text-xs text-blue-300 bg-blue-900/30 p-2 rounded-md mt-3">
-                                O envio será feito na data e hora selecionadas, de acordo com o seu fuso horário local.
-                            </p>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Hora do Envio</label>
+                                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} required={isScheduling} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
                         </div>
+                    )}
+                    {utcDisplayTime && (
+                        <p className="text-xs text-blue-300 bg-blue-900/30 p-2 rounded-md mt-3">
+                            {utcDisplayTime}
+                        </p>
                     )}
                 </fieldset>
 

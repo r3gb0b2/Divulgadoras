@@ -123,6 +123,47 @@ const PostCard: React.FC<{
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+
+    const isExpiredAndMissed = useMemo(() => {
+        if (!assignment.post.expiresAt) return false;
+        const now = new Date();
+        const expiryDate = (assignment.post.expiresAt as Timestamp).toDate();
+        // It's missed if: it's expired AND it's still pending AND it hasn't been justified yet.
+        return expiryDate < now && assignment.status === 'pending' && !assignment.justification;
+    }, [assignment]);
+    
+    if (isExpiredAndMissed) {
+        return (
+            <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-red-500">
+                <div className="flex justify-between items-start mb-3">
+                    <div>
+                        <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                        {assignment.post.postFormats && assignment.post.postFormats.length > 0 && (
+                            <div className="flex gap-2 mt-1">
+                                {assignment.post.postFormats.map(format => (
+                                    <span key={format} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-600 text-gray-200 capitalize">
+                                        {format}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900/50 text-red-300">Perdido (Prazo Encerrado)</span>
+                </div>
+                <div className="border-t border-gray-700 pt-3">
+                    <p className="text-sm text-gray-300 mb-4">Você não confirmou esta publicação antes do prazo. Se houve algum imprevisto, envie uma justificativa para o organizador.</p>
+                     <div className="mt-4 text-center">
+                         <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     
     if (!assignment.promoterHasJoinedGroup) {
         return (
