@@ -13,6 +13,7 @@ import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
 import ProofUploadPage from './pages/ProofUploadPage';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -94,19 +95,21 @@ const App: React.FC = () => {
             )}
           </header>
           <main className="container mx-auto p-4 md:p-8 flex-grow">
-            <Routes>
-              <Route path="/" element={<PublicHome />} />
-              <Route path="/:organizationId" element={<StateSelection />} />
-              <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
-              
-              <Route path="/admin/*" element={<AdminAuth />} />
-              <Route path="/status" element={<StatusCheck />} />
-              <Route path="/posts" element={<PostCheck />} />
-              <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
-              <Route path="/lista/:organizationId?/:campaignId?" element={<GuestListCheck />} />
-              <Route path="/planos" element={<PricingPage />} />
-              <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<PublicHome />} />
+                <Route path="/:organizationId" element={<StateSelection />} />
+                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
+                
+                <Route path="/admin/*" element={<AdminAuth />} />
+                <Route path="/status" element={<StatusCheck />} />
+                <Route path="/posts" element={<PostCheck />} />
+                <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
+                <Route path="/lista/:organizationId?/:campaignId?" element={<GuestListCheck />} />
+                <Route path="/planos" element={<PricingPage />} />
+                <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">
               <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados.</p>
