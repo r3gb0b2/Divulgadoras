@@ -12,12 +12,56 @@ interface PhotoViewerModalProps {
 
 const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startIndex, isOpen, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(startIndex);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadableUrl, setDownloadableUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentIndex(startIndex);
   }, [startIndex, isOpen]);
+
+  // Effect to generate a fresh, valid URL for the current image
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setDownloadableUrl(null); // Reset on image change
+
+    const generateUrl = async () => {
+        const originalUrl = imageUrls[currentIndex];
+        if (!originalUrl) return;
+
+        // If it's a Firebase Storage URL, it might be expired. Let's get a fresh one.
+        if (originalUrl.includes('firebasestorage.googleapis.com')) {
+            try {
+                const urlObject = new URL(originalUrl);
+                const pathName = urlObject.pathname;
+                const pathStartIndex = pathName.indexOf('/o/');
+                
+                if (pathStartIndex !== -1) {
+                    const encodedPath = pathName.substring(pathStartIndex + 3);
+                    // Remove query params like token before decoding
+                    const decodedPath = decodeURIComponent(encodedPath.split('?')[0]); 
+                    
+                    const storageRef = ref(storage, decodedPath);
+                    const freshUrl = await getDownloadURL(storageRef);
+                    if (isMounted) setDownloadableUrl(freshUrl);
+                } else {
+                     if (isMounted) setDownloadableUrl(originalUrl); // Fallback if path parsing fails
+                }
+            } catch (e) {
+                console.warn("Could not generate a fresh download URL, falling back to the original URL.", e);
+                if (isMounted) setDownloadableUrl(originalUrl); // Fallback on error
+            }
+        } else {
+            // Not a firebase URL (e.g., blob URL), use as is.
+            if (isMounted) setDownloadableUrl(originalUrl);
+        }
+    };
+
+    generateUrl();
+
+    return () => { isMounted = false; };
+  }, [isOpen, currentIndex, imageUrls]);
+
 
   const goToPrevious = () => {
     if (imageUrls.length <= 1) return;
@@ -33,65 +77,6 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     setCurrentIndex(newIndex);
   };
   
-  const handleDownload = async () => {
-    if (isDownloading) return;
-    setIsDownloading(true);
-    setDownloadError(null);
-    try {
-        const originalUrl = imageUrls[currentIndex];
-        let freshUrl = originalUrl;
-
-        // If it's a Firebase Storage URL, it might be expired. Let's get a fresh one.
-        if (originalUrl.includes('firebasestorage.googleapis.com')) {
-            try {
-                // Extract the storage path from the full URL
-                const urlObject = new URL(originalUrl);
-                const pathName = urlObject.pathname;
-                
-                const pathStartIndex = pathName.indexOf('/o/');
-                if (pathStartIndex !== -1) {
-                    const encodedPath = pathName.substring(pathStartIndex + 3);
-                    const decodedPath = decodeURIComponent(encodedPath);
-
-                    // Get a fresh, valid download URL for this path
-                    const storageRef = ref(storage, decodedPath);
-                    freshUrl = await getDownloadURL(storageRef);
-                }
-            } catch (e) {
-                console.warn("Could not generate a fresh download URL, falling back to the original URL.", e);
-            }
-        }
-        
-        // Fetch the image data using the (potentially fresh) URL
-        const response = await fetch(freshUrl);
-        if (!response.ok) {
-            throw new Error(`Não foi possível buscar a imagem. Status: ${response.status}`);
-        }
-        const blob = await response.blob();
-        
-        const objectUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        
-        // Suggest a filename from the original URL (without token)
-        const filename = originalUrl.split('/').pop()?.split('?')[0] || 'divulgadora.jpg';
-        link.download = decodeURIComponent(filename);
-
-        document.body.appendChild(link);
-        link.click();
-        
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(objectUrl);
-
-    } catch (error) {
-        console.error("Download failed:", error);
-        setDownloadError("Falha no download. O link pode ter expirado ou ser inválido.");
-        setTimeout(() => setDownloadError(null), 3000);
-    } finally {
-        setIsDownloading(false);
-    }
-  };
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
@@ -153,15 +138,17 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
                 </button>
                 
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleDownload}
-                        disabled={isDownloading}
-                        className="bg-black bg-opacity-50 text-white px-4 py-2 rounded-full hover:bg-opacity-75 transition-all text-base flex items-center gap-2 disabled:opacity-50"
-                        aria-label="Baixar Imagem"
+                     <a
+                        href={downloadableUrl || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`bg-black bg-opacity-50 text-white px-4 py-2 rounded-full hover:bg-opacity-75 transition-all text-base flex items-center gap-2 ${!downloadableUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        aria-label="Abrir imagem original"
+                        onClick={(e) => { if (!downloadableUrl) e.preventDefault(); }}
                     >
                         <DownloadIcon className="w-5 h-5" />
-                        <span>{isDownloading ? 'Baixando...' : 'Baixar Imagem'}</span>
-                    </button>
+                        <span>{downloadableUrl ? 'Abrir Imagem Original' : 'Carregando...'}</span>
+                    </a>
                     <button
                         onClick={onClose}
                         className="bg-black bg-opacity-50 text-white px-5 py-2 rounded-full hover:bg-opacity-75 transition-all text-base"
@@ -181,8 +168,6 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
                     </svg>
                 </button>
             </div>
-
-            {downloadError && <p className="text-xs text-red-400 mt-2">{downloadError}</p>}
 
             {imageUrls.length > 1 && (
                 <div className="text-center text-white text-sm font-mono mt-2">

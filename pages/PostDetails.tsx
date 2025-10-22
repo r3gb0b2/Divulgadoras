@@ -53,40 +53,6 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
-const triggerDownloadWithBlob = async (url: string, campaignName: string, type: 'image' | 'video') => {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const blob = await response.blob();
-        const objectUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-
-        const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const urlPath = new URL(url).pathname;
-        const extension = urlPath.split('.').pop()?.split('?')[0] || (type === 'video' ? 'mp4' : 'jpg');
-        link.download = `${type}_${safeCampaignName}.${extension}`;
-        link.href = objectUrl;
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(objectUrl);
-    } catch (e) {
-        console.error("Direct download failed, falling back:", e);
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        alert("Não foi possível baixar o arquivo diretamente. Tentando abrir em uma nova aba.");
-    }
-};
-
-
 const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const [textColor, setTextColor] = useState('text-gray-400');
@@ -362,26 +328,27 @@ export const PostDetails: React.FC = () => {
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
-    const handleDownload = async (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
+    const handleOpenMedia = async (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
         if (isDownloading) return;
         setIsDownloading(true);
         setError('');
         try {
+            let finalUrl = mediaUrl;
+    
             if (type === 'video' && mediaUrl.includes('drive.google.com')) {
                 const fileId = extractGoogleDriveId(mediaUrl);
                 if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
-                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                window.open(downloadUrl, '_blank');
-            } else if (type === 'image') {
+                finalUrl = `https://drive.google.com/file/d/${fileId}/view`;
+            } else if (type === 'image' && !mediaUrl.startsWith('http')) { 
                 const imageRef = ref(storage, mediaUrl);
-                const freshUrl = await getDownloadURL(imageRef);
-                await triggerDownloadWithBlob(freshUrl, campaignName, type);
-            } else {
-                 throw new Error("Tipo de mídia não suportado para download direto.");
+                finalUrl = await getDownloadURL(imageRef);
             }
+    
+            window.open(finalUrl, '_blank', 'noopener,noreferrer');
+    
         } catch (error: any) {
-            console.error('Download failed:', error);
-            setError(`Não foi possível iniciar o download: ${error.message}`);
+            console.error('Failed to open media:', error);
+            setError(`Não foi possível abrir a mídia: ${error.message}`);
         } finally {
             setIsDownloading(false);
         }
@@ -414,12 +381,12 @@ export const PostDetails: React.FC = () => {
                             <StorageMedia path={post.mediaUrl} type={post.type} className="w-full max-w-sm mx-auto rounded-md" controls={post.type === 'video'} />
                             <div className="flex justify-center items-center gap-4 mt-2">
                                 <button
-                                    onClick={() => handleDownload(post.mediaUrl!, post.campaignName, post.type)}
+                                    onClick={() => handleOpenMedia(post.mediaUrl!, post.campaignName, post.type)}
                                     disabled={isDownloading}
                                     className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                                 >
                                     <DownloadIcon className="w-4 h-4" />
-                                    {isDownloading ? 'Baixando...' : `Baixar ${post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
+                                    {isDownloading ? 'Abrindo...' : `Abrir ${post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
                                 </button>
                             </div>
                         </div>
