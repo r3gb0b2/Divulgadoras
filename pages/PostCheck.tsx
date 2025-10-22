@@ -149,6 +149,55 @@ const PostCard: React.FC<{
     const [linkCopied, setLinkCopied] = useState(false);
     const [isViewing, setIsViewing] = useState(false);
 
+    if (!assignment.post.isActive) {
+        const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
+            const styles = {
+                pending: "bg-yellow-900/50 text-yellow-300",
+                accepted: "bg-green-900/50 text-green-300",
+                rejected: "bg-red-900/50 text-red-300",
+            };
+            const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
+            if (!status) return null;
+            return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+        };
+
+        return (
+            <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-gray-500 opacity-70">
+                 <div className="flex justify-between items-start mb-3">
+                    <div>
+                        <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                        {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
+                    </div>
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-400">Inativo</span>
+                </div>
+                <div className="border-t border-gray-700 pt-3">
+                    <p className="text-sm text-gray-400">Esta publicação foi desativada pelo organizador e não requer mais ação.</p>
+                     
+                     {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
+                        <div className="mt-4 text-center">
+                            <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
+                            <div className="flex justify-center gap-2">
+                                {assignment.proofImageUrls.map((url, index) => (
+                                    <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                        <img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" />
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                     )}
+                     
+                     {assignment.justification && (
+                         <div className="mt-4 text-center">
+                            <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
+                            <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
+                            <div className="text-xs">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                        </div>
+                     )}
+                </div>
+            </div>
+        );
+    }
+
     const isExpiredAndMissed = useMemo(() => {
         if (!assignment.post.expiresAt) return false;
         const now = new Date();

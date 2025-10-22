@@ -129,13 +129,12 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
         const snapshot = await getDocs(q);
         const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
         
-        // Filter out inactive posts, but keep expired ones to allow justification.
+        // Filter for data integrity. The client will handle UI for inactive/expired posts.
         const visibleAssignments = assignments.filter(assignment => {
             const post = assignment.post;
-            if (!post || !post.isActive) {
+            if (!post) {
                 return false;
             }
-            // Keep expired posts to allow for justification. The client will handle UI.
             return true;
         });
         
