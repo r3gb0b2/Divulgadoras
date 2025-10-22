@@ -18,6 +18,27 @@ interface Stats {
     pending: number;
 }
 
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) {
+        return null;
+    }
+    // Firestore Timestamp
+    if (typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    }
+    // Serialized Timestamp object
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
+    }
+    // ISO string or number (milliseconds)
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+};
+
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -29,9 +50,10 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
     if (assignment.proofSubmittedAt) {
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
-    // FIX: Add optional chaining and check for toDate function before calling
-    const expiresAt = assignment.post?.expiresAt;
-    if (expiresAt && typeof (expiresAt as Timestamp).toDate === 'function' && (expiresAt as Timestamp).toDate() < new Date()) {
+    
+    const expiresAt = toDateSafe(assignment.post?.expiresAt);
+
+    if (expiresAt && expiresAt < new Date()) {
         return { text: 'Perdido', color: 'bg-red-900/50 text-red-300' };
     }
     return { text: 'Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
