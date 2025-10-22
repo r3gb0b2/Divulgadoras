@@ -451,8 +451,21 @@ export const renewAssignmentDeadline = async (assignmentId: string): Promise<voi
     }
 };
 
-export const submitJustification = async (assignmentId: string, justification: string): Promise<void> => {
+export const submitJustification = async (assignmentId: string, justification: string, imageFiles: File[]): Promise<void> => {
     try {
+        let justificationImageUrls: string[] = [];
+        if (imageFiles.length > 0) {
+            justificationImageUrls = await Promise.all(
+                imageFiles.map(async (photo) => {
+                    const fileExtension = photo.name.split('.').pop();
+                    const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = ref(storage, `justifications-proofs/${fileName}`);
+                    await uploadBytes(storageRef, photo);
+                    return await getDownloadURL(storageRef);
+                })
+            );
+        }
+
         const docRef = doc(firestore, 'postAssignments', assignmentId);
         await updateDoc(docRef, {
             justification: justification,
@@ -460,6 +473,7 @@ export const submitJustification = async (assignmentId: string, justification: s
             justificationSubmittedAt: serverTimestamp(),
             proofImageUrls: [], 
             proofSubmittedAt: null,
+            justificationImageUrls: justificationImageUrls,
         });
     } catch (error) {
         console.error("Error submitting justification: ", error);

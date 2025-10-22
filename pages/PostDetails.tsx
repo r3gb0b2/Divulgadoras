@@ -438,7 +438,21 @@ export const PostDetails: React.FC = () => {
                                     <div className="mt-2 pt-2 border-t border-gray-700/50">
                                         <p className="text-xs font-semibold text-yellow-300">Justificativa Enviada:</p>
                                         <p className="text-sm text-gray-300 italic bg-gray-900/50 p-2 rounded-md my-1">{a.justification}</p>
-                                        <div className="flex items-center justify-between gap-2">
+                                        
+                                        {a.justificationImageUrls && a.justificationImageUrls.length > 0 && (
+                                            <div className="mt-2">
+                                                <p className="text-xs font-semibold text-gray-300">Anexos:</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {a.justificationImageUrls.map((url, i) => (
+                                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={url} alt={`Anexo ${i+1}`} className="w-10 h-10 object-cover rounded"/>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between gap-2 mt-2">
                                             <div className="text-xs flex items-center gap-2">Status: {renderJustificationStatus(a.justificationStatus)}</div>
                                             {a.justificationStatus === 'pending' && (
                                                 <div className="flex gap-2 text-xs font-semibold">

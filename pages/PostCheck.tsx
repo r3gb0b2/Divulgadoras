@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
-import { ArrowLeftIcon, EyeIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, DownloadIcon, CameraIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -372,25 +372,39 @@ const PostCard: React.FC<{
 const JustificationModal: React.FC<{
     isOpen: boolean,
     onClose: () => void,
-    onSubmit: (assignmentId: string, text: string) => Promise<void>,
+    onSubmit: (assignmentId: string, text: string, imageFiles: File[]) => Promise<void>,
     assignment: PostAssignment | null
 }> = ({ isOpen, onClose, onSubmit, assignment }) => {
     const [text, setText] = useState('');
+    const [imageFiles, setImageFiles] = useState<File[]>([]);
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (!isOpen) {
             setText('');
             setIsSubmitting(false);
+            setImageFiles([]);
+            setImagePreviews([]);
         }
     }, [isOpen]);
 
     if (!isOpen || !assignment) return null;
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            setImageFiles(fileList);
+            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
+            setImagePreviews(previewUrls);
+        }
+    };
+
     const handleSubmit = async () => {
         if (!text.trim()) return;
         setIsSubmitting(true);
-        await onSubmit(assignment.id, text);
+        await onSubmit(assignment.id, text, imageFiles);
         setIsSubmitting(false);
         onClose();
     };
@@ -403,10 +417,30 @@ const JustificationModal: React.FC<{
                 <textarea
                     value={text}
                     onChange={e => setText(e.target.value)}
-                    rows={5}
+                    rows={4}
                     placeholder="Ex: Tive um imprevisto pessoal..."
                     className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
                 />
+                <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Anexar imagens (opcional, máximo 2)</label>
+                    <div className="mt-2 flex items-center gap-4">
+                        <label htmlFor="justification-photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
+                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
+                            <span>{imagePreviews.length > 0 ? 'Trocar imagens' : 'Enviar imagens'}</span>
+                            <input id="justification-photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                        </label>
+                        <div className="flex-grow flex items-center gap-3">
+                            {imagePreviews.length > 0 ? (
+                                imagePreviews.map((preview, index) => (
+                                    <img key={index} className="h-16 w-16 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-400">Nenhuma imagem selecionada.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
                 <div className="mt-6 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
                     <button onClick={handleSubmit} disabled={isSubmitting || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
@@ -501,9 +535,9 @@ const PostCheck: React.FC = () => {
         setIsJustifyModalOpen(true);
     };
     
-    const handleJustifySubmit = async (assignmentId: string, text: string) => {
+    const handleJustifySubmit = async (assignmentId: string, text: string, imageFiles: File[]) => {
         try {
-            await submitJustification(assignmentId, text);
+            await submitJustification(assignmentId, text, imageFiles);
             await performSearch(email); // Refresh list
         } catch (err: any) {
             setError(err.message || 'Falha ao enviar justificativa.');

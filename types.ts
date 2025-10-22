@@ -171,6 +171,7 @@ export interface PostAssignment {
   justification?: string;
   justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
   justificationSubmittedAt?: Timestamp | FieldValue | null;
+  justificationImageUrls?: string[];
 }
 
 export interface GuestListConfirmation {
