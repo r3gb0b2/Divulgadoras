@@ -535,6 +535,7 @@ const PostCheck: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+    const [showInactive, setShowInactive] = useState(false);
     
     // Justification Modal State
     const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
@@ -622,6 +623,23 @@ const PostCheck: React.FC = () => {
         performSearch(email);
     };
 
+    const { activeAssignments, inactiveAssignments } = useMemo(() => {
+        if (!assignments) return { activeAssignments: [], inactiveAssignments: [] };
+        
+        const active: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
+        const inactive: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
+        
+        assignments.forEach(a => {
+            if (a.post.isActive) {
+                active.push(a);
+            } else {
+                inactive.push(a);
+            }
+        });
+
+        return { activeAssignments: active, inactiveAssignments: inactive };
+    }, [assignments]);
+
     const justificationCount = useMemo(() => {
         if (!assignments) return 0;
         return assignments.filter(a => !!a.justification).length;
@@ -659,11 +677,29 @@ const PostCheck: React.FC = () => {
                     </div>
                 )}
                 
-                {(!assignments || assignments.length === 0) ? (
+                {activeAssignments.length === 0 ? (
                     <p className="text-center text-gray-400 mt-4">Nenhuma publicação ativa encontrada para você no momento.</p>
                 ) : (
                     <div className="space-y-4">
-                        {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
+                        {activeAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
+                    </div>
+                )}
+
+                {inactiveAssignments.length > 0 && (
+                    <div className="mt-8 text-center border-t border-gray-700 pt-6">
+                        <button
+                            onClick={() => setShowInactive(prev => !prev)}
+                            className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 transition-colors"
+                        >
+                            {showInactive ? 'Ocultar' : 'Ver'} Histórico de Publicações ({inactiveAssignments.length})
+                        </button>
+                    </div>
+                )}
+
+                {showInactive && inactiveAssignments.length > 0 && (
+                    <div className="mt-6 space-y-4">
+                        <h3 className="text-xl font-bold text-gray-400 border-b border-gray-700 pb-2 mb-4">Publicações Inativas</h3>
+                        {inactiveAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
                     </div>
                 )}
             </>

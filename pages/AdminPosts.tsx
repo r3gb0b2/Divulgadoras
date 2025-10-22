@@ -16,6 +16,7 @@ const AdminPosts: React.FC = () => {
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -89,6 +90,17 @@ const AdminPosts: React.FC = () => {
         if (isNaN(date.getTime())) return 'Data inválida';
         return date.toLocaleDateString('pt-BR');
     };
+
+    const filteredPosts = useMemo(() => {
+        switch (statusFilter) {
+            case 'active':
+                return posts.filter(p => p.isActive);
+            case 'inactive':
+                return posts.filter(p => !p.isActive);
+            default:
+                return posts;
+        }
+    }, [posts, statusFilter]);
     
     const renderContent = () => {
         if (isLoading) {
@@ -97,12 +109,19 @@ const AdminPosts: React.FC = () => {
         if (error) {
             return <div className="text-red-400 text-center py-10">{error}</div>;
         }
-        if (posts.length === 0) {
-            return <div className="text-center text-gray-400 py-10">Nenhuma publicação criada ainda.</div>;
+        if (filteredPosts.length === 0) {
+            return (
+                <div className="text-center text-gray-400 py-10">
+                    {statusFilter === 'active' && 'Nenhuma publicação ativa encontrada.'}
+                    {statusFilter === 'inactive' && 'Nenhuma publicação inativa encontrada.'}
+                    {statusFilter === 'all' && posts.length === 0 && 'Nenhuma publicação criada ainda.'}
+                    {statusFilter === 'all' && posts.length > 0 && 'Nenhuma publicação encontrada com os filtros atuais.'}
+                </div>
+            );
         }
         return (
             <div className="space-y-4">
-                {posts.map(post => (
+                {filteredPosts.map(post => (
                     <div key={post.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-start">
                             <div>
@@ -110,7 +129,7 @@ const AdminPosts: React.FC = () => {
                                 <p className="font-bold text-lg text-primary">{post.campaignName}</p>
                                 {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
                                 <div className="flex items-center gap-3 text-sm text-gray-400">
-                                    <span>{post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}</span>
+                                    <span>{post.type === 'image' ? 'Imagem' : (post.type === 'video' ? 'Vídeo' : 'Texto')} - Criado em: {formatDate(post.createdAt)}</span>
                                      <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
                                         {post.isActive ? 'Ativo' : 'Inativo'}
                                     </span>
@@ -157,6 +176,17 @@ const AdminPosts: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
+                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-4 w-fit">
+                    {(['active', 'inactive', 'all'] as const).map(f => (
+                        <button 
+                            key={f} 
+                            onClick={() => setStatusFilter(f)} 
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                        >
+                            {{'active': 'Ativos', 'inactive': 'Inativos', 'all': 'Todos'}[f]}
+                        </button>
+                    ))}
+                </div>
                 {renderContent()}
             </div>
         </div>
