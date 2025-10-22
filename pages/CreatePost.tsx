@@ -11,7 +11,7 @@ import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 import { storage } from '../firebase/config';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -285,13 +285,12 @@ const CreatePost: React.FC = () => {
                 expiryTimestamp = Timestamp.fromDate(expiryDate);
             }
 
-            const postData: ScheduledPostData = {
+            const basePostData = {
                 campaignName: campaignDetails.name,
                 eventName: eventName.trim() || undefined,
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
-                mediaUrl: postType === 'video' ? videoUrl : undefined,
                 instructions,
                 postLink,
                 isActive,
@@ -312,11 +311,28 @@ const CreatePost: React.FC = () => {
                  if (!scheduleDate || !scheduleTime) {
                     throw new Error("Por favor, selecione data e hora para agendar.");
                 }
+
+                let scheduledMediaUrl: string | undefined = undefined;
+                if (postType === 'image' && mediaFile) {
+                    // Upload now, save the storage path
+                    const fileExtension = mediaFile.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = ref(storage, `posts-media/${fileName}`);
+                    await uploadBytes(storageRef, mediaFile);
+                    scheduledMediaUrl = storageRef.fullPath;
+                } else if (postType === 'video') {
+                    scheduledMediaUrl = videoUrl;
+                }
+                
+                const postDataForScheduling: ScheduledPostData = {
+                    ...basePostData,
+                    mediaUrl: scheduledMediaUrl,
+                };
+
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
                 const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
                 
-                // Firestore doesn't like 'undefined' values, so we clean the object.
-                const cleanPostData = JSON.parse(JSON.stringify(postData));
+                const cleanPostData = JSON.parse(JSON.stringify(postDataForScheduling));
 
                 await schedulePost({
                     postData: cleanPostData,
@@ -330,7 +346,14 @@ const CreatePost: React.FC = () => {
                 navigate('/admin/scheduled-posts');
 
             } else {
-                await createPost({ ...postData, organizationId: selectedOrgId, createdByEmail: adminData.email }, postType === 'image' ? mediaFile : null, promotersToAssign);
+                const postDataForImmediate = {
+                    ...basePostData,
+                    mediaUrl: postType === 'video' ? videoUrl : undefined, // createPost handles image upload itself
+                    organizationId: selectedOrgId,
+                    createdByEmail: adminData.email
+                };
+
+                await createPost(postDataForImmediate, postType === 'image' ? mediaFile : null, promotersToAssign);
                 alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
                 navigate('/admin/posts');
             }

@@ -642,9 +642,22 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                 const batch = db.batch();
                 const assignmentsCollectionRef = db.collection("postAssignments");
 
-                const denormalizedPostData = { ...newPost };
-                // Replace the server timestamp placeholder with a concrete one for assignments if needed, though the trigger handles it
-                denormalizedPostData.createdAt = now;
+                // Explicitly build the denormalized object to ensure data integrity
+                const denormalizedPostData = {
+                    type: postData.type,
+                    mediaUrl: postData.mediaUrl || null,
+                    textContent: postData.textContent || null,
+                    instructions: postData.instructions,
+                    postLink: postData.postLink || null,
+                    campaignName: postData.campaignName,
+                    eventName: postData.eventName || null,
+                    isActive: postData.isActive,
+                    expiresAt: postData.expiresAt || null,
+                    createdAt: now, // Use a concrete timestamp for consistency
+                    allowLateSubmissions: postData.allowLateSubmissions || false,
+                    allowImmediateProof: postData.allowImmediateProof || false,
+                    postFormats: postData.postFormats || [],
+                };
 
                 assignedPromoters.forEach((promoter) => {
                     const assignmentDocRef = assignmentsCollectionRef.doc();
