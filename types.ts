@@ -126,6 +126,7 @@ export interface Post {
   id: string;
   organizationId: string;
   campaignName: string;
+  eventName?: string;
   stateAbbr: string;
   type: 'image' | 'text' | 'video';
   mediaUrl?: string;
@@ -152,6 +153,7 @@ export interface PostAssignment {
     instructions: string;
     postLink?: string;
     campaignName: string;
+    eventName?: string;
     isActive: boolean;
     expiresAt: Timestamp | FieldValue | null;
     createdAt: Timestamp | FieldValue;
@@ -200,6 +202,7 @@ export interface PromoterStats extends Promoter {
 
 export interface ScheduledPostData {
   campaignName: string;
+  eventName?: string;
   stateAbbr: string;
   type: 'image' | 'text' | 'video';
   mediaUrl?: string | null;

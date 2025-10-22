@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg } from '../services/postService';
@@ -110,6 +108,7 @@ const AdminPosts: React.FC = () => {
                             <div>
                                 {isSuperAdmin && <p className="text-xs font-semibold text-gray-400">{orgNameMap[post.organizationId] || 'Organização Desconhecida'}</p>}
                                 <p className="font-bold text-lg text-primary">{post.campaignName}</p>
+                                {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
                                 <div className="flex items-center gap-3 text-sm text-gray-400">
                                     <span>{post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}</span>
                                      <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>

@@ -51,6 +51,7 @@ const CreatePost: React.FC = () => {
     // Form states
     const [selectedState, setSelectedState] = useState('');
     const [selectedCampaign, setSelectedCampaign] = useState('');
+    const [eventName, setEventName] = useState('');
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
@@ -129,6 +130,7 @@ const CreatePost: React.FC = () => {
                     setTextContent(originalPost.textContent || '');
                     setInstructions(originalPost.instructions || '');
                     setPostLink(originalPost.postLink || '');
+                    setEventName(originalPost.eventName || '');
                     setIsActive(originalPost.isActive);
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
@@ -285,6 +287,7 @@ const CreatePost: React.FC = () => {
 
             const postData: ScheduledPostData = {
                 campaignName: campaignDetails.name,
+                eventName: eventName.trim() || undefined,
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
@@ -366,9 +369,18 @@ const CreatePost: React.FC = () => {
                             {assignedStates.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                          <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} disabled={!selectedState} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:opacity-50">
-                            <option value="" disabled>Selecione um Evento</option>
+                            <option value="" disabled>Selecione um Evento/Gênero</option>
                             {filteredCampaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
+                    </div>
+                     <div className="mt-4">
+                        <input
+                            type="text"
+                            value={eventName}
+                            onChange={e => setEventName(e.target.value)}
+                            placeholder="Nome do Evento (Opcional, ex: Festa Neon)"
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                        />
                     </div>
                 </fieldset>
 

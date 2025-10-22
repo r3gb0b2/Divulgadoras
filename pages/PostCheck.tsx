@@ -138,6 +138,7 @@ const PostCard: React.FC<{
                 <div className="flex justify-between items-start mb-3">
                     <div>
                         <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                        {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
                         {assignment.post.postFormats && assignment.post.postFormats.length > 0 && (
                             <div className="flex gap-2 mt-1">
                                 {assignment.post.postFormats.map(format => (
@@ -169,6 +170,7 @@ const PostCard: React.FC<{
         return (
             <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500">
                 <h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>
+                {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
                 <p className="mt-2 text-yellow-300">
                     Você tem uma nova publicação para este evento!
                 </p>
@@ -293,6 +295,7 @@ const PostCard: React.FC<{
             <div className="flex justify-between items-start mb-3">
                 <div>
                     <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
+                    {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
                     {assignment.post.postFormats && assignment.post.postFormats.length > 0 && (
                         <div className="flex gap-2 mt-1">
                             {assignment.post.postFormats.map(format => (

@@ -218,6 +218,10 @@ const calculatePromoterStats = (assignments: PostAssignment[]) => {
       justifications++;
       if (assignment.justificationStatus === 'accepted') {
         acceptedJustifications++;
+      } else if (assignment.justificationStatus === 'rejected') {
+        missed++;
+      } else { // 'pending' justification
+        pending++;
       }
     } else { // No proof, no justification
       let deadlineHasPassed = false;

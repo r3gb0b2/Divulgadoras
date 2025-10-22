@@ -87,6 +87,8 @@ const PostDashboard: React.FC = () => {
                     stat.justifications++;
                     if (a.justificationStatus === 'accepted') {
                         stat.acceptedJustifications++;
+                    } else if (a.justificationStatus === 'rejected') {
+                        stat.missed++;
                     }
                 } else {
                     let isMissed = false;

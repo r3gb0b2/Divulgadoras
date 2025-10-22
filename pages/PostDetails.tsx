@@ -384,6 +384,7 @@ export const PostDetails: React.FC = () => {
                 {/* Left Column: Post Info */}
                 <div className="lg:col-span-1 bg-dark/70 p-4 rounded-lg flex flex-col h-full">
                     <h2 className="font-bold text-lg text-primary">{post.campaignName}</h2>
+                    {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
                     {post.postFormats && post.postFormats.length > 0 && (
                         <div className="flex gap-2 mt-1">
                             {post.postFormats.map(format => (

@@ -167,6 +167,7 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
                 { email: promoterEmail, name: promoterName },
                 {
                     campaignName: post.campaignName,
+                    eventName: post.eventName,
                     orgName: orgName,
                 }
             );
@@ -228,6 +229,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
         instructions: post.instructions,
         postLink: post.postLink || null,
         campaignName: post.campaignName,
+        eventName: post.eventName || null,
         isActive: post.isActive,
         expiresAt: post.expiresAt || null,
         createdAt: post.createdAt,
@@ -332,7 +334,8 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   }
 
   const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
-  const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
+  const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
+  const subject = `Nova Publicação Disponível - ${eventDisplayName}`;
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -351,7 +354,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
         <div class="container">
             <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
             <div class="content">
-                <p>Uma nova publicação para o evento <strong>${postDetails.campaignName}</strong> está disponível para você.</p>
+                <p>Uma nova publicação para o evento <strong>${eventDisplayName}</strong> está disponível para você.</p>
                 <p>Acesse o portal para ver as instruções e confirmar sua postagem.</p>
                 <p style="text-align: center; margin: 30px 0;">
                     <a href="${portalLink}" class="button">Ver Publicação</a>
@@ -534,6 +537,182 @@ exports.sendSingleProofReminder = functions.region("southamerica-east1").https.o
 
 
 // --- Callable Functions ---
+
+/**
+ * Creates a Post and its assignments in a single transaction.
+ */
+exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem criar publicações.");
+    }
+
+    const { postData, assignedPromoters } = data;
+    if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados da publicação ou divulgadoras designadas estão ausentes.");
+    }
+
+    // 1. Create the Post document
+    const postRef = db.collection("posts").doc();
+    const newPost = {
+        ...postData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await postRef.set(newPost);
+
+    // 2. Create PostAssignment documents in a batch
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    const denormalizedPostData = {
+        type: newPost.type,
+        mediaUrl: newPost.mediaUrl || null,
+        textContent: newPost.textContent || null,
+        instructions: newPost.instructions,
+        postLink: newPost.postLink || null,
+        campaignName: newPost.campaignName,
+        eventName: newPost.eventName || null,
+        isActive: newPost.isActive,
+        expiresAt: newPost.expiresAt || null,
+        createdAt: newPost.createdAt, // This will be the server timestamp object
+        allowLateSubmissions: newPost.allowLateSubmissions || false,
+        allowImmediateProof: newPost.allowImmediateProof || false,
+        postFormats: newPost.postFormats || [],
+    };
+
+    assignedPromoters.forEach(promoter => {
+        const assignmentDocRef = assignmentsCollectionRef.doc();
+        const newAssignment = {
+            postId: postRef.id,
+            post: denormalizedPostData,
+            organizationId: newPost.organizationId,
+            promoterId: promoter.id,
+            promoterEmail: promoter.email.toLowerCase(),
+            promoterName: promoter.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    });
+
+    await batch.commit();
+    // The onPostAssignmentCreated trigger will handle sending emails.
+    
+    return { success: true, postId: postRef.id };
+});
+
+/**
+ * Updates a Post and propagates changes to its assignments.
+ */
+exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const { postId, updateData } = data;
+    if (!postId || !updateData) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados inválidos.");
+    }
+
+    const postRef = db.collection('posts').doc(postId);
+    
+    // Update the main post document
+    await postRef.update(updateData);
+    
+    // Now, update all related assignments
+    const assignmentsQuery = db.collection('postAssignments').where('postId', '==', postId);
+    const snapshot = await assignmentsQuery.get();
+    
+    if (snapshot.empty) {
+        return { success: true, message: 'Post updated, no assignments to sync.' };
+    }
+    
+    // Denormalize the fields that are allowed to change
+    const denormalizedUpdate = {};
+    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'eventName'];
+    for (const key of updatableFields) {
+        if (updateData[key] !== undefined) {
+            denormalizedUpdate[`post.${key}`] = updateData[key];
+        }
+    }
+    
+    if (Object.keys(denormalizedUpdate).length === 0) {
+        return { success: true, message: 'Post updated, no relevant fields to sync to assignments.' };
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, denormalizedUpdate);
+    });
+    
+    await batch.commit();
+
+    return { success: true, message: `Post and ${snapshot.size} assignments updated.` };
+});
+
+/**
+ * Adds new assignments to an existing post.
+ */
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const { postId, promoterIds } = data;
+    if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados inválidos.");
+    }
+
+    const postRef = db.collection('posts').doc(postId);
+    const postSnap = await postRef.get();
+    if (!postSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const postData = postSnap.data();
+
+    // Get promoter details
+    const promotersRef = db.collection('promoters');
+    const promotersSnap = await promotersRef.where(admin.firestore.FieldPath.documentId(), 'in', promoterIds).get();
+    const promoters = promotersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    const denormalizedPostData = {
+        type: postData.type,
+        mediaUrl: postData.mediaUrl || null,
+        textContent: postData.textContent || null,
+        instructions: postData.instructions,
+        postLink: postData.postLink || null,
+        campaignName: postData.campaignName,
+        eventName: postData.eventName || null,
+        isActive: postData.isActive,
+        expiresAt: postData.expiresAt || null,
+        createdAt: postData.createdAt,
+        allowLateSubmissions: postData.allowLateSubmissions || false,
+        allowImmediateProof: postData.allowImmediateProof || false,
+        postFormats: postData.postFormats || [],
+    };
+
+    promoters.forEach(promoter => {
+        const assignmentDocRef = assignmentsCollectionRef.doc();
+        const newAssignment = {
+            postId: postId,
+            post: denormalizedPostData,
+            organizationId: postData.organizationId,
+            promoterId: promoter.id,
+            promoterEmail: promoter.email.toLowerCase(),
+            promoterName: promoter.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    });
+
+    await batch.commit();
+    return { success: true };
+});
 
 /**
  * Manually resends a status email to a promoter.
@@ -1060,335 +1239,10 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
     if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
-    // Return the stripe config object so the frontend can display it for debugging.
-    return functions.config().stripe || {};
-});
-
-
-// --- Post Management ---
-
-// Private helper for creating posts and assignments. No auth checks.
-async function _internalCreatePostAndAssignments(postData, assignedPromoters) {
-  const postDocRef = db.collection("posts").doc();
-  const batch = db.batch();
-  const creationTimestamp = admin.firestore.Timestamp.now();
-
-  let finalExpiresAt = null;
-  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
-    finalExpiresAt = new admin.firestore.Timestamp(
-        postData.expiresAt.seconds,
-        postData.expiresAt.nanoseconds,
-    );
-  }
-
-  const newPost = {
-    ...postData,
-    expiresAt: finalExpiresAt,
-    createdAt: creationTimestamp,
-  };
-
-  batch.set(postDocRef, newPost);
-
-  const denormalizedPostData = {
-    type: newPost.type,
-    instructions: newPost.instructions,
-    postLink: newPost.postLink,
-    campaignName: newPost.campaignName,
-    isActive: newPost.isActive,
-    expiresAt: newPost.expiresAt,
-    allowLateSubmissions: newPost.allowLateSubmissions,
-    autoAssignToNewPromoters: newPost.autoAssignToNewPromoters,
-    allowImmediateProof: newPost.allowImmediateProof,
-    mediaUrl: newPost.mediaUrl,
-    textContent: newPost.textContent,
-    createdAt: creationTimestamp,
-    postFormats: newPost.postFormats,
-  };
-
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  for (const promoter of assignedPromoters) {
-    if (!promoter.id || !promoter.email || !promoter.name) {
-      functions.logger.warn("Skipping promoter with missing data in _internalCreatePostAndAssignments:", promoter);
-      continue;
-    }
-    const assignmentDocRef = assignmentsCollectionRef.doc();
-    const newAssignment = {
-      postId: postDocRef.id,
-      post: denormalizedPostData,
-      organizationId: postData.organizationId,
-      promoterId: promoter.id,
-      promoterEmail: promoter.email.toLowerCase(),
-      promoterName: promoter.name,
-      status: "pending",
-      confirmedAt: null,
-      proofImageUrls: [],
-      proofSubmittedAt: null,
+    // WARNING: Be careful what you expose here.
+    return {
+        brevo: functions.config().brevo,
+        stripe: functions.config().stripe,
+        gemini_key_exists: !!functions.config().gemini?.key,
     };
-    batch.set(assignmentDocRef, newAssignment);
-  }
-
-  await batch.commit();
-
-  return { success: true, postId: postDocRef.id };
-}
-
-exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-  if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
-    throw new functions.https.HttpsError("permission-denied", "Apenas usuários autorizados podem criar posts.");
-  }
-
-  const { postData, assignedPromoters } = data;
-  if (!postData || !assignedPromoters || !Array.isArray(assignedPromoters) || assignedPromoters.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e uma lista válida de divulgadoras são obrigatórios.");
-  }
-
-  try {
-    const finalPostData = {
-      ...postData,
-      createdByEmail: context.auth.token.email,
-    };
-    return await _internalCreatePostAndAssignments(finalPostData, assignedPromoters);
-  } catch (error) {
-    functions.logger.error("Error in createPostAndAssignments wrapper:", error);
-    throw new functions.https.HttpsError("internal", `Failed to save data. Error: ${error.message}`);
-  }
-});
-
-// New scheduled function to process posts from the `scheduledPosts` collection
-exports.processScheduledPosts = functions.region("southamerica-east1").pubsub.schedule('every 5 minutes').onRun(async (context) => {
-    const now = admin.firestore.Timestamp.now();
-    const query = db.collection('scheduledPosts').where('status', '==', 'pending').where('scheduledAt', '<=', now);
-    const snapshot = await query.get();
-
-    if (snapshot.empty) {
-        functions.logger.info("No scheduled posts to process.");
-        return null;
-    }
-
-    const promises = snapshot.docs.map(async (doc) => {
-        const scheduledPost = doc.data();
-        try {
-            const postDataWithCreator = {
-                ...scheduledPost.postData,
-                organizationId: scheduledPost.organizationId,
-                createdByEmail: scheduledPost.createdByEmail,
-            };
-            
-            await _internalCreatePostAndAssignments(
-                postDataWithCreator,
-                scheduledPost.assignedPromoters
-            );
-            return doc.ref.update({ status: 'sent' });
-        } catch (error) {
-            functions.logger.error(`Failed to process scheduled post ${doc.id}:`, error);
-            return doc.ref.update({ status: 'error', error: error.message });
-        }
-    });
-
-    await Promise.all(promises);
-    functions.logger.info(`Processed ${snapshot.size} scheduled posts.`);
-    return null;
-});
-
-
-exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-  }
-
-  const { postId, promoterIds } = data;
-  if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
-  }
-
-  // 1. Fetch post
-  const postDocRef = db.collection("posts").doc(postId);
-  const postSnap = await postDocRef.get();
-  if (!postSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
-  }
-  const post = postSnap.data();
-
-  // 2. Prepare batch write for new assignments
-  const batch = db.batch();
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  const promotersToCreate = [];
-
-  const denormalizedPostData = {
-    type: post.type,
-    mediaUrl: post.mediaUrl || null,
-    textContent: post.textContent || null,
-    instructions: post.instructions,
-    postLink: post.postLink || null,
-    campaignName: post.campaignName,
-    isActive: post.isActive,
-    expiresAt: post.expiresAt || null,
-    createdAt: post.createdAt,
-    allowLateSubmissions: post.allowLateSubmissions || false,
-    allowImmediateProof: post.allowImmediateProof || false,
-    postFormats: post.postFormats || [],
-  };
-
-  // 3. Fetch promoters and create assignment docs
-  for (const promoterId of promoterIds) {
-    const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-    if (promoterDoc.exists) {
-      const promoterData = promoterDoc.data();
-      const assignmentDocRef = assignmentsCollectionRef.doc();
-      const newAssignment = {
-        postId: postId,
-        post: denormalizedPostData,
-        organizationId: promoterData.organizationId,
-        promoterId: promoterId,
-        promoterEmail: promoterData.email.toLowerCase(),
-        promoterName: promoterData.name,
-        status: "pending",
-        confirmedAt: null,
-      };
-      batch.set(assignmentDocRef, newAssignment);
-      promotersToCreate.push(promoterData);
-    }
-  }
-
-  if (promotersToCreate.length === 0) {
-    console.log("Nenhuma divulgadora válida encontrada para atribuir.");
-    return { success: true, message: "Nenhuma divulgadora válida foi encontrada." };
-  }
-
-  // 4. Commit batch
-  await batch.commit();
-  console.log(`[Manual Assign] Created ${promotersToCreate.length} new assignments for post ${postId}.`);
-
-  // 5. Return. Notifications will be sent by the trigger.
-  return { success: true, message: `${promotersToCreate.length} atribuições criadas. As notificações estão sendo enviadas em segundo plano.` };
-});
-
-exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-    }
-    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-    }
-
-    const { postId, updateData } = data;
-    if (!postId || !updateData) {
-        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
-    }
-
-    // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
-    if (updateData.expiresAt && typeof updateData.expiresAt === "object" && updateData.expiresAt.seconds !== undefined) {
-        updateData.expiresAt = new admin.firestore.Timestamp(
-            updateData.expiresAt.seconds,
-            updateData.expiresAt.nanoseconds,
-        );
-    } else if (updateData.expiresAt === null) {
-        updateData.expiresAt = null;
-    }
-
-
-    const batch = db.batch();
-
-    // 1. Update main post document
-    const postDocRef = db.collection("posts").doc(postId);
-    batch.update(postDocRef, updateData);
-
-    // 2. Find and update all assignments
-    const assignmentsQuery = db.collection("postAssignments").where("postId", "==", postId);
-    const assignmentsSnapshot = await assignmentsQuery.get();
-
-    // Build the denormalized update object dynamically
-    const denormalizedUpdateData = {};
-    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink", "autoAssignToNewPromoters", "allowLateSubmissions", "allowImmediateProof", "postFormats"];
-
-    for (const field of fieldsToSync) {
-      // Check if the property exists in updateData, even if its value is null or undefined
-      if (Object.prototype.hasOwnProperty.call(updateData, field)) {
-        // Firestore needs dot notation for nested objects
-        denormalizedUpdateData[`post.${field}`] = updateData[field];
-      }
-    }
-
-    if (Object.keys(denormalizedUpdateData).length > 0) {
-        assignmentsSnapshot.forEach((doc) => {
-            batch.update(doc.ref, denormalizedUpdateData);
-        });
-    }
-
-    await batch.commit();
-
-    return { success: true };
-});
-
-exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-  }
-
-  const { postId } = data;
-  if (!postId) {
-    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
-  }
-
-  const postSnap = await db.collection("posts").doc(postId).get();
-  if (!postSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
-  }
-  const post = postSnap.data();
-
-  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  // Query for promoters who have CONFIRMED their post.
-  const assignmentsQuery = db.collection("postAssignments")
-      .where("postId", "==", postId)
-      .where("status", "==", "confirmed");
-
-  const snapshot = await assignmentsQuery.get();
-  if (snapshot.empty) {
-    return { success: true, count: 0, message: "Nenhuma divulgação confirmada foi encontrada para este post." };
-  }
-
-  const now = new Date();
-  const promotersToRemind = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((assignment) => {
-        // Filter out those who already submitted proof or don't have a confirmation time
-        if (assignment.proofSubmittedAt || !assignment.confirmedAt) {
-          return false;
-        }
-        // Check if the submission window is active (after 6h, before 24h)
-        const confirmationTime = assignment.confirmedAt.toDate();
-        const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
-        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-        return now >= enableTime && now < expireTime;
-      });
-
-  if (promotersToRemind.length === 0) {
-    return { success: true, count: 0, message: "Nenhuma divulgadora com janela de envio de comprovação ativa no momento." };
-  }
-
-  const emailPromises = promotersToRemind.map((promoter) =>
-    sendProofReminderEmail(promoter, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-
-  await Promise.allSettled(emailPromises);
-
-  return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });
