@@ -7,6 +7,7 @@ import { Timestamp } from 'firebase/firestore';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import AssignPostModal from '../components/AssignPostModal';
 import EditPostModal from '../components/EditPostModal'; // Import new modal
+import PhotoViewerModal from '../components/PhotoViewerModal';
 import { storage } from '../firebase/config';
 // FIX: Import 'uploadBytes' to handle file uploads.
 import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
@@ -137,6 +138,10 @@ export const PostDetails: React.FC = () => {
     const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState<string | null>(null); // For single-actions like reminders
     
+    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+    const [photoViewerUrls, setPhotoViewerUrls] = useState<string[]>([]);
+    const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
+
     const isAssignmentMissed = (assignment: PostAssignment): boolean => {
         if (assignment.proofSubmittedAt || assignment.justification) {
             return false;
@@ -205,6 +210,12 @@ export const PostDetails: React.FC = () => {
             default: return assignments;
         }
     }, [filter, assignments]);
+
+    const openPhotoViewer = (urls: string[], startIndex: number) => {
+        setPhotoViewerUrls(urls);
+        setPhotoViewerStartIndex(startIndex);
+        setIsPhotoViewerOpen(true);
+    };
 
     const handleOpenStatsModal = (assignment: PostAssignment) => {
         setSelectedPromoterForStats(assignment);
@@ -457,9 +468,9 @@ export const PostDetails: React.FC = () => {
                                                 <p className="text-xs font-semibold text-gray-300">Anexos:</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     {a.justificationImageUrls.map((url, i) => (
-                                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                                                            <img src={url} alt={`Anexo ${i+1}`} className="w-10 h-10 object-cover rounded"/>
-                                                        </a>
+                                                        <button key={i} type="button" onClick={() => openPhotoViewer(a.justificationImageUrls!, i)}>
+                                                            <img src={url} alt={`Anexo ${i + 1}`} className="w-10 h-10 object-cover rounded cursor-pointer"/>
+                                                        </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -481,9 +492,9 @@ export const PostDetails: React.FC = () => {
                                     <div className="flex items-center gap-2">
                                         {a.proofImageUrls && a.proofImageUrls.length > 0 ? (
                                             a.proofImageUrls.map((url, i) => (
-                                                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                                                    <img src={url} alt={`Prova ${i+1}`} className="w-10 h-10 object-cover rounded"/>
-                                                </a>
+                                                <button key={i} type="button" onClick={() => openPhotoViewer(a.proofImageUrls!, i)}>
+                                                    <img src={url} alt={`Prova ${i + 1}`} className="w-10 h-10 object-cover rounded cursor-pointer"/>
+                                                </button>
                                             ))
                                         ) : !a.justification && (
                                             <p className="text-xs text-gray-500">Aguardando comprovação...</p>
@@ -524,6 +535,7 @@ export const PostDetails: React.FC = () => {
              <PromoterPostStatsModal isOpen={isStatsModalOpen} onClose={() => setStatsModalOpen(false)} promoter={selectedPromoterForStats} />
              <AssignPostModal isOpen={isAssignModalOpen} onClose={() => setAssignModalOpen(false)} post={post} existingAssignments={assignments} onSuccess={fetchData} />
              <EditPostModal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} post={post} onSave={handleSavePost} />
+             <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
         </div>
     );
 }
