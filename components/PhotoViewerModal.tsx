@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DownloadIcon } from './Icons';
 
 interface PhotoViewerModalProps {
   imageUrls: string[];
@@ -9,6 +10,8 @@ interface PhotoViewerModalProps {
 
 const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startIndex, isOpen, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(startIndex);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     setCurrentIndex(startIndex);
@@ -26,6 +29,44 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     const isLastSlide = currentIndex === imageUrls.length - 1;
     const newIndex = isLastSlide ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
+  };
+  
+  const handleDownload = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    setDownloadError(null);
+    try {
+        const url = imageUrls[currentIndex];
+        // Fetch the image data
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Não foi possível buscar a imagem. Status: ${response.status}`);
+        }
+        const blob = await response.blob();
+        
+        // Create a temporary link to trigger the download
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        
+        // Suggest a filename
+        const filename = url.split('/').pop()?.split('?')[0] || 'divulgadora.jpg';
+        link.download = filename;
+
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(objectUrl);
+
+    } catch (error) {
+        console.error("Download failed:", error);
+        setDownloadError("Falha no download. Tente novamente.");
+        setTimeout(() => setDownloadError(null), 3000);
+    } finally {
+        setIsDownloading(false);
+    }
   };
 
   useEffect(() => {
@@ -77,35 +118,48 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
         
         {/* Controls container */}
         <div className="flex-shrink-0 flex flex-col items-center w-full mt-4">
-            <div className="flex items-center justify-center gap-8">
+            <div className="flex items-center justify-center gap-4 sm:gap-8">
                 <button
                     onClick={goToPrevious}
                     className={`bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all ${imageUrls.length <= 1 ? 'invisible' : ''}`}
                     aria-label="Foto anterior"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
                 
-                <button
-                    onClick={onClose}
-                    className="bg-black bg-opacity-50 text-white px-6 py-3 rounded-full hover:bg-opacity-75 transition-all text-lg"
-                    aria-label="Fechar"
-                >
-                    Fechar
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleDownload}
+                        disabled={isDownloading}
+                        className="bg-black bg-opacity-50 text-white px-4 py-2 rounded-full hover:bg-opacity-75 transition-all text-base flex items-center gap-2 disabled:opacity-50"
+                        aria-label="Baixar Imagem"
+                    >
+                        <DownloadIcon className="w-5 h-5" />
+                        <span>{isDownloading ? 'Baixando...' : 'Baixar Imagem'}</span>
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="bg-black bg-opacity-50 text-white px-5 py-2 rounded-full hover:bg-opacity-75 transition-all text-base"
+                        aria-label="Fechar"
+                    >
+                        Fechar
+                    </button>
+                </div>
 
                 <button
                     onClick={goToNext}
                     className={`bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all ${imageUrls.length <= 1 ? 'invisible' : ''}`}
                     aria-label="Próxima foto"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                 </button>
             </div>
+
+            {downloadError && <p className="text-xs text-red-400 mt-2">{downloadError}</p>}
 
             {imageUrls.length > 1 && (
                 <div className="text-center text-white text-sm font-mono mt-2">
