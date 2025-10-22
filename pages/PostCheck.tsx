@@ -10,6 +10,27 @@ import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import { ref, getDownloadURL } from 'firebase/storage';
 
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) {
+        return null;
+    }
+    // Firestore Timestamp
+    if (typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    }
+    // Serialized Timestamp object
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
+    }
+    // ISO string or number (milliseconds)
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+};
+
 // Helper to extract Google Drive file ID from various URL formats
 const extractGoogleDriveId = (url: string): string | null => {
     let id = null;
@@ -36,7 +57,9 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
     useEffect(() => {
         if (!assignment.confirmedAt) return;
 
-        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const confirmationTime = toDateSafe(assignment.confirmedAt);
+        if (!confirmationTime) return;
+        
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
         const timer = setInterval(() => {
@@ -129,9 +152,9 @@ const PostCard: React.FC<{
     const isExpiredAndMissed = useMemo(() => {
         if (!assignment.post.expiresAt) return false;
         const now = new Date();
-        const expiryDate = (assignment.post.expiresAt as Timestamp).toDate();
+        const expiryDate = toDateSafe(assignment.post.expiresAt);
         // It's missed if: it's expired AND it's still pending AND it hasn't been justified yet.
-        return expiryDate < now && assignment.status === 'pending' && !assignment.justification;
+        return expiryDate && expiryDate < now && assignment.status === 'pending' && !assignment.justification;
     }, [assignment]);
     
     if (isExpiredAndMissed) {

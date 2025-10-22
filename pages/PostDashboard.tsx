@@ -19,6 +19,27 @@ const getPerformanceColor = (rate: number): string => {
     return 'text-red-400';
 };
 
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) {
+        return null;
+    }
+    // Firestore Timestamp
+    if (typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    }
+    // Serialized Timestamp object
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
+    }
+    // ISO string or number (milliseconds)
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+};
+
 const PostDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -92,8 +113,8 @@ const PostDashboard: React.FC = () => {
                     }
                 } else {
                     let isMissed = false;
-                    const postExpiresAt = a.post.expiresAt ? (a.post.expiresAt as Timestamp).toDate() : null;
-                    const confirmedAt = a.confirmedAt ? (a.confirmedAt as Timestamp).toDate() : null;
+                    const postExpiresAt = toDateSafe(a.post.expiresAt);
+                    const confirmedAt = toDateSafe(a.confirmedAt);
 
                     if (!a.post.allowLateSubmissions) {
                          if (confirmedAt) {

@@ -16,6 +16,27 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { auth } from '../firebase/config';
 import StorageMedia from '../components/StorageMedia';
 
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) {
+        return null;
+    }
+    // Firestore Timestamp
+    if (typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    }
+    // Serialized Timestamp object
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
+    }
+    // ISO string or number (milliseconds)
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+};
+
 // Helper to extract Google Drive file ID from various URL formats
 const extractGoogleDriveId = (url: string): string | null => {
     let id = null;
@@ -65,7 +86,12 @@ const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) =>
             return;
         }
 
-        const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+        const confirmationTime = toDateSafe(assignment.confirmedAt);
+        if (!confirmationTime) {
+            setTimeLeft('Data inválida');
+            return;
+        }
+
         const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
@@ -151,12 +177,12 @@ export const PostDetails: React.FC = () => {
             return false;
         }
         const now = new Date();
-        const confirmedAt = assignment.confirmedAt ? (assignment.confirmedAt as Timestamp).toDate() : null;
+        const confirmedAt = toDateSafe(assignment.confirmedAt);
         if (confirmedAt) {
             const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
             return now > proofDeadline;
         }
-        const postExpiresAt = assignment.post.expiresAt ? (assignment.post.expiresAt as Timestamp).toDate() : null;
+        const postExpiresAt = toDateSafe(assignment.post.expiresAt);
         if (postExpiresAt) {
             return now > postExpiresAt;
         }
