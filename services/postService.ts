@@ -123,7 +123,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
         // Filter out inactive posts, but keep expired ones to allow justification.
         const visibleAssignments = assignments.filter(assignment => {
             const post = assignment.post;
-            if (!post.isActive) {
+            if (!post || !post.isActive) {
                 return false;
             }
             // Keep expired posts to allow for justification. The client will handle UI.
@@ -212,6 +212,11 @@ const calculatePromoterStats = (assignments: PostAssignment[]) => {
   const now = new Date();
 
   assignments.forEach(assignment => {
+    if (!assignment.post) {
+      console.warn(`Skipping stats calculation for assignment ${assignment.id} due to missing post data.`);
+      return;
+    }
+    
     if (assignment.proofSubmittedAt) {
       completed++;
     } else if (assignment.justification) {

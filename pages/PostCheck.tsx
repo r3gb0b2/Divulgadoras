@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
-import { ArrowLeftIcon, EyeIcon, DownloadIcon, CameraIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, CameraIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -124,7 +124,6 @@ const PostCard: React.FC<{
 }> = ({ assignment, onConfirm, onJustify }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
     const [isViewing, setIsViewing] = useState(false);
 
     const isExpiredAndMissed = useMemo(() => {
@@ -236,53 +235,6 @@ const PostCard: React.FC<{
             setIsViewing(false);
         }
     };
-
-    const handleDownload = async (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
-        if(isDownloading) return;
-        setIsDownloading(true);
-        try {
-            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
-                const fileId = extractGoogleDriveId(mediaUrl);
-                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
-                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                window.open(downloadUrl, '_blank');
-                return;
-            }
-            
-            let finalUrl = mediaUrl;
-            if (!mediaUrl.startsWith('http')) {
-                const storageRef = ref(storage, mediaUrl);
-                finalUrl = await getDownloadURL(storageRef);
-            }
-            
-            const response = await fetch(finalUrl);
-            if (!response.ok) {
-                throw new Error(`Erro ao buscar mídia: ${response.statusText}`);
-            }
-            const blob = await response.blob();
-            
-            const objectUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            
-            const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const extension = type === 'video' ? 'mp4' : 'jpg';
-            const filename = `${type}_${safeCampaignName}.${extension}`;
-            link.setAttribute('download', filename);
-            
-            document.body.appendChild(link);
-            link.click();
-            
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
-
-        } catch (error: any) {
-            console.error('Download failed:', error);
-            alert(`Não foi possível iniciar o download: ${error.message}`);
-        } finally {
-            setIsDownloading(false);
-        }
-    };
     
     const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
         const styles = {
@@ -366,19 +318,11 @@ const PostCard: React.FC<{
                         <div className="flex justify-center items-center gap-4 mt-2">
                             <button
                                 onClick={() => handleView(assignment.post.mediaUrl!, assignment.post.type)}
-                                disabled={isViewing || isDownloading}
+                                disabled={isViewing}
                                 className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                             >
                                 <EyeIcon className="w-4 h-4" /> 
                                 {isViewing ? 'Abrindo...' : 'Visualizar'}
-                            </button>
-                            <button
-                                onClick={() => handleDownload(assignment.post.mediaUrl!, assignment.post.campaignName, assignment.post.type)}
-                                disabled={isDownloading || isViewing}
-                                className="text-sm text-green-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                            >
-                                <DownloadIcon className="w-4 h-4" /> 
-                                {isDownloading ? 'Baixando...' : `Baixar ${assignment.post.type === 'video' ? 'Vídeo' : 'Imagem'}`}
                             </button>
                         </div>
                     </div>
