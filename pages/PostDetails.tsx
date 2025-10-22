@@ -126,8 +126,8 @@ export const PostDetails: React.FC = () => {
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed'>('all');
-    const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, completed: 0 });
+    const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'missed' | 'justifications'>('all');
+    const [stats, setStats] = useState({ total: 0, pending: 0, confirmed: 0, completed: 0, missed: 0, justifications: 0 });
     const [isDownloading, setIsDownloading] = useState(false);
 
     // Modal states
@@ -136,6 +136,27 @@ export const PostDetails: React.FC = () => {
     const [isAssignModalOpen, setAssignModalOpen] = useState(false);
     const [isEditModalOpen, setEditModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState<string | null>(null); // For single-actions like reminders
+    
+    const isAssignmentMissed = (assignment: PostAssignment): boolean => {
+        if (assignment.proofSubmittedAt || assignment.justification) {
+            return false;
+        }
+        if (assignment.post.allowLateSubmissions) {
+            return false;
+        }
+        const now = new Date();
+        const confirmedAt = assignment.confirmedAt ? (assignment.confirmedAt as Timestamp).toDate() : null;
+        if (confirmedAt) {
+            const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+            return now > proofDeadline;
+        }
+        const postExpiresAt = assignment.post.expiresAt ? (assignment.post.expiresAt as Timestamp).toDate() : null;
+        if (postExpiresAt) {
+            return now > postExpiresAt;
+        }
+        return false;
+    };
+
 
     const fetchData = async () => {
         if (!postId) return;
@@ -160,7 +181,9 @@ export const PostDetails: React.FC = () => {
         const pending = assignments.filter(a => a.status === 'pending').length;
         const confirmed = assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt).length;
         const completed = assignments.filter(a => !!a.proofSubmittedAt).length;
-        setStats({ total, pending, confirmed, completed });
+        const justifications = assignments.filter(a => !!a.justification).length;
+        const missed = assignments.filter(isAssignmentMissed).length;
+        setStats({ total, pending, confirmed, completed, missed, justifications });
     }, [assignments]);
     
     const handleLogout = async () => {
@@ -177,6 +200,8 @@ export const PostDetails: React.FC = () => {
             case 'pending': return assignments.filter(a => a.status === 'pending');
             case 'confirmed': return assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt);
             case 'completed': return assignments.filter(a => !!a.proofSubmittedAt);
+            case 'missed': return assignments.filter(isAssignmentMissed);
+            case 'justifications': return assignments.filter(a => !!a.justification);
             default: return assignments;
         }
     }, [filter, assignments]);
@@ -407,10 +432,17 @@ export const PostDetails: React.FC = () => {
                 {/* Right Column: Assignments */}
                 <div className="lg:col-span-2 bg-dark/70 p-4 rounded-lg">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-                         <div className="flex space-x-1 p-1 bg-gray-800/50 rounded-lg">
-                            {(['all', 'pending', 'confirmed', 'completed'] as const).map(f => (
+                         <div className="flex flex-wrap space-x-1 p-1 bg-gray-800/50 rounded-lg">
+                            {(['all', 'pending', 'confirmed', 'completed', 'missed', 'justifications'] as const).map(f => (
                                 <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    {{'all': `Todas (${stats.total})`, 'pending': `Pendentes (${stats.pending})`, 'confirmed': `Confirmadas (${stats.confirmed})`, 'completed': `Concluídas (${stats.completed})`}[f]}
+                                    {{
+                                        'all': `Todas (${stats.total})`, 
+                                        'pending': `Pendentes (${stats.pending})`, 
+                                        'confirmed': `Confirmadas (${stats.confirmed})`, 
+                                        'completed': `Concluídas (${stats.completed})`,
+                                        'missed': `Prazo Perdido (${stats.missed})`,
+                                        'justifications': `Justificativas (${stats.justifications})`
+                                    }[f]}
                                 </button>
                             ))}
                         </div>
