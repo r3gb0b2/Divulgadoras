@@ -28,6 +28,7 @@ import GuestListAccessPage from './GuestListAccessPage';
 import ChangePasswordPage from './ChangePasswordPage'; // Import new page
 import PostDashboard from './PostDashboard';
 import AdminSchedulePage from './AdminSchedulePage';
+import PromoterDiagnosticsPage from './PromoterDiagnosticsPage'; // Import new page
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -237,6 +238,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
+                    <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
                 </>
             )}
 

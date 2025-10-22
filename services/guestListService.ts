@@ -90,6 +90,39 @@ export const getGuestListForCampaign = async (
 };
 
 /**
+ * Fetches all guest list confirmations for a specific promoter by email.
+ * @param email - The email of the promoter.
+ * @returns A promise that resolves to an array of GuestListConfirmation objects.
+ */
+export const getGuestListConfirmationsByEmail = async (
+  email: string
+): Promise<GuestListConfirmation[]> => {
+  try {
+    const q = query(
+      collection(firestore, 'guestListConfirmations'),
+      where('promoterEmail', '==', email.toLowerCase().trim())
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const confirmations: GuestListConfirmation[] = [];
+    querySnapshot.forEach((doc) => {
+      confirmations.push({ id: doc.id, ...doc.data() } as GuestListConfirmation);
+    });
+    
+    // Sort by most recent first
+    return confirmations.sort((a, b) => {
+        const timeA = (a.confirmedAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.confirmedAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
+  } catch (error) {
+    console.error('Error fetching guest list confirmations by email: ', error);
+    throw new Error('Não foi possível buscar as confirmações de lista de convidados.');
+  }
+};
+
+
+/**
  * Checks in a person (promoter or guest) for a specific event confirmation.
  * Uses a transaction to ensure data integrity.
  * @param confirmationId The ID of the GuestListConfirmation document.
