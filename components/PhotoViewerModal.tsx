@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DownloadIcon } from './Icons';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase/config';
 
 interface PhotoViewerModalProps {
   imageUrls: string[];
@@ -36,33 +38,54 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     setIsDownloading(true);
     setDownloadError(null);
     try {
-        const url = imageUrls[currentIndex];
-        // Fetch the image data
-        const response = await fetch(url);
+        const originalUrl = imageUrls[currentIndex];
+        let freshUrl = originalUrl;
+
+        // If it's a Firebase Storage URL, it might be expired. Let's get a fresh one.
+        if (originalUrl.includes('firebasestorage.googleapis.com')) {
+            try {
+                // Extract the storage path from the full URL
+                const urlObject = new URL(originalUrl);
+                const pathName = urlObject.pathname;
+                
+                const pathStartIndex = pathName.indexOf('/o/');
+                if (pathStartIndex !== -1) {
+                    const encodedPath = pathName.substring(pathStartIndex + 3);
+                    const decodedPath = decodeURIComponent(encodedPath);
+
+                    // Get a fresh, valid download URL for this path
+                    const storageRef = ref(storage, decodedPath);
+                    freshUrl = await getDownloadURL(storageRef);
+                }
+            } catch (e) {
+                console.warn("Could not generate a fresh download URL, falling back to the original URL.", e);
+            }
+        }
+        
+        // Fetch the image data using the (potentially fresh) URL
+        const response = await fetch(freshUrl);
         if (!response.ok) {
             throw new Error(`Não foi possível buscar a imagem. Status: ${response.status}`);
         }
         const blob = await response.blob();
         
-        // Create a temporary link to trigger the download
         const objectUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = objectUrl;
         
-        // Suggest a filename
-        const filename = url.split('/').pop()?.split('?')[0] || 'divulgadora.jpg';
-        link.download = filename;
+        // Suggest a filename from the original URL (without token)
+        const filename = originalUrl.split('/').pop()?.split('?')[0] || 'divulgadora.jpg';
+        link.download = decodeURIComponent(filename);
 
         document.body.appendChild(link);
         link.click();
         
-        // Clean up
         document.body.removeChild(link);
         window.URL.revokeObjectURL(objectUrl);
 
     } catch (error) {
         console.error("Download failed:", error);
-        setDownloadError("Falha no download. Tente novamente.");
+        setDownloadError("Falha no download. O link pode ter expirado ou ser inválido.");
         setTimeout(() => setDownloadError(null), 3000);
     } finally {
         setIsDownloading(false);

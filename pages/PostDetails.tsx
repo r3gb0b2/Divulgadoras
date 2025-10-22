@@ -53,6 +53,40 @@ const timestampToInputDate = (ts: Timestamp | undefined | null | any): string =>
     return date.toISOString().split('T')[0];
 };
 
+const triggerDownloadWithBlob = async (url: string, campaignName: string, type: 'image' | 'video') => {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const urlPath = new URL(url).pathname;
+        const extension = urlPath.split('.').pop()?.split('?')[0] || (type === 'video' ? 'mp4' : 'jpg');
+        link.download = `${type}_${safeCampaignName}.${extension}`;
+        link.href = objectUrl;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+        console.error("Direct download failed, falling back:", e);
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert("Não foi possível baixar o arquivo diretamente. Tentando abrir em uma nova aba.");
+    }
+};
+
+
 const ProofTimer: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const [textColor, setTextColor] = useState('text-gray-400');
@@ -328,50 +362,29 @@ export const PostDetails: React.FC = () => {
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
-    const handleDownload = (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
+    const handleDownload = async (mediaUrl: string, campaignName: string, type: 'image' | 'video') => {
+        if (isDownloading) return;
         setIsDownloading(true);
         setError('');
         try {
-            let downloadUrl = mediaUrl;
-
             if (type === 'video' && mediaUrl.includes('drive.google.com')) {
                 const fileId = extractGoogleDriveId(mediaUrl);
                 if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
-                downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                window.open(downloadUrl, '_blank');
             } else if (type === 'image') {
-                // For images from Firebase Storage, we still need to get the download URL
                 const imageRef = ref(storage, mediaUrl);
-                getDownloadURL(imageRef).then(url => {
-                    triggerDownload(url, campaignName, type);
-                }).catch(err => {
-                    throw new Error("Não foi possível obter o link de download da imagem.");
-                });
-                return; // The promise will handle the rest
+                const freshUrl = await getDownloadURL(imageRef);
+                await triggerDownloadWithBlob(freshUrl, campaignName, type);
             } else {
                  throw new Error("Tipo de mídia não suportado para download direto.");
             }
-
-            triggerDownload(downloadUrl, campaignName, type);
-
         } catch (error: any) {
             console.error('Download failed:', error);
-            alert(`Não foi possível iniciar o download: ${error.message}`);
+            setError(`Não foi possível iniciar o download: ${error.message}`);
         } finally {
             setIsDownloading(false);
         }
-    };
-
-    const triggerDownload = (url: string, campaignName: string, type: 'image' | 'video') => {
-        const safeCampaignName = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const fileName = `${type}_${safeCampaignName}.${type === 'video' ? 'mp4' : 'jpg'}`;
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', fileName);
-        link.setAttribute('target', '_blank'); // Good fallback
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
     const renderContent = () => {
