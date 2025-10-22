@@ -43,6 +43,7 @@ interface EditPostModalProps {
 }
 
 const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, onSave }) => {
+    const [eventName, setEventName] = useState('');
     const [instructions, setInstructions] = useState('');
     const [textContent, setTextContent] = useState('');
     const [postLink, setPostLink] = useState('');
@@ -61,6 +62,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
 
     useEffect(() => {
         if (post) {
+            setEventName(post.eventName || '');
             setInstructions(post.instructions || '');
             setTextContent(post.textContent || '');
             setMediaUrl(post.mediaUrl || '');
@@ -113,6 +115,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         }
 
         const updatedData: Partial<Post> = {
+            eventName: eventName.trim() || undefined,
             instructions,
             postLink,
             isActive,
@@ -147,6 +150,16 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 <h2 className="text-2xl font-bold text-white mb-4">Editar Conteúdo da Publicação</h2>
                 
                 <div className="flex-grow overflow-y-auto space-y-4 pr-2">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Nome do Evento (Opcional)</label>
+                        <input 
+                            type="text" 
+                            value={eventName} 
+                            onChange={e => setEventName(e.target.value)} 
+                            placeholder="Ex: Festa Neon"
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                        />
+                    </div>
                     {post.type === 'text' && (
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Conteúdo do Texto</label>
