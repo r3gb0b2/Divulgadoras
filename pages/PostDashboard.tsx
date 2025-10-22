@@ -65,9 +65,11 @@ const PostDashboard: React.FC = () => {
     }, [fetchData]);
     
     const processedStats = useMemo(() => {
-        const statsMap = new Map<string, PromoterStats>();
+        type PromoterStatsWithAccepted = PromoterStats & { acceptedJustifications: number };
+        const statsMap = new Map<string, PromoterStatsWithAccepted>();
+        
         promoters.forEach(p => {
-            statsMap.set(p.id, { ...p, assigned: 0, completed: 0, justifications: 0, missed: 0, completionRate: 0 });
+            statsMap.set(p.id, { ...p, assigned: 0, completed: 0, justifications: 0, missed: 0, completionRate: 0, acceptedJustifications: 0 });
         });
 
         const now = new Date();
@@ -83,6 +85,9 @@ const PostDashboard: React.FC = () => {
                     stat.completed++;
                 } else if (a.justification) {
                     stat.justifications++;
+                    if (a.justificationStatus === 'accepted') {
+                        stat.acceptedJustifications++;
+                    }
                 } else {
                     let isMissed = false;
                     const postExpiresAt = a.post.expiresAt ? (a.post.expiresAt as Timestamp).toDate() : null;
@@ -102,8 +107,13 @@ const PostDashboard: React.FC = () => {
         });
         
         const finalStats = Array.from(statsMap.values()).map(stat => {
-             if (stat.assigned > 0) {
-                stat.completionRate = Math.round((stat.completed / stat.assigned) * 100);
+             const effectiveAssigned = stat.assigned - stat.acceptedJustifications;
+             if (effectiveAssigned > 0) {
+                stat.completionRate = Math.round((stat.completed / effectiveAssigned) * 100);
+            } else if (stat.assigned > 0) { // All assignments were excused
+                stat.completionRate = 100;
+            } else { // No assignments at all
+                stat.completionRate = 0;
             }
             return stat;
         }).filter(stat => stat.assigned > 0); // Only show promoters with at least one assignment

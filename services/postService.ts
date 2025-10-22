@@ -203,10 +203,71 @@ export const submitProof = async (assignmentId: string, imageFiles: File[]): Pro
     }
 };
 
-export const getStatsForPromoter = async (promoterId: string): Promise<{
-  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
+const calculatePromoterStats = (assignments: PostAssignment[]) => {
+  let completed = 0;
+  let missed = 0;
+  let justifications = 0;
+  let acceptedJustifications = 0;
+  let pending = 0;
+  const now = new Date();
+
+  assignments.forEach(assignment => {
+    if (assignment.proofSubmittedAt) {
+      completed++;
+    } else if (assignment.justification) {
+      justifications++;
+      if (assignment.justificationStatus === 'accepted') {
+        acceptedJustifications++;
+      }
+    } else { // No proof, no justification
+      let deadlineHasPassed = false;
+      if (!assignment.post.allowLateSubmissions) {
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+          const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
+          const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+          if (now > proofExpireTime) {
+            deadlineHasPassed = true;
+          }
+        }
+        if (!deadlineHasPassed) {
+          const postExpiresAt = assignment.post.expiresAt;
+          if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+            deadlineHasPassed = true;
+          }
+        }
+      }
+      
+      if (deadlineHasPassed) {
+        missed++;
+      } else {
+        pending++;
+      }
+    }
+  });
+
+  return {
+    assigned: assignments.length,
+    completed,
+    missed,
+    justifications,
+    acceptedJustifications,
+    pending,
+  };
+};
+
+type StatsResult = {
+  stats: {
+    assigned: number;
+    completed: number;
+    missed: number;
+    justifications: number;
+    acceptedJustifications: number;
+    pending: number;
+  };
   assignments: PostAssignment[];
-}> => {
+};
+
+export const getStatsForPromoter = async (promoterId: string): Promise<StatsResult> => {
   try {
     const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
     const snapshot = await getDocs(q);
@@ -218,65 +279,15 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{
         return timeB - timeA;
     });
 
-    let completed = 0;
-    let missed = 0; // Post expired
-    let proofDeadlineMissed = 0; // 24h proof window expired
-    let pending = 0;
-    const now = new Date();
-
-    assignments.forEach(assignment => {
-      if (assignment.proofSubmittedAt) {
-        completed++;
-      } else if (!assignment.post.allowLateSubmissions) {
-        let deadlineHasPassed = false;
-        
-        // Proof deadline is more specific, check it first for confirmed posts
-        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
-            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
-            if (now > proofExpireTime) {
-                proofDeadlineMissed++;
-                deadlineHasPassed = true;
-            }
-        }
-
-        // If not caught by proof deadline, check general post expiration
-        if (!deadlineHasPassed) {
-            const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
-                missed++;
-                deadlineHasPassed = true;
-            }
-        }
-
-        if (!deadlineHasPassed) {
-            pending++;
-        }
-      } else { // Late submissions are allowed, so it's always pending until submitted
-          pending++;
-      }
-    });
-
-    return {
-      stats: {
-        assigned: assignments.length,
-        completed,
-        missed,
-        proofDeadlineMissed,
-        pending,
-      },
-      assignments,
-    };
+    const stats = calculatePromoterStats(assignments);
+    return { stats, assignments };
   } catch (error) {
     console.error("Error getting promoter stats: ", error);
     throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
   }
 };
 
-export const getStatsForPromoterByEmail = async (email: string): Promise<{
-  stats: { assigned: number; completed: number; missed: number; proofDeadlineMissed: number; pending: number };
-  assignments: PostAssignment[];
-}> => {
+export const getStatsForPromoterByEmail = async (email: string): Promise<StatsResult> => {
   try {
     const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
     const snapshot = await getDocs(q);
@@ -288,56 +299,8 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{
         return timeB - timeA;
     });
 
-    let completed = 0;
-    let missed = 0; // Post expired
-    let proofDeadlineMissed = 0; // 24h proof window expired
-    let pending = 0;
-    const now = new Date();
-
-    assignments.forEach(assignment => {
-      if (assignment.proofSubmittedAt) {
-        completed++;
-      } else if (!assignment.post.allowLateSubmissions) {
-        let deadlineHasPassed = false;
-        
-        // Proof deadline is more specific, check it first for confirmed posts
-        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-            const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
-            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
-            if (now > proofExpireTime) {
-                proofDeadlineMissed++;
-                deadlineHasPassed = true;
-            }
-        }
-
-        // If not caught by proof deadline, check general post expiration
-        if (!deadlineHasPassed) {
-            const postExpiresAt = assignment.post.expiresAt;
-            if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
-                missed++;
-                deadlineHasPassed = true;
-            }
-        }
-
-        if (!deadlineHasPassed) {
-            pending++;
-        }
-      } else { // Late submissions are allowed, so it's always pending until submitted
-          pending++;
-      }
-    });
-
-
-    return {
-      stats: {
-        assigned: assignments.length,
-        completed,
-        missed,
-        proofDeadlineMissed,
-        pending,
-      },
-      assignments,
-    };
+    const stats = calculatePromoterStats(assignments);
+    return { stats, assignments };
   } catch (error) {
     console.error("Error getting promoter stats by email: ", error);
     throw new Error("Não foi possível buscar as estatísticas da divulgadora.");

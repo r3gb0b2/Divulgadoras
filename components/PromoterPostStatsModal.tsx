@@ -13,7 +13,8 @@ interface Stats {
     assigned: number;
     completed: number;
     missed: number;
-    proofDeadlineMissed: number;
+    justifications: number;
+    acceptedJustifications: number;
     pending: number;
 }
 
@@ -83,7 +84,7 @@ const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen,
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{stats.assigned}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Concluídas</h3><p className="text-2xl font-bold text-green-400">{stats.completed}</p></div>
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Prazo Perdido</h3><p className="text-2xl font-bold text-orange-400">{stats.proofDeadlineMissed}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Justificativas</h3><p className="text-2xl font-bold text-yellow-400">{stats.justifications}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Perdidas</h3><p className="text-2xl font-bold text-red-400">{stats.missed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
                             </div>

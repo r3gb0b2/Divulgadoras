@@ -13,7 +13,8 @@ interface Stats {
     assigned: number;
     completed: number;
     missed: number;
-    proofDeadlineMissed: number;
+    justifications: number;
+    acceptedJustifications: number;
     pending: number;
 }
 
@@ -62,7 +63,11 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
 
     if (!isOpen || !promoter) return null;
 
-    const completionPercentage = stats && stats.assigned > 0 ? ((stats.completed / stats.assigned) * 100).toFixed(0) : 0;
+    const effectiveAssigned = stats ? stats.assigned - stats.acceptedJustifications : 0;
+    const completionPercentage = stats && effectiveAssigned > 0
+        ? ((stats.completed / effectiveAssigned) * 100).toFixed(0)
+        : (stats && stats.assigned > 0 ? '100' : '0');
+
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
@@ -85,7 +90,7 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{stats.assigned}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Concluídas</h3><p className="text-2xl font-bold text-green-400">{stats.completed}</p></div>
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Prazo Perdido</h3><p className="text-2xl font-bold text-orange-400">{stats.proofDeadlineMissed}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Justificativas</h3><p className="text-2xl font-bold text-yellow-400">{stats.justifications}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Perdidas</h3><p className="text-2xl font-bold text-red-400">{stats.missed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Aproveitamento</h3><p className="text-2xl font-bold text-blue-400">{completionPercentage}%</p></div>
