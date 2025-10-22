@@ -51,8 +51,7 @@ const formatScheduledDate = (ts: any): string => {
 
         return date.toLocaleString('pt-BR', {
             day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-            timeZoneName: 'short',
+            hour: '2-digit', minute: '2-digit'
         });
     } catch (e) {
         console.error("Failed to format date:", ts, e);
@@ -110,7 +109,9 @@ const EditScheduleModal: React.FC<{
                     <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                     <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                 </div>
-                <p className="text-xs text-gray-400 mt-2">O horário selecionado está no seu fuso horário local.</p>
+                <p className="text-xs text-blue-300 mt-2">
+                    O horário selecionado é o do seu fuso horário local.
+                </p>
                 <div className="mt-6 flex justify-end gap-3">
                     <button onClick={onClose} disabled={isSaving} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
                     <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
