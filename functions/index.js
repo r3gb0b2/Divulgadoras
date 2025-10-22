@@ -605,6 +605,81 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
 });
 
 /**
+ * Scheduled function to check for and process due scheduled posts.
+ */
+exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
+    .schedule("every 5 minutes").onRun(async (context) => {
+        console.log("Running scheduled post check...");
+        const now = admin.firestore.Timestamp.now();
+        const scheduledPostsRef = db.collection("scheduledPosts");
+        const query = scheduledPostsRef.where("status", "==", "pending")
+                                       .where("scheduledAt", "<=", now);
+
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+            console.log("No scheduled posts are due.");
+            return null;
+        }
+
+        console.log(`Found ${snapshot.size} scheduled posts to process.`);
+
+        const processingPromises = snapshot.docs.map(async (doc) => {
+            const scheduledPost = doc.data();
+            const { postData, assignedPromoters, createdByEmail, organizationId } = scheduledPost;
+            
+            try {
+                // 1. Create the Post document
+                const postRef = db.collection("posts").doc();
+                const newPost = {
+                    ...postData,
+                    organizationId,
+                    createdByEmail,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                };
+                await postRef.set(newPost);
+                
+                // 2. Create PostAssignment documents
+                const batch = db.batch();
+                const assignmentsCollectionRef = db.collection("postAssignments");
+
+                const denormalizedPostData = { ...newPost };
+                // Replace the server timestamp placeholder with a concrete one for assignments if needed, though the trigger handles it
+                denormalizedPostData.createdAt = now;
+
+                assignedPromoters.forEach((promoter) => {
+                    const assignmentDocRef = assignmentsCollectionRef.doc();
+                    const newAssignment = {
+                        postId: postRef.id,
+                        post: denormalizedPostData,
+                        organizationId: organizationId,
+                        promoterId: promoter.id,
+                        promoterEmail: promoter.email.toLowerCase(),
+                        promoterName: promoter.name,
+                        status: "pending",
+                        confirmedAt: null,
+                    };
+                    batch.set(assignmentDocRef, newAssignment);
+                });
+                
+                await batch.commit();
+
+                // 3. Update the scheduled post status to 'sent'
+                await doc.ref.update({ status: "sent" });
+                console.log(`Successfully processed scheduled post ${doc.id}`);
+
+            } catch (error) {
+                console.error(`Error processing scheduled post ${doc.id}:`, error);
+                // Update status to 'error' with a reason
+                await doc.ref.update({ status: "error", error: error.message });
+            }
+        });
+
+        await Promise.all(processingPromises);
+        console.log("Finished scheduled post check.");
+        return null;
+    });
+
+/**
  * Updates a Post and propagates changes to its assignments.
  */
 exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
