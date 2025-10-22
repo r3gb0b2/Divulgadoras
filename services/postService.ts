@@ -84,7 +84,16 @@ export const getAssignmentsForOrganization = async (organizationId: string): Pro
     try {
         const q = query(collection(firestore, "postAssignments"), where("organizationId", "==", organizationId));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+
+        // Add filtering for data integrity
+        return assignments.filter(a => {
+            if (!a.post) {
+                console.warn(`[Data Integrity] Assignment ${a.id} is missing 'post' data and will be filtered out.`);
+                return false;
+            }
+            return true;
+        });
     } catch (error) {
         console.error("Error fetching assignments for organization: ", error);
         throw new Error("Não foi possível buscar as tarefas da organização.");
@@ -280,7 +289,15 @@ export const getStatsForPromoter = async (promoterId: string): Promise<StatsResu
   try {
     const q = query(collection(firestore, "postAssignments"), where("promoterId", "==", promoterId));
     const snapshot = await getDocs(q);
-    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    const assignments = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
+        .filter(a => {
+            if (!a.post || !a.post.createdAt) {
+                console.warn(`[Stats] Filtering out assignment ${a.id} for promoter ${promoterId} due to missing 'post' or 'post.createdAt' field.`);
+                return false;
+            }
+            return true;
+        });
     
     assignments.sort((a, b) => {
         const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
@@ -300,7 +317,15 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<StatsRe
   try {
     const q = query(collection(firestore, "postAssignments"), where("promoterEmail", "==", email.toLowerCase().trim()));
     const snapshot = await getDocs(q);
-    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    const assignments = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
+        .filter(a => {
+            if (!a.post || !a.post.createdAt) {
+                console.warn(`[Stats] Filtering out assignment ${a.id} for email ${email} due to missing 'post' or 'post.createdAt' field.`);
+                return false;
+            }
+            return true;
+        });
     
     assignments.sort((a, b) => {
         const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
