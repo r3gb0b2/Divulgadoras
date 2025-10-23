@@ -675,26 +675,41 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
         console.log("Running scheduled post check...");
         const now = admin.firestore.Timestamp.now();
         const scheduledPostsRef = db.collection("scheduledPosts");
-        const query = scheduledPostsRef.where("status", "==", "pending")
-                                       .where("scheduledAt", "<=", now);
+        // Query only by status to avoid needing a composite index. Time check is done in code.
+        const query = scheduledPostsRef.where("status", "==", "pending");
 
         const snapshot = await query.get();
         if (snapshot.empty) {
-            console.log("No scheduled posts are due.");
+            console.log("No pending scheduled posts found.");
             return null;
         }
 
-        console.log(`Found ${snapshot.size} scheduled posts to process.`);
+        // Filter for posts that are actually due
+        const duePosts = snapshot.docs.filter((doc) => {
+            const data = doc.data();
+            return data.scheduledAt && data.scheduledAt.toDate() <= now.toDate();
+        });
 
-        const processingPromises = snapshot.docs.map(async (doc) => {
+        if (duePosts.length === 0) {
+            console.log("No scheduled posts are due at this time.");
+            return null;
+        }
+
+        console.log(`Found ${duePosts.length} scheduled posts to process.`);
+
+        const processingPromises = duePosts.map(async (doc) => {
             const scheduledPost = doc.data();
             const { postData, assignedPromoters, createdByEmail, organizationId } = scheduledPost;
             
             const batch = db.batch();
             try {
+                // Robustly handle expiresAt, which might be an ISO string from client
                 let expiresAtTimestamp = null;
-                if (postData.expiresAt && typeof postData.expiresAt === 'object' && postData.expiresAt.seconds !== undefined) {
-                    expiresAtTimestamp = new admin.firestore.Timestamp(postData.expiresAt.seconds, postData.expiresAt.nanoseconds);
+                if (postData.expiresAt) {
+                    const date = new Date(postData.expiresAt);
+                    if (!isNaN(date.getTime())) {
+                        expiresAtTimestamp = admin.firestore.Timestamp.fromDate(date);
+                    }
                 }
 
                 const postRef = db.collection("posts").doc();
