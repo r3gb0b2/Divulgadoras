@@ -12,6 +12,7 @@ interface State {
 
 class ErrorBoundary extends Component<Props, State> {
   // FIX: The component's state was not initialized, causing errors when trying to access `this.state`, `this.setState`, or `this.props`. Adding a constructor with `super(props)` and initializing `this.state` makes these available on the class instance and fixes the errors.
+  // FIX: Added constructor to initialize state and props for the class component.
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };

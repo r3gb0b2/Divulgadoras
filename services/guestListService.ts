@@ -11,6 +11,7 @@ import {
   doc,
   runTransaction,
   Timestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import { GuestListConfirmation } from '../types';
 
@@ -118,6 +119,24 @@ export const getGuestListConfirmationsByEmail = async (
   } catch (error) {
     console.error('Error fetching guest list confirmations by email: ', error);
     throw new Error('Não foi possível buscar as confirmações de lista de convidados.');
+  }
+};
+
+/**
+ * Updates an existing guest list confirmation.
+ * @param confirmationId - The ID of the guest list confirmation document to update.
+ * @param data - The partial data to update.
+ */
+export const updateGuestListConfirmation = async (
+  confirmationId: string,
+  data: Partial<Pick<GuestListConfirmation, 'isPromoterAttending' | 'guestNames'>>
+): Promise<void> => {
+  try {
+    const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
+    await updateDoc(docRef, data);
+  } catch (error) {
+    console.error('Error updating guest list confirmation: ', error);
+    throw new Error('Não foi possível atualizar a confirmação da lista.');
   }
 };
 
