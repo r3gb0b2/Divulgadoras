@@ -269,8 +269,13 @@ const PostCard: React.FC<{
                             </div>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        {assignment.post.expiresAt && <CountdownTimer expiresAt={assignment.post.expiresAt} />}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        {assignment.post.expiresAt && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400 font-medium">Prazo:</span>
+                                <CountdownTimer expiresAt={assignment.post.expiresAt} />
+                            </div>
+                        )}
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900/50 text-red-300">Perdido</span>
                     </div>
                 </div>
@@ -474,8 +479,13 @@ const PostCard: React.FC<{
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                     {assignment.post.expiresAt && <CountdownTimer expiresAt={assignment.post.expiresAt} />}
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                     {assignment.post.expiresAt && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 font-medium">Tempo restante:</span>
+                            <CountdownTimer expiresAt={assignment.post.expiresAt} />
+                        </div>
+                     )}
                      {assignment.status === 'confirmed' ? (
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
                     ) : (

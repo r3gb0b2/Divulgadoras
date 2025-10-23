@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
-import { getAllCampaigns } from '../services/settingsService';
+import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updateInstructionTemplate, deleteInstructionTemplate } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost } from '../services/postService';
-import { Campaign, Promoter, ScheduledPostData } from '../types';
+import { Campaign, Promoter, ScheduledPostData, InstructionTemplate } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 // FIX: Removed modular signOut import to use compat syntax.
@@ -37,6 +37,153 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
     </div>
 );
 
+// ===================================================================
+// START: Modal Component defined within the same file for convenience
+// ===================================================================
+interface ManageInstructionsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onTemplatesUpdated: () => void;
+  organizationId: string;
+}
+
+const ManageInstructionsModal: React.FC<ManageInstructionsModalProps> = ({ isOpen, onClose, onTemplatesUpdated, organizationId }) => {
+  const [templates, setTemplates] = useState<InstructionTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [newTemplateText, setNewTemplateText] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState<InstructionTemplate | null>(null);
+
+  const fetchTemplates = useCallback(async () => {
+    if (!organizationId) return;
+    setIsLoading(true);
+    setError('');
+    try {
+      const data = await getInstructionTemplates(organizationId);
+      setTemplates(data);
+    } catch (err) {
+      setError('Falha ao carregar os modelos.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchTemplates();
+    }
+  }, [isOpen, fetchTemplates]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleAddTemplate = async () => {
+    if (!newTemplateText.trim() || !organizationId) return;
+    try {
+      await addInstructionTemplate(newTemplateText, organizationId);
+      setNewTemplateText('');
+      await fetchTemplates();
+      onTemplatesUpdated();
+    } catch (err) {
+      setError('Falha ao adicionar modelo.');
+    }
+  };
+
+  const handleUpdateTemplate = async () => {
+    if (!editingTemplate || !editingTemplate.text.trim()) return;
+    try {
+      await updateInstructionTemplate(editingTemplate.id, editingTemplate.text);
+      setEditingTemplate(null);
+      await fetchTemplates();
+      onTemplatesUpdated();
+    } catch (err) {
+      setError('Falha ao atualizar modelo.');
+    }
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja remover este modelo?')) {
+      try {
+        await deleteInstructionTemplate(id);
+        await fetchTemplates();
+        onTemplatesUpdated();
+      } catch (err) {
+        setError('Falha ao remover modelo.');
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">Gerenciar Modelos de Instruções</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
+        </div>
+
+        <div className="space-y-4 mb-4">
+            <h3 className="text-lg font-semibold text-gray-200">Adicionar Novo Modelo</h3>
+            <div className="flex flex-col gap-2">
+                <textarea
+                    value={newTemplateText}
+                    onChange={(e) => setNewTemplateText(e.target.value)}
+                    placeholder="Digite o novo modelo de instruções aqui..."
+                    rows={4}
+                    className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                />
+                <button onClick={handleAddTemplate} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark self-end">Adicionar</button>
+            </div>
+        </div>
+
+        <div className="flex-grow overflow-y-auto border-t border-b border-gray-700 py-4">
+            <h3 className="text-lg font-semibold text-gray-200 mb-2">Modelos Existentes</h3>
+            {isLoading && <p>Carregando...</p>}
+            {error && <p className="text-red-500">{error}</p>}
+            <ul className="space-y-2">
+                {templates.map(template => (
+                    <li key={template.id} className="p-2 bg-gray-700/50 rounded-md">
+                        {editingTemplate?.id === template.id ? (
+                            <textarea
+                                value={editingTemplate.text}
+                                onChange={(e) => setEditingTemplate({ ...editingTemplate, text: e.target.value })}
+                                rows={4}
+                                className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800"
+                            />
+                        ) : (
+                            <p className="text-gray-200 whitespace-pre-wrap">{template.text}</p>
+                        )}
+                        <div className="flex gap-4 justify-end mt-2">
+                            {editingTemplate?.id === template.id ? (
+                                <>
+                                    <button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button>
+                                    <button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button>
+                                </>
+                            ) : (
+                                <>
+                                    <button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button>
+                                    <button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button>
+                                </>
+                            )}
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        </div>
+        <div className="mt-6 flex justify-end">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+              Fechar
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ===================================================================
+// END: Modal Component
+// ===================================================================
+
+
 const CreatePost: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -46,7 +193,7 @@ const CreatePost: React.FC = () => {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
-    const [rulesHistory, setRulesHistory] = useState<string[]>([]);
+    const [instructionTemplates, setInstructionTemplates] = useState<InstructionTemplate[]>([]);
     
     // Form states
     const [selectedState, setSelectedState] = useState('');
@@ -78,6 +225,7 @@ const CreatePost: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
     
     useEffect(() => {
         if (isScheduling && scheduleDate && scheduleTime) {
@@ -105,21 +253,18 @@ const CreatePost: React.FC = () => {
                 return;
             }
             try {
-                const [orgData, allCampaigns] = await Promise.all([
+                const [orgData, allCampaigns, templatesData] = await Promise.all([
                     getOrganization(selectedOrgId),
-                    getAllCampaigns(selectedOrgId)
+                    getAllCampaigns(selectedOrgId),
+                    getInstructionTemplates(selectedOrgId),
                 ]);
 
                 if (orgData?.assignedStates) {
                     setAssignedStates(orgData.assignedStates);
                 }
                 setCampaigns(allCampaigns);
+                setInstructionTemplates(templatesData);
                 
-                const storedHistory = localStorage.getItem(`rulesHistory_${adminData.uid}`);
-                if (storedHistory) {
-                    setRulesHistory(JSON.parse(storedHistory));
-                }
-
                 // Check for duplication request
                 const queryParams = new URLSearchParams(location.search);
                 const fromPostId = queryParams.get('fromPost');
@@ -199,6 +344,12 @@ const CreatePost: React.FC = () => {
         } catch (error) {
             console.error("Logout failed", error);
         }
+    };
+
+    const handleRefreshTemplates = async () => {
+        if (!selectedOrgId) return;
+        const templatesData = await getInstructionTemplates(selectedOrgId);
+        setInstructionTemplates(templatesData);
     };
 
     const filteredCampaigns = useMemo(() => {
@@ -301,12 +452,6 @@ const CreatePost: React.FC = () => {
                 postFormats: postFormats,
             };
             
-            if (instructions.trim() && adminData?.uid) {
-                const newHistory = [instructions.trim(), ...rulesHistory.filter(r => r !== instructions.trim())].slice(0, 10);
-                setRulesHistory(newHistory);
-                localStorage.setItem(`rulesHistory_${adminData.uid}`, JSON.stringify(newHistory));
-            }
-
             if (isScheduling) {
                  if (!scheduleDate || !scheduleTime) {
                     throw new Error("Por favor, selecione data e hora para agendar.");
@@ -484,27 +629,30 @@ const CreatePost: React.FC = () => {
                             </p>
                         </div>
                      )}
-                     {rulesHistory.length > 0 && (
-                        <div className="mt-4">
-                            <label htmlFor="rules-history" className="block text-sm font-medium text-gray-400">Usar regras recentes:</label>
-                            <select
-                                id="rules-history"
-                                onChange={(e) => {
-                                    if (e.target.value) {
-                                        setInstructions(e.target.value);
-                                    }
-                                }}
-                                className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                            >
-                                <option value="">Selecione para preencher...</option>
-                                {rulesHistory.map((rule, index) => (
-                                    <option key={index} value={rule}>
-                                        {rule.substring(0, 80)}{rule.length > 80 ? '...' : ''}
-                                    </option>
-                                ))}
-                            </select>
+                     <div className="mt-4">
+                        <div className="flex justify-between items-center mb-1">
+                            <label htmlFor="instruction-templates" className="block text-sm font-medium text-gray-400">Usar modelo de instrução:</label>
+                            <button type="button" onClick={() => setIsInstructionsModalOpen(true)} className="text-xs text-primary hover:underline">
+                                Gerenciar Modelos
+                            </button>
                         </div>
-                     )}
+                        <select
+                            id="instruction-templates"
+                            onChange={(e) => {
+                                if (e.target.value) {
+                                    setInstructions(e.target.value);
+                                }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                        >
+                            <option value="">Selecione para preencher...</option>
+                            {instructionTemplates.map((template) => (
+                                <option key={template.id} value={template.text}>
+                                    {template.text.substring(0, 80)}{template.text.length > 80 ? '...' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                     <div className="mt-4">
                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
@@ -572,6 +720,14 @@ const CreatePost: React.FC = () => {
                     </button>
                 </div>
             </form>
+            {selectedOrgId && (
+                <ManageInstructionsModal 
+                    isOpen={isInstructionsModalOpen}
+                    onClose={() => setIsInstructionsModalOpen(false)}
+                    onTemplatesUpdated={handleRefreshTemplates}
+                    organizationId={selectedOrgId}
+                />
+            )}
         </div>
     );
 };

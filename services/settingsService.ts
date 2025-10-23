@@ -1,7 +1,7 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { states } from '../constants/states';
-import { StatesConfig, StateConfig, Campaign } from '../types';
+import { StatesConfig, StateConfig, Campaign, InstructionTemplate } from '../types';
 
 const STATES_CONFIG_DOC_ID = 'statesConfig';
 const SETTINGS_COLLECTION = 'settings';
@@ -148,5 +148,55 @@ export const deleteCampaign = async (id: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting campaign: ", error);
         throw new Error("Não foi possível deletar o evento/gênero.");
+    }
+};
+
+// --- Instruction Templates Service Functions ---
+
+export const getInstructionTemplates = async (organizationId: string): Promise<InstructionTemplate[]> => {
+    try {
+        const q = query(
+            collection(firestore, "instructionTemplates"),
+            where("organizationId", "==", organizationId),
+            orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        const templates = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InstructionTemplate));
+        return templates;
+    } catch (error) {
+        console.error("Error getting instruction templates: ", error);
+        throw new Error("Não foi possível buscar os modelos de instruções.");
+    }
+};
+
+export const addInstructionTemplate = async (text: string, organizationId: string): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(firestore, 'instructionTemplates'), { 
+            text, 
+            organizationId,
+            createdAt: serverTimestamp() 
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding instruction template: ", error);
+        throw new Error("Não foi possível adicionar o modelo de instrução.");
+    }
+};
+
+export const updateInstructionTemplate = async (id: string, text: string): Promise<void> => {
+    try {
+        await updateDoc(doc(firestore, 'instructionTemplates', id), { text });
+    } catch (error) {
+        console.error("Error updating instruction template: ", error);
+        throw new Error("Não foi possível atualizar o modelo de instrução.");
+    }
+};
+
+export const deleteInstructionTemplate = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(firestore, "instructionTemplates", id));
+    } catch (error) {
+        console.error("Error deleting instruction template: ", error);
+        throw new Error("Não foi possível deletar o modelo de instrução.");
     }
 };

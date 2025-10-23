@@ -228,3 +228,10 @@ export interface ScheduledPost {
   createdByEmail: string;
   error?: string;
 }
+
+export interface InstructionTemplate {
+  id: string;
+  text: string;
+  organizationId: string;
+  createdAt?: Timestamp | FieldValue;
+}
