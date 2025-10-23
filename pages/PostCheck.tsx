@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
-import { ArrowLeftIcon, EyeIcon, CameraIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -147,7 +147,7 @@ const PostCard: React.FC<{
 }> = ({ assignment, onConfirm, onJustify }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
-    const [isViewing, setIsViewing] = useState(false);
+    const [isMediaProcessing, setIsMediaProcessing] = useState(false);
 
     if (!assignment.post.isActive) {
         const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
@@ -283,10 +283,11 @@ const PostCard: React.FC<{
         });
     };
 
-    const handleView = async (mediaUrl: string, type: 'image' | 'video') => {
-        if (isViewing) return;
-        setIsViewing(true);
+    const handleView = async () => {
+        if (isMediaProcessing || !assignment.post.mediaUrl) return;
+        setIsMediaProcessing(true);
         try {
+            const { mediaUrl, type } = assignment.post;
             let finalUrl = mediaUrl;
     
             if (type === 'video' && mediaUrl.includes('drive.google.com')) {
@@ -304,10 +305,57 @@ const PostCard: React.FC<{
             console.error('Failed to open media:', error);
             alert(`Não foi possível abrir a mídia: ${error.message}`);
         } finally {
-            setIsViewing(false);
+            setIsMediaProcessing(false);
         }
     };
     
+    const handleDownload = async () => {
+        if (isMediaProcessing || !assignment.post.mediaUrl) return;
+        setIsMediaProcessing(true);
+        try {
+            const { mediaUrl, type } = assignment.post;
+            
+            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
+                const fileId = extractGoogleDriveId(mediaUrl);
+                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
+                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+                window.open(downloadUrl, '_blank');
+                return;
+            }
+            
+            let finalUrl = mediaUrl;
+            if (type === 'image' && !mediaUrl.startsWith('http')) {
+                const storageRef = ref(storage, mediaUrl);
+                finalUrl = await getDownloadURL(storageRef);
+            }
+            
+            const response = await fetch(finalUrl);
+            if (!response.ok) {
+                throw new Error(`Erro ao buscar mídia: ${response.statusText}`);
+            }
+            const blob = await response.blob();
+            
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            
+            const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || `download`;
+            link.setAttribute('download', filename);
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(objectUrl);
+
+        } catch (error: any) {
+            console.error('Failed to download media:', error);
+            alert(`Não foi possível baixar a mídia: ${error.message}`);
+        } finally {
+            setIsMediaProcessing(false);
+        }
+    };
+
     const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
         const styles = {
             pending: "bg-yellow-900/50 text-yellow-300",
@@ -389,12 +437,20 @@ const PostCard: React.FC<{
                         <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
                         <div className="flex justify-center items-center gap-4 mt-2">
                             <button
-                                onClick={() => handleView(assignment.post.mediaUrl!, assignment.post.type)}
-                                disabled={isViewing}
+                                onClick={handleView}
+                                disabled={isMediaProcessing}
                                 className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
                             >
                                 <EyeIcon className="w-4 h-4" /> 
-                                {isViewing ? 'Abrindo...' : 'Visualizar'}
+                                {isMediaProcessing ? '...' : 'Visualizar'}
+                            </button>
+                             <button
+                                onClick={handleDownload}
+                                disabled={isMediaProcessing}
+                                className="text-sm text-green-400 hover:underline flex items-center gap-1 disabled:opacity-50"
+                            >
+                                <DownloadIcon className="w-4 h-4" />
+                                {isMediaProcessing ? '...' : 'Baixar'}
                             </button>
                         </div>
                     </div>

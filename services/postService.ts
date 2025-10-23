@@ -17,6 +17,27 @@ import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter, ScheduledPost } from '../types';
 
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) {
+        return null;
+    }
+    // Firestore Timestamp
+    if (typeof timestamp.toDate === 'function') {
+        return timestamp.toDate();
+    }
+    // Serialized Timestamp object
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
+    }
+    // ISO string or number (milliseconds)
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+    return null;
+};
+
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
   mediaFile: File | null,
@@ -240,15 +261,18 @@ const calculatePromoterStats = (assignments: PostAssignment[]) => {
       let deadlineHasPassed = false;
       if (!assignment.post.allowLateSubmissions) {
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-          const confirmationTime = (assignment.confirmedAt as Timestamp).toDate();
-          const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
-          if (now > proofExpireTime) {
-            deadlineHasPassed = true;
+          const confirmationTime = toDateSafe(assignment.confirmedAt);
+          if (confirmationTime) {
+            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofExpireTime) {
+              deadlineHasPassed = true;
+            }
           }
         }
         if (!deadlineHasPassed) {
           const postExpiresAt = assignment.post.expiresAt;
-          if (postExpiresAt && (postExpiresAt as Timestamp).toDate() < now) {
+          const postExpiresDate = toDateSafe(postExpiresAt);
+          if (postExpiresDate && postExpiresDate < now) {
             deadlineHasPassed = true;
           }
         }
@@ -299,8 +323,10 @@ export const getStatsForPromoter = async (promoterId: string): Promise<StatsResu
         });
     
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        const dateA = toDateSafe(a.post.createdAt);
+        const dateB = toDateSafe(b.post.createdAt);
+        const timeA = dateA ? dateA.getTime() : 0;
+        const timeB = dateB ? dateB.getTime() : 0;
         return timeB - timeA;
     });
 
@@ -327,8 +353,10 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<StatsRe
         });
     
     assignments.sort((a, b) => {
-        const timeA = (a.post.createdAt as Timestamp)?.toMillis() || 0;
-        const timeB = (b.post.createdAt as Timestamp)?.toMillis() || 0;
+        const dateA = toDateSafe(a.post.createdAt);
+        const dateB = toDateSafe(b.post.createdAt);
+        const timeA = dateA ? dateA.getTime() : 0;
+        const timeB = dateB ? dateB.getTime() : 0;
         return timeB - timeA;
     });
 
