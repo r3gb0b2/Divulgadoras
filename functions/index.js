@@ -627,29 +627,26 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
             const scheduledPost = doc.data();
             const { postData, assignedPromoters, createdByEmail, organizationId } = scheduledPost;
             
+            const batch = db.batch();
             try {
-                // Convert serialized timestamp from client back to a real Timestamp object
                 let expiresAtTimestamp = null;
                 if (postData.expiresAt && typeof postData.expiresAt === 'object' && postData.expiresAt.seconds !== undefined) {
                     expiresAtTimestamp = new admin.firestore.Timestamp(postData.expiresAt.seconds, postData.expiresAt.nanoseconds);
                 }
 
-                // 1. Create the Post document
                 const postRef = db.collection("posts").doc();
+                const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
                 const newPost = {
                     ...postData,
-                    expiresAt: expiresAtTimestamp, // Use corrected timestamp
+                    expiresAt: expiresAtTimestamp,
                     organizationId,
                     createdByEmail,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: serverTimestamp,
                 };
-                await postRef.set(newPost);
-                
-                // 2. Create PostAssignment documents
-                const batch = db.batch();
-                const assignmentsCollectionRef = db.collection("postAssignments");
+                batch.set(postRef, newPost);
 
-                // Explicitly build the denormalized object to ensure data integrity
+                const assignmentsCollectionRef = db.collection("postAssignments");
                 const denormalizedPostData = {
                     type: postData.type,
                     mediaUrl: postData.mediaUrl || null,
@@ -659,8 +656,8 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                     campaignName: postData.campaignName,
                     eventName: postData.eventName || null,
                     isActive: postData.isActive,
-                    expiresAt: expiresAtTimestamp, // Use corrected timestamp here too
-                    createdAt: now, // Use a concrete timestamp for consistency
+                    expiresAt: expiresAtTimestamp,
+                    createdAt: serverTimestamp,
                     allowLateSubmissions: postData.allowLateSubmissions || false,
                     allowImmediateProof: postData.allowImmediateProof || false,
                     postFormats: postData.postFormats || [],
@@ -681,15 +678,13 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                     batch.set(assignmentDocRef, newAssignment);
                 });
                 
-                await batch.commit();
+                batch.update(doc.ref, { status: "sent" });
 
-                // 3. Update the scheduled post status to 'sent'
-                await doc.ref.update({ status: "sent" });
+                await batch.commit();
                 console.log(`Successfully processed scheduled post ${doc.id}`);
 
             } catch (error) {
                 console.error(`Error processing scheduled post ${doc.id}:`, error);
-                // Update status to 'error' with a reason
                 await doc.ref.update({ status: "error", error: error.message });
             }
         });
