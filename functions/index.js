@@ -990,6 +990,43 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
   return { success: true };
 });
 
+exports.resetGuestListsForCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    }
+
+    const { campaignId } = data;
+    if (!campaignId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID do evento (campaignId) é obrigatório.");
+    }
+
+    try {
+        const confirmationsRef = db.collection("guestListConfirmations");
+        const q = confirmationsRef.where("campaignId", "==", campaignId);
+        const snapshot = await q.get();
+
+        if (snapshot.empty) {
+            return { success: true, message: "Nenhuma lista para resetar.", deletedCount: 0 };
+        }
+
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+
+        return { success: true, message: `Todas as ${snapshot.size} listas foram resetadas.`, deletedCount: snapshot.size };
+    } catch (error) {
+        console.error(`Error resetting guest lists for campaign ${campaignId}:`, error);
+        throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao tentar resetar as listas.");
+    }
+});
+
 
 // --- User and Organization Management ---
 

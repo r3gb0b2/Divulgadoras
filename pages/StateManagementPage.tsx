@@ -6,6 +6,8 @@ import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
@@ -24,6 +26,9 @@ const CampaignModal: React.FC<{
         guestAllowance: {} as { [listName: string]: number },
     });
     const [newListName, setNewListName] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+    const [resetMessage, setResetMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
 
     useEffect(() => {
         if (campaign) {
@@ -39,9 +44,33 @@ const CampaignModal: React.FC<{
         } else {
             setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {} });
         }
+        setResetMessage(null); // Clear message when modal reopens
     }, [campaign, isOpen]);
     
     if (!isOpen) return null;
+
+    const handleResetLists = async () => {
+        if (!campaign || !('id' in campaign)) return;
+
+        if (window.confirm(`Tem certeza que deseja resetar TODAS as listas de convidados para o evento "${campaign.name}"? Esta ação é irreversível e removerá todas as confirmações e convidados já enviados pelas divulgadoras.`)) {
+            setIsResetting(true);
+            setResetMessage(null);
+            try {
+                const resetFunction = httpsCallable(functions, 'resetGuestListsForCampaign');
+                const result = await resetFunction({ campaignId: campaign.id });
+                const data = result.data as { success: boolean, message: string, deletedCount: number };
+                if (data.success) {
+                    setResetMessage({ type: 'success', text: `Sucesso! ${data.deletedCount} listas foram removidas.` });
+                } else {
+                    throw new Error(data.message || 'Falha na operação.');
+                }
+            } catch (error: any) {
+                setResetMessage({ type: 'error', text: error.message || 'Ocorreu um erro ao resetar as listas.' });
+            } finally {
+                setIsResetting(false);
+            }
+        }
+    };
 
     const handleAddListType = () => {
         if (newListName.trim() && !formData.guestListTypes.includes(newListName.trim())) {
@@ -96,7 +125,24 @@ const CampaignModal: React.FC<{
                     <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
                     
                     <div className="border-t border-gray-700 pt-4 space-y-3">
-                        <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
+                             {campaign && 'id' in campaign && formData.guestListTypes.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleResetLists}
+                                    disabled={isResetting}
+                                    className="px-3 py-1 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                                >
+                                    {isResetting ? 'Resetando...' : 'Resetar Listas'}
+                                </button>
+                            )}
+                        </div>
+                        {resetMessage && (
+                            <div className={`p-2 rounded-md text-sm ${resetMessage.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                                {resetMessage.text}
+                            </div>
+                        )}
                          <p className="text-sm text-gray-400">Adicione os tipos de lista de convidados para este evento (ex: "Lista VIP", "Aniversariante"). Se nenhuma lista for adicionada, o recurso de lista de convidados ficará desativado.</p>
                          <div className="flex gap-2">
                             <input type="text" placeholder="Nome do tipo de lista" value={newListName} onChange={e => setNewListName(e.target.value)} className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
