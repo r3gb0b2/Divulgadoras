@@ -5,11 +5,59 @@ import { getCampaigns, getAllCampaigns } from '../services/settingsService';
 import { addGuestListConfirmation } from '../services/guestListService';
 import { Promoter, Campaign } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
+import { Timestamp } from 'firebase/firestore';
 
 interface EventWithCampaignAndList extends Promoter {
     campaignDetails: Campaign;
     listName: string;
 }
+
+const useCountdown = (targetDate: Date | null) => {
+    const [timeLeft, setTimeLeft] = useState({
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+        isOver: false,
+    });
+
+    useEffect(() => {
+        if (!targetDate) {
+            setTimeLeft(prev => ({ ...prev, isOver: false })); // No deadline, not over
+            return;
+        }
+        
+        // Initial check
+        if (targetDate.getTime() < new Date().getTime()) {
+             setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isOver: true });
+             return;
+        }
+
+
+        const interval = setInterval(() => {
+            const now = new Date();
+            const difference = targetDate.getTime() - now.getTime();
+
+            if (difference > 0) {
+                setTimeLeft({
+                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+                    minutes: Math.floor((difference / 1000 / 60) % 60),
+                    seconds: Math.floor((difference / 1000) % 60),
+                    isOver: false,
+                });
+            } else {
+                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isOver: true });
+                clearInterval(interval);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [targetDate]);
+
+    return timeLeft;
+};
+
 
 const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> = ({ event }) => {
     const { campaignDetails, listName } = event;
@@ -19,6 +67,10 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    
+    const closingDate = campaignDetails.guestListClosesAt ? (campaignDetails.guestListClosesAt as Timestamp).toDate() : null;
+    const { days, hours, minutes, seconds, isOver } = useCountdown(closingDate);
+
 
     const handleGuestNameChange = (index: number, value: string) => {
         const newGuestNames = [...guestNames];
@@ -61,50 +113,67 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
     }
 
     return (
-        <form onSubmit={handleSubmit} className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
+        <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
             <h3 className="font-bold text-lg text-primary">{campaignDetails.name} - <span className="text-gray-200">{listName}</span></h3>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
             
-            <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
-                <label className="flex items-center cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={isAttending}
-                        onChange={(e) => setIsAttending(e.target.checked)}
-                        className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
-                    />
-                    <span className="ml-3 font-medium text-gray-200">Confirmar minha presença</span>
-                </label>
-            </div>
-
-            {isAttending && allowanceForThisList > 0 && (
-                <div>
-                    <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({allowanceForThisList} permitidos)</h4>
-                    <div className="space-y-2">
-                        {Array.from({ length: allowanceForThisList }).map((_, index) => (
-                            <input
-                                key={index}
-                                type="text"
-                                value={guestNames[index]}
-                                onChange={(e) => handleGuestNameChange(index, e.target.value)}
-                                placeholder={`Nome completo do Convidado ${index + 1}`}
-                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                            />
-                        ))}
-                    </div>
+             {closingDate && !success && (
+                <div className={`text-center mb-2 p-3 rounded-md text-white font-bold text-lg ${isOver ? 'bg-red-900/70' : 'bg-blue-900/70'}`}>
+                    {isOver ? (
+                        <span>LISTA ENCERRADA</span>
+                    ) : (
+                        <span>
+                            ENCERRA EM: {days > 0 && `${days}d `}{hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+                        </span>
+                    )}
                 </div>
             )}
-            
-            <div className="text-right">
-                <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
-                >
-                    {isSubmitting ? 'Confirmando...' : 'Confirmar Lista'}
-                </button>
-            </div>
-        </form>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                
+                <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
+                    <label className="flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={isAttending}
+                            onChange={(e) => setIsAttending(e.target.checked)}
+                            disabled={isOver}
+                            className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary disabled:opacity-50"
+                        />
+                        <span className="ml-3 font-medium text-gray-200">Confirmar minha presença</span>
+                    </label>
+                </div>
+
+                {isAttending && allowanceForThisList > 0 && (
+                    <div>
+                        <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({allowanceForThisList} permitidos)</h4>
+                        <div className="space-y-2">
+                            {Array.from({ length: allowanceForThisList }).map((_, index) => (
+                                <input
+                                    key={index}
+                                    type="text"
+                                    value={guestNames[index]}
+                                    onChange={(e) => handleGuestNameChange(index, e.target.value)}
+                                    placeholder={`Nome completo do Convidado ${index + 1}`}
+                                    disabled={isOver}
+                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="text-right">
+                    <button
+                        type="submit"
+                        disabled={isSubmitting || isOver}
+                        className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
+                    >
+                        {isSubmitting ? 'Confirmando...' : (isOver ? 'Lista Encerrada' : 'Confirmar Lista')}
+                    </button>
+                </div>
+            </form>
+        </div>
     );
 };
 

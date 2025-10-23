@@ -990,7 +990,9 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
   return { success: true };
 });
 
-exports.resetGuestListsForCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+exports.resetGuestListsForCampaign = functions.region("southamerica-east1")
+    .runWith({ timeoutSeconds: 300 }) // Increase timeout for large deletions
+    .https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
     }
@@ -1013,12 +1015,20 @@ exports.resetGuestListsForCampaign = functions.region("southamerica-east1").http
             return { success: true, message: "Nenhuma lista para resetar.", deletedCount: 0 };
         }
 
-        const batch = db.batch();
-        snapshot.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
+        // Process deletions in chunks to avoid exceeding batch limit of 500 operations.
+        const BATCH_SIZE = 499; // Keep it slightly under the limit for safety
+        const batches = [];
+        
+        for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+            const batch = db.batch();
+            const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+            chunk.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            batches.push(batch.commit());
+        }
 
-        await batch.commit();
+        await Promise.all(batches);
 
         return { success: true, message: `Todas as ${snapshot.size} listas foram resetadas.`, deletedCount: snapshot.size };
     } catch (error) {

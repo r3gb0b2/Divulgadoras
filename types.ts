@@ -61,6 +61,7 @@ export interface Campaign {
   guestAllowance?: { [listName: string]: number };
   guestListAccess?: 'all' | 'specific';
   guestListAssignments?: { [promoterId: string]: string[] }; // Maps promoterId to an array of list names
+  guestListClosesAt?: Timestamp | FieldValue | null;
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';

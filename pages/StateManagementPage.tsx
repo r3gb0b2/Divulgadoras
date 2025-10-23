@@ -8,6 +8,21 @@ import { ArrowLeftIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import { Timestamp, FieldValue } from 'firebase/firestore';
+
+const timestampToDateTimeLocal = (ts: any): string => {
+    if (!ts) return '';
+    try {
+        const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+        if (isNaN(date.getTime())) return '';
+        // Adjust for timezone offset to display correctly in the input
+        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+        return localDate.toISOString().slice(0, 16);
+    } catch (e) {
+        console.error("Error converting timestamp to datetime-local:", e);
+        return '';
+    }
+};
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
@@ -24,6 +39,7 @@ const CampaignModal: React.FC<{
         isActive: true,
         guestListTypes: [] as string[],
         guestAllowance: {} as { [listName: string]: number },
+        guestListClosesAt: null as Timestamp | FieldValue | null,
     });
     const [newListName, setNewListName] = useState('');
     const [isResetting, setIsResetting] = useState(false);
@@ -40,9 +56,10 @@ const CampaignModal: React.FC<{
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
                 guestListTypes: campaign.guestListTypes || [],
                 guestAllowance: campaign.guestAllowance || {},
+                guestListClosesAt: campaign.guestListClosesAt || null,
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {} });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {}, guestListClosesAt: null });
         }
         setResetMessage(null); // Clear message when modal reopens
     }, [campaign, isOpen]);
@@ -167,6 +184,18 @@ const CampaignModal: React.FC<{
                                 </div>
                             ))}
                          </div>
+                          <div className="mt-4">
+                            <label htmlFor="guestListClosesAt" className="block text-sm font-medium text-gray-300">Encerrar listas em (opcional)</label>
+                            <input
+                                id="guestListClosesAt"
+                                type="datetime-local"
+                                value={formData.guestListClosesAt ? timestampToDateTimeLocal(formData.guestListClosesAt) : ''}
+                                onChange={e => setFormData({ ...formData, guestListClosesAt: e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : null })}
+                                className="mt-1 w-full sm:w-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                                style={{ colorScheme: 'dark' }}
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Após esta data e hora, as divulgadoras não poderão mais enviar nomes.</p>
+                        </div>
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
