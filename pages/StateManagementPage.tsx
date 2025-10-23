@@ -39,7 +39,7 @@ const CampaignModal: React.FC<{
         isActive: true,
         guestListTypes: [] as string[],
         guestAllowance: {} as { [listName: string]: number },
-        guestListClosesAt: null as Timestamp | FieldValue | null,
+        guestListClosesAt: {} as { [listName: string]: Timestamp | FieldValue | null },
     });
     const [newListName, setNewListName] = useState('');
     const [isResetting, setIsResetting] = useState(false);
@@ -56,10 +56,10 @@ const CampaignModal: React.FC<{
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
                 guestListTypes: campaign.guestListTypes || [],
                 guestAllowance: campaign.guestAllowance || {},
-                guestListClosesAt: campaign.guestListClosesAt || null,
+                guestListClosesAt: campaign.guestListClosesAt || {},
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {}, guestListClosesAt: null });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {}, guestListClosesAt: {} });
         }
         setResetMessage(null); // Clear message when modal reopens
     }, [campaign, isOpen]);
@@ -95,7 +95,8 @@ const CampaignModal: React.FC<{
             setFormData(prev => ({ 
                 ...prev, 
                 guestListTypes: [...prev.guestListTypes, newName],
-                guestAllowance: { ...(prev.guestAllowance || {}), [newName]: 0 }
+                guestAllowance: { ...(prev.guestAllowance || {}), [newName]: 0 },
+                guestListClosesAt: { ...(prev.guestListClosesAt || {}), [newName]: null }
             }));
             setNewListName('');
         }
@@ -104,10 +105,12 @@ const CampaignModal: React.FC<{
     const handleRemoveListType = (nameToRemove: string) => {
         setFormData(prev => {
             const { [nameToRemove]: _, ...newAllowance } = (prev.guestAllowance || {});
+            const { [nameToRemove]: __, ...newClosesAt } = (prev.guestListClosesAt || {});
             return {
                 ...prev,
                 guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove),
                 guestAllowance: newAllowance,
+                guestListClosesAt: newClosesAt,
             };
         });
     };
@@ -120,6 +123,17 @@ const CampaignModal: React.FC<{
             guestAllowance: {
                 ...(prev.guestAllowance || {}),
                 [listName]: isNaN(allowance) ? 0 : Math.max(0, allowance)
+            }
+        }));
+    };
+
+    const handleClosesAtChange = (listName: string, value: string) => {
+        const closesAtTimestamp = value ? Timestamp.fromDate(new Date(value)) : null;
+        setFormData(prev => ({
+            ...prev,
+            guestListClosesAt: {
+                ...(prev.guestListClosesAt || {}),
+                [listName]: closesAtTimestamp
             }
         }));
     };
@@ -167,35 +181,36 @@ const CampaignModal: React.FC<{
                          </div>
                          <div className="space-y-2">
                             {(formData.guestListTypes || []).map(name => (
-                                <div key={name} className="flex justify-between items-center p-2 bg-gray-800 rounded gap-4">
-                                    <span className="text-gray-200 flex-grow">{name}</span>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                        <label htmlFor={`allowance-${name}`} className="text-sm text-gray-400">Convidados:</label>
-                                        <input
-                                            id={`allowance-${name}`}
-                                            type="number"
-                                            min="0"
-                                            value={formData.guestAllowance?.[name] ?? 0}
-                                            onChange={(e) => handleAllowanceChange(name, e.target.value)}
-                                            className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
-                                        />
+                                <div key={name} className="flex flex-wrap justify-between items-center p-3 bg-gray-800 rounded gap-4">
+                                    <span className="text-gray-200 font-semibold">{name}</span>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 flex-grow justify-end">
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor={`allowance-${name}`} className="text-sm text-gray-400">Convidados:</label>
+                                            <input
+                                                id={`allowance-${name}`}
+                                                type="number"
+                                                min="0"
+                                                value={formData.guestAllowance?.[name] ?? 0}
+                                                onChange={(e) => handleAllowanceChange(name, e.target.value)}
+                                                className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <label htmlFor={`closesAt-${name}`} className="text-sm text-gray-400">Encerra em:</label>
+                                            <input
+                                                id={`closesAt-${name}`}
+                                                type="datetime-local"
+                                                value={formData.guestListClosesAt?.[name] ? timestampToDateTimeLocal(formData.guestListClosesAt[name]) : ''}
+                                                onChange={(e) => handleClosesAtChange(name, e.target.value)}
+                                                className="px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
+                                                style={{ colorScheme: 'dark' }}
+                                            />
+                                        </div>
                                         <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300 text-2xl leading-none">&times;</button>
                                     </div>
                                 </div>
                             ))}
                          </div>
-                          <div className="mt-4">
-                            <label htmlFor="guestListClosesAt" className="block text-sm font-medium text-gray-300">Encerrar listas em (opcional)</label>
-                            <input
-                                id="guestListClosesAt"
-                                type="datetime-local"
-                                value={formData.guestListClosesAt ? timestampToDateTimeLocal(formData.guestListClosesAt) : ''}
-                                onChange={e => setFormData({ ...formData, guestListClosesAt: e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : null })}
-                                className="mt-1 w-full sm:w-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                                style={{ colorScheme: 'dark' }}
-                            />
-                            <p className="text-xs text-gray-400 mt-1">Após esta data e hora, as divulgadoras não poderão mais enviar nomes.</p>
-                        </div>
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">

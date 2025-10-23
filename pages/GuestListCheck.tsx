@@ -68,7 +68,9 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     
-    const closingDate = campaignDetails.guestListClosesAt ? (campaignDetails.guestListClosesAt as Timestamp).toDate() : null;
+    const closingDate = (campaignDetails.guestListClosesAt && campaignDetails.guestListClosesAt[listName]) 
+        ? (campaignDetails.guestListClosesAt[listName] as Timestamp).toDate() 
+        : null;
     const { days, hours, minutes, seconds, isOver } = useCountdown(closingDate);
 
 
