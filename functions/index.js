@@ -628,10 +628,17 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
             const { postData, assignedPromoters, createdByEmail, organizationId } = scheduledPost;
             
             try {
+                // Convert serialized timestamp from client back to a real Timestamp object
+                let expiresAtTimestamp = null;
+                if (postData.expiresAt && typeof postData.expiresAt === 'object' && postData.expiresAt.seconds !== undefined) {
+                    expiresAtTimestamp = new admin.firestore.Timestamp(postData.expiresAt.seconds, postData.expiresAt.nanoseconds);
+                }
+
                 // 1. Create the Post document
                 const postRef = db.collection("posts").doc();
                 const newPost = {
                     ...postData,
+                    expiresAt: expiresAtTimestamp, // Use corrected timestamp
                     organizationId,
                     createdByEmail,
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -652,7 +659,7 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                     campaignName: postData.campaignName,
                     eventName: postData.eventName || null,
                     isActive: postData.isActive,
-                    expiresAt: postData.expiresAt || null,
+                    expiresAt: expiresAtTimestamp, // Use corrected timestamp here too
                     createdAt: now, // Use a concrete timestamp for consistency
                     allowLateSubmissions: postData.allowLateSubmissions || false,
                     allowImmediateProof: postData.allowImmediateProof || false,

@@ -11,7 +11,7 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Switched to constructor for state initialization to ensure `this.state`, `this.setState`, and `this.props` are available.
+  // FIX: Initialized state in the constructor to make `this.state`, `this.setState`, and `this.props` available on the class instance.
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
