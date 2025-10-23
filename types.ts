@@ -58,7 +58,7 @@ export interface Campaign {
   associatedAdmins?: string[];
   // Guest List Feature
   guestListTypes?: string[];
-  guestAllowance?: number;
+  guestAllowance?: { [listName: string]: number };
   guestListAccess?: 'all' | 'specific';
   guestListAssignments?: { [promoterId: string]: string[] }; // Maps promoterId to an array of list names
 }

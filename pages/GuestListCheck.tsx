@@ -13,8 +13,9 @@ interface EventWithCampaignAndList extends Promoter {
 
 const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> = ({ event }) => {
     const { campaignDetails, listName } = event;
+    const allowanceForThisList = (campaignDetails.guestAllowance && campaignDetails.guestAllowance[listName]) || 0;
     const [isAttending, setIsAttending] = useState(true);
-    const [guestNames, setGuestNames] = useState<string[]>(Array(campaignDetails.guestAllowance || 0).fill(''));
+    const [guestNames, setGuestNames] = useState<string[]>(Array(allowanceForThisList).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -76,11 +77,11 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
                 </label>
             </div>
 
-            {isAttending && (campaignDetails.guestAllowance || 0) > 0 && (
+            {isAttending && allowanceForThisList > 0 && (
                 <div>
-                    <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({campaignDetails.guestAllowance} permitidos)</h4>
+                    <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({allowanceForThisList} permitidos)</h4>
                     <div className="space-y-2">
-                        {Array.from({ length: campaignDetails.guestAllowance || 0 }).map((_, index) => (
+                        {Array.from({ length: allowanceForThisList }).map((_, index) => (
                             <input
                                 key={index}
                                 type="text"

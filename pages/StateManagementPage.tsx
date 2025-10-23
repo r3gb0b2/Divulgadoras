@@ -21,7 +21,7 @@ const CampaignModal: React.FC<{
         rules: '', 
         isActive: true,
         guestListTypes: [] as string[],
-        guestAllowance: 0,
+        guestAllowance: {} as { [listName: string]: number },
     });
     const [newListName, setNewListName] = useState('');
 
@@ -34,10 +34,10 @@ const CampaignModal: React.FC<{
                 rules: campaign.rules || '',
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
                 guestListTypes: campaign.guestListTypes || [],
-                guestAllowance: campaign.guestAllowance || 0,
+                guestAllowance: campaign.guestAllowance || {},
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: 0 });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {} });
         }
     }, [campaign, isOpen]);
     
@@ -45,13 +45,37 @@ const CampaignModal: React.FC<{
 
     const handleAddListType = () => {
         if (newListName.trim() && !formData.guestListTypes.includes(newListName.trim())) {
-            setFormData(prev => ({ ...prev, guestListTypes: [...prev.guestListTypes, newListName.trim()] }));
+            const newName = newListName.trim();
+            setFormData(prev => ({ 
+                ...prev, 
+                guestListTypes: [...prev.guestListTypes, newName],
+                guestAllowance: { ...(prev.guestAllowance || {}), [newName]: 0 }
+            }));
             setNewListName('');
         }
     };
 
     const handleRemoveListType = (nameToRemove: string) => {
-        setFormData(prev => ({ ...prev, guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove) }));
+        setFormData(prev => {
+            const { [nameToRemove]: _, ...newAllowance } = (prev.guestAllowance || {});
+            return {
+                ...prev,
+                guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove),
+                guestAllowance: newAllowance,
+            };
+        });
+    };
+    
+    const handleAllowanceChange = (listName: string, value: string) => {
+        const allowance = parseInt(value, 10);
+        
+        setFormData(prev => ({
+            ...prev,
+            guestAllowance: {
+                ...(prev.guestAllowance || {}),
+                [listName]: isNaN(allowance) ? 0 : Math.max(0, allowance)
+            }
+        }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -79,20 +103,24 @@ const CampaignModal: React.FC<{
                             <button type="button" onClick={handleAddListType} className="px-4 py-2 bg-primary text-white rounded-md">Adicionar</button>
                          </div>
                          <div className="space-y-2">
-                            {formData.guestListTypes.map(name => (
-                                <div key={name} className="flex justify-between items-center p-2 bg-gray-800 rounded">
-                                    <span className="text-gray-200">{name}</span>
-                                    <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300">&times;</button>
+                            {(formData.guestListTypes || []).map(name => (
+                                <div key={name} className="flex justify-between items-center p-2 bg-gray-800 rounded gap-4">
+                                    <span className="text-gray-200 flex-grow">{name}</span>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <label htmlFor={`allowance-${name}`} className="text-sm text-gray-400">Convidados:</label>
+                                        <input
+                                            id={`allowance-${name}`}
+                                            type="number"
+                                            min="0"
+                                            value={formData.guestAllowance?.[name] ?? 0}
+                                            onChange={(e) => handleAllowanceChange(name, e.target.value)}
+                                            className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
+                                        />
+                                        <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300 text-2xl leading-none">&times;</button>
+                                    </div>
                                 </div>
                             ))}
                          </div>
-
-                         {formData.guestListTypes.length > 0 && (
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300">Nº de convidados por divulgadora</label>
-                                 <input type="number" min="0" value={formData.guestAllowance} onChange={e => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
-                             </div>
-                         )}
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
