@@ -3,7 +3,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter } from '../types';
-import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -47,6 +47,52 @@ const extractGoogleDriveId = (url: string): string | null => {
         }
     }
     return id;
+};
+
+const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+    const [isExpired, setIsExpired] = useState(false);
+
+    useEffect(() => {
+        const targetDate = toDateSafe(expiresAt);
+        if (!targetDate) return;
+
+        const updateTimer = () => {
+            const now = new Date();
+            const difference = targetDate.getTime() - now.getTime();
+
+            if (difference > 0) {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+                const minutes = Math.floor((difference / 1000 / 60) % 60);
+                const seconds = Math.floor((difference / 1000) % 60);
+                
+                let timeString = '';
+                if (days > 0) timeString += `${days}d `;
+                timeString += `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+
+                setTimeLeft(timeString);
+                setIsExpired(false);
+            } else {
+                setTimeLeft('Prazo encerrado');
+                setIsExpired(true);
+            }
+        };
+
+        updateTimer(); // Initial call
+        const timer = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(timer);
+    }, [expiresAt]);
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}>
+            <ClockIcon className="h-4 w-4" />
+            <span>{timeLeft}</span>
+        </div>
+    );
 };
 
 const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
@@ -223,7 +269,10 @@ const PostCard: React.FC<{
                             </div>
                         )}
                     </div>
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900/50 text-red-300">Perdido (Prazo Encerrado)</span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {assignment.post.expiresAt && <CountdownTimer expiresAt={assignment.post.expiresAt} />}
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900/50 text-red-300">Perdido</span>
+                    </div>
                 </div>
                 <div className="border-t border-gray-700 pt-3">
                     <p className="text-sm text-gray-300 mb-4">Você não confirmou esta publicação antes do prazo. Se houve algum imprevisto, envie uma justificativa para o organizador.</p>
@@ -288,6 +337,7 @@ const PostCard: React.FC<{
         setIsMediaProcessing(true);
         try {
             const { mediaUrl, type } = assignment.post;
+    
             let finalUrl = mediaUrl;
     
             if (type === 'video' && mediaUrl.includes('drive.google.com')) {
@@ -424,11 +474,14 @@ const PostCard: React.FC<{
                         </div>
                     )}
                 </div>
-                {assignment.status === 'confirmed' ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
-                ) : (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
-                )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                     {assignment.post.expiresAt && <CountdownTimer expiresAt={assignment.post.expiresAt} />}
+                     {assignment.status === 'confirmed' ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
+                    ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                    )}
+                </div>
             </div>
             
             <div className="border-t border-gray-700 pt-3">
