@@ -485,6 +485,69 @@ async function getOrgAndCampaignDetails(organizationId, stateAbbr, campaignName)
   return { orgName, campaignRules, campaignLink };
 }
 
+/**
+ * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
+ */
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  // 1. Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  // 2. Get postId
+  const { postId } = data;
+  if (!postId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação (postId) é obrigatório.");
+  }
+
+  // Get post and org details for email personalization
+  const postSnap = await db.collection("posts").doc(postId).get();
+  if (!postSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  // 3. Query for assignments that need a reminder
+  const assignmentsQuery = db.collection("postAssignments")
+      .where("postId", "==", postId)
+      .where("status", "==", "confirmed")
+      .where("proofSubmittedAt", "==", null);
+
+  const snapshot = await assignmentsQuery.get();
+
+  // Filter out assignments that already have a justification
+  const assignmentsToSendTo = snapshot.docs.filter((doc) => !doc.data().justification);
+
+  if (assignmentsToSendTo.length === 0) {
+    return { success: true, count: 0, message: "Nenhuma divulgadora pendente de comprovação para este post." };
+  }
+
+  // 4. Iterate and send emails
+  const emailPromises = assignmentsToSendTo.map((doc) => {
+    const assignment = { id: doc.id, ...doc.data() };
+    return sendProofReminderEmail(assignment, { campaignName: post.campaignName, orgName });
+  });
+
+  await Promise.all(emailPromises);
+
+  // 5. Batch update the timestamps for sent reminders
+  const batch = db.batch();
+  const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+  assignmentsToSendTo.forEach((doc) => {
+    batch.update(doc.ref, { lastManualReminderAt: serverTimestamp });
+  });
+  await batch.commit();
+
+  return { success: true, count: assignmentsToSendTo.length, message: `${assignmentsToSendTo.length} lembretes foram enviados com sucesso.` };
+});
+
 exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
