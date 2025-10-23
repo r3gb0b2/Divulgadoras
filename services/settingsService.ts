@@ -1,5 +1,5 @@
 import { firestore } from '../firebase/config';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { states } from '../constants/states';
 import { StatesConfig, StateConfig, Campaign, InstructionTemplate } from '../types';
 
@@ -157,14 +157,24 @@ export const getInstructionTemplates = async (organizationId: string): Promise<I
     try {
         const q = query(
             collection(firestore, "instructionTemplates"),
-            where("organizationId", "==", organizationId),
-            orderBy("createdAt", "desc")
+            where("organizationId", "==", organizationId)
         );
         const querySnapshot = await getDocs(q);
         const templates = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InstructionTemplate));
+        
+        // Sort client-side to avoid needing a composite index
+        templates.sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // descending
+        });
+
         return templates;
     } catch (error) {
         console.error("Error getting instruction templates: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice no Firebase Console.");
+        }
         throw new Error("Não foi possível buscar os modelos de instruções.");
     }
 };
