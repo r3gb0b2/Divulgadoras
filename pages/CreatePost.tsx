@@ -477,16 +477,21 @@ const CreatePost: React.FC = () => {
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
                 const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
                 
-                const cleanPostData = JSON.parse(JSON.stringify(postDataForScheduling));
-
-                await schedulePost({
-                    postData: cleanPostData,
+                // The bug: A complex object (potentially a state proxy) containing a Timestamp is being passed to Firestore.
+                // This can cause serialization errors when the backend cloud function reads the data.
+                // The fix: Deep-clone the `postData` via JSON stringify/parse to ensure it's a plain object.
+                // This converts the Timestamp to a standard object format ({seconds, nanoseconds}) that the backend
+                // can reliably handle and reconstruct, avoiding deserialization failures.
+                const payload = {
+                    postData: JSON.parse(JSON.stringify(postDataForScheduling)),
                     assignedPromoters: promotersToAssign,
                     scheduledAt: scheduledTimestamp,
                     organizationId: selectedOrgId,
                     createdByEmail: adminData.email,
-                    status: 'pending'
-                });
+                    status: 'pending' as const,
+                };
+
+                await schedulePost(payload);
                 alert('Publicação agendada com sucesso!');
                 navigate('/admin/scheduled-posts');
 
