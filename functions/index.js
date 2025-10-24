@@ -617,10 +617,14 @@ exports.createPostAndAssignments = functions.region("southamerica-east1")
     try {
         const postDocRef = postsCollection.doc();
 
-        // 3. Prepare Post Data
+        // Use a concrete timestamp for the denormalized 'post.createdAt' field,
+        // as server timestamps cannot be used in nested objects within a batch.
+        const creationTimestampForDenormalization = admin.firestore.Timestamp.now();
+
+        // 3. Prepare Post Data for the main 'posts' collection document
         const finalPostData = {
             ...postData,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(), // This will be resolved by Firestore server.
             // The client sends an ISO string, so we convert it back to a Timestamp.
             expiresAt: postData.expiresAt ?
                 admin.firestore.Timestamp.fromDate(new Date(postData.expiresAt)) :
@@ -644,8 +648,8 @@ exports.createPostAndAssignments = functions.region("southamerica-east1")
                     campaignName: finalPostData.campaignName,
                     eventName: finalPostData.eventName || null,
                     isActive: finalPostData.isActive,
-                    expiresAt: finalPostData.expiresAt, // This is now a Firestore Timestamp
-                    createdAt: finalPostData.createdAt, // This is a ServerTimestamp FieldValue
+                    expiresAt: finalPostData.expiresAt, // This is a valid Firestore Timestamp or null
+                    createdAt: creationTimestampForDenormalization, // Use the concrete timestamp for denormalization
                     allowLateSubmissions: finalPostData.allowLateSubmissions || false,
                     allowImmediateProof: finalPostData.allowImmediateProof || false,
                     postFormats: finalPostData.postFormats || [],
