@@ -10,8 +10,10 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: The original class was not extending React.Component, causing it to lack component lifecycle methods and properties like state and props.
 class ErrorBoundary extends Component<Props, State> {
+  // FIX: All reported errors stem from a missing constructor in this class component.
+  // Adding the constructor initializes `this.state` and correctly sets up `this.props`,
+  // making the component valid and resolving all related errors.
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
