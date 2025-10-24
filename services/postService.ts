@@ -38,6 +38,35 @@ const toDateSafe = (timestamp: any): Date | null => {
     return null;
 };
 
+/**
+ * Recursively converts Firestore Timestamps into ISO 8601 strings,
+ * which is a robust format for cloud function serialization.
+ * @param data The data to serialize.
+ * @returns The serialized data.
+ */
+const serializeDataForFunction = (data: any): any => {
+    if (data === null || typeof data !== 'object') {
+        return data;
+    }
+    // Check if it's a Firestore Timestamp (from compat or v9)
+    if (typeof data.toDate === 'function' && typeof data.seconds === 'number' && typeof data.nanoseconds === 'number') {
+        return data.toDate().toISOString(); // Convert to ISO string
+    }
+    // Recurse for arrays
+    if (Array.isArray(data)) {
+        return data.map(item => serializeDataForFunction(item));
+    }
+    // Recurse for objects
+    const newData: { [key: string]: any } = {};
+    for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+            newData[key] = serializeDataForFunction(data[key]);
+        }
+    }
+    return newData;
+};
+
+
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
   mediaFile: File | null,
@@ -65,18 +94,11 @@ export const createPost = async (
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
     const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
     
-    // FIX: A complex object (like a Firestore Timestamp) passed directly to a callable function
-    // can cause serialization errors. The previous JSON.stringify fix was not sufficient.
-    // This new implementation creates a plain object and explicitly converts the Timestamp
-    // to an ISO string, which is a standard serializable format.
-    const plainObjectPostData = JSON.parse(JSON.stringify(finalPostData));
-    if (plainObjectPostData.expiresAt && plainObjectPostData.expiresAt.seconds) {
-        const date = new Date(plainObjectPostData.expiresAt.seconds * 1000);
-        plainObjectPostData.expiresAt = date.toISOString();
-    }
+    // Manually serialize Timestamp objects to a robust format (ISO string).
+    const serializablePostData = serializeDataForFunction(finalPostData);
 
     const payload = {
-        postData: plainObjectPostData,
+        postData: serializablePostData,
         assignedPromoters,
     };
 
@@ -89,12 +111,39 @@ export const createPost = async (
     
     return data.postId;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating post via cloud function: ", error);
-    if (error instanceof Error) {
-        throw error;
+    
+    // Defensive error message construction to avoid crashes inside the catch block.
+    let detailMessage = "Verifique os logs da função 'createPostAndAssignments' no Firebase para mais detalhes.";
+    if (error.details) {
+        if (typeof error.details === 'object' && error.details !== null && typeof error.details.message === 'string') {
+            detailMessage = `Detalhes do servidor: ${error.details.message}`;
+        } else {
+            try {
+                detailMessage = `Detalhes do servidor: ${String(error.details)}`;
+            } catch (e) {
+                detailMessage = "Não foi possível extrair os detalhes do erro do servidor."
+            }
+        }
     }
-    throw new Error("Não foi possível criar a publicação.");
+
+    const errorMessage = error.message || 'Ocorreu um erro desconhecido no servidor.';
+    
+    throw new Error(`Falha ao criar a publicação. Erro: "${errorMessage}". ${detailMessage}`);
+  }
+};
+
+export const schedulePost = async (scheduleData: Omit<ScheduledPost, 'id'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(firestore, 'scheduledPosts'), scheduleData);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error scheduling post: ", error);
+    if (error instanceof Error && (error.message.includes('invalid argument') || error.message.includes('Unsupported field value'))) {
+        throw new Error("Não foi possível agendar a publicação. Um tipo de dado inválido foi detectado (provavelmente uma data). Por favor, verifique os campos e tente novamente.");
+    }
+    throw new Error("Não foi possível agendar a publicação.");
   }
 };
 
@@ -482,16 +531,25 @@ export const removePromoterFromPostAndGroup = async (assignmentId: string, promo
 export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
     try {
         const docRef = doc(firestore, 'postAssignments', assignmentId);
-        await updateDoc(docRef, {
-            confirmedAt: serverTimestamp(),
-        });
+        // This will renew the 24-hour deadline from NOW.
+        await updateDoc(docRef, { confirmedAt: serverTimestamp() });
     } catch (error) {
-        console.error("Error renewing assignment deadline: ", error);
-        throw new Error("Não foi possível renovar o prazo da tarefa.");
+        console.error("Error renewing assignment deadline:", error);
+        throw new Error("Não foi possível renovar o prazo.");
     }
 };
 
-export const submitJustification = async (assignmentId: string, justification: string, imageFiles: File[]): Promise<void> => {
+export const updateAssignment = async (assignmentId: string, data: Partial<Pick<PostAssignment, 'justificationStatus' | 'proofSubmittedAt'>>): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'postAssignments', assignmentId);
+        await updateDoc(docRef, data);
+    } catch (error) {
+        console.error("Error updating assignment:", error);
+        throw new Error("Não foi possível atualizar a tarefa.");
+    }
+};
+
+export const submitJustification = async (assignmentId: string, text: string, imageFiles: File[]): Promise<void> => {
     try {
         let justificationImageUrls: string[] = [];
         if (imageFiles.length > 0) {
@@ -499,7 +557,7 @@ export const submitJustification = async (assignmentId: string, justification: s
                 imageFiles.map(async (photo) => {
                     const fileExtension = photo.name.split('.').pop();
                     const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = ref(storage, `justifications-proofs/${fileName}`);
+                    const storageRef = ref(storage, `posts-justifications/${fileName}`);
                     await uploadBytes(storageRef, photo);
                     return await getDownloadURL(storageRef);
                 })
@@ -508,40 +566,14 @@ export const submitJustification = async (assignmentId: string, justification: s
 
         const docRef = doc(firestore, 'postAssignments', assignmentId);
         await updateDoc(docRef, {
-            justification: justification,
+            justification: text,
+            justificationImageUrls: justificationImageUrls,
             justificationStatus: 'pending',
             justificationSubmittedAt: serverTimestamp(),
-            proofImageUrls: [], 
-            proofSubmittedAt: null,
-            justificationImageUrls: justificationImageUrls,
         });
     } catch (error) {
-        console.error("Error submitting justification: ", error);
+        console.error("Error submitting justification:", error);
         throw new Error("Não foi possível enviar a justificativa.");
-    }
-};
-
-export const updateAssignment = async (assignmentId: string, data: Partial<Omit<PostAssignment, 'id'>>): Promise<void> => {
-    try {
-        const docRef = doc(firestore, 'postAssignments', assignmentId);
-        await updateDoc(docRef, data);
-    } catch (error) {
-        console.error("Error updating assignment: ", error);
-        throw new Error("Não foi possível atualizar a tarefa.");
-    }
-};
-
-// --- Scheduled Post Functions ---
-
-export const schedulePost = async (
-  data: Omit<ScheduledPost, 'id'>
-): Promise<string> => {
-    try {
-        const docRef = await addDoc(collection(firestore, 'scheduledPosts'), data);
-        return docRef.id;
-    } catch (error) {
-        console.error("Error scheduling post: ", error);
-        throw new Error("Não foi possível agendar a publicação.");
     }
 };
 
@@ -549,12 +581,13 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
     try {
         const q = query(
             collection(firestore, "scheduledPosts"),
-            where("organizationId", "==", organizationId)
+            where("organizationId", "==", organizationId),
+            // where("status", "==", "pending") // Optional: only show pending ones
         );
         const snapshot = await getDocs(q);
         const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
         posts.sort((a, b) => 
-            ((b.scheduledAt as Timestamp)?.toMillis() || 0) - ((a.scheduledAt as Timestamp)?.toMillis() || 0)
+            ((a.scheduledAt as Timestamp)?.toMillis() || 0) - ((b.scheduledAt as Timestamp)?.toMillis() || 0)
         );
         return posts;
     } catch (error) {
@@ -565,8 +598,7 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
 
 export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
     try {
-        const docRef = doc(firestore, 'scheduledPosts', id);
-        await updateDoc(docRef, data);
+        await updateDoc(doc(firestore, 'scheduledPosts', id), data);
     } catch (error) {
         console.error("Error updating scheduled post: ", error);
         throw new Error("Não foi possível atualizar o agendamento.");
@@ -578,6 +610,6 @@ export const deleteScheduledPost = async (id: string): Promise<void> => {
         await deleteDoc(doc(firestore, "scheduledPosts", id));
     } catch (error) {
         console.error("Error deleting scheduled post: ", error);
-        throw new Error("Não foi possível cancelar o agendamento.");
+        throw new Error("Não foi possível deletar o agendamento.");
     }
 };

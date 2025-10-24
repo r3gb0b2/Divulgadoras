@@ -19,7 +19,8 @@ import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } fro
 import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
-import CreatePost from './CreatePost';
+// FIX: Changed to a named import to resolve module export issue.
+import { CreatePost } from './CreatePost';
 // FIX: Changed to a named import to resolve module export issue.
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page

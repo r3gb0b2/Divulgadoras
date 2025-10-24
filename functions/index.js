@@ -577,4 +577,98 @@ exports.sendSingleProofReminder = functions.region("southamerica-east1").https.o
 
   const postSnap = await db.collection("posts").doc(assignment.postId).get();
   if (!postSnap.exists) {
-    throw new functions
+    throw new functions.https.HttpsError("not-found", "Publicação associada não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  await sendProofReminderEmail(assignment, { campaignName: post.campaignName, orgName });
+
+  await db.collection("postAssignments").doc(assignmentId).update({
+      lastManualReminderAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { success: true, message: "Lembrete enviado com sucesso." };
+});
+
+exports.createPostAndAssignments = functions.region("southamerica-east1")
+  .https.onCall(async (data, context) => {
+    // 1. Auth Check
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Apenas administradores autenticados podem criar publicações.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Você não tem permissão para criar publicações.");
+    }
+
+    // 2. Data Validation
+    const { postData, assignedPromoters } = data;
+    if (!postData || typeof postData !== "object" || !Array.isArray(assignedPromoters) || assignedPromoters.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados da publicação ou divulgadoras inválidos.");
+    }
+
+    const postsCollection = db.collection("posts");
+    const assignmentsCollection = db.collection("postAssignments");
+    const batch = db.batch();
+
+    try {
+        const postDocRef = postsCollection.doc();
+
+        // 3. Prepare Post Data
+        const finalPostData = {
+            ...postData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            // The client sends an ISO string, so we convert it back to a Timestamp.
+            expiresAt: postData.expiresAt ?
+                admin.firestore.Timestamp.fromDate(new Date(postData.expiresAt)) :
+                null,
+        };
+
+        // 4. Batch write the Post document
+        batch.set(postDocRef, finalPostData);
+
+        // 5. Batch write all PostAssignment documents
+        for (const promoter of assignedPromoters) {
+            const assignmentDocRef = assignmentsCollection.doc();
+            const newAssignment = {
+                postId: postDocRef.id,
+                post: { // denormalized data
+                    type: finalPostData.type,
+                    mediaUrl: finalPostData.mediaUrl || null,
+                    textContent: finalPostData.textContent || null,
+                    instructions: finalPostData.instructions,
+                    postLink: finalPostData.postLink || null,
+                    campaignName: finalPostData.campaignName,
+                    eventName: finalPostData.eventName || null,
+                    isActive: finalPostData.isActive,
+                    expiresAt: finalPostData.expiresAt, // This is now a Firestore Timestamp
+                    createdAt: finalPostData.createdAt, // This is a ServerTimestamp FieldValue
+                    allowLateSubmissions: finalPostData.allowLateSubmissions || false,
+                    allowImmediateProof: finalPostData.allowImmediateProof || false,
+                    postFormats: finalPostData.postFormats || [],
+                    autoAssignToNewPromoters: finalPostData.autoAssignToNewPromoters || false,
+                },
+                organizationId: finalPostData.organizationId,
+                promoterId: promoter.id,
+                promoterEmail: promoter.email.toLowerCase(),
+                promoterName: promoter.name,
+                status: "pending",
+                confirmedAt: null,
+            };
+            batch.set(assignmentDocRef, newAssignment);
+        }
+
+        // 6. Commit the batch
+        await batch.commit();
+
+        return { success: true, postId: postDocRef.id };
+    } catch (error) {
+        console.error("Error in createPostAndAssignments function:", error);
+        // Log the received data for debugging
+        console.error("Received postData:", JSON.stringify(postData));
+        throw new functions.https.HttpsError("internal", "Erro ao salvar no banco de dados.", { message: error.message });
+    }
+});
