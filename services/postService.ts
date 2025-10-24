@@ -41,7 +41,7 @@ const toDateSafe = (timestamp: any): Date | null => {
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
   mediaFile: File | null,
-  assignedPromoters: Promoter[]
+  assignedPromoters: Pick<Promoter, 'id' | 'email' | 'name'>[]
 ): Promise<string> => {
   try {
     let finalMediaUrl: string | undefined = undefined;
@@ -66,11 +66,17 @@ export const createPost = async (
     const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
     
     // FIX: A complex object (like a Firestore Timestamp) passed directly to a callable function
-    // can cause serialization errors on the server side. To prevent this, we convert the postData
-    // object to a plain JSON object, which serializes Timestamps into a format that the
-    // Admin SDK can correctly interpret and reconstruct. This is the same fix applied to scheduled posts.
+    // can cause serialization errors. The previous JSON.stringify fix was not sufficient.
+    // This new implementation creates a plain object and explicitly converts the Timestamp
+    // to an ISO string, which is a standard serializable format.
+    const plainObjectPostData = JSON.parse(JSON.stringify(finalPostData));
+    if (plainObjectPostData.expiresAt && plainObjectPostData.expiresAt.seconds) {
+        const date = new Date(plainObjectPostData.expiresAt.seconds * 1000);
+        plainObjectPostData.expiresAt = date.toISOString();
+    }
+
     const payload = {
-        postData: JSON.parse(JSON.stringify(finalPostData)),
+        postData: plainObjectPostData,
         assignedPromoters,
     };
 
