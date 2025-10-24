@@ -64,7 +64,17 @@ export const createPost = async (
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
     const createPostAndAssignments = httpsCallable(functions, 'createPostAndAssignments');
-    const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
+    
+    // FIX: A complex object (like a Firestore Timestamp) passed directly to a callable function
+    // can cause serialization errors on the server side. To prevent this, we convert the postData
+    // object to a plain JSON object, which serializes Timestamps into a format that the
+    // Admin SDK can correctly interpret and reconstruct. This is the same fix applied to scheduled posts.
+    const payload = {
+        postData: JSON.parse(JSON.stringify(finalPostData)),
+        assignedPromoters,
+    };
+
+    const result = await createPostAndAssignments(payload);
     
     const data = result.data as { success: boolean, postId?: string };
     if (!data.success || !data.postId) {
