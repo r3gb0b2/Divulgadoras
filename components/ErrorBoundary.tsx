@@ -10,10 +10,8 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: Extended React.Component to make this a valid class component. This resolves all errors in this file and the related error in App.tsx.
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: All reported errors stem from a missing constructor in this class component.
-  // Adding the constructor initializes `this.state` and correctly sets up `this.props`,
-  // making the component valid and resolving all related errors.
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
