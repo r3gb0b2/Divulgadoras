@@ -525,7 +525,7 @@ const PostCard: React.FC<{
             <div className="border-t border-gray-700 pt-3">
                 {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
                      <div className="mb-4">
-                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
+                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md" controls={assignment.post.type === 'video'} />
                         <div className="flex justify-center items-center gap-4 mt-2">
                             <button
                                 onClick={handleView}
@@ -772,16 +772,28 @@ const PostCheck: React.FC = () => {
 
     const { activeAssignments, inactiveAssignments } = useMemo(() => {
         if (!assignments) return { activeAssignments: [], inactiveAssignments: [] };
-        
+
         const active: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
         const inactive: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
-        
+
         assignments.forEach(a => {
-            if (a.post.isActive) {
+            const isCompleted = !!a.proofSubmittedAt || a.justificationStatus === 'accepted';
+            const isFinalized = isCompleted || a.justificationStatus === 'rejected';
+
+            if (a.post.isActive && !isFinalized) {
                 active.push(a);
             } else {
                 inactive.push(a);
             }
+        });
+
+        // Sort inactive assignments to show the most recent ones first
+        inactive.sort((a, b) => {
+            const dateA = toDateSafe(a.post.createdAt);
+            const dateB = toDateSafe(b.post.createdAt);
+            const timeA = dateA ? dateA.getTime() : 0;
+            const timeB = dateB ? dateB.getTime() : 0;
+            return timeB - timeA;
         });
 
         return { activeAssignments: active, inactiveAssignments: inactive };
@@ -789,7 +801,7 @@ const PostCheck: React.FC = () => {
 
     const justificationCount = useMemo(() => {
         if (!assignments) return 0;
-        return assignments.filter(a => !!a.justification).length;
+        return assignments.filter(a => !!a.justification && a.justificationStatus === 'pending').length;
     }, [assignments]);
 
     const renderResult = () => {
