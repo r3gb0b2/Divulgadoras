@@ -95,7 +95,10 @@ const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt })
     );
 };
 
-const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) => {
+const ProofSection: React.FC<{
+    assignment: PostAssignment,
+    onJustify: (assignment: PostAssignment) => void
+}> = ({ assignment, onJustify }) => {
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
@@ -170,17 +173,28 @@ const ProofSection: React.FC<{ assignment: PostAssignment }> = ({ assignment }) 
             </div>
         );
     }
+    
+    const isExpired = timeLeft === 'Tempo esgotado';
 
     return (
         <div className="mt-4 text-center">
-            <button
-                onClick={() => navigate(`/proof/${assignment.id}`)}
-                disabled={!isButtonEnabled}
-                className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                Comprovação de Postagem
-            </button>
-            <p className="text-xs text-gray-400 mt-2">{timeLeft}</p>
+            {isExpired ? (
+                <button
+                    onClick={() => onJustify(assignment)}
+                    className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                    Justificar Ausência
+                </button>
+            ) : (
+                <button
+                    onClick={() => navigate(`/proof/${assignment.id}`)}
+                    disabled={!isButtonEnabled}
+                    className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Comprovação de Postagem
+                </button>
+            )}
+            <p className={`text-xs mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
         </div>
     );
 };
@@ -217,7 +231,7 @@ const PostCard: React.FC<{
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-400">Inativo</span>
                 </div>
                 <div className="border-t border-gray-700 pt-3">
-                    <p className="text-sm text-gray-400">Esta publicação foi desativada pelo organizador e não requer mais ação.</p>
+                    <p className="text-sm text-gray-400">Esta publicação foi desativada pelo organizador.</p>
                      
                      {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
                         <div className="mt-4 text-center">
@@ -239,6 +253,20 @@ const PostCard: React.FC<{
                             <div className="text-xs">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
                         </div>
                      )}
+
+                    {!assignment.proofImageUrls?.length && !assignment.justification && (
+                        <>
+                           <p className="text-sm text-gray-300 mt-2">Se você não realizou esta postagem, envie uma justificativa.</p>
+                           <div className="mt-4 text-center">
+                                <button 
+                                   onClick={() => onJustify(assignment)}
+                                   className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                                >
+                                   Justificar Ausência
+                               </button>
+                           </div>
+                        </>
+                    )}
                 </div>
             </div>
         );
@@ -427,7 +455,7 @@ const PostCard: React.FC<{
 
     const renderActions = () => {
         if (hasProof) {
-            return <ProofSection assignment={assignment} />;
+            return <ProofSection assignment={assignment} onJustify={onJustify} />;
         }
         if (hasJustification) {
             return (
@@ -458,7 +486,7 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'confirmed') {
-            return <ProofSection assignment={assignment} />;
+            return <ProofSection assignment={assignment} onJustify={onJustify} />;
         }
         return null;
     };
