@@ -10,7 +10,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Extended React.Component to make this a valid class component. This resolves all errors in this file and the related error in App.tsx.
+// FIX: The original class was not extending React.Component, causing it to lack component lifecycle methods and properties like state and props.
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
