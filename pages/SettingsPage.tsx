@@ -127,14 +127,14 @@ const SettingsPage: React.FC = () => {
             </div>
           </Link>
           
-           {/* Métricas das Divulgadoras */}
+           {/* Desempenho das Divulgadoras */}
           <Link
             to="/admin/dashboard"
             className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
           >
             <div className="flex items-center">
               <ChartBarIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Métricas das Divulgadoras</h2>
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Desempenho das Divulgadoras</h2>
             </div>
             <p className="mt-2 text-gray-400">
               Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.

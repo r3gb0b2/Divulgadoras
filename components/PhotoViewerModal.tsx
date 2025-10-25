@@ -68,28 +68,28 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, s
   }, [isOpen, currentIndex, imageUrls]);
 
 
-  const goToPrevious = (e: React.MouseEvent) => {
+  const goToPrevious = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (imageUrls.length <= 1) return;
     const isFirstSlide = currentIndex === 0;
     const newIndex = isFirstSlide ? imageUrls.length - 1 : currentIndex - 1;
     setCurrentIndex(newIndex);
-  };
+  }, [currentIndex, imageUrls.length]);
 
-  const goToNext = (e: React.MouseEvent) => {
+  const goToNext = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (imageUrls.length <= 1) return;
     const isLastSlide = currentIndex === imageUrls.length - 1;
     const newIndex = isLastSlide ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
-  };
+  }, [currentIndex, imageUrls.length]);
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
       if (!isOpen) return;
       if (e.key === 'ArrowRight') goToNext(e as any);
       else if (e.key === 'ArrowLeft') goToPrevious(e as any);
       else if (e.key === 'Escape') onClose();
-  }, [isOpen, currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, goToNext, goToPrevious, onClose]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -142,7 +142,8 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, s
                 </div>
             </div>
         </div>
-    );
+    </div>
+  );
 };
 
 export default PhotoViewerModal;

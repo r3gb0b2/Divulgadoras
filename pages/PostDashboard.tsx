@@ -209,7 +209,7 @@ const PostDashboard: React.FC = () => {
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Desempenho de Postagens</h1>
+                <h1 className="text-3xl font-bold">Desempenho das Divulgadoras</h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" />
                     <span>Voltar</span>
