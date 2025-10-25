@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DownloadIcon } from './Icons';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
@@ -10,13 +10,16 @@ interface PhotoViewerModalProps {
   onClose: () => void;
 }
 
-const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startIndex, isOpen, onClose }) => {
+// FIX: Changed to a named export to resolve a module resolution error.
+export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startIndex, isOpen, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [downloadableUrl, setDownloadableUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    setCurrentIndex(startIndex);
-  }, [startIndex, isOpen]);
+    if (isOpen) {
+        setCurrentIndex(startIndex);
+    }
+  }, [isOpen, startIndex]);
 
   // Effect to generate a fresh, valid URL for the current image
   useEffect(() => {
@@ -32,8 +35,10 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
         // If it's a Firebase Storage URL, it might be expired. Let's get a fresh one.
         if (originalUrl.includes('firebasestorage.googleapis.com')) {
             try {
+                // This is a simplified way to get the path. A more robust way might be needed if URLs change.
                 const urlObject = new URL(originalUrl);
                 const pathName = urlObject.pathname;
+                // Path is like /v0/b/bucket-name.appspot.com/o/path%2Fto%2Ffile.jpg
                 const pathStartIndex = pathName.indexOf('/o/');
                 
                 if (pathStartIndex !== -1) {
@@ -63,38 +68,35 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
   }, [isOpen, currentIndex, imageUrls]);
 
 
-  const goToPrevious = () => {
+  const goToPrevious = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (imageUrls.length <= 1) return;
     const isFirstSlide = currentIndex === 0;
     const newIndex = isFirstSlide ? imageUrls.length - 1 : currentIndex - 1;
     setCurrentIndex(newIndex);
   };
 
-  const goToNext = () => {
+  const goToNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (imageUrls.length <= 1) return;
     const isLastSlide = currentIndex === imageUrls.length - 1;
     const newIndex = isLastSlide ? 0 : currentIndex + 1;
     setCurrentIndex(newIndex);
   };
   
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
       if (!isOpen) return;
-      if (e.key === 'ArrowRight') {
-        goToNext();
-      } else if (e.key === 'ArrowLeft') {
-        goToPrevious();
-      } else if (e.key === 'Escape') {
-        onClose();
-      }
-    };
+      if (e.key === 'ArrowRight') goToNext(e as any);
+      else if (e.key === 'ArrowLeft') goToPrevious(e as any);
+      else if (e.key === 'Escape') onClose();
+  }, [isOpen, currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, currentIndex]); // Re-add listener if state changes
+  }, [handleKeyDown]);
 
   if (!isOpen || !imageUrls || imageUrls.length === 0) {
     return null;
@@ -106,78 +108,41 @@ const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startInd
     }
   };
 
-  return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50 p-4 transition-opacity duration-300"
-      onClick={handleBackdropClick}
-      aria-modal="true"
-      role="dialog"
-    >
-      <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col justify-center">
-        {/* Close button moved to the bottom controls */}
+  const hasMultipleImages = imageUrls.length > 1;
 
-        <div className="flex-grow flex items-center justify-center min-h-0">
-          <img
-            src={imageUrls[currentIndex]}
-            alt={`Foto ${currentIndex + 1} de ${imageUrls.length}`}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-          />
-        </div>
-        
-        {/* Controls container */}
-        <div className="flex-shrink-0 flex flex-col items-center w-full mt-4">
-            <div className="flex items-center justify-center gap-4 sm:gap-8">
-                <button
-                    onClick={goToPrevious}
-                    className={`bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all ${imageUrls.length <= 1 ? 'invisible' : ''}`}
-                    aria-label="Foto anterior"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                </button>
-                
-                <div className="flex items-center gap-2">
-                     <a
-                        href={downloadableUrl || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`bg-black bg-opacity-50 text-white px-4 py-2 rounded-full hover:bg-opacity-75 transition-all text-base flex items-center gap-2 ${!downloadableUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        aria-label="Abrir imagem original"
-                        onClick={(e) => { if (!downloadableUrl) e.preventDefault(); }}
-                    >
-                        <DownloadIcon className="w-5 h-5" />
-                        <span>{downloadableUrl ? 'Abrir Imagem Original' : 'Carregando...'}</span>
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-2" onClick={handleBackdropClick} role="dialog" aria-modal="true">
+        <div className="relative w-full max-w-2xl max-h-[95vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {/* Image Area */}
+            <div className="relative w-full flex-grow min-h-0 flex items-center justify-center">
+                <img src={imageUrls[currentIndex]} alt={`Visualização ${currentIndex + 1}`} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
+            </div>
+            
+            {/* Bottom Control Bar */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                {hasMultipleImages && (
+                    <p className="text-center text-white text-sm font-mono mb-2">{currentIndex + 1} / {imageUrls.length}</p>
+                )}
+                <div className="flex items-center justify-center gap-4 sm:gap-6 text-white">
+                    <button onClick={goToPrevious} disabled={!hasMultipleImages} className="p-2 rounded-full bg-black/50 hover:bg-black/70 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <a href={downloadableUrl || '#'} download target="_blank" rel="noopener noreferrer" className={`p-3 rounded-full bg-black/50 hover:bg-black/70 ${!downloadableUrl ? 'opacity-30 cursor-not-allowed' : ''}`} title="Baixar imagem">
+                        <DownloadIcon className="h-6 w-6" />
                     </a>
-                    <button
-                        onClick={onClose}
-                        className="bg-black bg-opacity-50 text-white px-5 py-2 rounded-full hover:bg-opacity-75 transition-all text-base"
-                        aria-label="Fechar"
-                    >
+                    <button onClick={onClose} className="px-6 py-2 bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 transition-colors">
                         Fechar
                     </button>
+                    <a href={imageUrls[currentIndex]} target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-black/50 hover:bg-black/70" title="Abrir em nova aba">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </a>
+                    <button onClick={goToNext} disabled={!hasMultipleImages} className="p-2 rounded-full bg-black/50 hover:bg-black/70 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </button>
                 </div>
-
-                <button
-                    onClick={goToNext}
-                    className={`bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75 transition-all ${imageUrls.length <= 1 ? 'invisible' : ''}`}
-                    aria-label="Próxima foto"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                </button>
             </div>
-
-            {imageUrls.length > 1 && (
-                <div className="text-center text-white text-sm font-mono mt-2">
-                    {currentIndex + 1} / {imageUrls.length}
-                </div>
-            )}
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default PhotoViewerModal;

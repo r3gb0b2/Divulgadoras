@@ -9,7 +9,8 @@ import { getAssignmentsForOrganization } from '../services/postService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment } from '../types';
 import { states } from '../constants/states';
 import { Link } from 'react-router-dom';
-import PhotoViewerModal from '../components/PhotoViewerModal';
+// FIX: Changed to a named import to resolve module export error.
+import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';

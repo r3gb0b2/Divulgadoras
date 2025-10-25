@@ -4,7 +4,7 @@ import { Post, PostAssignment, Promoter } from '../types';
 import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications, renewAssignmentDeadline } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon, InstagramIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon, InstagramIcon, ClockIcon, DownloadIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -13,7 +13,7 @@ import ChangeAssignmentStatusModal from '../components/ChangeAssignmentStatusMod
 import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { storage, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ref, uploadBytes } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 const formatDate = (timestamp: any): string => {
@@ -44,7 +44,7 @@ const ProofCountdownTimer: React.FC<{ confirmedAt: any; allowLateSubmissions: bo
             if (difference > 0) {
                 const hours = Math.floor(difference / (1000 * 60 * 60));
                 const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+                const seconds = Math.floor((difference / 1000) % 60);
                 setTimeLeft(`${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`);
                 setIsExpired(false);
             } else {
@@ -76,13 +76,43 @@ const PhotoViewerModal: React.FC<{
     startIndex: number;
 }> = ({ isOpen, onClose, imageUrls, startIndex }) => {
     const [currentIndex, setCurrentIndex] = useState(startIndex);
+    const [downloadableUrl, setDownloadableUrl] = useState<string | null>(null);
 
-    // Reset index when modal is opened with a new start index
     useEffect(() => {
         if (isOpen) {
             setCurrentIndex(startIndex);
         }
     }, [isOpen, startIndex]);
+
+    // Effect to generate a fresh, valid URL for the current image
+    useEffect(() => {
+        if (!isOpen) return;
+        let isMounted = true;
+        setDownloadableUrl(null); // Reset on image change
+
+        const generateUrl = async () => {
+            const originalUrl = imageUrls[currentIndex];
+            if (!originalUrl) return;
+
+            // Simple check if it's a blob or http URL.
+            if (originalUrl.startsWith('http') || originalUrl.startsWith('blob:')) {
+                 if (isMounted) setDownloadableUrl(originalUrl);
+            } else {
+                // Otherwise, assume it's a Firebase Storage path.
+                 try {
+                    const storageRef = ref(storage, originalUrl);
+                    const freshUrl = await getDownloadURL(storageRef);
+                    if (isMounted) setDownloadableUrl(freshUrl);
+                } catch (e) {
+                    console.warn("Could not generate a fresh download URL, falling back to original URL.", e);
+                    // This might fail if it's already a full URL that doesn't start with http, which is unlikely.
+                    if (isMounted) setDownloadableUrl(originalUrl);
+                }
+            }
+        };
+        generateUrl();
+        return () => { isMounted = false; };
+    }, [isOpen, currentIndex, imageUrls]);
 
     const goToPrevious = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -97,91 +127,53 @@ const PhotoViewerModal: React.FC<{
         const newIndex = isLast ? 0 : currentIndex + 1;
         setCurrentIndex(newIndex);
     };
-    
-    // Keyboard navigation
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isOpen) return;
-            if (e.key === 'ArrowRight') {
-                e.stopPropagation();
-                goToNext(e as any); // cast to avoid type issue on event
-            } else if (e.key === 'ArrowLeft') {
-                e.stopPropagation();
-                goToPrevious(e as any);
-            } else if (e.key === 'Escape') {
-                onClose();
-            }
-        };
 
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (!isOpen) return;
+        if (e.key === 'ArrowRight') goToNext(e as any);
+        else if (e.key === 'ArrowLeft') goToPrevious(e as any);
+        else if (e.key === 'Escape') onClose();
+    }, [isOpen, currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, currentIndex, goToNext, goToPrevious, onClose]);
-
+    }, [handleKeyDown]);
 
     if (!isOpen) return null;
 
     const hasMultipleImages = imageUrls.length > 1;
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-2 sm:p-4" 
-            onClick={onClose}
-            aria-modal="true"
-            role="dialog"
-        >
-            <div 
-                className="relative w-full max-w-4xl max-h-[95vh] flex flex-col items-center justify-center" 
-                onClick={(e) => e.stopPropagation()}
-            >
-                <button
-                    onClick={onClose}
-                    className="absolute top-0 right-0 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors z-10 -mr-2 -mt-2 sm:mr-0 sm:mt-0"
-                    aria-label="Fechar"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-                {/* Image container */}
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-2" onClick={onClose} role="dialog" aria-modal="true">
+            <div className="relative w-full max-w-2xl max-h-[95vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                {/* Image Area */}
                 <div className="relative w-full flex-grow min-h-0 flex items-center justify-center">
-                    <img
-                        src={imageUrls[currentIndex]}
-                        alt={`Visualização ${currentIndex + 1}`}
-                        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                    />
-
-                    {/* Previous Button */}
-                    {hasMultipleImages && (
-                        <button
-                            onClick={goToPrevious}
-                            className="absolute left-0 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary ml-2"
-                            aria-label="Anterior"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                        </button>
-                    )}
-
-                    {/* Next Button */}
-                    {hasMultipleImages && (
-                        <button
-                            onClick={goToNext}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary mr-2"
-                            aria-label="Próxima"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                    )}
+                    <img src={imageUrls[currentIndex]} alt={`Visualização ${currentIndex + 1}`} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
                 </div>
                 
-                {/* Controls container at the bottom */}
-                <div className="flex-shrink-0 flex flex-col items-center mt-4">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"
-                    >
-                        Fechar
-                    </button>
+                {/* Bottom Control Bar */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                     {hasMultipleImages && (
-                        <p className="text-white text-sm mt-2 font-mono">{currentIndex + 1} / {imageUrls.length}</p>
+                        <p className="text-center text-white text-sm font-mono mb-2">{currentIndex + 1} / {imageUrls.length}</p>
                     )}
+                    <div className="flex items-center justify-center gap-4 sm:gap-6 text-white">
+                        <button onClick={goToPrevious} disabled={!hasMultipleImages} className="p-2 rounded-full bg-black/50 hover:bg-black/70 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <a href={downloadableUrl || '#'} download target="_blank" rel="noopener noreferrer" className={`p-3 rounded-full bg-black/50 hover:bg-black/70 ${!downloadableUrl ? 'opacity-30 cursor-not-allowed' : ''}`} title="Baixar imagem">
+                            <DownloadIcon className="h-6 w-6" />
+                        </a>
+                        <button onClick={onClose} className="px-6 py-2 bg-red-600 text-white font-semibold rounded-full hover:bg-red-700 transition-colors">
+                            Fechar
+                        </button>
+                        <a href={imageUrls[currentIndex]} target="_blank" rel="noopener noreferrer" className="p-3 rounded-full bg-black/50 hover:bg-black/70" title="Abrir em nova aba">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
+                        <button onClick={goToNext} disabled={!hasMultipleImages} className="p-2 rounded-full bg-black/50 hover:bg-black/70 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

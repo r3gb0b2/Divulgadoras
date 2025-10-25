@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -10,10 +10,8 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-class ErrorBoundary extends Component<Props, State> {
-  // FIX: Explicitly declare the 'state' property on the class. The TypeScript compiler was failing to resolve 'this.state' and 'this.props' from the component instance, and this declaration helps the type checker.
-  public state: State;
-
+// FIX: Extended from `React.Component` directly to avoid potential naming conflicts and resolve type errors where `this.props` and `this.setState` were not found. The explicit `public state: State` declaration was also removed as it is inherited.
+class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
