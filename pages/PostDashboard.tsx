@@ -130,14 +130,12 @@ const PostDashboard: React.FC = () => {
         });
         
         const finalStats = Array.from(statsMap.values()).map(stat => {
-             const effectiveAssigned = stat.assigned - stat.acceptedJustifications;
-             if (effectiveAssigned > 0) {
-                stat.completionRate = Math.round((stat.completed / effectiveAssigned) * 100);
-            } else if (stat.assigned > 0) { // All assignments were excused
-                stat.completionRate = 100;
-            } else { // No assignments at all
-                stat.completionRate = 0;
-            }
+            const successfulOutcomes = stat.completed + stat.acceptedJustifications;
+            if (stat.assigned > 0) {
+               stat.completionRate = Math.round((successfulOutcomes / stat.assigned) * 100);
+           } else {
+               stat.completionRate = 0;
+           }
             return stat;
         }).filter(stat => stat.assigned > 0); // Only show promoters with at least one assignment
 

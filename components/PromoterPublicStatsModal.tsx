@@ -119,10 +119,10 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
 
     if (!isOpen || !promoter) return null;
 
-    const effectiveAssigned = stats ? stats.assigned - stats.acceptedJustifications : 0;
-    const completionPercentage = stats && effectiveAssigned > 0
-        ? ((stats.completed / effectiveAssigned) * 100).toFixed(0)
-        : (stats && stats.assigned > 0 ? '100' : '0');
+    const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
+    const completionPercentage = stats && stats.assigned > 0
+        ? ((successfulOutcomes / stats.assigned) * 100).toFixed(0)
+        : '0';
 
 
     return (
