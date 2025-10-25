@@ -1,0 +1,262 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { GuestList, Campaign } from '../types';
+import { getGuestListsForOrg, createGuestList, updateGuestList, deleteGuestList } from '../services/guestListService';
+import { getAllCampaigns } from '../services/settingsService';
+import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/Icons';
+import { Timestamp, FieldValue } from 'firebase/firestore';
+
+const timestampToDateTimeLocal = (ts: any): string => {
+    if (!ts) return '';
+    try {
+        const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+        if (isNaN(date.getTime())) return '';
+        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+        return localDate.toISOString().slice(0, 16);
+    } catch (e) { return ''; }
+};
+
+// Modal for Creating/Editing Guest Lists
+const ListModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (data: Partial<Omit<GuestList, 'id'>>) => Promise<void>;
+    list: Partial<GuestList> | null;
+    campaigns: Campaign[];
+}> = ({ isOpen, onClose, onSave, list, campaigns }) => {
+    const [formData, setFormData] = useState<Partial<Omit<GuestList, 'id'>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    
+    useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                name: list?.name || '',
+                campaignId: list?.campaignId || '',
+                description: list?.description || '',
+                guestAllowance: list?.guestAllowance || 0,
+                closesAt: list?.closesAt || null,
+                isActive: list?.isActive !== undefined ? list.isActive : true,
+            });
+        }
+    }, [list, isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { name, value, type } = e.target;
+        if (type === 'checkbox') {
+            setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
+        } else if (type === 'number') {
+            setFormData(prev => ({ ...prev, [name]: parseInt(value, 10) || 0 }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+    
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        const closesAtTimestamp = value ? Timestamp.fromDate(new Date(value)) : null;
+        setFormData(prev => ({ ...prev, [name]: closesAtTimestamp }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        try {
+            await onSave(formData);
+            onClose();
+        } catch (err) {
+            // Error handling is done in parent component
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold text-white mb-4">{list?.id ? 'Editar Lista' : 'Criar Nova Lista'}</h2>
+                <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto space-y-4 pr-2">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Evento Associado</label>
+                        <select name="campaignId" value={formData.campaignId} onChange={handleChange} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white">
+                            <option value="" disabled>Selecione um evento...</option>
+                            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
+                        </select>
+                    </div>
+                    <input type="text" name="name" placeholder="Nome da Lista (ex: Lista VIP)" value={formData.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
+                    <textarea name="description" placeholder="Descrição (opcional)" value={formData.description} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Nº de Convidados Permitidos</label>
+                        <input type="number" name="guestAllowance" min="0" value={formData.guestAllowance} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Encerramento da Lista (opcional)</label>
+                        <input type="datetime-local" name="closesAt" value={formData.closesAt ? timestampToDateTimeLocal(formData.closesAt) : ''} onChange={handleDateChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" style={{colorScheme: 'dark'}} />
+                    </div>
+                    <label className="flex items-center space-x-2 text-white"><input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativa (visível para divulgadoras)</span></label>
+                </form>
+                <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
+                    <button type="submit" onClick={handleSubmit} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">{isSaving ? 'Salvando...' : 'Salvar'}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const AdminLists: React.FC = () => {
+    const navigate = useNavigate();
+    const { adminData, selectedOrgId } = useAdminAuth();
+
+    const [lists, setLists] = useState<GuestList[]>([]);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [copiedLink, setCopiedLink] = useState<string | null>(null);
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingList, setEditingList] = useState<GuestList | null>(null);
+
+    const fetchData = useCallback(async () => {
+        if (!selectedOrgId) {
+            setError("Nenhuma organização selecionada.");
+            setIsLoading(false);
+            return;
+        }
+        setIsLoading(true);
+        setError('');
+        try {
+            const [listsData, campaignsData] = await Promise.all([
+                getGuestListsForOrg(selectedOrgId),
+                getAllCampaigns(selectedOrgId)
+            ]);
+            setLists(listsData);
+            setCampaigns(campaignsData.sort((a,b) => a.name.localeCompare(b.name)));
+        } catch (err: any) {
+            setError(err.message || "Falha ao carregar dados.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedOrgId]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleOpenModal = (list: GuestList | null = null) => {
+        setEditingList(list);
+        setIsModalOpen(true);
+    };
+
+    const handleSaveList = async (data: Partial<Omit<GuestList, 'id'>>) => {
+        if (!selectedOrgId || !adminData?.email) return;
+        setError('');
+        try {
+            if (editingList) {
+                await updateGuestList(editingList.id, data);
+            } else {
+                const selectedCampaign = campaigns.find(c => c.id === data.campaignId);
+                if (!selectedCampaign) throw new Error("Evento selecionado é inválido.");
+                const listData: Omit<GuestList, 'id' | 'createdAt'> = {
+                    ...data,
+                    organizationId: selectedOrgId,
+                    campaignName: selectedCampaign.name,
+                    assignedPromoterIds: [],
+                    createdByEmail: adminData.email
+                } as Omit<GuestList, 'id' | 'createdAt'>;
+                await createGuestList(listData);
+            }
+            await fetchData();
+        } catch (err: any) {
+            setError(err.message || 'Falha ao salvar a lista.');
+            throw err;
+        }
+    };
+
+    const handleDelete = async (listId: string) => {
+        if (window.confirm("Tem certeza que deseja deletar esta lista? Todas as confirmações de convidados associadas serão perdidas.")) {
+            try {
+                await deleteGuestList(listId);
+                await fetchData();
+            } catch (err: any) {
+                setError(err.message || 'Falha ao deletar a lista.');
+            }
+        }
+    };
+    
+    const handleCopyLink = (listId: string) => {
+        const link = `${window.location.origin}/#/lista/${listId}`;
+        navigator.clipboard.writeText(link).then(() => {
+            setCopiedLink(listId);
+            setTimeout(() => setCopiedLink(null), 2500);
+        }).catch(err => alert('Falha ao copiar o link.'));
+    };
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold">Gerenciar Listas de Convidados</h1>
+                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
+                </button>
+            </div>
+            <div className="bg-secondary shadow-lg rounded-lg p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <p className="text-gray-400">Crie e gerencie listas com links únicos para suas divulgadoras.</p>
+                    <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark">
+                        + Criar Nova Lista
+                    </button>
+                </div>
+                 {error && <p className="text-red-400 mb-4">{error}</p>}
+                
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome da Lista</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Evento</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Atribuições</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                         <tbody className="divide-y divide-gray-700">
+                            {isLoading ? (
+                                <tr><td colSpan={5} className="text-center py-8">Carregando...</td></tr>
+                            ) : lists.length === 0 ? (
+                                <tr><td colSpan={5} className="text-center py-8 text-gray-400">Nenhuma lista criada ainda.</td></tr>
+                            ) : (
+                                lists.map(list => (
+                                    <tr key={list.id} className="hover:bg-gray-700/40">
+                                        <td className="px-4 py-3 whitespace-nowrap font-medium text-white">{list.name}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.campaignName}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${list.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
+                                                {list.isActive ? 'Ativa' : 'Inativa'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.assignedPromoterIds.length} divulgadora(s)</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex justify-end items-center gap-4">
+                                                <button onClick={() => navigate(`/admin/guestlist-assignments/${list.id}`)} className="text-indigo-400 hover:text-indigo-300" title="Gerenciar Atribuições"><UsersIcon className="w-5 h-5"/></button>
+                                                <button onClick={() => handleCopyLink(list.id)} className="text-blue-400 hover:text-blue-300" title="Copiar Link da Lista">{copiedLink === list.id ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}</button>
+                                                <button onClick={() => handleOpenModal(list)} className="text-yellow-400 hover:text-yellow-300" title="Editar"><PencilIcon className="w-5 h-5"/></button>
+                                                <button onClick={() => handleDelete(list.id)} className="text-red-400 hover:text-red-300" title="Excluir"><TrashIcon className="w-5 h-5"/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                         </tbody>
+                    </table>
+                </div>
+            </div>
+            <ListModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveList} list={editingList} campaigns={campaigns} />
+        </div>
+    );
+};
+
+export default AdminLists;

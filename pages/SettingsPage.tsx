@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -104,6 +104,23 @@ const SettingsPage: React.FC = () => {
             </div>
             <p className="mt-2 text-gray-400">
               Crie publicações de texto ou imagem e designe para suas divulgadoras aprovadas.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Gerenciar Listas de Convidados */}
+          <Link
+            to="/admin/lists"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas de Convidados</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.
             </p>
             <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
               Acessar &rarr;

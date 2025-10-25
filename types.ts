@@ -56,12 +56,10 @@ export interface Campaign {
   stateAbbr: string;
   organizationId: string;
   associatedAdmins?: string[];
-  // Guest List Feature
-  guestListTypes?: string[];
-  guestAllowance?: { [listName: string]: number };
+  // FIX: Add guest list properties to Campaign type to support guest list access control.
   guestListAccess?: 'all' | 'specific';
-  guestListAssignments?: { [promoterId: string]: string[] }; // Maps promoterId to an array of list names
-  guestListClosesAt?: { [listName: string]: Timestamp | FieldValue | null };
+  guestListAssignments?: { [promoterId: string]: string[] };
+  guestListTypes?: string[];
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';
@@ -177,11 +175,28 @@ export interface PostAssignment {
   justificationImageUrls?: string[];
 }
 
+// New model for individual guest lists
+export interface GuestList {
+  id: string;
+  organizationId: string;
+  campaignId: string;
+  campaignName: string; // denormalized for easy display
+  name: string;
+  description?: string;
+  guestAllowance: number;
+  closesAt: Timestamp | FieldValue | null;
+  isActive: boolean;
+  assignedPromoterIds: string[]; // Simple array of promoter IDs
+  createdAt: Timestamp | FieldValue;
+  createdByEmail: string;
+}
+
 export interface GuestListConfirmation {
     id: string;
     organizationId: string;
     campaignId: string;
     campaignName: string;
+    guestListId?: string; // Link to the new GuestList model
     promoterId: string;
     promoterName: string;
     promoterEmail: string;

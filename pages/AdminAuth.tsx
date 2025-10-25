@@ -24,7 +24,8 @@ import CreatePost from './CreatePost';
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page
 import GuestListCheckinPage from './GuestListCheckinPage'; // Import new page
-import GuestListAccessPage from './GuestListAccessPage';
+import AdminLists from './AdminLists';
+import GuestListAssignments from './GuestListAssignments';
 import ChangePasswordPage from './ChangePasswordPage'; // Import new page
 import PostDashboard from './PostDashboard';
 import AdminSchedulePage from './AdminSchedulePage';
@@ -234,7 +235,8 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
-                    <Route path="guestlist-access/:campaignId" element={<ProtectedRoute><GuestListAccessPage /></ProtectedRoute>} />
+                    <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
@@ -256,7 +258,8 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
-                    <Route path="guestlist-access/:campaignId" element={<ProtectedRoute><GuestListAccessPage /></ProtectedRoute>} />
+                    <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />

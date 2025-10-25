@@ -253,6 +253,15 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="mt-2 text-gray-400">Criar e acompanhar publicações para as divulgadoras.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
+                    
+                    <Link to="/admin/lists" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Criar e gerenciar listas de convidados com links e atribuições individuais.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
 
                     <Link to="/admin/dashboard" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">

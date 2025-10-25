@@ -10,20 +10,6 @@ import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
-const timestampToDateTimeLocal = (ts: any): string => {
-    if (!ts) return '';
-    try {
-        const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
-        if (isNaN(date.getTime())) return '';
-        // Adjust for timezone offset to display correctly in the input
-        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
-        return localDate.toISOString().slice(0, 16);
-    } catch (e) {
-        console.error("Error converting timestamp to datetime-local:", e);
-        return '';
-    }
-};
-
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
     isOpen: boolean;
@@ -37,15 +23,8 @@ const CampaignModal: React.FC<{
         whatsappLink: '', 
         rules: '', 
         isActive: true,
-        guestListTypes: [] as string[],
-        guestAllowance: {} as { [listName: string]: number },
-        guestListClosesAt: {} as { [listName: string]: Timestamp | FieldValue | null },
     });
-    const [newListName, setNewListName] = useState('');
-    const [isResetting, setIsResetting] = useState(false);
-    const [resetMessage, setResetMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
-
-
+    
     useEffect(() => {
         if (campaign) {
             setFormData({
@@ -54,89 +33,13 @@ const CampaignModal: React.FC<{
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
                 isActive: campaign.isActive !== undefined ? campaign.isActive : true,
-                guestListTypes: campaign.guestListTypes || [],
-                guestAllowance: campaign.guestAllowance || {},
-                guestListClosesAt: campaign.guestListClosesAt || {},
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: {}, guestListClosesAt: {} });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true });
         }
-        setResetMessage(null); // Clear message when modal reopens
     }, [campaign, isOpen]);
     
     if (!isOpen) return null;
-
-    const handleResetLists = async () => {
-        if (!campaign || !('id' in campaign)) return;
-
-        if (window.confirm(`Tem certeza que deseja resetar TODAS as listas de convidados para o evento "${campaign.name}"? Esta ação é irreversível e removerá todas as confirmações e convidados já enviados pelas divulgadoras.`)) {
-            setIsResetting(true);
-            setResetMessage(null);
-            try {
-                const resetFunction = httpsCallable(functions, 'resetGuestListsForCampaign');
-                const result = await resetFunction({ campaignId: campaign.id });
-                const data = result.data as { success: boolean, message: string, deletedCount: number };
-                if (data.success) {
-                    setResetMessage({ type: 'success', text: `Sucesso! ${data.deletedCount} listas foram removidas.` });
-                } else {
-                    throw new Error(data.message || 'Falha na operação.');
-                }
-            } catch (error: any) {
-                setResetMessage({ type: 'error', text: error.message || 'Ocorreu um erro ao resetar as listas.' });
-            } finally {
-                setIsResetting(false);
-            }
-        }
-    };
-
-    const handleAddListType = () => {
-        if (newListName.trim() && !formData.guestListTypes.includes(newListName.trim())) {
-            const newName = newListName.trim();
-            setFormData(prev => ({ 
-                ...prev, 
-                guestListTypes: [...prev.guestListTypes, newName],
-                guestAllowance: { ...(prev.guestAllowance || {}), [newName]: 0 },
-                guestListClosesAt: { ...(prev.guestListClosesAt || {}), [newName]: null }
-            }));
-            setNewListName('');
-        }
-    };
-
-    const handleRemoveListType = (nameToRemove: string) => {
-        setFormData(prev => {
-            const { [nameToRemove]: _, ...newAllowance } = (prev.guestAllowance || {});
-            const { [nameToRemove]: __, ...newClosesAt } = (prev.guestListClosesAt || {});
-            return {
-                ...prev,
-                guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove),
-                guestAllowance: newAllowance,
-                guestListClosesAt: newClosesAt,
-            };
-        });
-    };
-    
-    const handleAllowanceChange = (listName: string, value: string) => {
-        const allowance = parseInt(value, 10);
-        
-        setFormData(prev => ({
-            ...prev,
-            guestAllowance: {
-                ...(prev.guestAllowance || {}),
-                [listName]: isNaN(allowance) ? 0 : Math.max(0, allowance)
-            }
-        }));
-    };
-
-    const handleClosesAtChange = (listName: string, value: string) => {
-        const closesAtTimestamp = value ? Timestamp.fromDate(new Date(value)) : null;
-        setFormData(prev => ({
-            ...prev,
-            guestListClosesAt: {
-                ...(prev.guestListClosesAt || {}),
-                [listName]: closesAtTimestamp
-            }
-        }));
-    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -154,64 +57,6 @@ const CampaignModal: React.FC<{
                     <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
                     <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
-                    
-                    <div className="border-t border-gray-700 pt-4 space-y-3">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
-                             {campaign && 'id' in campaign && formData.guestListTypes.length > 0 && (
-                                <button
-                                    type="button"
-                                    onClick={handleResetLists}
-                                    disabled={isResetting}
-                                    className="px-3 py-1 bg-red-600 text-white rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                                >
-                                    {isResetting ? 'Resetando...' : 'Resetar Listas'}
-                                </button>
-                            )}
-                        </div>
-                        {resetMessage && (
-                            <div className={`p-2 rounded-md text-sm ${resetMessage.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                                {resetMessage.text}
-                            </div>
-                        )}
-                         <p className="text-sm text-gray-400">Adicione os tipos de lista de convidados para este evento (ex: "Lista VIP", "Aniversariante"). Se nenhuma lista for adicionada, o recurso de lista de convidados ficará desativado.</p>
-                         <div className="flex gap-2">
-                            <input type="text" placeholder="Nome do tipo de lista" value={newListName} onChange={e => setNewListName(e.target.value)} className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
-                            <button type="button" onClick={handleAddListType} className="px-4 py-2 bg-primary text-white rounded-md">Adicionar</button>
-                         </div>
-                         <div className="space-y-2">
-                            {(formData.guestListTypes || []).map(name => (
-                                <div key={name} className="flex flex-wrap justify-between items-center p-3 bg-gray-800 rounded gap-4">
-                                    <span className="text-gray-200 font-semibold">{name}</span>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 flex-grow justify-end">
-                                        <div className="flex items-center gap-2">
-                                            <label htmlFor={`allowance-${name}`} className="text-sm text-gray-400">Convidados:</label>
-                                            <input
-                                                id={`allowance-${name}`}
-                                                type="number"
-                                                min="0"
-                                                value={formData.guestAllowance?.[name] ?? 0}
-                                                onChange={(e) => handleAllowanceChange(name, e.target.value)}
-                                                className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
-                                            />
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <label htmlFor={`closesAt-${name}`} className="text-sm text-gray-400">Encerra em:</label>
-                                            <input
-                                                id={`closesAt-${name}`}
-                                                type="datetime-local"
-                                                value={formData.guestListClosesAt?.[name] ? timestampToDateTimeLocal(formData.guestListClosesAt[name]) : ''}
-                                                onChange={(e) => handleClosesAtChange(name, e.target.value)}
-                                                className="px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white"
-                                                style={{ colorScheme: 'dark' }}
-                                            />
-                                        </div>
-                                        <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300 text-2xl leading-none">&times;</button>
-                                    </div>
-                                </div>
-                            ))}
-                         </div>
-                    </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
@@ -237,7 +82,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
-    const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
 
     const isSuperAdmin = adminData.role === 'superadmin';
     const orgIdForOps = isSuperAdmin ? undefined : selectedOrgId;
@@ -286,18 +130,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         }).catch(err => {
             console.error('Failed to copy direct link: ', err);
             alert('Falha ao copiar o link. Por favor, tente manualmente.');
-        });
-    };
-
-    const handleCopyGuestListLink = (campaign: Campaign) => {
-        if (!orgIdForOps) return;
-        const link = `${window.location.origin}/#/lista/${orgIdForOps}/${campaign.id}`;
-        navigator.clipboard.writeText(link).then(() => {
-            setCopiedGuestListLink(campaign.id);
-            setTimeout(() => setCopiedGuestListLink(null), 2500);
-        }).catch(err => {
-            console.error('Failed to copy guest list link: ', err);
-            alert('Falha ao copiar o link da lista.');
         });
     };
 
@@ -405,15 +237,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 </div>
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist-access/${c.id}`)} className="text-yellow-400 hover:text-yellow-300">Gerenciar Acesso</button>}
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button 
-                                            onClick={() => handleCopyGuestListLink(c)}
-                                            className="text-green-400 hover:text-green-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
-                                            disabled={copiedGuestListLink === c.id}
-                                        >
-                                            {copiedGuestListLink === c.id ? 'Link Copiado!' : 'Copiar Link da Lista'}
-                                        </button>}
                                         <button 
                                             onClick={() => handleCopyLink(c)} 
                                             className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"

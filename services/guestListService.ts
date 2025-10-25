@@ -12,8 +12,82 @@ import {
   runTransaction,
   Timestamp,
   updateDoc,
+  getDoc,
+  deleteDoc,
+  orderBy,
 } from 'firebase/firestore';
-import { GuestListConfirmation } from '../types';
+import { GuestListConfirmation, GuestList } from '../types';
+
+// ===================================================================
+// NEW GUEST LIST MODEL FUNCTIONS (Post-refactor)
+// ===================================================================
+
+export const getGuestListById = async (listId: string): Promise<GuestList | null> => {
+    try {
+        const docRef = doc(firestore, 'guestLists', listId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as GuestList;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting guest list by ID: ", error);
+        throw new Error("Não foi possível buscar a lista de convidados.");
+    }
+};
+
+export const getGuestListsForOrg = async (organizationId: string): Promise<GuestList[]> => {
+    try {
+        const q = query(
+            collection(firestore, "guestLists"),
+            where("organizationId", "==", organizationId),
+            orderBy("createdAt", "desc")
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
+    } catch (error) {
+        console.error("Error fetching guest lists for org: ", error);
+        throw new Error("Não foi possível buscar as listas.");
+    }
+};
+
+export const createGuestList = async (data: Omit<GuestList, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(firestore, 'guestLists'), {
+            ...data,
+            createdAt: serverTimestamp(),
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error creating guest list: ", error);
+        throw new Error("Não foi possível criar a lista.");
+    }
+};
+
+export const updateGuestList = async (listId: string, data: Partial<Omit<GuestList, 'id'>>): Promise<void> => {
+    try {
+        const docRef = doc(firestore, 'guestLists', listId);
+        await updateDoc(docRef, data);
+    } catch (error) {
+        console.error("Error updating guest list: ", error);
+        throw new Error("Não foi possível atualizar a lista.");
+    }
+};
+
+export const deleteGuestList = async (listId: string): Promise<void> => {
+    try {
+        // Potentially, we could also delete all confirmations associated with this list in a transaction
+        await deleteDoc(doc(firestore, "guestLists", listId));
+    } catch (error) {
+        console.error("Error deleting guest list: ", error);
+        throw new Error("Não foi possível deletar a lista.");
+    }
+};
+
+
+// ===================================================================
+// LEGACY GUEST LIST CONFIRMATION FUNCTIONS (Still used for check-in)
+// ===================================================================
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
@@ -26,12 +100,11 @@ export const addGuestListConfirmation = async (
   try {
     const confirmationsRef = collection(firestore, 'guestListConfirmations');
     
-    // Check if a confirmation already exists for this promoter and campaign
+    // Check if a confirmation already exists for this promoter, list, and campaign
     const q = query(
       confirmationsRef,
       where('promoterId', '==', confirmationData.promoterId),
-      where('campaignId', '==', confirmationData.campaignId),
-      where('listName', '==', confirmationData.listName),
+      where('guestListId', '==', confirmationData.guestListId),
       limit(1)
     );
     
@@ -121,25 +194,6 @@ export const getGuestListConfirmationsByEmail = async (
     throw new Error('Não foi possível buscar as confirmações de lista de convidados.');
   }
 };
-
-/**
- * Updates an existing guest list confirmation.
- * @param confirmationId - The ID of the guest list confirmation document to update.
- * @param data - The partial data to update.
- */
-export const updateGuestListConfirmation = async (
-  confirmationId: string,
-  data: Partial<Pick<GuestListConfirmation, 'isPromoterAttending' | 'guestNames'>>
-): Promise<void> => {
-  try {
-    const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
-    await updateDoc(docRef, data);
-  } catch (error) {
-    console.error('Error updating guest list confirmation: ', error);
-    throw new Error('Não foi possível atualizar a confirmação da lista.');
-  }
-};
-
 
 /**
  * Checks in a person (promoter or guest) for a specific event confirmation.
