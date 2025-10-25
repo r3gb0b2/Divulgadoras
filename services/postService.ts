@@ -598,12 +598,11 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
         }
 
         const scheduledPosts: ScheduledPost[] = [];
-        const CHUNK_SIZE = 30;
-        for (let i = 0; i < orgIds.length; i += CHUNK_SIZE) {
-            const orgIdsChunk = orgIds.slice(i, i + CHUNK_SIZE);
-             const q = query(
+        // Query for each organization ID separately to avoid needing a composite index for the 'in' query.
+        for (const orgId of orgIds) {
+            const q = query(
                 collection(firestore, "scheduledPosts"),
-                where("organizationId", "in", orgIdsChunk),
+                where("organizationId", "==", orgId),
                 where("status", "==", "pending")
             );
             const snapshot = await getDocs(q);
