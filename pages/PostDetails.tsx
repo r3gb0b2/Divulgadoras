@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment } from '../types';
-import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment } from '../services/postService';
+import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications } from '../services/postService';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon } from '../components/Icons';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -66,6 +66,10 @@ export const PostDetails: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const pendingJustificationsCount = useMemo(() => {
+        return assignments.filter(a => a.justificationStatus === 'pending').length;
+    }, [assignments]);
     
     const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
         if (!post) return;
@@ -116,6 +120,22 @@ export const PostDetails: React.FC = () => {
                 fetchData();
             } catch(err:any) {
                 setError(err.message || 'Falha ao enviar lembretes.');
+            } finally {
+                setIsProcessing(null);
+            }
+        }
+    };
+
+    const handleAcceptAllJustifications = async () => {
+        if (!post || pendingJustificationsCount === 0) return;
+        if (window.confirm(`Tem certeza que deseja aceitar todas as ${pendingJustificationsCount} justificativas pendentes para esta publicação?`)) {
+            setIsProcessing('accept_all');
+            try {
+                const result = await acceptAllJustifications(post.id);
+                alert(result.message || `${result.count} justificativas foram aceitas.`);
+                await fetchData();
+            } catch (err: any) {
+                setError(err.message || 'Falha ao aceitar justificativas.');
             } finally {
                 setIsProcessing(null);
             }
@@ -247,10 +267,18 @@ export const PostDetails: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                     <h2 className="text-2xl font-bold">Tarefas das Divulgadoras ({assignments.length})</h2>
                     {canManage && (
-                        <button onClick={handleGeneralReminder} disabled={isProcessing === 'general'} className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm font-semibold disabled:opacity-50">
-                            <MegaphoneIcon className="w-5 h-5"/>
-                            {isProcessing === 'general' ? 'Enviando...' : 'Lembrete Geral'}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {pendingJustificationsCount > 0 && (
+                                <button onClick={handleAcceptAllJustifications} disabled={isProcessing === 'accept_all'} className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50">
+                                    <CheckCircleIcon className="w-5 h-5"/>
+                                    {isProcessing === 'accept_all' ? 'Processando...' : `Aceitar Todas Justificativas (${pendingJustificationsCount})`}
+                                </button>
+                            )}
+                            <button onClick={handleGeneralReminder} disabled={isProcessing === 'general'} className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm font-semibold disabled:opacity-50">
+                                <MegaphoneIcon className="w-5 h-5"/>
+                                {isProcessing === 'general' ? 'Enviando...' : 'Lembrete Geral'}
+                            </button>
+                        </div>
                     )}
                 </div>
                  {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}

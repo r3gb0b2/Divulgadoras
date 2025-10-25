@@ -446,6 +446,20 @@ export const sendSinglePostReminder = async (assignmentId: string): Promise<{mes
     }
 };
 
+export const acceptAllJustifications = async (postId: string): Promise<{count: number, message: string}> => {
+    try {
+        const func = httpsCallable(functions, 'acceptAllJustifications');
+        const result = await func({ postId });
+        return result.data as {count: number, message: string};
+    } catch (error) {
+        console.error("Error accepting all justifications:", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível aceitar todas as justificativas.");
+    }
+};
+
 export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
     try {
         const batch = writeBatch(firestore);

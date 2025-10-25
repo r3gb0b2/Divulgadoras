@@ -1267,6 +1267,46 @@ exports.setPromoterStatusToRemoved = functions
       return { success: true, message: "Divulgadora removida e suas publicações foram limpas.", deletedAssignments: assignmentsSnapshot.size };
     });
 
+/**
+ * Accepts all pending justifications for a given post.
+ */
+exports.acceptAllJustifications = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  // 1. Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  // 2. Get postId
+  const { postId } = data;
+  if (!postId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação (postId) é obrigatório.");
+  }
+
+  // 3. Query for assignments with pending justifications
+  const assignmentsQuery = db.collection("postAssignments")
+      .where("postId", "==", postId)
+      .where("justificationStatus", "==", "pending");
+
+  const snapshot = await assignmentsQuery.get();
+
+  if (snapshot.empty) {
+    return { success: true, count: 0, message: "Nenhuma justificativa pendente encontrada para esta publicação." };
+  }
+
+  // 4. Batch update the status to 'accepted'
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { justificationStatus: "accepted" });
+  });
+  await batch.commit();
+
+  return { success: true, count: snapshot.size, message: `${snapshot.size} justificativas foram aceitas com sucesso.` };
+});
+
 
 // --- Gemini AI assistant function ---
 const { GoogleGenAI } = require("@google/genai");
