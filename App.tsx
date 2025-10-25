@@ -105,7 +105,7 @@ const App: React.FC = () => {
                 <Route path="/status" element={<StatusCheck />} />
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
-                <Route path="/lista/:listId" element={<GuestListCheck />} />
+                <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
               </Routes>

@@ -11,7 +11,7 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Replaced class property state initialization with a standard constructor. This ensures the component is correctly initialized by calling `super(props)`, which makes `this.props` and `this.setState` available and resolves the errors.
+  // FIX: Added a constructor to correctly initialize component state. This resolves errors when accessing `this.state`, `this.setState`, and `this.props`.
   constructor(props: Props) {
     super(props);
     this.state = {

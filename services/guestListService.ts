@@ -36,6 +36,22 @@ export const getGuestListById = async (listId: string): Promise<GuestList | null
     }
 };
 
+export const getActiveGuestListsForCampaign = async (campaignId: string): Promise<GuestList[]> => {
+    try {
+        const q = query(
+            collection(firestore, "guestLists"),
+            where("campaignId", "==", campaignId),
+            where("isActive", "==", true)
+        );
+        const snapshot = await getDocs(q);
+        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
+        return lists;
+    } catch (error) {
+        console.error("Error fetching active guest lists for campaign: ", error);
+        throw new Error("Não foi possível buscar as listas ativas para este evento.");
+    }
+};
+
 export const getGuestListsForOrg = async (organizationId: string): Promise<GuestList[]> => {
     try {
         const q = query(

@@ -186,10 +186,10 @@ const AdminLists: React.FC = () => {
         }
     };
     
-    const handleCopyLink = (listId: string) => {
-        const link = `${window.location.origin}/#/lista/${listId}`;
+    const handleCopyLink = (campaignId: string) => {
+        const link = `${window.location.origin}/#/listas/${campaignId}`;
         navigator.clipboard.writeText(link).then(() => {
-            setCopiedLink(listId);
+            setCopiedLink(campaignId);
             setTimeout(() => setCopiedLink(null), 2500);
         }).catch(err => alert('Falha ao copiar o link.'));
     };
@@ -242,7 +242,7 @@ const AdminLists: React.FC = () => {
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end items-center gap-4">
                                                 <button onClick={() => navigate(`/admin/guestlist-assignments/${list.id}`)} className="text-indigo-400 hover:text-indigo-300" title="Gerenciar Atribuições"><UsersIcon className="w-5 h-5"/></button>
-                                                <button onClick={() => handleCopyLink(list.id)} className="text-blue-400 hover:text-blue-300" title="Copiar Link da Lista">{copiedLink === list.id ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}</button>
+                                                <button onClick={() => handleCopyLink(list.campaignId)} className="text-blue-400 hover:text-blue-300" title="Copiar Link do Evento">{copiedLink === list.campaignId ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}</button>
                                                 <button onClick={() => handleOpenModal(list)} className="text-yellow-400 hover:text-yellow-300" title="Editar"><PencilIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => handleDelete(list.id)} className="text-red-400 hover:text-red-300" title="Excluir"><TrashIcon className="w-5 h-5"/></button>
                                             </div>
