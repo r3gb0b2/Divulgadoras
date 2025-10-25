@@ -481,32 +481,27 @@ const PostCard: React.FC<{
 }
 
 const ScheduledPostCard: React.FC<{ post: ScheduledPost }> = ({ post }) => {
+    const isInitiallyReleased = useMemo(() => {
+        const target = toDateSafe(post.scheduledAt);
+        return target ? target.getTime() < new Date().getTime() : false;
+    }, [post.scheduledAt]);
+
+    const [isReleased, setIsReleased] = useState(isInitiallyReleased);
+
+    const handleRelease = useCallback(() => {
+        setIsReleased(true);
+    }, []);
+
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
-            <div className="flex justify-between items-start mb-3">
+            <div className="flex justify-between items-start">
                 <div>
                     <p className="font-bold text-lg text-primary">{post.postData.campaignName}</p>
                     {post.postData.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.postData.eventName}</p>}
                 </div>
-                <CountdownTimer targetDate={post.scheduledAt} />
-            </div>
-            <div className="border-t border-gray-700 pt-3">
-                {post.postData.type === 'image' && post.postData.mediaUrl && (
-                    <StorageMedia path={post.postData.mediaUrl} type="image" className="w-full max-w-sm mx-auto rounded-md mb-4" />
-                )}
-                 {post.postData.type === 'video' && post.postData.mediaUrl && (
-                    <p className="text-center text-sm text-gray-300 my-4">[Prévia de vídeo indisponível para posts agendados]</p>
-                )}
-                 {post.postData.type === 'text' && (
-                    <div className="bg-gray-800 p-3 rounded-md mb-4">
-                        <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{post.postData.textContent}</pre>
-                    </div>
-                )}
-                <div>
-                    <h4 className="font-semibold text-gray-200">Instruções:</h4>
-                    <div className="bg-gray-800/50 p-3 rounded-md">
-                        <p className="text-gray-300 text-sm whitespace-pre-wrap">{post.postData.instructions}</p>
-                    </div>
+                <div className="flex items-center gap-2">
+                    {!isReleased && <span className="text-sm text-gray-400">Essa postagem vai ser liberada em:</span>}
+                    <CountdownTimer targetDate={post.scheduledAt} onEnd={handleRelease} />
                 </div>
             </div>
         </div>
