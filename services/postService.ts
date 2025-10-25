@@ -561,36 +561,6 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
     }
 };
 
-export const getScheduledPostsForPromoter = async (promoterId: string, organizationIds: string[]): Promise<ScheduledPost[]> => {
-    if (organizationIds.length === 0) return [];
-    try {
-        // We can query for multiple orgs at once using 'in'
-        const q = query(
-            collection(firestore, "scheduledPosts"),
-            where("organizationId", "in", organizationIds),
-            where("status", "==", "pending")
-        );
-        const snapshot = await getDocs(q);
-        const allPendingForOrgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
-        
-        // Client-side filter to find posts assigned to the specific promoter
-        const promoterScheduledPosts = allPendingForOrgs.filter(post => 
-            post.assignedPromoters.some(p => p.id === promoterId)
-        );
-        
-        promoterScheduledPosts.sort((a, b) => 
-            ((a.scheduledAt as Timestamp)?.toMillis() || 0) - ((b.scheduledAt as Timestamp)?.toMillis() || 0)
-        );
-
-        return promoterScheduledPosts;
-
-    } catch (error) {
-        console.error("Error fetching scheduled posts for promoter: ", error);
-        throw new Error("Não foi possível buscar as publicações agendadas.");
-    }
-};
-
-
 export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
     try {
         const docRef = doc(firestore, 'scheduledPosts', id);
