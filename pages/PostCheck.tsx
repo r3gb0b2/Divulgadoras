@@ -407,29 +407,29 @@ const PostCard: React.FC<{
             }
             
             let finalUrl = mediaUrl;
-            if (type === 'image' && !mediaUrl.startsWith('http')) {
+            if (!mediaUrl.startsWith('http')) {
                 const storageRef = ref(storage, mediaUrl);
                 finalUrl = await getDownloadURL(storageRef);
             }
             
-            const response = await fetch(finalUrl);
-            if (!response.ok) {
-                throw new Error(`Erro ao buscar mídia: ${response.statusText}`);
-            }
-            const blob = await response.blob();
-            
-            const objectUrl = window.URL.createObjectURL(blob);
+            // Create a temporary link to trigger the download
             const link = document.createElement('a');
-            link.href = objectUrl;
+            link.href = finalUrl;
             
-            const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || `download`;
+            // Add download attribute. For cross-origin, this is a suggestion.
+            // The browser may ignore it and use its own filename.
+            const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || 'download';
             link.setAttribute('download', filename);
             
+            // To support all browsers and prevent navigation, open in a new tab.
+            // This is a reliable fallback if the 'download' attribute is ignored.
+            link.setAttribute('target', '_blank');
+            link.setAttribute('rel', 'noopener noreferrer');
+            
+            // Append to the DOM, click it, and then remove it.
             document.body.appendChild(link);
             link.click();
-            
             document.body.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
 
         } catch (error: any) {
             console.error('Failed to download media:', error);
