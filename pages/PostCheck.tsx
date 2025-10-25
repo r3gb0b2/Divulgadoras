@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
+// FIX: Added 'getScheduledPostsForPromoter' to import.
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { PostAssignment, Promoter } from '../types';
+import { PostAssignment, Promoter, ScheduledPost } from '../types';
 import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
@@ -49,17 +50,17 @@ const extractGoogleDriveId = (url: string): string | null => {
     return id;
 };
 
-const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt }) => {
+const CountdownTimer: React.FC<{ targetDate: any, onEnd?: () => void }> = ({ targetDate, onEnd }) => {
     const [timeLeft, setTimeLeft] = useState('');
     const [isExpired, setIsExpired] = useState(false);
 
     useEffect(() => {
-        const targetDate = toDateSafe(expiresAt);
-        if (!targetDate) return;
+        const target = toDateSafe(targetDate);
+        if (!target) return;
 
         const updateTimer = () => {
             const now = new Date();
-            const difference = targetDate.getTime() - now.getTime();
+            const difference = target.getTime() - now.getTime();
 
             if (difference > 0) {
                 const days = Math.floor(difference / (1000 * 60 * 60 * 24));
@@ -74,8 +75,9 @@ const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt })
                 setTimeLeft(timeString);
                 setIsExpired(false);
             } else {
-                setTimeLeft('Prazo encerrado');
+                setTimeLeft('Liberado!');
                 setIsExpired(true);
+                if (onEnd) onEnd();
             }
         };
 
@@ -83,12 +85,12 @@ const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt })
         const timer = setInterval(updateTimer, 1000);
 
         return () => clearInterval(timer);
-    }, [expiresAt]);
+    }, [targetDate, onEnd]);
 
     if (!timeLeft) return null;
 
     return (
-        <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}>
+        <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-green-900/50 text-green-300' : 'bg-blue-900/50 text-blue-300'}`}>
             <ClockIcon className="h-4 w-4" />
             <span>{timeLeft}</span>
         </div>
@@ -208,119 +210,6 @@ const PostCard: React.FC<{
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
-
-    if (!assignment.post.isActive) {
-        const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
-            const styles = {
-                pending: "bg-yellow-900/50 text-yellow-300",
-                accepted: "bg-green-900/50 text-green-300",
-                rejected: "bg-red-900/50 text-red-300",
-            };
-            const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
-            if (!status) return null;
-            return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
-        };
-
-        return (
-            <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-gray-500 opacity-70">
-                 <div className="flex justify-between items-start mb-3">
-                    <div>
-                        <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
-                        {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
-                    </div>
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-400">Inativo</span>
-                </div>
-                <div className="border-t border-gray-700 pt-3">
-                    <p className="text-sm text-gray-400">Esta publicação foi desativada pelo organizador.</p>
-                     
-                     {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
-                        <div className="mt-4 text-center">
-                            <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
-                            <div className="flex justify-center gap-2">
-                                {assignment.proofImageUrls.map((url, index) => (
-                                    <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                        <img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" />
-                                    </a>
-                                ))}
-                            </div>
-                        </div>
-                     )}
-                     
-                     {assignment.justification && (
-                         <div className="mt-4 text-center">
-                            <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
-                            <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
-                            <div className="text-xs">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
-                        </div>
-                     )}
-
-                    {!assignment.proofImageUrls?.length && !assignment.justification && (
-                        <>
-                           <p className="text-sm text-gray-300 mt-2">Se você não realizou esta postagem, envie uma justificativa.</p>
-                           <div className="mt-4 text-center">
-                                <button 
-                                   onClick={() => onJustify(assignment)}
-                                   className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                                >
-                                   Justificar Ausência
-                                </button>
-                           </div>
-                        </>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    const isExpiredAndMissed = useMemo(() => {
-        if (!assignment.post.expiresAt) return false;
-        const now = new Date();
-        const expiryDate = toDateSafe(assignment.post.expiresAt);
-        // It's missed if: it's expired AND it's still pending AND it hasn't been justified yet.
-        return expiryDate && expiryDate < now && assignment.status === 'pending' && !assignment.justification;
-    }, [assignment]);
-    
-    if (isExpiredAndMissed) {
-        return (
-            <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-red-500">
-                <div className="flex justify-between items-start mb-3">
-                    <div>
-                        <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
-                        {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
-                        {assignment.post.postFormats && assignment.post.postFormats.length > 0 && (
-                            <div className="flex gap-2 mt-1">
-                                {assignment.post.postFormats.map(format => (
-                                    <span key={format} className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-600 text-gray-200 capitalize">
-                                        {format}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        {assignment.post.expiresAt && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400 font-medium">Prazo:</span>
-                                <CountdownTimer expiresAt={assignment.post.expiresAt} />
-                            </div>
-                        )}
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900/50 text-red-300">Perdido</span>
-                    </div>
-                </div>
-                <div className="border-t border-gray-700 pt-3">
-                    <p className="text-sm text-gray-300 mb-4">Você não confirmou esta publicação antes do prazo. Se houve algum imprevisto, envie uma justificativa para o organizador.</p>
-                     <div className="mt-4 text-center">
-                         <button 
-                            onClick={() => onJustify(assignment)}
-                            className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                            Justificar Ausência
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
     
     if (!assignment.promoterHasJoinedGroup) {
         return (
@@ -511,7 +400,7 @@ const PostCard: React.FC<{
                      {assignment.post.expiresAt && (
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400 font-medium">Tempo restante:</span>
-                            <CountdownTimer expiresAt={assignment.post.expiresAt} />
+                            <CountdownTimer targetDate={assignment.post.expiresAt} />
                         </div>
                      )}
                      <div className="mt-1">
@@ -527,7 +416,7 @@ const PostCard: React.FC<{
             <div className="border-t border-gray-700 pt-3">
                 {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
                      <div className="mb-4">
-                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
+                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type === 'text' ? 'image' : assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
                         <div className="flex justify-center items-center gap-4 mt-2">
                             <button
                                 onClick={handleView}
@@ -590,6 +479,40 @@ const PostCard: React.FC<{
         </div>
     );
 }
+
+const ScheduledPostCard: React.FC<{ post: ScheduledPost }> = ({ post }) => {
+    return (
+        <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+            <div className="flex justify-between items-start mb-3">
+                <div>
+                    <p className="font-bold text-lg text-primary">{post.postData.campaignName}</p>
+                    {post.postData.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.postData.eventName}</p>}
+                </div>
+                <CountdownTimer targetDate={post.scheduledAt} />
+            </div>
+            <div className="border-t border-gray-700 pt-3">
+                {post.postData.type === 'image' && post.postData.mediaUrl && (
+                    <StorageMedia path={post.postData.mediaUrl} type="image" className="w-full max-w-sm mx-auto rounded-md mb-4" />
+                )}
+                 {post.postData.type === 'video' && post.postData.mediaUrl && (
+                    <p className="text-center text-sm text-gray-300 my-4">[Prévia de vídeo indisponível para posts agendados]</p>
+                )}
+                 {post.postData.type === 'text' && (
+                    <div className="bg-gray-800 p-3 rounded-md mb-4">
+                        <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{post.postData.textContent}</pre>
+                    </div>
+                )}
+                <div>
+                    <h4 className="font-semibold text-gray-200">Instruções:</h4>
+                    <div className="bg-gray-800/50 p-3 rounded-md">
+                        <p className="text-gray-300 text-sm whitespace-pre-wrap">{post.postData.instructions}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const JustificationModal: React.FC<{
     isOpen: boolean,
@@ -679,12 +602,13 @@ const PostCheck: React.FC = () => {
     const location = useLocation();
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
+    const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
     const [currentPromoter, setCurrentPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
-    const [showInactive, setShowInactive] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
     
     // Justification Modal State
     const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
@@ -695,18 +619,22 @@ const PostCheck: React.FC = () => {
         setIsLoading(true);
         setError(null);
         setAssignments(null);
+        setScheduledPosts([]);
         setCurrentPromoter(null);
         setSearched(true);
         try {
-            const [assignmentsResult, promoterProfiles] = await Promise.all([
+            const [assignmentsResult, promoterProfiles, scheduledPostsResult] = await Promise.all([
                 getAssignmentsForPromoterByEmail(searchEmail),
                 findPromotersByEmail(searchEmail),
+                getScheduledPostsForPromoter(searchEmail),
             ]);
 
             if (promoterProfiles && promoterProfiles.length > 0) {
                 setCurrentPromoter(promoterProfiles[0]);
             }
 
+            setScheduledPosts(scheduledPostsResult);
+            
             const campaignStatusMap = new Map<string, boolean>();
             if (promoterProfiles) {
                 // First pass: set all to false initially based on existence.
@@ -791,27 +719,30 @@ const PostCheck: React.FC = () => {
         e.preventDefault();
         performSearch(email);
     };
-
-    const { activeAssignments, inactiveAssignments } = useMemo(() => {
-        if (!assignments) return { activeAssignments: [], inactiveAssignments: [] };
-        
+    
+    const { activeAssignments, archivedAssignments } = useMemo(() => {
+        if (!assignments) return { activeAssignments: [], archivedAssignments: [] };
+    
         const active: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
-        const inactive: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
-        
+        const archived: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
+    
         assignments.forEach(a => {
-            if (a.post.isActive) {
-                active.push(a);
+            const isCompleted = !!a.proofSubmittedAt || !!a.justification;
+            const isMissed = !a.post.isActive; // Inactive posts are always archived
+    
+            if (isCompleted || isMissed) {
+                archived.push(a);
             } else {
-                inactive.push(a);
+                active.push(a);
             }
         });
-
-        return { activeAssignments: active, inactiveAssignments: inactive };
+    
+        return { activeAssignments: active, archivedAssignments: archived };
     }, [assignments]);
 
     const justificationCount = useMemo(() => {
         if (!assignments) return 0;
-        return assignments.filter(a => !!a.justification).length;
+        return assignments.filter(a => a.justification && a.justificationStatus === 'pending').length;
     }, [assignments]);
 
     const renderResult = () => {
@@ -842,10 +773,20 @@ const PostCheck: React.FC = () => {
                 
                 {justificationCount > 0 && (
                     <div className="mb-4 p-3 bg-blue-900/50 rounded-md text-blue-300 text-sm text-center">
-                        Você tem <strong>{justificationCount}</strong> justificativa(s) de não postagem. O organizador irá analisá-las.
+                        Você tem <strong>{justificationCount}</strong> justificativa(s) de não postagem aguardando análise do organizador.
                     </div>
                 )}
                 
+                {scheduledPosts.length > 0 && (
+                     <div className="mb-8">
+                        <h2 className="text-2xl font-bold text-gray-100 mb-4 text-center border-b border-gray-700 pb-2">Próximas Publicações Agendadas</h2>
+                        <div className="space-y-4">
+                            {scheduledPosts.map(p => <ScheduledPostCard key={p.id} post={p} />)}
+                        </div>
+                    </div>
+                )}
+                
+                <h2 className="text-2xl font-bold text-gray-100 mb-4 text-center border-b border-gray-700 pb-2">Publicações Ativas</h2>
                 {activeAssignments.length === 0 ? (
                     <p className="text-center text-gray-400 mt-4">Nenhuma publicação ativa encontrada para você no momento.</p>
                 ) : (
@@ -854,21 +795,21 @@ const PostCheck: React.FC = () => {
                     </div>
                 )}
 
-                {inactiveAssignments.length > 0 && (
+                {archivedAssignments.length > 0 && (
                     <div className="mt-8 text-center border-t border-gray-700 pt-6">
                         <button
-                            onClick={() => setShowInactive(prev => !prev)}
+                            onClick={() => setShowArchived(prev => !prev)}
                             className="px-6 py-2 bg-gray-600 text-white font-semibold rounded-md hover:bg-gray-500 transition-colors"
                         >
-                            {showInactive ? 'Ocultar' : 'Ver'} Histórico de Publicações ({inactiveAssignments.length})
+                            {showArchived ? 'Ocultar' : 'Ver'} Publicações Arquivadas ({archivedAssignments.length})
                         </button>
                     </div>
                 )}
 
-                {showInactive && inactiveAssignments.length > 0 && (
+                {showArchived && archivedAssignments.length > 0 && (
                     <div className="mt-6 space-y-4">
-                        <h3 className="text-xl font-bold text-gray-400 border-b border-gray-700 pb-2 mb-4">Publicações Inativas</h3>
-                        {inactiveAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
+                        <h3 className="text-xl font-bold text-gray-400 border-b border-gray-700 pb-2 mb-4">Publicações Arquivadas</h3>
+                         {archivedAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmPost} onJustify={handleOpenJustifyModal} />)}
                     </div>
                 )}
             </>

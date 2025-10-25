@@ -16,6 +16,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Post, PostAssignment, Promoter, ScheduledPost } from '../types';
+import { findPromotersByEmail } from './promoterService';
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -577,5 +578,53 @@ export const deleteScheduledPost = async (id: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting scheduled post: ", error);
         throw new Error("Não foi possível cancelar o agendamento.");
+    }
+};
+
+// FIX: Added missing 'getScheduledPostsForPromoter' function.
+export const getScheduledPostsForPromoter = async (email: string): Promise<ScheduledPost[]> => {
+    try {
+        const promoterProfiles = await findPromotersByEmail(email);
+        if (promoterProfiles.length === 0) {
+            return [];
+        }
+
+        const orgIds = [...new Set(promoterProfiles.map(p => p.organizationId))];
+        const promoterIdSet = new Set(promoterProfiles.map(p => p.id));
+        const lowerCaseEmail = email.toLowerCase().trim();
+
+        if (orgIds.length === 0) {
+            return [];
+        }
+
+        const scheduledPosts: ScheduledPost[] = [];
+        const CHUNK_SIZE = 30;
+        for (let i = 0; i < orgIds.length; i += CHUNK_SIZE) {
+            const orgIdsChunk = orgIds.slice(i, i + CHUNK_SIZE);
+             const q = query(
+                collection(firestore, "scheduledPosts"),
+                where("organizationId", "in", orgIdsChunk),
+                where("status", "==", "pending")
+            );
+            const snapshot = await getDocs(q);
+            snapshot.forEach(doc => {
+                scheduledPosts.push({ id: doc.id, ...doc.data() } as ScheduledPost);
+            });
+        }
+        
+        const promoterScheduledPosts = scheduledPosts.filter(post => 
+            post.assignedPromoters.some(assigned => 
+                promoterIdSet.has(assigned.id) || assigned.email.toLowerCase() === lowerCaseEmail
+            )
+        );
+        
+        promoterScheduledPosts.sort((a, b) => 
+            ((a.scheduledAt as Timestamp)?.toMillis() || 0) - ((b.scheduledAt as Timestamp)?.toMillis() || 0)
+        );
+
+        return promoterScheduledPosts;
+    } catch (error) {
+        console.error("Error fetching scheduled posts for promoter: ", error);
+        throw new Error("Não foi possível buscar as publicações agendadas.");
     }
 };
