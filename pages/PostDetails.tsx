@@ -13,6 +13,7 @@ import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { storage, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes } from 'firebase/storage';
+import PhotoViewerModal from '../components/PhotoViewerModal';
 
 
 const formatDate = (timestamp: any): string => {
@@ -43,6 +44,11 @@ export const PostDetails: React.FC = () => {
     const [isChangeStatusModalOpen, setIsChangeStatusModalOpen] = useState(false);
     const [selectedAssignment, setSelectedAssignment] = useState<PostAssignment | null>(null);
 
+    // Photo viewer modal state
+    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+    const [photoViewerUrls, setPhotoViewerUrls] = useState<string[]>([]);
+    const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
+
     const canManage = adminData?.role === 'admin' || adminData?.role === 'superadmin' || adminData?.role === 'poster';
 
     const fetchData = useCallback(async () => {
@@ -70,6 +76,22 @@ export const PostDetails: React.FC = () => {
     const pendingJustificationsCount = useMemo(() => {
         return assignments.filter(a => a.justificationStatus === 'pending').length;
     }, [assignments]);
+
+    const openPhotoViewer = (urls: string[] | undefined, startIndex: number) => {
+        if (!urls) return;
+        const validUrls = urls.filter(url => url !== 'manual');
+        if (validUrls.length === 0) return;
+
+        const clickedUrl = urls[startIndex];
+        if (clickedUrl === 'manual') return;
+        
+        const actualStartIndex = validUrls.indexOf(clickedUrl);
+        if (actualStartIndex === -1) return;
+
+        setPhotoViewerUrls(validUrls);
+        setPhotoViewerStartIndex(actualStartIndex);
+        setIsPhotoViewerOpen(true);
+    };
     
     const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
         if (!post) return;
@@ -323,9 +345,9 @@ export const PostDetails: React.FC = () => {
                                                     url === 'manual' ? 
                                                     <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído<br/>Manual</div>
                                                     :
-                                                    <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                                            <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500" />
-                                                        </a>
+                                                    <button type="button" key={index} onClick={() => openPhotoViewer(assignment.proofImageUrls, index)}>
+                                                        <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500 cursor-pointer hover:opacity-80 transition-opacity" />
+                                                    </button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -339,9 +361,9 @@ export const PostDetails: React.FC = () => {
                                                 {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                                                     <div className="flex items-center gap-2">
                                                         {assignment.justificationImageUrls.map((url, index) => (
-                                                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                                                <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500" />
-                                                            </a>
+                                                        <button type="button" key={index} onClick={() => openPhotoViewer(assignment.justificationImageUrls, index)}>
+                                                            <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500 cursor-pointer hover:opacity-80 transition-opacity" />
+                                                        </button>
                                                         ))}
                                                     </div>
                                                 )}
@@ -383,6 +405,12 @@ export const PostDetails: React.FC = () => {
                 </>
             )}
             <PromoterPostStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={selectedAssignment}/>
+            <PhotoViewerModal
+                isOpen={isPhotoViewerOpen}
+                onClose={() => setIsPhotoViewerOpen(false)}
+                imageUrls={photoViewerUrls}
+                startIndex={photoViewerStartIndex}
+            />
         </div>
     );
 };
