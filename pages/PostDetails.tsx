@@ -502,8 +502,9 @@ export const PostDetails: React.FC = () => {
                         </button>
                     ))}
                  </div>
-                 
-                 <div className="overflow-x-auto">
+
+                 {/* DESKTOP TABLE */}
+                 <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-700">
                         <thead className="bg-gray-700/50">
                             <tr>
@@ -590,10 +591,99 @@ export const PostDetails: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
-                    {filteredAssignments.length === 0 && (
-                        <p className="text-gray-400 text-center py-8">Nenhuma tarefa encontrada com este filtro.</p>
-                    )}
                  </div>
+
+                 {/* MOBILE CARDS */}
+                 <div className="block md:hidden space-y-4">
+                    {filteredAssignments.map(assignment => (
+                        <div key={assignment.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <p className="font-semibold text-white">{assignment.promoterName}</p>
+                                    <p className="text-xs text-gray-400">{assignment.promoterEmail}</p>
+                                    {assignment.promoterDetails?.instagram && (
+                                        <a href={`https://instagram.com/${assignment.promoterDetails.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center gap-1 text-xs mt-1">
+                                            <InstagramIcon className="w-3 h-3" />
+                                            <span>{assignment.promoterDetails.instagram}</span>
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="flex-shrink-0 text-right">
+                                    {getStatusBadge(assignment)}
+                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                        <ProofCountdownTimer 
+                                            confirmedAt={assignment.confirmedAt} 
+                                            allowLateSubmissions={post.allowLateSubmissions ?? false} 
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="border-t border-gray-700 pt-3 text-sm text-gray-300">
+                                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Comprovação / Justificativa</h4>
+                                {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (
+                                    <div className="flex items-start flex-col gap-2">
+                                        <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)})</p>
+                                        <div className="flex items-center gap-2">
+                                            {assignment.proofImageUrls.map((url, index) => (
+                                            url === 'manual' ? 
+                                            <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído<br/>Manual</div>
+                                            :
+                                            <button type="button" key={index} onClick={() => openPhotoViewer(assignment.proofImageUrls, index)}>
+                                                <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500 cursor-pointer hover:opacity-80 transition-opacity" />
+                                            </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : assignment.justification ? (
+                                    <div className="flex flex-col gap-2">
+                                        <div>
+                                            <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
+                                            <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
+                                        </div>
+                                        {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                {assignment.justificationImageUrls.map((url, index) => (
+                                                <button type="button" key={index} onClick={() => openPhotoViewer(assignment.justificationImageUrls, index)}>
+                                                    <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500 cursor-pointer hover:opacity-80 transition-opacity" />
+                                                </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500">Nenhuma comprovação ou justificativa enviada.</p>
+                                )}
+                            </div>
+
+                            <div className="border-t border-gray-700 mt-3 pt-3">
+                                <div className="flex justify-end items-center flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
+                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                        <button onClick={() => handleRenewDeadline(assignment.id)} disabled={isProcessing === `${assignment.id}_renew`} className="flex items-center gap-1 text-gray-400 hover:text-gray-200 disabled:opacity-50" title="Renovar prazo de 24h para envio do print">
+                                            <ClockIcon className="w-4 h-4" /> 
+                                            <span>{isProcessing === `${assignment.id}_renew` ? '...' : 'Renovar'}</span>
+                                        </button>
+                                    )}
+                                    <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="flex items-center gap-1 text-blue-400 hover:text-blue-300">
+                                        <ChartBarIcon className="w-4 h-4" /> <span>Estatísticas</span>
+                                    </button>
+                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                        <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
+                                            <EnvelopeIcon className="w-4 h-4" /> <span>{isProcessing === assignment.id ? '...' : 'Lembrete'}</span>
+                                        </button>
+                                    )}
+                                    <button onClick={() => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }} className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
+                                        <PencilIcon className="w-4 h-4" /> <span>Alterar</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                 </div>
+
+                 {filteredAssignments.length === 0 && (
+                    <p className="text-gray-400 text-center py-8">Nenhuma tarefa encontrada com este filtro.</p>
+                 )}
             </div>
 
             {/* Modals */}
