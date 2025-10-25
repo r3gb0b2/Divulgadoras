@@ -38,19 +38,13 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
         // FIX: Use compat onAuthStateChanged method.
         const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
             setLoading(true);
-            setOrganizationsForAdmin([]);
-            setSelectedOrgIdState(sessionStorage.getItem('selectedOrgId')); 
 
             if (firebaseUser) {
-                setUser(firebaseUser);
-                sessionStorage.setItem('isAdminAuthenticated', 'true');
                 try {
-                    // Use UID for secure data retrieval
                     let data = await getAdminUserData(firebaseUser.uid);
 
                     // If no admin data is found, check if it's the default superadmin email.
                     // If so, create their admin record on the fly for the first login.
-                    // This superadmin has no organizationId and can see everything.
                     if (!data && firebaseUser.email === 'r3gb0b@gmail.com') {
                         const superAdminPayload: Omit<AdminUserData, 'uid'> = {
                             email: firebaseUser.email,
@@ -58,46 +52,70 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                             assignedStates: [], // Superadmin has access to all states implicitly
                         };
                         await setAdminUserData(firebaseUser.uid, superAdminPayload);
-                        // Set the data for the current session after creating it
                         data = { uid: firebaseUser.uid, ...superAdminPayload };
                     }
-
+                    
+                    setUser(firebaseUser);
                     setAdminData(data);
-                     if (data?.organizationIds && data.organizationIds.length > 0) {
-                        try {
-                            const allOrgs = await getOrganizations();
-                            const adminOrgs = allOrgs.filter(org => data.organizationIds.includes(org.id)).sort((a,b) => a.name.localeCompare(b.name));
-                            setOrganizationsForAdmin(adminOrgs);
+                    
+                    if (!data) {
+                        // User exists in Auth, but not in admins collection. Sign them out.
+                        await auth.signOut();
+                        return; // The next onAuthStateChanged will handle cleanup.
+                    }
 
-                            const currentSelected = sessionStorage.getItem('selectedOrgId');
-                            // If there's no selection, or the selection is invalid, default to the first org
-                            if (!currentSelected || !data.organizationIds.includes(currentSelected)) {
-                                const defaultOrgId = data.organizationIds[0];
-                                setSelectedOrgId(defaultOrgId); 
-                            } else {
-                                setSelectedOrgIdState(currentSelected);
-                            }
-                        } catch (orgError) {
-                            console.error("Failed to fetch organizations for admin", orgError);
+                    const allOrgs = await getOrganizations();
+                    
+                    if (data.role === 'superadmin') {
+                        // Superadmin can see all orgs for the switcher
+                        setOrganizationsForAdmin(allOrgs.sort((a,b) => a.name.localeCompare(b.name)));
+                        // Respect sessionStorage for impersonation
+                        const currentSelected = sessionStorage.getItem('selectedOrgId');
+                        const isValid = allOrgs.some(org => org.id === currentSelected);
+                        if (currentSelected && isValid) {
+                            setSelectedOrgIdState(currentSelected);
+                        } else {
+                            setSelectedOrgIdState(null); // Superadmin default is no org selected
+                        }
+                    } else if (data.organizationIds && data.organizationIds.length > 0) {
+                        const adminOrgs = allOrgs.filter(org => data.organizationIds.includes(org.id)).sort((a,b) => a.name.localeCompare(b.name));
+                        
+                        if (adminOrgs.length > 0) {
+                             setOrganizationsForAdmin(adminOrgs);
+                             const validOrgIds = adminOrgs.map(o => o.id);
+                             const currentSelected = sessionStorage.getItem('selectedOrgId');
+
+                             if (currentSelected && validOrgIds.includes(currentSelected)) {
+                                 setSelectedOrgIdState(currentSelected);
+                             } else {
+                                 // Default to the first valid org
+                                 setSelectedOrgId(validOrgIds[0]);
+                             }
+                        } else {
+                            // Admin is assigned to orgs that no longer exist.
+                            console.warn("Admin assigned to non-existent organizations.");
                             setOrganizationsForAdmin([]);
+                            setSelectedOrgIdState(null);
+                            sessionStorage.removeItem('selectedOrgId');
                         }
                     } else {
-                        // No orgs associated
+                        // Regular admin with no organizations assigned.
                         setOrganizationsForAdmin([]);
                         setSelectedOrgIdState(null);
                         sessionStorage.removeItem('selectedOrgId');
                     }
+
                 } catch (error) {
-                    console.error("Failed to fetch admin data", error);
-                    setAdminData(null); // Ensure no stale data on error
+                    console.error("Error during auth state processing:", error);
+                    // On any error, sign out and clear state
+                    await auth.signOut();
                 }
             } else {
                 setUser(null);
                 setAdminData(null);
-                sessionStorage.removeItem('isAdminAuthenticated');
                 setOrganizationsForAdmin([]);
                 setSelectedOrgIdState(null);
-                sessionStorage.removeItem('selectedOrgId');
+                sessionStorage.clear();
             }
             setLoading(false);
         });
