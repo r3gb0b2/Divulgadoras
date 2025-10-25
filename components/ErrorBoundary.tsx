@@ -12,12 +12,17 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Replaced constructor with class property for state initialization. This is a more modern class fields syntax and can prevent `this` context issues that may have caused the build errors.
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  // FIX: Reverted to a constructor for state initialization to fix build errors.
+  // The class property syntax was likely not supported by the build environment,
+  // which caused 'this.props' and 'this.setState' to be unrecognized.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Atualiza o estado para que a próxima renderização mostre a UI de fallback.
