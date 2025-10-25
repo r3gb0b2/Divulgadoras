@@ -13,7 +13,6 @@ import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { storage, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes } from 'firebase/storage';
-import PhotoViewerModal from '../components/PhotoViewerModal';
 
 
 const formatDate = (timestamp: any): string => {
@@ -24,6 +23,119 @@ const formatDate = (timestamp: any): string => {
 };
 
 type AssignmentStatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'justified';
+
+const PhotoViewerModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    imageUrls: string[];
+    startIndex: number;
+}> = ({ isOpen, onClose, imageUrls, startIndex }) => {
+    const [currentIndex, setCurrentIndex] = useState(startIndex);
+
+    // Reset index when modal is opened with a new start index
+    useEffect(() => {
+        if (isOpen) {
+            setCurrentIndex(startIndex);
+        }
+    }, [isOpen, startIndex]);
+
+    const goToPrevious = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const isFirst = currentIndex === 0;
+        const newIndex = isFirst ? imageUrls.length - 1 : currentIndex - 1;
+        setCurrentIndex(newIndex);
+    };
+
+    const goToNext = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const isLast = currentIndex === imageUrls.length - 1;
+        const newIndex = isLast ? 0 : currentIndex + 1;
+        setCurrentIndex(newIndex);
+    };
+    
+    // Keyboard navigation
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isOpen) return;
+            if (e.key === 'ArrowRight') {
+                e.stopPropagation();
+                goToNext(e as any); // cast to avoid type issue on event
+            } else if (e.key === 'ArrowLeft') {
+                e.stopPropagation();
+                goToPrevious(e as any);
+            } else if (e.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, currentIndex, goToNext, goToPrevious, onClose]);
+
+
+    if (!isOpen) return null;
+
+    const hasMultipleImages = imageUrls.length > 1;
+
+    return (
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-2 sm:p-4" 
+            onClick={onClose}
+            aria-modal="true"
+            role="dialog"
+        >
+            <div 
+                className="relative w-full max-w-5xl max-h-[95vh] flex flex-col items-center justify-center" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Image container */}
+                <div className="relative w-full flex-grow min-h-0 flex items-center justify-center">
+                    <img
+                        src={imageUrls[currentIndex]}
+                        alt={`Visualização ${currentIndex + 1}`}
+                        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                    />
+
+                    {/* Previous Button */}
+                    {hasMultipleImages && (
+                        <button
+                            onClick={goToPrevious}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary ml-2"
+                            aria-label="Anterior"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                    )}
+
+                    {/* Next Button */}
+                    {hasMultipleImages && (
+                        <button
+                            onClick={goToNext}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 bg-black/40 text-white p-2 rounded-full hover:bg-black/60 transition-colors focus:outline-none focus:ring-2 focus:ring-primary mr-2"
+                            aria-label="Próxima"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    )}
+                </div>
+                
+                {/* Controls container at the bottom */}
+                <div className="flex-shrink-0 flex flex-col items-center mt-4">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark"
+                    >
+                        Fechar
+                    </button>
+                    {hasMultipleImages && (
+                        <p className="text-white text-sm mt-2 font-mono">{currentIndex + 1} / {imageUrls.length}</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
