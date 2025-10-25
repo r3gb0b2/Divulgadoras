@@ -40,11 +40,19 @@ export const getGuestListsForOrg = async (organizationId: string): Promise<Guest
     try {
         const q = query(
             collection(firestore, "guestLists"),
-            where("organizationId", "==", organizationId),
-            orderBy("createdAt", "desc")
+            where("organizationId", "==", organizationId)
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
+        const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
+        
+        // Sort client-side to avoid needing a composite index
+        lists.sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // descending
+        });
+
+        return lists;
     } catch (error) {
         console.error("Error fetching guest lists for org: ", error);
         throw new Error("Não foi possível buscar as listas.");

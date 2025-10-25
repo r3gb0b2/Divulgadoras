@@ -182,7 +182,7 @@ const GuestListAssignments: React.FC = () => {
                             </label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1">
                                 {filteredPromoters.map(p => (
-                                    <label key={p.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-800/50 cursor-pointer">
+                                    <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-800/50 cursor-pointer">
                                         <input type="checkbox" checked={assignedIds.has(p.id)} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
                                         <span className={`truncate text-sm font-semibold ${getPerformanceColor(p.completionRate)}`} title={p.name}>{p.instagram || p.name}</span>
                                     </label>
