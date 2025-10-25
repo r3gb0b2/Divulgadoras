@@ -11,11 +11,8 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: In a class component, `this.state` must be initialized, and `super(props)` must be called in the constructor. This resolves errors where `this.state`, `this.setState`, and `this.props` were reported as non-existent.
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
-  }
+  // FIX: Replaced the constructor with a public class field for state initialization. This resolves errors where `this.state`, `this.setState`, and `this.props` were reported as non-existent.
+  state: State = { hasError: false, error: null, errorInfo: null };
 
   static getDerivedStateFromError(error: Error): State {
     // Atualiza o estado para que a próxima renderização mostre a UI de fallback.

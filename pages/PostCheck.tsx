@@ -263,7 +263,7 @@ const PostCard: React.FC<{
                                    className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
                                 >
                                    Justificar Ausência
-                               </button>
+                                </button>
                            </div>
                         </>
                     )}
@@ -514,11 +514,13 @@ const PostCard: React.FC<{
                             <CountdownTimer expiresAt={assignment.post.expiresAt} />
                         </div>
                      )}
-                     {assignment.status === 'confirmed' ? (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
-                    ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
-                    )}
+                     <div className="mt-1">
+                        {assignment.status === 'confirmed' ? (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Confirmado</span>
+                        ) : (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                        )}
+                    </div>
                 </div>
             </div>
             
@@ -708,11 +710,21 @@ const PostCheck: React.FC = () => {
             const campaignStatusMap = new Map<string, boolean>();
             if (promoterProfiles) {
                 for (const profile of promoterProfiles) {
-                    // We only care about the status for campaigns they have been approved for
-                    if (profile.campaignName && profile.status === 'approved') {
-                        // The latest registration for a campaign will be first due to sorting in findPromotersByEmail
-                        if (!campaignStatusMap.has(profile.campaignName)) {
-                            campaignStatusMap.set(profile.campaignName, profile.hasJoinedGroup || false);
+                    if (profile.status === 'approved') {
+                        const joinedStatus = profile.hasJoinedGroup || false;
+                        
+                        // Apply status to the primary campaign of this profile
+                        if (profile.campaignName && !campaignStatusMap.has(profile.campaignName)) {
+                            campaignStatusMap.set(profile.campaignName, joinedStatus);
+                        }
+                        
+                        // Apply status to all associated campaigns of this profile
+                        if (profile.associatedCampaigns) {
+                            for (const assocCampaign of profile.associatedCampaigns) {
+                                if (!campaignStatusMap.has(assocCampaign)) {
+                                    campaignStatusMap.set(assocCampaign, joinedStatus);
+                                }
+                            }
                         }
                     }
                 }
