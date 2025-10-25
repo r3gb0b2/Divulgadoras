@@ -5,6 +5,7 @@ import { GuestList, Promoter, PostAssignment } from '../types';
 import { getGuestListById, updateGuestList } from '../services/guestListService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAssignmentsForOrganization } from '../services/postService';
+import { getAllCampaigns } from '../services/settingsService';
 import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
 
 const getPerformanceColor = (rate: number): string => {
@@ -38,8 +39,21 @@ const GuestListAssignments: React.FC = () => {
             const listData = await getGuestListById(listId);
             if (!listData) throw new Error("Lista de convidados não encontrada.");
             
+            // FIX: Fetch all campaigns to find the state for the current one.
+            const allCampaigns = await getAllCampaigns(listData.organizationId);
+            const associatedCampaign = allCampaigns.find(c => c.id === listData.campaignId);
+            
+            if (!associatedCampaign) {
+                throw new Error(`Evento associado (ID: ${listData.campaignId}) não foi encontrado.`);
+            }
+
+            // FIX: Use the correct stateAbbr from the campaign, not campaignName.
             const [approvedPromoters, orgAssignments] = await Promise.all([
-                getApprovedPromoters(listData.organizationId, listData.campaignName, listData.campaignName),
+                getApprovedPromoters(
+                    listData.organizationId,
+                    associatedCampaign.stateAbbr, // Correct state
+                    listData.campaignName
+                ),
                 getAssignmentsForOrganization(listData.organizationId)
             ]);
 
