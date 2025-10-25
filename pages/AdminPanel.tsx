@@ -144,19 +144,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [adminData, isSuperAdmin, selectedOrgId]);
 
     const getStatesForScope = useCallback(() => {
-        if (isSuperAdmin) {
-            return null; // Super admin can see all states if filter is 'all'
+        let statesForScope: string[] | null = null;
+        if (!isSuperAdmin) {
+            // Start with org-level states
+            statesForScope = organization?.assignedStates || null;
+            // Restrict to admin-specific states if they exist
+            if (adminData.assignedStates && adminData.assignedStates.length > 0) {
+                statesForScope = adminData.assignedStates;
+            }
         }
-        
-        // For regular admins, their assigned states take precedence
-        if (adminData.assignedStates && adminData.assignedStates.length > 0) {
-            return adminData.assignedStates;
-        }
-        
-        // Otherwise, fall back to organization's assigned states
-        // Default to an empty array if neither is set, to prevent fetching all data
-        return organization?.assignedStates || [];
-
+        return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
     const fetchAllData = useCallback(async () => {
