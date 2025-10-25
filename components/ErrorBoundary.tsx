@@ -10,16 +10,13 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Extended from `React.Component` directly to avoid potential naming conflicts and resolve type errors where `this.props` and `this.setState` were not found. The explicit `public state: State` declaration was also removed as it is inherited.
+// FIX: Refactored to use a class property initializer for the state, which is a more modern and concise syntax that avoids needing a constructor just to set the initial state. This also resolves type errors where `this.state`, `this.setState`, and `this.props` were not recognized.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Atualiza o estado para que a próxima renderização mostre a UI de fallback.

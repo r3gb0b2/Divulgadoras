@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { PostAssignment, Promoter } from '../types';
+import { PostAssignment, Promoter, ScheduledPost } from '../types';
 import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
@@ -91,6 +91,96 @@ const CountdownTimer: React.FC<{ expiresAt: Timestamp | any }> = ({ expiresAt })
         <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}>
             <ClockIcon className="h-4 w-4" />
             <span>{timeLeft}</span>
+        </div>
+    );
+};
+
+const FutureCountdownTimer: React.FC<{ targetAt: any }> = ({ targetAt }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+
+    useEffect(() => {
+        const targetDate = toDateSafe(targetAt);
+        if (!targetDate) return;
+
+        const updateTimer = () => {
+            const now = new Date();
+            const difference = targetDate.getTime() - now.getTime();
+
+            if (difference > 0) {
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+                const minutes = Math.floor((difference / 1000 / 60) % 60);
+                
+                let timeString = '';
+                if (days > 1) timeString = `em ${days} dias`;
+                else if (days === 1) timeString = `em 1 dia`;
+                else if (hours > 0) timeString = `em ${hours}h ${minutes}m`;
+                else if (minutes > 0) timeString = `em ${minutes}m`;
+                else timeString = `em instantes`;
+
+                setTimeLeft(timeString);
+            } else {
+                setTimeLeft('Aguardando processamento...');
+            }
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000 * 30); // Update every 30s is enough
+
+        return () => clearInterval(interval);
+    }, [targetAt]);
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 bg-gray-600 text-gray-200">
+            <ClockIcon className="h-4 w-4" />
+            <span>{timeLeft}</span>
+        </div>
+    );
+};
+
+const ScheduledPostCard: React.FC<{ post: ScheduledPost }> = ({ post }) => {
+    const { postData, scheduledAt } = post;
+    const formattedDate = toDateSafe(scheduledAt)?.toLocaleString('pt-BR', {
+        day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit'
+    }) || 'Data inválida';
+
+    return (
+        <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+            <div className="flex justify-between items-start mb-3">
+                <div>
+                    <p className="font-bold text-lg text-primary">{postData.campaignName}</p>
+                    {postData.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{postData.eventName}</p>}
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <FutureCountdownTimer targetAt={scheduledAt} />
+                </div>
+            </div>
+
+            <div className="border-t border-gray-700 pt-3">
+                <p className="text-sm text-center text-blue-300 mb-4">
+                    Esta publicação será liberada para você em <strong>{formattedDate}</strong>.
+                </p>
+
+                {(postData.type === 'image' || postData.type === 'video') && postData.mediaUrl && (
+                     <div className="mb-4">
+                        <StorageMedia path={postData.mediaUrl} type={postData.type} controls={postData.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
+                    </div>
+                )}
+                {postData.type === 'text' && (
+                    <div className="bg-gray-800 p-3 rounded-md mb-4">
+                        <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{postData.textContent}</pre>
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <h4 className="font-semibold text-gray-200">Instruções:</h4>
+                    <div className="bg-gray-800/50 p-3 rounded-md">
+                        <p className="text-gray-300 text-sm whitespace-pre-wrap">{postData.instructions}</p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -679,6 +769,7 @@ const PostCheck: React.FC = () => {
     const location = useLocation();
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
+    const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
     const [currentPromoter, setCurrentPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -695,45 +786,36 @@ const PostCheck: React.FC = () => {
         setIsLoading(true);
         setError(null);
         setAssignments(null);
+        setScheduledPosts([]);
         setCurrentPromoter(null);
         setSearched(true);
         try {
-            const [assignmentsResult, promoterProfiles] = await Promise.all([
-                getAssignmentsForPromoterByEmail(searchEmail),
-                findPromotersByEmail(searchEmail),
-            ]);
-
-            if (promoterProfiles && promoterProfiles.length > 0) {
-                setCurrentPromoter(promoterProfiles[0]);
+            const promoterProfiles = await findPromotersByEmail(searchEmail);
+            if (!promoterProfiles || promoterProfiles.length === 0) {
+                setError("Nenhum cadastro de divulgadora encontrado para este e-mail.");
+                setIsLoading(false);
+                return;
             }
 
-            const campaignStatusMap = new Map<string, boolean>();
-            if (promoterProfiles) {
-                // First pass: set all to false initially based on existence.
-                for (const profile of promoterProfiles) {
-                    if (profile.status === 'approved') {
-                        if (profile.campaignName && !campaignStatusMap.has(profile.campaignName)) {
-                            campaignStatusMap.set(profile.campaignName, false);
-                        }
-                        if (profile.associatedCampaigns) {
-                            for (const assoc of profile.associatedCampaigns) {
-                                if (!campaignStatusMap.has(assoc)) {
-                                    campaignStatusMap.set(assoc, false);
-                                }
-                            }
-                        }
-                    }
-                }
+            const mainProfile = promoterProfiles[0];
+            const organizationIds = [...new Set(promoterProfiles.map(p => p.organizationId))];
+            
+            const [assignmentsResult, scheduledPostsResult] = await Promise.all([
+                getAssignmentsForPromoterByEmail(searchEmail),
+                getScheduledPostsForPromoter(mainProfile.id, organizationIds),
+            ]);
+            
+            setScheduledPosts(scheduledPostsResult);
+            setCurrentPromoter(mainProfile);
 
-                // Second pass: upgrade to true if any profile grants it. A 'true' status wins.
-                for (const profile of promoterProfiles) {
-                    if (profile.status === 'approved' && profile.hasJoinedGroup) {
-                        if (profile.campaignName) {
-                            campaignStatusMap.set(profile.campaignName, true);
-                        }
-                        if (profile.associatedCampaigns) {
-                            for (const assoc of profile.associatedCampaigns) {
-                                campaignStatusMap.set(assoc, true);
+            const campaignStatusMap = new Map<string, boolean>();
+            for (const profile of promoterProfiles) {
+                if (profile.status === 'approved') {
+                    if (profile.campaignName) campaignStatusMap.set(profile.campaignName, profile.hasJoinedGroup || false);
+                    if (profile.associatedCampaigns) {
+                        for (const assoc of profile.associatedCampaigns) {
+                             if (!campaignStatusMap.has(assoc)) {
+                                campaignStatusMap.set(assoc, profile.hasJoinedGroup || false);
                             }
                         }
                     }
@@ -839,7 +921,22 @@ const PostCheck: React.FC = () => {
                         Ver Minhas Estatísticas de Postagens
                     </button>
                 </div>
+
+                {scheduledPosts.length > 0 && (
+                    <div className="mb-8">
+                        <h3 className="text-xl font-bold text-gray-400 border-b border-gray-700 pb-2 mb-4">
+                            Próximas Publicações Agendadas
+                        </h3>
+                        <div className="space-y-4">
+                            {scheduledPosts.map(sp => <ScheduledPostCard key={sp.id} post={sp} />)}
+                        </div>
+                    </div>
+                )}
                 
+                <h3 className="text-xl font-bold text-gray-400 border-b border-gray-700 pb-2 mb-4">
+                    Publicações Ativas
+                </h3>
+
                 {justificationCount > 0 && (
                     <div className="mb-4 p-3 bg-blue-900/50 rounded-md text-blue-300 text-sm text-center">
                         Você tem <strong>{justificationCount}</strong> justificativa(s) de não postagem. O organizador irá analisá-las.
