@@ -13,13 +13,13 @@ interface State {
 class ErrorBoundary extends React.Component<Props, State> {
   // FIX: All errors are caused by state not being properly declared on the class.
   // Initializing state as a class property correctly declares it and resolves the cascading type errors for `state`, `setState`, and `props`.
-  state: State = {
+  public state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Este método de ciclo de vida é acionado após um erro ser lançado por um componente descendente.
     // Usamos para atualizar o estado e renderizar uma UI de fallback.
     this.setState({
@@ -31,7 +31,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       // UI de Fallback
       return (

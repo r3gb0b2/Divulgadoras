@@ -14,8 +14,9 @@ type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'sta
 type SortDirection = 'asc' | 'desc';
 
 const getPerformanceColor = (rate: number): string => {
-    if (rate > 60) return 'text-green-400';
-    if (rate > 30) return 'text-yellow-400';
+    if (rate === 100) return 'text-green-400';
+    if (rate >= 60) return 'text-blue-400';
+    if (rate >= 31) return 'text-yellow-400'; // Laranja
     return 'text-red-400';
 };
 
@@ -55,7 +56,7 @@ const PostDashboard: React.FC = () => {
     const [filterCampaign, setFilterCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
-    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+    const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -149,8 +150,9 @@ const PostDashboard: React.FC = () => {
             searched = searched.filter(s => {
                 const rate = s.completionRate;
                 if (rate < 0) return false;
-                if (colorFilter === 'green') return rate > 60;
-                if (colorFilter === 'yellow') return rate > 30 && rate <= 60;
+                if (colorFilter === 'green') return rate === 100;
+                if (colorFilter === 'blue') return rate >= 60 && rate < 100;
+                if (colorFilter === 'yellow') return rate >= 31 && rate < 60;
                 if (colorFilter === 'red') return rate >= 0 && rate <= 30;
                 return true;
             });
@@ -236,17 +238,18 @@ const PostDashboard: React.FC = () => {
                  <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
                     <div className="flex items-center gap-x-4">
                         <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>61% - 100%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31% - 60%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0% - 30%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>100%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div><span>60-99%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31-59%</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0-30%</span></div>
                     </div>
                     <div className="flex items-center gap-x-2">
                         <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
                         <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                            {(['all', 'green', 'yellow', 'red'] as const).map(f => (
+                            {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
                                 <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
-                                    <span>{{'all': 'Todos', 'green': 'Verde', 'yellow': 'Amarelo', 'red': 'Vermelho'}[f]}</span>
+                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
+                                    <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
                                 </button>
                             ))}
                         </div>
