@@ -11,12 +11,15 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Reverted state initialization from a constructor to a class property. The constructor-based approach was causing TypeScript errors where 'state', 'setState', and 'props' were not found on the component instance. Class property initialization is a standard and widely supported syntax that correctly defines the component's state.
-  state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  // FIX: Replaced class property state initialization with a standard constructor. This ensures the component is correctly initialized by calling `super(props)`, which makes `this.props` and `this.setState` available and resolves the errors.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Atualiza o estado para que a próxima renderização mostre a UI de fallback.

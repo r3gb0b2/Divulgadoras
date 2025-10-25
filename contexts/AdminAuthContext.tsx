@@ -66,44 +66,46 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
 
                     const allOrgs = await getOrganizations();
                     
+                    let finalOrgsForAdmin: Organization[] = [];
+                    let finalSelectedOrgId: string | null = null;
+
                     if (data.role === 'superadmin') {
-                        // Superadmin can see all orgs for the switcher
-                        setOrganizationsForAdmin(allOrgs.sort((a,b) => a.name.localeCompare(b.name)));
-                        // Respect sessionStorage for impersonation
-                        const currentSelected = sessionStorage.getItem('selectedOrgId');
-                        const isValid = allOrgs.some(org => org.id === currentSelected);
-                        if (currentSelected && isValid) {
-                            setSelectedOrgIdState(currentSelected);
-                        } else {
-                            setSelectedOrgIdState(null); // Superadmin default is no org selected
+                        finalOrgsForAdmin = allOrgs.sort((a, b) => a.name.localeCompare(b.name));
+                        const storedId = sessionStorage.getItem('selectedOrgId');
+                        // A superadmin can impersonate any org, so we validate against all of them.
+                        if (storedId && finalOrgsForAdmin.some(org => org.id === storedId)) {
+                            finalSelectedOrgId = storedId;
                         }
                     } else if (data.organizationIds && data.organizationIds.length > 0) {
-                        const adminOrgs = allOrgs.filter(org => data.organizationIds.includes(org.id)).sort((a,b) => a.name.localeCompare(b.name));
-                        
-                        if (adminOrgs.length > 0) {
-                             setOrganizationsForAdmin(adminOrgs);
-                             const validOrgIds = adminOrgs.map(o => o.id);
-                             const currentSelected = sessionStorage.getItem('selectedOrgId');
+                        // Filter orgs the admin has access to AND that actually exist.
+                        const accessibleOrgIds = new Set(data.organizationIds);
+                        finalOrgsForAdmin = allOrgs
+                            .filter(org => accessibleOrgIds.has(org.id))
+                            .sort((a, b) => a.name.localeCompare(b.name));
 
-                             if (currentSelected && validOrgIds.includes(currentSelected)) {
-                                 setSelectedOrgIdState(currentSelected);
-                             } else {
-                                 // Default to the first valid org
-                                 setSelectedOrgId(validOrgIds[0]);
-                             }
-                        } else {
-                            // Admin is assigned to orgs that no longer exist.
-                            console.warn("Admin assigned to non-existent organizations.");
-                            setOrganizationsForAdmin([]);
-                            setSelectedOrgIdState(null);
-                            sessionStorage.removeItem('selectedOrgId');
+                        if (finalOrgsForAdmin.length > 0) {
+                            const validOrgIds = finalOrgsForAdmin.map(o => o.id);
+                            const storedId = sessionStorage.getItem('selectedOrgId');
+
+                            // If there's a stored ID and it's one of the valid ones, use it.
+                            if (storedId && validOrgIds.includes(storedId)) {
+                                finalSelectedOrgId = storedId;
+                            } else {
+                                // Otherwise, default to the first valid organization.
+                                finalSelectedOrgId = validOrgIds[0];
+                            }
                         }
+                    }
+                    
+                    // Apply the calculated state in one go.
+                    setOrganizationsForAdmin(finalOrgsForAdmin);
+                    setSelectedOrgIdState(finalSelectedOrgId);
+                    if (finalSelectedOrgId) {
+                        sessionStorage.setItem('selectedOrgId', finalSelectedOrgId);
                     } else {
-                        // Regular admin with no organizations assigned.
-                        setOrganizationsForAdmin([]);
-                        setSelectedOrgIdState(null);
                         sessionStorage.removeItem('selectedOrgId');
                     }
+
 
                 } catch (error) {
                     console.error("Error during auth state processing:", error);
