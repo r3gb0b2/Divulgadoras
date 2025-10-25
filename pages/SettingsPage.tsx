@@ -129,7 +129,7 @@ const SettingsPage: React.FC = () => {
 
           {/* Controle de Entrada */}
            <Link
-            to="/admin/lists"
+            to="/admin/checkin-dashboard"
             className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
           >
             <div className="flex items-center">

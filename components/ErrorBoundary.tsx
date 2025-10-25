@@ -12,15 +12,12 @@ interface State {
 
 class ErrorBoundary extends React.Component<Props, State> {
   // FIX: All errors are caused by state not being properly declared on the class.
-  // Initializing state in the constructor is a more robust way to ensure it's set up correctly for the component instance, resolving errors where `this.setState` and `this.props` might be undefined due to build environment configurations.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // Initializing state as a class property is a more modern and concise way to ensure it's set up correctly for the component instance.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Este método de ciclo de vida é acionado após um erro ser lançado por um componente descendente.

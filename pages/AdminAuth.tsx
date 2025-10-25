@@ -30,6 +30,7 @@ import ChangePasswordPage from './ChangePasswordPage'; // Import new page
 import PostDashboard from './PostDashboard';
 import AdminSchedulePage from './AdminSchedulePage';
 import PromoterDiagnosticsPage from './PromoterDiagnosticsPage'; // Import new page
+import AdminCheckinDashboard from './AdminCheckinDashboard'; // Import new page
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -234,6 +235,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
+                    <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
@@ -257,6 +259,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
+                    <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
