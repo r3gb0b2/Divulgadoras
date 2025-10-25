@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
-  // FIX: Made children optional to resolve type error in App.tsx where it was not being correctly inferred.
+  // FIX: Made children optional to resolve type errors where the component might be used without children.
   children?: ReactNode;
 }
 
@@ -12,9 +12,7 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Reverted to a constructor for state initialization to fix build errors.
-  // The class property syntax was likely not supported by the build environment,
-  // which caused 'this.props' and 'this.setState' to be unrecognized.
+  // FIX: Reverted to a constructor for state initialization to resolve errors where `this.state` and `this.setState` were not recognized, likely due to unsupported class property syntax in the build environment.
   constructor(props: Props) {
     super(props);
     this.state = {

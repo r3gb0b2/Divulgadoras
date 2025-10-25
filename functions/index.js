@@ -128,12 +128,14 @@ exports.onPromoterStatusChange = functions
 
       // 2. Check for status changes to send notification emails
       const statusChanged = newValue.status !== oldValue.status;
-      const isApprovalOrRejection =
-      newValue.status === "approved" || newValue.status === "rejected";
+      const isNotificationStatus =
+      newValue.status === "approved" ||
+      newValue.status === "rejected" ||
+      newValue.status === "rejected_editable";
 
-      if (statusChanged && isApprovalOrRejection) {
+      if (statusChanged && isNotificationStatus) {
         try {
-          await sendStatusChangeEmail(newValue);
+          await sendStatusChangeEmail(newValue, promoterId);
         } catch (error) {
           console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
         }
@@ -258,8 +260,9 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
  * For 'approved' status, it uses the custom HTML template from Firestore.
  * For 'rejected' status, it uses a fixed template ID from Brevo.
  * @param {object} promoterData The promoter document data.
+ * @param {string} promoterId The ID of the promoter document.
  */
-async function sendStatusChangeEmail(promoterData) {
+async function sendStatusChangeEmail(promoterData, promoterId) {
   if (!brevoApiInstance) {
     console.error("Brevo API key not configured. Cannot send email.");
     return;
@@ -304,6 +307,42 @@ async function sendStatusChangeEmail(promoterData) {
       htmlTemplate = htmlTemplate.replace(placeholder, replacements[key]);
     }
     sendSmtpEmail.htmlContent = htmlTemplate;
+  } else if (promoterData.status === "rejected_editable") {
+    sendSmtpEmail.subject = `Ação Necessária: Corrija seu cadastro para ${replacements.campaignName}`;
+
+    const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ""}?edit_id=${promoterId}`;
+    const rejectionReasonHtml = promoterData.rejectionReason ? `<p><strong>Motivo:</strong></p><div style="background-color: #ffefef; border-left: 4px solid #f87171; padding: 10px; margin-bottom: 20px;">${promoterData.rejectionReason.replace(/\n/g, "<br/>")}</div>` : "";
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Correção de Cadastro Necessária</title>
+          <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+            .header { background-color: #f97316; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 30px; }
+            .button { display: inline-block; background-color: #f97316; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header"><h1>Olá, ${promoterData.name}!</h1></div>
+            <div class="content">
+                <p>Notamos que seu cadastro para o evento <strong>${replacements.campaignName}</strong> precisa de algumas correções antes de ser aprovado.</p>
+                ${rejectionReasonHtml}
+                <p>Por favor, clique no botão abaixo para acessar seu cadastro, fazer as correções necessárias e reenviá-lo para análise.</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${editLink}" class="button">Corrigir Meu Cadastro</a>
+                </p>
+                <p>Atenciosamente,<br>Equipe ${replacements.orgName}</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+    sendSmtpEmail.htmlContent = htmlContent;
   } else { // 'rejected'
     sendSmtpEmail.subject = "Atualização sobre seu cadastro";
     sendSmtpEmail.templateId = 11; // Assumes Brevo template ID 11 for rejections
