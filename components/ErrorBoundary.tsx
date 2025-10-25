@@ -11,7 +11,9 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Reverted state initialization to use a constructor. The previous class property initialization, while valid syntax, was causing type resolution errors where 'this.state' and 'this.props' were not being correctly identified on the component instance.
+  // FIX: Explicitly declare the 'state' property on the class. The TypeScript compiler was failing to resolve 'this.state' and 'this.props' from the component instance, and this declaration helps the type checker.
+  public state: State;
+
   constructor(props: Props) {
     super(props);
     this.state = {
