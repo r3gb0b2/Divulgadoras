@@ -709,21 +709,31 @@ const PostCheck: React.FC = () => {
 
             const campaignStatusMap = new Map<string, boolean>();
             if (promoterProfiles) {
+                // First pass: set all to false initially based on existence.
                 for (const profile of promoterProfiles) {
                     if (profile.status === 'approved') {
-                        const joinedStatus = profile.hasJoinedGroup || false;
-                        
-                        // Apply status to the primary campaign of this profile
                         if (profile.campaignName && !campaignStatusMap.has(profile.campaignName)) {
-                            campaignStatusMap.set(profile.campaignName, joinedStatus);
+                            campaignStatusMap.set(profile.campaignName, false);
                         }
-                        
-                        // Apply status to all associated campaigns of this profile
                         if (profile.associatedCampaigns) {
-                            for (const assocCampaign of profile.associatedCampaigns) {
-                                if (!campaignStatusMap.has(assocCampaign)) {
-                                    campaignStatusMap.set(assocCampaign, joinedStatus);
+                            for (const assoc of profile.associatedCampaigns) {
+                                if (!campaignStatusMap.has(assoc)) {
+                                    campaignStatusMap.set(assoc, false);
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // Second pass: upgrade to true if any profile grants it. A 'true' status wins.
+                for (const profile of promoterProfiles) {
+                    if (profile.status === 'approved' && profile.hasJoinedGroup) {
+                        if (profile.campaignName) {
+                            campaignStatusMap.set(profile.campaignName, true);
+                        }
+                        if (profile.associatedCampaigns) {
+                            for (const assoc of profile.associatedCampaigns) {
+                                campaignStatusMap.set(assoc, true);
                             }
                         }
                     }
