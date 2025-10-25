@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Post, PostAssignment } from '../types';
-import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications } from '../services/postService';
+import { Post, PostAssignment, Promoter } from '../types';
+import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications, renewAssignmentDeadline } from '../services/postService';
+import { getPromotersByIds } from '../services/promoterService';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon, InstagramIcon, ClockIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -23,6 +24,50 @@ const formatDate = (timestamp: any): string => {
 };
 
 type AssignmentStatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'justified';
+type AssignmentWithPromoter = PostAssignment & { promoterDetails?: Promoter };
+
+
+const ProofCountdownTimer: React.FC<{ confirmedAt: any; allowLateSubmissions: boolean }> = ({ confirmedAt, allowLateSubmissions }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+    const [isExpired, setIsExpired] = useState(false);
+
+    useEffect(() => {
+        const confirmationTime = confirmedAt?.toDate ? confirmedAt.toDate() : new Date(confirmedAt);
+        if (isNaN(confirmationTime.getTime())) return;
+
+        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+
+        const updateTimer = () => {
+            const now = new Date();
+            const difference = expireTime.getTime() - now.getTime();
+
+            if (difference > 0) {
+                const hours = Math.floor(difference / (1000 * 60 * 60));
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+                setTimeLeft(`${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`);
+                setIsExpired(false);
+            } else {
+                setTimeLeft(allowLateSubmissions ? 'Prazo encerrado (envio tardio liberado)' : 'Prazo encerrado');
+                setIsExpired(true);
+            }
+        };
+
+        updateTimer();
+        const timer = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(timer);
+    }, [confirmedAt, allowLateSubmissions]);
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className={`text-xs font-semibold mt-1 flex items-center gap-1 ${isExpired ? 'text-red-400' : 'text-yellow-300'}`}>
+            <ClockIcon className="w-3 h-3"/>
+            {timeLeft}
+        </div>
+    );
+};
 
 const PhotoViewerModal: React.FC<{
     isOpen: boolean;
@@ -143,7 +188,7 @@ export const PostDetails: React.FC = () => {
     const { adminData } = useAdminAuth();
 
     const [post, setPost] = useState<Post | null>(null);
-    const [assignments, setAssignments] = useState<PostAssignment[]>([]);
+    const [assignments, setAssignments] = useState<AssignmentWithPromoter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
@@ -154,7 +199,7 @@ export const PostDetails: React.FC = () => {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [isChangeStatusModalOpen, setIsChangeStatusModalOpen] = useState(false);
-    const [selectedAssignment, setSelectedAssignment] = useState<PostAssignment | null>(null);
+    const [selectedAssignment, setSelectedAssignment] = useState<AssignmentWithPromoter | null>(null);
 
     // Photo viewer modal state
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -173,7 +218,21 @@ export const PostDetails: React.FC = () => {
         try {
             const { post: postData, assignments: assignmentsData } = await getPostWithAssignments(postId);
             setPost(postData);
-            setAssignments(assignmentsData.sort((a,b) => a.promoterName.localeCompare(b.promoterName)));
+            
+            if (assignmentsData.length > 0) {
+                const promoterIds = [...new Set(assignmentsData.map(a => a.promoterId))];
+                const promoters = await getPromotersByIds(promoterIds);
+                const promotersMap = new Map(promoters.map(p => [p.id, p]));
+
+                const assignmentsWithDetails = assignmentsData.map(assignment => ({
+                    ...assignment,
+                    promoterDetails: promotersMap.get(assignment.promoterId)
+                }));
+                setAssignments(assignmentsWithDetails.sort((a,b) => a.promoterName.localeCompare(b.promoterName)));
+            } else {
+                setAssignments([]);
+            }
+
         } catch (err: any) {
             setError(err.message || 'Falha ao buscar detalhes da publicação.');
         } finally {
@@ -296,6 +355,21 @@ export const PostDetails: React.FC = () => {
             await fetchData();
         } catch(err) {
             throw err;
+        }
+    };
+    
+    const handleRenewDeadline = async (assignmentId: string) => {
+        if (!window.confirm("Isso irá resetar o prazo de 24 horas para o envio da comprovação, a partir de agora. Deseja continuar?")) {
+            return;
+        }
+        setIsProcessing(assignmentId + '_renew');
+        try {
+            await renewAssignmentDeadline(assignmentId);
+            await fetchData(); // Refresh data to show new countdown
+        } catch(err: any) {
+            setError(err.message || "Falha ao renovar prazo.");
+        } finally {
+            setIsProcessing(null);
         }
     };
 
@@ -444,9 +518,22 @@ export const PostDetails: React.FC = () => {
                                 <tr key={assignment.id} className="hover:bg-gray-700/40">
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         <p className="font-semibold text-white">{assignment.promoterName}</p>
+                                        <p className="text-xs text-gray-400">{assignment.promoterEmail}</p>
+                                        {assignment.promoterDetails?.instagram && (
+                                            <a href={`https://instagram.com/${assignment.promoterDetails.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center gap-1 text-xs mt-1">
+                                                <InstagramIcon className="w-3 h-3" />
+                                                <span>{assignment.promoterDetails.instagram}</span>
+                                            </a>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         {getStatusBadge(assignment)}
+                                        {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                            <ProofCountdownTimer 
+                                                confirmedAt={assignment.confirmedAt} 
+                                                allowLateSubmissions={post.allowLateSubmissions ?? false} 
+                                            />
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-300">
                                         {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
@@ -484,6 +571,12 @@ export const PostDetails: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end items-center gap-x-4">
+                                            {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                                <button onClick={() => handleRenewDeadline(assignment.id)} disabled={isProcessing === `${assignment.id}_renew`} className="flex items-center gap-1 text-gray-400 hover:text-gray-200 disabled:opacity-50" title="Renovar prazo de 24h para envio do print">
+                                                    <ClockIcon className="w-4 h-4" /> 
+                                                    {isProcessing === `${assignment.id}_renew` ? '...' : <span className="hidden sm:inline">Renovar</span>}
+                                                </button>
+                                            )}
                                             <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="flex items-center gap-1 text-blue-400 hover:text-blue-300"><ChartBarIcon className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span></button>
                                             {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
                                                 <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
