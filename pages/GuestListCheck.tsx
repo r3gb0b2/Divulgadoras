@@ -238,8 +238,11 @@ const GuestListCheck: React.FC = () => {
 
                 if (entryForThisEvent) {
                     let allowedListNames: string[] = [];
+                    const existingListTypes = new Set(directCampaign.guestListTypes || []);
                     if (directCampaign.guestListAccess === 'specific') {
-                        allowedListNames = directCampaign.guestListAssignments?.[entryForThisEvent.id] || [];
+                        const assignedLists = directCampaign.guestListAssignments?.[entryForThisEvent.id] || [];
+                        // Filter to ensure assigned lists still exist in the campaign settings
+                        allowedListNames = assignedLists.filter(listName => existingListTypes.has(listName));
                     } else {
                         allowedListNames = directCampaign.guestListTypes || [];
                     }
@@ -287,8 +290,11 @@ const GuestListCheck: React.FC = () => {
                         
                         if (campaignDetails && campaignDetails.guestListTypes) {
                             let allowedListNames: string[] = [];
+                            const existingListTypes = new Set(campaignDetails.guestListTypes || []);
                             if (campaignDetails.guestListAccess === 'specific') {
-                                allowedListNames = campaignDetails.guestListAssignments?.[entry.id] || [];
+                                const assignedLists = campaignDetails.guestListAssignments?.[entry.id] || [];
+                                // Filter to ensure assigned lists still exist in the campaign settings
+                                allowedListNames = assignedLists.filter(listName => existingListTypes.has(listName));
                             } else {
                                 allowedListNames = campaignDetails.guestListTypes || [];
                             }
