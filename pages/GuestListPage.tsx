@@ -1,12 +1,10 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
@@ -254,7 +252,8 @@ const GuestListPage: React.FC = () => {
                             to={`/admin/checkin/${campaignId}`}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
                         >
-                            Controlar Entrada
+                            <CheckCircleIcon className="w-4 h-4" />
+                            <span>Controlar Entrada</span>
                         </Link>
                         <button
                             onClick={handleDownloadCSV}
