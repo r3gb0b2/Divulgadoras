@@ -4,7 +4,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { GuestList, Campaign } from '../types';
 import { getGuestListsForOrg, createGuestList, updateGuestList, deleteGuestList } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
-import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/Icons';
+import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, UsersIcon, CheckCircleIcon } from '../components/Icons';
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
 const timestampToDateTimeLocal = (ts: any): string => {
@@ -241,6 +241,7 @@ const AdminLists: React.FC = () => {
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.assignedPromoterIds.length} divulgadora(s)</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end items-center gap-4">
+                                                <button onClick={() => navigate(`/admin/checkin/${list.campaignId}`)} className="text-green-400 hover:text-green-300" title="Controlar Entrada (Check-in)"><CheckCircleIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => navigate(`/admin/guestlist-assignments/${list.id}`)} className="text-indigo-400 hover:text-indigo-300" title="Gerenciar Atribuições"><UsersIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => handleCopyLink(list.campaignId)} className="text-blue-400 hover:text-blue-300" title="Copiar Link do Evento">{copiedLink === list.campaignId ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}</button>
                                                 <button onClick={() => handleOpenModal(list)} className="text-yellow-400 hover:text-yellow-300" title="Editar"><PencilIcon className="w-5 h-5"/></button>
