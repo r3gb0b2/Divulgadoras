@@ -55,58 +55,51 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
                         data = { uid: firebaseUser.uid, ...superAdminPayload };
                     }
                     
-                    setUser(firebaseUser);
-                    setAdminData(data);
-                    
                     if (!data) {
                         // User exists in Auth, but not in admins collection. Sign them out.
                         await auth.signOut();
                         return; // The next onAuthStateChanged will handle cleanup.
                     }
+                    
+                    setUser(firebaseUser);
+                    setAdminData(data);
 
                     const allOrgs = await getOrganizations();
                     
-                    let finalOrgsForAdmin: Organization[] = [];
-                    let finalSelectedOrgId: string | null = null;
-
+                    let adminVisibleOrgs: Organization[] = [];
                     if (data.role === 'superadmin') {
-                        finalOrgsForAdmin = allOrgs.sort((a, b) => a.name.localeCompare(b.name));
-                        const storedId = sessionStorage.getItem('selectedOrgId');
-                        // A superadmin can impersonate any org, so we validate against all of them.
-                        if (storedId && finalOrgsForAdmin.some(org => org.id === storedId)) {
-                            finalSelectedOrgId = storedId;
-                        }
-                    } else if (data.organizationIds && data.organizationIds.length > 0) {
-                        // Filter orgs the admin has access to AND that actually exist.
+                        adminVisibleOrgs = allOrgs;
+                    } else if (data.organizationIds?.length) {
                         const accessibleOrgIds = new Set(data.organizationIds);
-                        finalOrgsForAdmin = allOrgs
-                            .filter(org => accessibleOrgIds.has(org.id))
-                            .sort((a, b) => a.name.localeCompare(b.name));
+                        // Make sure to only include orgs that still exist
+                        adminVisibleOrgs = allOrgs.filter(org => accessibleOrgIds.has(org.id));
+                    }
 
-                        if (finalOrgsForAdmin.length > 0) {
-                            const validOrgIds = finalOrgsForAdmin.map(o => o.id);
-                            const storedId = sessionStorage.getItem('selectedOrgId');
+                    // Always sort for consistent UI
+                    adminVisibleOrgs.sort((a, b) => a.name.localeCompare(b.name));
+                    setOrganizationsForAdmin(adminVisibleOrgs);
 
-                            // If there's a stored ID and it's one of the valid ones, use it.
-                            if (storedId && validOrgIds.includes(storedId)) {
-                                finalSelectedOrgId = storedId;
-                            } else {
-                                // Otherwise, default to the first valid organization.
-                                finalSelectedOrgId = validOrgIds[0];
-                            }
+                    let newSelectedOrgId: string | null = null;
+                    if (adminVisibleOrgs.length > 0) {
+                        const storedId = sessionStorage.getItem('selectedOrgId');
+                        const isValidStoredId = storedId && adminVisibleOrgs.some(org => org.id === storedId);
+
+                        if (isValidStoredId) {
+                            newSelectedOrgId = storedId;
+                        } else if (data.role !== 'superadmin') {
+                            // If stored ID is invalid or missing, default non-superadmin to their first available org.
+                            newSelectedOrgId = adminVisibleOrgs[0].id;
                         }
+                        // For superadmin, if storedId is invalid, newSelectedOrgId remains null, which is correct.
                     }
                     
-                    // Apply the calculated state in one go.
-                    setOrganizationsForAdmin(finalOrgsForAdmin);
-                    setSelectedOrgIdState(finalSelectedOrgId);
-                    if (finalSelectedOrgId) {
-                        sessionStorage.setItem('selectedOrgId', finalSelectedOrgId);
+                    // Update state and sessionStorage in one go
+                    setSelectedOrgIdState(newSelectedOrgId);
+                    if (newSelectedOrgId) {
+                        sessionStorage.setItem('selectedOrgId', newSelectedOrgId);
                     } else {
                         sessionStorage.removeItem('selectedOrgId');
                     }
-
-
                 } catch (error) {
                     console.error("Error during auth state processing:", error);
                     // On any error, sign out and clear state
