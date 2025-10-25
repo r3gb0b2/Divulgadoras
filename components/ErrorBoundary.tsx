@@ -10,38 +10,37 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: The ErrorBoundary class must extend React.Component to be a valid class component with access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
-
-  static getDerivedStateFromError(error: Error): Partial<State> {
-    // Atualiza o estado para que a próxima renderização mostre a UI de fallback.
-    return { hasError: true, error };
-  }
+  // FIX: All errors are caused by state not being properly declared on the class.
+  // Initializing state as a class property correctly declares it and resolves the cascading type errors for `state`, `setState`, and `props`.
+  state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Você também pode registrar o erro em um serviço de relatórios de erro
-    this.setState({ error, errorInfo });
+    // Este método de ciclo de vida é acionado após um erro ser lançado por um componente descendente.
+    // Usamos para atualizar o estado e renderizar uma UI de fallback.
+    this.setState({
+      hasError: true,
+      error: error,
+      errorInfo: errorInfo,
+    });
+    // Você também pode registrar o erro em um serviço de relatórios de erro aqui
     console.error("Uncaught error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      // Você pode renderizar qualquer UI de fallback.
+      // UI de Fallback
       return (
         <div className="bg-red-900/50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">
           <h1 className="text-2xl font-bold mb-2">Ops! Algo deu errado.</h1>
           <p className="mb-4">
-            A aplicação encontrou um erro inesperado durante a renderização. Isso pode ser causado por dados inconsistentes ou um problema no código.
+            A aplicação encontrou um erro inesperado. Isso pode ser um problema temporário ou um bug.
           </p>
-          <p className="mb-4">Você pode tentar recarregar a página ou voltar para a página anterior.</p>
+          <p className="mb-4">Tente recarregar a página. Se o problema persistir, entre em contato com o suporte.</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700"
@@ -68,6 +67,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // Normalmente, apenas renderiza os filhos
     return this.props.children;
   }
 }
