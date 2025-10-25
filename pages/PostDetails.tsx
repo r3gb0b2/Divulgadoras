@@ -316,22 +316,35 @@ export const PostDetails: React.FC = () => {
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-300">
                                         {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)}):</p>
-                                                {assignment.proofImageUrls.map((url, index) => (
-                                                url === 'manual' ? 
-                                                <div key={index} className="w-12 h-12 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Manual</div>
-                                                :
-                                                <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                                        <img src={url} alt={`Prova ${index + 1}`} className="w-12 h-12 object-cover rounded-md border border-green-500" />
-                                                    </a>
-                                                ))}
+                                            <div className="flex items-start flex-col gap-2">
+                                                <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)})</p>
+                                                <div className="flex items-center gap-2">
+                                                    {assignment.proofImageUrls.map((url, index) => (
+                                                    url === 'manual' ? 
+                                                    <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído<br/>Manual</div>
+                                                    :
+                                                    <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500" />
+                                                        </a>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                         {assignment.justification && (
-                                            <div>
-                                                <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)}):</p>
-                                                <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
+                                            <div className="flex flex-col gap-2">
+                                                <div>
+                                                    <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
+                                                    <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
+                                                </div>
+                                                {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
+                                                    <div className="flex items-center gap-2">
+                                                        {assignment.justificationImageUrls.map((url, index) => (
+                                                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                                                <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500" />
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </td>

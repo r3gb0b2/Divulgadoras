@@ -11,24 +11,25 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Switched to constructor-based state initialization to ensure proper inheritance of Component properties like `props`, `state`, and `setState`. This resolves type inference issues where class fields might behave unexpectedly.
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
-  }
+  // FIX: Replaced constructor with class property for state initialization and corrected lifecycle method signatures. This resolves type errors related to accessing component state and props.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
-  static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     // Atualiza o estado para que a próxima renderização mostre a UI de fallback.
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Você também pode registrar o erro em um serviço de relatórios de erro
     this.setState({ error, errorInfo });
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       // Você pode renderizar qualquer UI de fallback.
       return (
