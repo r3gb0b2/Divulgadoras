@@ -1,37 +1,67 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
+  // FIX: Use a class property to initialize state. This is a more modern syntax
+  // and resolves the TypeScript errors where `this.state` and `this.props` were not
+  // recognized on the component instance.
+  state: State = {
     hasError: false,
+    error: null,
+    errorInfo: null,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // Atualiza o estado para que a próxima renderização mostre a UI de fallback.
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Você também pode registrar o erro em um serviço de relatórios de erro
+    this.setState({ error, errorInfo });
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
+      // Você pode renderizar qualquer UI de fallback.
       return (
-        <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md" role="alert">
-          <h1 className="font-bold text-lg mb-2">Oops! Algo deu errado.</h1>
-          <p>Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.</p>
+        <div className="bg-red-900/50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">
+          <h1 className="text-2xl font-bold mb-2">Ops! Algo deu errado.</h1>
+          <p className="mb-4">
+            A aplicação encontrou um erro inesperado durante a renderização. Isso pode ser causado por dados inconsistentes ou um problema no código.
+          </p>
+          <p className="mb-4">Você pode tentar recarregar a página ou voltar para a página anterior.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700"
+          >
+            Recarregar Página
+          </button>
+          
           {this.state.error && (
-            <pre className="mt-4 text-xs whitespace-pre-wrap">
-              {this.state.error.toString()}
-            </pre>
+            <details className="mt-6 text-left bg-black/30 p-3 rounded-md">
+              <summary className="cursor-pointer font-semibold text-red-100">Detalhes técnicos do erro</summary>
+              <pre className="mt-2 text-xs whitespace-pre-wrap">
+                <strong>Mensagem:</strong> {this.state.error.toString()}
+                {this.state.errorInfo && (
+                  <>
+                    <br /><br />
+                    <strong>Stack de Componentes:</strong>
+                    {this.state.errorInfo.componentStack}
+                  </>
+                )}
+              </pre>
+            </details>
           )}
         </div>
       );
