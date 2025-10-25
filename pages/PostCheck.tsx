@@ -882,10 +882,13 @@ const PostCheck: React.FC = () => {
         
         assignments.forEach(a => {
             const isCompletedByUser = !!a.proofSubmittedAt || !!a.justification;
-            if (a.post.isActive && !isCompletedByUser) {
-                active.push(a);
-            } else {
+            // A post is archived if the user has completed it OR the admin has made it inactive.
+            const isArchived = isCompletedByUser || !a.post.isActive;
+
+            if (isArchived) {
                 archived.push(a);
+            } else {
+                active.push(a);
             }
         });
 
