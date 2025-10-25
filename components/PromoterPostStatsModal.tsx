@@ -47,15 +47,48 @@ const formatDate = (timestamp: any): string => {
 };
 
 const getStatusInfo = (assignment: PostAssignment): { text: string; color: string } => {
+    // 1. Proof submitted is always "Concluído"
     if (assignment.proofSubmittedAt) {
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
-    
-    const expiresAt = toDateSafe(assignment.post?.expiresAt);
 
-    if (expiresAt && expiresAt < new Date()) {
+    // 2. Handle justifications
+    if (assignment.justification) {
+        if (assignment.justificationStatus === 'accepted') {
+            return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
+        }
+        if (assignment.justificationStatus === 'rejected') {
+            return { text: 'Perdido (Justificativa Rejeitada)', color: 'bg-red-900/50 text-red-300' };
+        }
+        return { text: 'Justificativa Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
+    }
+    
+    // 3. Handle posts without proof or justification
+    const now = new Date();
+    let isMissed = false;
+
+    if (!assignment.post?.allowLateSubmissions) {
+        const expiresAt = toDateSafe(assignment.post?.expiresAt);
+        const confirmedAt = toDateSafe(assignment.confirmedAt);
+
+        // Check against 24h proof window if confirmed
+        if (assignment.status === 'confirmed' && confirmedAt) {
+            const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+            if (now > proofDeadline) {
+                isMissed = true;
+            }
+        }
+        // If not yet confirmed, check against post expiration
+        else if (expiresAt && now > expiresAt) {
+            isMissed = true;
+        }
+    }
+
+    if (isMissed) {
         return { text: 'Perdido', color: 'bg-red-900/50 text-red-300' };
     }
+
+    // 4. Default to pending if not missed and not completed
     return { text: 'Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
 };
 
