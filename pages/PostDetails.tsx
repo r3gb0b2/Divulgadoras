@@ -24,69 +24,6 @@ const formatDate = (timestamp: any): string => {
 
 type AssignmentStatusFilter = 'all' | 'pending' | 'confirmed' | 'completed' | 'justified';
 
-const AssignmentCard: React.FC<{
-    assignment: PostAssignment;
-    onSendReminder: (assignment: PostAssignment) => void;
-    onChangeStatus: (assignment: PostAssignment) => void;
-    onViewStats: (assignment: PostAssignment) => void;
-    isProcessing: string | null;
-}> = ({ assignment, onSendReminder, onChangeStatus, onViewStats, isProcessing }) => {
-
-    const getStatusBadge = () => {
-        if (assignment.proofSubmittedAt) return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span>;
-        if (assignment.justification) {
-            if (assignment.justificationStatus === 'accepted') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Justificativa Aceita</span>;
-            if (assignment.justificationStatus === 'rejected') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-900/50 text-red-300">Justificativa Rejeitada</span>;
-            return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Justificativa Pendente</span>;
-        }
-        if (assignment.status === 'confirmed') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-900/50 text-indigo-300">Confirmado</span>;
-        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-400">Pendente</span>;
-    };
-
-    return (
-        <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
-            <div className="flex justify-between items-start mb-3">
-                <p className="font-bold text-lg text-white">{assignment.promoterName}</p>
-                {getStatusBadge()}
-            </div>
-            
-            {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
-                <div className="mb-3">
-                    <p className="text-xs text-gray-400 mb-1">Comprovação ({formatDate(assignment.proofSubmittedAt)}):</p>
-                    <div className="flex gap-2">
-                        {assignment.proofImageUrls.map((url, index) => (
-                           url === 'manual' ? 
-                           <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído Manualmente</div>
-                           :
-                           <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border-2 border-green-500" />
-                            </a>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {assignment.justification && (
-                 <div className="mb-3">
-                    <p className="text-xs text-gray-400 mb-1">Justificativa ({formatDate(assignment.justificationSubmittedAt)}):</p>
-                    <p className="text-sm italic bg-gray-800 p-2 rounded-md text-gray-300">"{assignment.justification}"</p>
-                </div>
-            )}
-
-            <div className="border-t border-gray-700 pt-3 flex flex-wrap justify-end gap-x-4 gap-y-2 text-sm font-medium">
-                <button onClick={() => onViewStats(assignment)} className="flex items-center gap-1 text-blue-400 hover:text-blue-300"><ChartBarIcon className="w-4 h-4" /> Ver Estatísticas</button>
-                {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                    <button onClick={() => onSendReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
-                        <EnvelopeIcon className="w-4 h-4" /> {isProcessing === assignment.id ? 'Enviando...' : 'Lembrete'}
-                    </button>
-                )}
-                <button onClick={() => onChangeStatus(assignment)} className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300"><PencilIcon className="w-4 h-4" /> Alterar Status</button>
-            </div>
-        </div>
-    );
-};
-
-
 export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
@@ -247,6 +184,18 @@ export const PostDetails: React.FC = () => {
         { label: 'Com Justificativa', value: 'justified', count: stats.justified },
     ];
 
+    const getStatusBadge = (assignment: PostAssignment) => {
+        if (assignment.proofSubmittedAt) return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span>;
+        if (assignment.justification) {
+            if (assignment.justificationStatus === 'accepted') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Justificativa Aceita</span>;
+            if (assignment.justificationStatus === 'rejected') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-900/50 text-red-300">Justificativa Rejeitada</span>;
+            return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Justificativa Pendente</span>;
+        }
+        if (assignment.status === 'confirmed') return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-900/50 text-indigo-300">Confirmado</span>;
+        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-400">Pendente</span>;
+    };
+
+
     return (
         <div>
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
@@ -318,19 +267,63 @@ export const PostDetails: React.FC = () => {
                     ))}
                  </div>
                  
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredAssignments.map(a => (
-                        <AssignmentCard
-                            key={a.id}
-                            assignment={a}
-                            onSendReminder={handleSingleReminder}
-                            onChangeStatus={(assignment) => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }}
-                            onViewStats={(assignment) => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }}
-                            isProcessing={isProcessing}
-                        />
-                    ))}
+                 <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Divulgadora</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Comprovação / Justificativa</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {filteredAssignments.map(assignment => (
+                                <tr key={assignment.id} className="hover:bg-gray-700/40">
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        <p className="font-semibold text-white">{assignment.promoterName}</p>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        {getStatusBadge(assignment)}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-300">
+                                        {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)}):</p>
+                                                {assignment.proofImageUrls.map((url, index) => (
+                                                url === 'manual' ? 
+                                                <div key={index} className="w-12 h-12 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Manual</div>
+                                                :
+                                                <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                                        <img src={url} alt={`Prova ${index + 1}`} className="w-12 h-12 object-cover rounded-md border border-green-500" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {assignment.justification && (
+                                            <div>
+                                                <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)}):</p>
+                                                <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                        <div className="flex justify-end items-center gap-x-4">
+                                            <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="flex items-center gap-1 text-blue-400 hover:text-blue-300"><ChartBarIcon className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span></button>
+                                            {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                                <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
+                                                    <EnvelopeIcon className="w-4 h-4" /> {isProcessing === assignment.id ? '...' : <span className="hidden sm:inline">Lembrete</span>}
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }} className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300"><PencilIcon className="w-4 h-4" /> <span className="hidden sm:inline">Alterar</span></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                     {filteredAssignments.length === 0 && (
-                        <p className="text-gray-400 md:col-span-2 lg:col-span-3 text-center py-8">Nenhuma tarefa encontrada com este filtro.</p>
+                        <p className="text-gray-400 text-center py-8">Nenhuma tarefa encontrada com este filtro.</p>
                     )}
                  </div>
             </div>
