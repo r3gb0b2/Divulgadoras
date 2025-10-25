@@ -22,6 +22,29 @@ interface AdminPanelProps {
     adminData: AdminUserData;
 }
 
+const formatRelativeTime = (timestamp: any): string => {
+  if (!timestamp) return 'N/A';
+  const date = (timestamp as Timestamp).toDate ? (timestamp as Timestamp).toDate() : new Date(timestamp);
+  if (isNaN(date.getTime())) return 'Data inválida';
+
+  const now = new Date();
+  const seconds = Math.round((now.getTime() - date.getTime()) / 1000);
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
+  const weeks = Math.round(days / 7);
+  const months = Math.round(days / 30);
+  const years = Math.round(days / 365);
+
+  if (seconds < 60) return 'agora mesmo';
+  if (minutes < 60) return `há ${minutes} min`;
+  if (hours < 24) return `há ${hours}h`;
+  if (days < 7) return `há ${days}d`;
+  if (weeks < 4) return `há ${weeks} sem`;
+  if (months < 12) return `há ${months} ${months > 1 ? 'meses' : 'mês'}`;
+  return `há ${years} ${years > 1 ? 'anos' : 'ano'}`;
+};
+
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
     const birthDate = new Date(dateString);
@@ -544,9 +567,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
 
                         <div className="text-xs text-gray-500 mb-3 space-y-1">
-                            <p><span className="font-semibold">Cadastrado em:</span> {formatDate(promoter.createdAt)}</p>
+                            <p title={formatDate(promoter.createdAt)}><span className="font-semibold">Cadastrado:</span> {formatRelativeTime(promoter.createdAt)}</p>
                             {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
-                                <p><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt)}</p>
+                                <p title={formatDate(promoter.statusChangedAt)}><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} ({formatRelativeTime(promoter.statusChangedAt)})</p>
                             )}
                         </div>
 
