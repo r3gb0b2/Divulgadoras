@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, ChartBarIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
@@ -18,6 +18,7 @@ const GuestListCheckinPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [processingCheckin, setProcessingCheckin] = useState<string | null>(null); // Stores "confId-personName"
+    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'checkedIn'>('pending');
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -65,21 +66,78 @@ const GuestListCheckinPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    const listStats = useMemo(() => {
+        if (!selectedListId) return { total: 0, checkedIn: 0, pending: 0, rate: 0 };
+
+        const confirmationsForList = allConfirmations.filter(conf => conf.guestListId === selectedListId);
+
+        let totalPeople = 0;
+        let checkedInCount = 0;
+
+        confirmationsForList.forEach(conf => {
+            const guestList = conf.guestNames.filter(name => name.trim() !== '');
+            if (conf.isPromoterAttending) {
+                totalPeople++;
+                if (conf.promoterCheckedInAt) {
+                    checkedInCount++;
+                }
+            }
+            totalPeople += guestList.length;
+            checkedInCount += (conf.guestsCheckedIn || []).length;
+        });
+
+        const pendingCount = totalPeople - checkedInCount;
+        const rate = totalPeople > 0 ? Math.round((checkedInCount / totalPeople) * 100) : 0;
+
+        return {
+            total: totalPeople,
+            checkedIn: checkedInCount,
+            pending: pendingCount,
+            rate: rate,
+        };
+    }, [allConfirmations, selectedListId]);
+
+
     const filteredConfirmations = useMemo(() => {
         if (!selectedListId) return [];
 
-        const confirmationsOnSelectedList = allConfirmations.filter(conf => conf.guestListId === selectedListId);
+        let confirmations = allConfirmations.filter(conf => conf.guestListId === selectedListId);
+
+        // Apply status filter
+        if (statusFilter !== 'all') {
+            confirmations = confirmations.filter(conf => {
+                const attendingPromoter = conf.isPromoterAttending;
+                const promoterCheckedIn = !!conf.promoterCheckedInAt;
+                const guests = conf.guestNames.filter(name => name.trim() !== '');
+                const checkedInGuests = new Set((conf.guestsCheckedIn || []).map(g => g.name));
+
+                if (statusFilter === 'pending') {
+                    const promoterPending = attendingPromoter && !promoterCheckedIn;
+                    const guestsPending = guests.some(guest => !checkedInGuests.has(guest));
+                    return promoterPending || guestsPending;
+                }
+                
+                if (statusFilter === 'checkedIn') {
+                    const promoterDone = !attendingPromoter || promoterCheckedIn;
+                    const guestsDone = guests.every(guest => checkedInGuests.has(guest));
+                    return promoterDone && guestsDone;
+                }
+
+                return true;
+            });
+        }
         
+        // Apply search query
         if (!searchQuery.trim()) {
-            return confirmationsOnSelectedList;
+            return confirmations;
         }
 
         const lowercasedQuery = searchQuery.toLowerCase();
-        return confirmationsOnSelectedList.filter(conf =>
+        return confirmations.filter(conf =>
             conf.promoterName.toLowerCase().includes(lowercasedQuery) ||
             conf.guestNames.some(guest => guest.toLowerCase().includes(lowercasedQuery))
         );
-    }, [searchQuery, allConfirmations, selectedListId]);
+    }, [searchQuery, allConfirmations, selectedListId, statusFilter]);
 
     const handleCheckIn = async (confirmationId: string, personName: string) => {
         const checkinKey = `${confirmationId}-${personName}`;
@@ -193,7 +251,7 @@ const GuestListCheckinPage: React.FC = () => {
         }
 
         if (filteredConfirmations.length === 0 && !searchQuery) {
-            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação encontrada para esta lista.</p>;
+            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação encontrada para esta lista com o filtro "{statusFilter}".</p>;
         }
 
         if (filteredConfirmations.length === 0) {
@@ -283,23 +341,63 @@ const GuestListCheckinPage: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                {selectedListId && (
-                    <div className="relative mb-6">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                            <SearchIcon className="h-5 w-5 text-gray-400" />
-                        </span>
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Pesquisar por nome da divulgadora ou convidado..."
-                            className="w-full pl-10 pr-4 py-3 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-lg focus:ring-primary focus:border-primary"
-                        />
-                    </div>
-                )}
-                {error && <p className="text-red-400 text-center mb-4">{error}</p>}
-                
-                {selectedListId ? renderCheckinList() : renderListSelection()}
+                {selectedListId ? (
+                    <>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-dark/70 p-4 rounded-lg text-center">
+                                <UsersIcon className="w-8 h-8 mx-auto text-blue-400 mb-2"/>
+                                <h3 className="text-gray-400 text-sm">Total na Lista</h3>
+                                <p className="text-3xl font-bold text-white">{listStats.total}</p>
+                            </div>
+                             <div className="bg-dark/70 p-4 rounded-lg text-center">
+                                <CheckCircleIcon className="w-8 h-8 mx-auto text-green-400 mb-2"/>
+                                <h3 className="text-gray-400 text-sm">Check-ins</h3>
+                                <p className="text-3xl font-bold text-green-400">{listStats.checkedIn}</p>
+                            </div>
+                             <div className="bg-dark/70 p-4 rounded-lg text-center">
+                                <ClockIcon className="w-8 h-8 mx-auto text-yellow-400 mb-2"/>
+                                <h3 className="text-gray-400 text-sm">Pendentes</h3>
+                                <p className="text-3xl font-bold text-yellow-400">{listStats.pending}</p>
+                            </div>
+                             <div className="bg-dark/70 p-4 rounded-lg text-center">
+                                <ChartBarIcon className="w-8 h-8 mx-auto text-primary mb-2"/>
+                                <h3 className="text-gray-400 text-sm">Taxa de Entrada</h3>
+                                <p className="text-3xl font-bold text-primary">{listStats.rate}%</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <SearchIcon className="h-5 w-5 text-gray-400" />
+                                </span>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Pesquisar por nome da divulgadora ou convidado..."
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-lg focus:ring-primary focus:border-primary"
+                                />
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                                <span className="text-sm font-medium text-gray-300">Filtrar por status:</span>
+                                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                                    {(['pending', 'checkedIn', 'all'] as const).map(f => (
+                                        <button 
+                                            key={f} 
+                                            onClick={() => setStatusFilter(f)} 
+                                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                        >
+                                            {{'pending': 'Pendentes', 'checkedIn': 'Check-in Feito', 'all': 'Todos'}[f]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        {error && <p className="text-red-400 text-center mb-4">{error}</p>}
+                        {renderCheckinList()}
+                    </>
+                ) : renderListSelection()}
             </div>
         </div>
     );
