@@ -31,6 +31,7 @@ import PostDashboard from './PostDashboard';
 import AdminSchedulePage from './AdminSchedulePage';
 import PromoterDiagnosticsPage from './PromoterDiagnosticsPage'; // Import new page
 import AdminCheckinDashboard from './AdminCheckinDashboard'; // Import new page
+import QrCodeScannerPage from './QrCodeScannerPage'; // Importar a nova página
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -237,6 +238,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="checkin-scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
@@ -261,6 +263,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="checkin-scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />

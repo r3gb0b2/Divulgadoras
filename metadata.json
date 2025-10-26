@@ -1,5 +1,7 @@
 {
   "name": "Equipe Certa",
   "description": "Plataforma completa para organizadores de eventos gerenciarem suas equipes de divulgação de forma eficiente.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

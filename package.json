@@ -12,7 +12,9 @@
     "react-router-dom": "^7.9.4",
     "react-dom": "^19.2.0",
     "react": "^19.2.0",
-    "firebase": "^12.4.0"
+    "firebase": "^12.4.0",
+    "html5-qrcode": "^2.3.8",
+    "fuse.js": "7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

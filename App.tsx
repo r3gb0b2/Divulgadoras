@@ -14,6 +14,7 @@ import PostCheck from './pages/PostCheck';
 import GuestListCheck from './pages/GuestListCheck'; // Import new page
 import ProofUploadPage from './pages/ProofUploadPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import HistoryPage from './pages/HistoryPage';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -57,6 +58,7 @@ const App: React.FC = () => {
                 <OrganizationSwitcher />
                 <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
                 <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
+                <Link to="/historico" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Histórico</Link>
                 <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
                 <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
               </div>
@@ -88,6 +90,7 @@ const App: React.FC = () => {
                   </div>
                   <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
                   <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
+                  <Link to="/historico" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Histórico</Link>
                   <Link to="/planos" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Planos</Link>
                   <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                 </div>
@@ -103,6 +106,7 @@ const App: React.FC = () => {
                 
                 <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/status" element={<StatusCheck />} />
+                <Route path="/historico" element={<HistoryPage />} />
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
