@@ -255,7 +255,12 @@ const PostCard: React.FC<{
     };
     
     const handleDownload = async () => {
-        if (isMediaProcessing || !assignment.post.mediaUrl || !assignment.post.isActive) return;
+        if (!assignment.post.isActive) {
+            alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
+            return;
+        }
+        if (isMediaProcessing || !assignment.post.mediaUrl) return;
+
         setIsMediaProcessing(true);
         try {
             const { mediaUrl, type } = assignment.post;
@@ -405,8 +410,8 @@ const PostCard: React.FC<{
                             {assignment.post.mediaUrl && (
                                 <button
                                     onClick={handleDownload}
-                                    disabled={isMediaProcessing || !assignment.post.isActive}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={isMediaProcessing}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!assignment.post.isActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
                                     title={!assignment.post.isActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
@@ -416,7 +421,12 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <a
                                     href={assignment.post.isActive ? assignment.post.googleDriveUrl : undefined}
-                                    onClick={(e) => !assignment.post.isActive && e.preventDefault()}
+                                    onClick={(e) => {
+                                        if (!assignment.post.isActive) {
+                                            e.preventDefault();
+                                            alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
+                                        }
+                                    }}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!assignment.post.isActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
