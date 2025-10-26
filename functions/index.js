@@ -227,6 +227,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
       post: { // denormalized data
         type: post.type,
         mediaUrl: post.mediaUrl || null,
+        googleDriveUrl: post.googleDriveUrl || null,
         textContent: post.textContent || null,
         instructions: post.instructions,
         postLink: post.postLink || null,
@@ -672,6 +673,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     const denormalizedPostData = {
         type: newPost.type,
         mediaUrl: newPost.mediaUrl || null,
+        googleDriveUrl: newPost.googleDriveUrl || null,
         textContent: newPost.textContent || null,
         instructions: newPost.instructions,
         postLink: newPost.postLink || null,
@@ -767,6 +769,7 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                 const denormalizedPostData = {
                     type: postData.type,
                     mediaUrl: postData.mediaUrl || null,
+                    googleDriveUrl: postData.googleDriveUrl || null,
                     textContent: postData.textContent || null,
                     instructions: postData.instructions,
                     postLink: postData.postLink || null,
@@ -838,7 +841,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     
     // Denormalize the fields that are allowed to change
     const denormalizedUpdate = {};
-    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'eventName'];
+    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'googleDriveUrl', 'eventName'];
     for (const key of updatableFields) {
         if (updateData[key] !== undefined) {
             denormalizedUpdate[`post.${key}`] = updateData[key];
@@ -889,6 +892,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
     const denormalizedPostData = {
         type: postData.type,
         mediaUrl: postData.mediaUrl || null,
+        googleDriveUrl: postData.googleDriveUrl || null,
         textContent: postData.textContent || null,
         instructions: postData.instructions,
         postLink: postData.postLink || null,

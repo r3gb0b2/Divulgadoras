@@ -47,8 +47,8 @@ export const createPost = async (
   try {
     let finalMediaUrl: string | undefined = undefined;
 
-    // 1. For images, upload on the client. For videos, the URL is already in postData.
-    if (mediaFile && postData.type === 'image') {
+    // 1. Upload media file to Firebase Storage if provided
+    if (mediaFile) {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = ref(storage, `posts-media/${fileName}`);
@@ -59,8 +59,8 @@ export const createPost = async (
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        // Use the uploaded image path, or the provided video URL
-        mediaUrl: finalMediaUrl || postData.mediaUrl || null,
+        mediaUrl: finalMediaUrl, // This is now just for firebase path
+        // googleDriveUrl is already in postData from the form
     };
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
@@ -590,19 +590,19 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
         }
 
         const orgIds = [...new Set(promoterProfiles.map(p => p.organizationId))];
-        const promoterIdSet = new Set(promoterProfiles.map(p => p.id));
-        const lowerCaseEmail = email.toLowerCase().trim();
-
         if (orgIds.length === 0) {
             return [];
         }
 
+        // Firestore 'in' query can take up to 30 elements. Chunk if necessary.
+        const CHUNK_SIZE = 30;
         const scheduledPosts: ScheduledPost[] = [];
-        // Query for each organization ID separately to avoid needing a composite index for the 'in' query.
-        for (const orgId of orgIds) {
+
+        for (let i = 0; i < orgIds.length; i += CHUNK_SIZE) {
+            const orgChunk = orgIds.slice(i, i + CHUNK_SIZE);
             const q = query(
                 collection(firestore, "scheduledPosts"),
-                where("organizationId", "==", orgId),
+                where("organizationId", "in", orgChunk),
                 where("status", "==", "pending")
             );
             const snapshot = await getDocs(q);
@@ -611,6 +611,9 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
             });
         }
         
+        const promoterIdSet = new Set(promoterProfiles.map(p => p.id));
+        const lowerCaseEmail = email.toLowerCase().trim();
+
         const promoterScheduledPosts = scheduledPosts.filter(post => 
             post.assignedPromoters.some(assigned => 
                 promoterIdSet.has(assigned.id) || assigned.email.toLowerCase() === lowerCaseEmail

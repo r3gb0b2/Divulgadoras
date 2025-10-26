@@ -129,6 +129,7 @@ export interface Post {
   stateAbbr: string;
   type: 'image' | 'text' | 'video';
   mediaUrl?: string;
+  googleDriveUrl?: string;
   textContent?: string;
   instructions: string;
   postLink?: string;
@@ -148,6 +149,7 @@ export interface PostAssignment {
   post: { // Denormalized post data
     type: 'image' | 'text' | 'video';
     mediaUrl?: string;
+    googleDriveUrl?: string;
     textContent?: string;
     instructions: string;
     postLink?: string;
@@ -222,6 +224,7 @@ export interface ScheduledPostData {
   stateAbbr: string;
   type: 'image' | 'text' | 'video';
   mediaUrl?: string | null;
+  googleDriveUrl?: string;
   textContent?: string;
   instructions: string;
   postLink?: string;

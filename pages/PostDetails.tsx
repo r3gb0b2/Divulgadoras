@@ -266,8 +266,8 @@ export const PostDetails: React.FC = () => {
     const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
         if (!post) return;
         
-        let finalMediaUrl = updatedData.mediaUrl;
-        if (post.type === 'image' && newMediaFile) {
+        let finalMediaUrl = post.mediaUrl;
+        if (newMediaFile) {
             const fileExtension = newMediaFile.name.split('.').pop();
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
             const storageRef = ref(storage, `posts-media/${fileName}`);
@@ -449,9 +449,9 @@ export const PostDetails: React.FC = () => {
                 </div>
 
                 <div className="mt-6 border-t border-gray-700 pt-4 space-y-4">
-                     {(post.type === 'image' || post.type === 'video') && post.mediaUrl && (
+                     {(post.type === 'image' || post.type === 'video') && (post.mediaUrl || post.googleDriveUrl) && (
                          <div className="max-w-sm">
-                            <StorageMedia path={post.mediaUrl} type={post.type} className="w-full rounded-md" controls={post.type === 'video'}/>
+                            <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full rounded-md" controls={post.type === 'video'}/>
                          </div>
                      )}
                      {post.type === 'text' && (
@@ -461,6 +461,18 @@ export const PostDetails: React.FC = () => {
                         <h3 className="font-semibold">Instruções:</h3>
                         <p className="text-gray-300 whitespace-pre-wrap">{post.instructions}</p>
                      </div>
+                     {post.googleDriveUrl && (
+                        <div>
+                            <h3 className="font-semibold">Link Google Drive:</h3>
+                            <a href={post.googleDriveUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{post.googleDriveUrl}</a>
+                        </div>
+                     )}
+                     {post.mediaUrl && !post.mediaUrl.includes('drive.google.com') && (
+                        <div>
+                            <h3 className="font-semibold">Mídia no Servidor (Firebase):</h3>
+                            <p className="text-gray-400 text-sm">A mídia principal está hospedada em nosso servidor (geralmente mais rápido para download).</p>
+                        </div>
+                     )}
                       {post.postLink && (
                         <div>
                             <h3 className="font-semibold">Link da Postagem:</h3>
