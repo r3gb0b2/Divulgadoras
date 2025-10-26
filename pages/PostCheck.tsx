@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost } from '../types';
-import { ArrowLeftIcon, EyeIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -253,33 +253,6 @@ const PostCard: React.FC<{
             alert('Falha ao copiar link.');
         });
     };
-
-    const handleView = async () => {
-        if (isMediaProcessing || !assignment.post.mediaUrl) return;
-        setIsMediaProcessing(true);
-        try {
-            const { mediaUrl, type } = assignment.post;
-    
-            let finalUrl = mediaUrl;
-    
-            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
-                const fileId = extractGoogleDriveId(mediaUrl);
-                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
-                finalUrl = `https://drive.google.com/file/d/${fileId}/view`;
-            } else if (!mediaUrl.startsWith('http')) { 
-                const mediaRef = ref(storage, mediaUrl);
-                finalUrl = await getDownloadURL(mediaRef);
-            }
-    
-            window.open(finalUrl, '_blank', 'noopener,noreferrer');
-    
-        } catch (error: any) {
-            console.error('Failed to open media:', error);
-            alert(`Não foi possível abrir a mídia: ${error.message}`);
-        } finally {
-            setIsMediaProcessing(false);
-        }
-    };
     
     const handleDownload = async () => {
         if (isMediaProcessing || !assignment.post.mediaUrl) return;
@@ -414,32 +387,50 @@ const PostCard: React.FC<{
             </div>
             
             <div className="border-t border-gray-700 pt-3">
-                {(assignment.post.type === 'image' || assignment.post.type === 'video') && assignment.post.mediaUrl && (
-                     <div className="mb-4">
-                        <StorageMedia path={assignment.post.mediaUrl} type={assignment.post.type === 'text' ? 'image' : assignment.post.type} controls={assignment.post.type === 'video'} className="w-full max-w-sm mx-auto rounded-md" />
-                        <div className="flex justify-center items-center gap-4 mt-2">
-                            <button
-                                onClick={handleView}
-                                disabled={isMediaProcessing}
-                                className="text-sm text-blue-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                            >
-                                <EyeIcon className="w-4 h-4" /> 
-                                {isMediaProcessing ? '...' : 'Visualizar'}
-                            </button>
-                             <button
-                                onClick={handleDownload}
-                                disabled={isMediaProcessing}
-                                className="text-sm text-green-400 hover:underline flex items-center gap-1 disabled:opacity-50"
-                            >
-                                <DownloadIcon className="w-4 h-4" />
-                                {isMediaProcessing ? '...' : 'Baixar'}
-                            </button>
-                        </div>
-                    </div>
-                )}
                 {assignment.post.type === 'text' && (
                     <div className="bg-gray-800 p-3 rounded-md mb-4">
                         <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm">{assignment.post.textContent}</pre>
+                    </div>
+                )}
+
+                {(assignment.post.type === 'image' || assignment.post.type === 'video') && (assignment.post.mediaUrl || assignment.post.googleDriveUrl) && (
+                    <div className="mb-4">
+                        <StorageMedia
+                            path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''}
+                            type={assignment.post.type}
+                            controls={assignment.post.type === 'video'}
+                            className="w-full max-w-sm mx-auto rounded-md"
+                        />
+                        <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
+                            {assignment.post.mediaUrl && (
+                                <button
+                                    onClick={handleDownload} // This uses mediaUrl implicitly
+                                    disabled={isMediaProcessing}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold disabled:opacity-50"
+                                    title="Baixar do nosso servidor (Firebase)"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 1</span>
+                                </button>
+                            )}
+                            {assignment.post.googleDriveUrl && (
+                                <a
+                                    href={assignment.post.googleDriveUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-500 text-sm font-semibold"
+                                    title="Baixar do Google Drive"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 2</span>
+                                </a>
+                            )}
+                        </div>
+                        {assignment.post.mediaUrl && assignment.post.googleDriveUrl && (
+                            <p className="text-center text-xs text-gray-400 mt-2">
+                                Link 1 é do servidor da plataforma, Link 2 é do Google Drive.
+                            </p>
+                        )}
                     </div>
                 )}
 
