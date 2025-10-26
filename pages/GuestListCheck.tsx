@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
 import { getActiveGuestListsForCampaign, addGuestListConfirmation, getGuestListConfirmationsByEmail } from '../services/guestListService';
@@ -6,6 +6,39 @@ import { Promoter, GuestList, Campaign, GuestListConfirmation } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { getAllCampaigns } from '../services/settingsService';
+
+declare var QRCode: any; // To inform TypeScript about the global QRCode variable
+
+const PromoterQrCode: React.FC<{ promoter: Promoter, list: GuestList }> = ({ promoter, list }) => {
+    const qrCodeRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (qrCodeRef.current) {
+            qrCodeRef.current.innerHTML = ''; // Clear previous QR code
+            new QRCode(qrCodeRef.current, {
+                text: JSON.stringify({
+                    type: "promoter-checkin",
+                    promoterId: promoter.id,
+                    campaignId: list.campaignId,
+                    listId: list.id
+                }),
+                width: 256,
+                height: 256,
+                colorDark : "#ffffff",
+                colorLight : "#1a1a2e", // secondary color
+            });
+        }
+    }, [promoter, list]);
+
+    return (
+        <div className="bg-dark/70 p-4 rounded-lg shadow-sm text-center">
+            <h3 className="text-xl font-bold text-primary">Seu QR Code de Acesso</h3>
+            <p className="text-sm text-gray-400 mt-2 mb-4">Apresente este código na entrada do evento para um check-in rápido.</p>
+            <div ref={qrCodeRef} className="flex justify-center items-center p-4 bg-secondary rounded-lg"></div>
+        </div>
+    );
+};
+
 
 const useCountdown = (targetDate: Date | null) => {
     const [timeLeft, setTimeLeft] = useState({
@@ -110,25 +143,26 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
 
     if (success) {
         return (
-            <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
-                <h3 className="text-xl font-bold text-primary">{list.name}</h3>
-                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md mt-4">
+            <div className="space-y-4">
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
                     <p className="font-bold">{isEditing ? 'Lista Atualizada!' : 'Presença Confirmada!'}</p>
                     <p>Sua lista para <strong>{list.name}</strong> foi {isEditing ? 'atualizada' : 'enviada'} com sucesso.</p>
                 </div>
+                <PromoterQrCode promoter={promoter} list={list} />
             </div>
         );
     }
     
     if (isLocked) {
         return (
-             <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4 text-center">
-                <h3 className="text-xl font-bold text-primary">{list.name}</h3>
-                {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
-                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
-                    <p className="font-bold">Lista Já Enviada!</p>
-                    <p>Você já enviou seus nomes para esta lista. Se precisar fazer alguma alteração, solicite a liberação ao organizador do evento.</p>
+             <div className="space-y-4">
+                <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4 text-center">
+                    <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
+                        <p className="font-bold">Lista Já Enviada!</p>
+                        <p>Você já enviou seus nomes para esta lista. Se precisar fazer alguma alteração, solicite a liberação ao organizador do evento.</p>
+                    </div>
                 </div>
+                <PromoterQrCode promoter={promoter} list={list} />
             </div>
         );
     }

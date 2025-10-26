@@ -1,75 +1,167 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { ArrowLeftIcon } from '../components/Icons';
+import { getPromoterById } from '../services/promoterService';
+import { getGuestListForCampaign, checkInPerson } from '../services/guestListService';
+import { Promoter, GuestListConfirmation } from '../types';
+import { Timestamp } from 'firebase/firestore';
+
+// --- Audio Feedback Helper ---
+const playSound = (type: 'success' | 'error') => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!audioContext) return;
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    if (type === 'success') {
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2);
+    } else {
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
+    }
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+};
+
+
+interface ScanData {
+    promoter: Promoter;
+    confirmation: GuestListConfirmation;
+}
 
 const QrCodeScannerPage: React.FC = () => {
     const navigate = useNavigate();
-    const [scanResult, setScanResult] = useState<string | null>(null);
+    const [scanData, setScanData] = useState<ScanData | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
+    const [isFetchingData, setIsFetchingData] = useState(false);
+    const [isProcessingCheckin, setIsProcessingCheckin] = useState(false);
+    const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(false);
+    
     const scannerRef = useRef<Html5Qrcode | null>(null);
+    const readerRef = useRef<HTMLDivElement>(null);
+
+    const onScanSuccess = useCallback(async (decodedText: string) => {
+        if (isFetchingData || scanData) return; // Prevent multiple scans
+
+        setIsFetchingData(true);
+        setScanError(null);
+        setFeedbackMessage(null);
+        
+        if (navigator.vibrate) navigator.vibrate(50);
+
+        try {
+            const data = JSON.parse(decodedText);
+            if (data.type !== 'promoter-checkin' || !data.promoterId || !data.campaignId) {
+                throw new Error("QR Code inválido ou não reconhecido.");
+            }
+
+            const { promoterId, campaignId } = data;
+            
+            const [promoter, campaignConfirmations] = await Promise.all([
+                getPromoterById(promoterId),
+                getGuestListForCampaign(campaignId)
+            ]);
+
+            if (!promoter) {
+                throw new Error("Divulgadora não encontrada no banco de dados.");
+            }
+            
+            const confirmation = campaignConfirmations.find(c => c.promoterId === promoterId);
+            
+            if (!confirmation) {
+                throw new Error("Esta divulgadora não confirmou presença na lista para este evento.");
+            }
+
+            setScanData({ promoter, confirmation });
+            // Stop scanning after successful data fetch
+            if (scannerRef.current?.isScanning) {
+                await scannerRef.current.stop();
+                setIsScanning(false);
+            }
+
+        } catch (err: any) {
+            setScanError(err.message || "Erro ao processar QR Code.");
+            playSound('error');
+        } finally {
+            setIsFetchingData(false);
+        }
+    }, [isFetchingData, scanData]);
+
+
+    const startScanner = useCallback(async () => {
+        if (!scannerRef.current || scannerRef.current.isScanning || !readerRef.current) return;
+        setScanError(null);
+        try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras && cameras.length) {
+                setIsScanning(true);
+                await scannerRef.current.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    onScanSuccess,
+                    (errorMessage) => { /* ignore */ }
+                );
+            } else {
+                setScanError("Nenhuma câmera encontrada no dispositivo.");
+            }
+        } catch (err: any) {
+            setScanError(`Erro ao acessar a câmera: ${err.message}. Por favor, conceda permissão de câmera.`);
+        }
+    }, [onScanSuccess]);
 
     useEffect(() => {
-        // Initialize the scanner
         const qrCodeScanner = new Html5Qrcode('qr-reader');
         scannerRef.current = qrCodeScanner;
-
-        const startScanner = async () => {
-            setScanError(null);
-            try {
-                const cameras = await Html5Qrcode.getCameras();
-                if (cameras && cameras.length) {
-                    setIsScanning(true);
-                    qrCodeScanner.start(
-                        { facingMode: "environment" }, // prefer back camera
-                        {
-                            fps: 10,
-                            qrbox: { width: 250, height: 250 }
-                        },
-                        (decodedText, decodedResult) => {
-                            // Success callback
-                            setScanResult(decodedText);
-                            // Here you would typically call an API to validate the QR code
-                            // For now, just display the result.
-                            
-                            // Optional: stop scanning after a successful scan
-                            // if (scannerRef.current?.isScanning) {
-                            //     scannerRef.current.stop();
-                            // }
-                            // setIsScanning(false);
-                        },
-                        (errorMessage) => {
-                            // Ignore "QR code not found" errors, they are expected.
-                        }
-                    ).catch(err => {
-                        setScanError(`Não foi possível iniciar o scanner: ${err.message}`);
-                        setIsScanning(false);
-                    });
-                } else {
-                    setScanError("Nenhuma câmera encontrada no dispositivo.");
-                }
-            } catch (err: any) {
-                setScanError(`Erro ao acessar a câmera: ${err.message}. Por favor, conceda permissão de câmera.`);
-            }
-        };
-
         startScanner();
-
-        // Cleanup function
         return () => {
             if (scannerRef.current && scannerRef.current.isScanning) {
-                scannerRef.current.stop().catch(err => {
-                    console.error("Falha ao parar o scanner de QR code.", err);
-                });
+                scannerRef.current.stop().catch(err => console.error("Falha ao parar o scanner.", err));
             }
         };
-    }, []);
+    }, [startScanner]);
 
-    const handleClear = () => {
-        setScanResult(null);
+    const handleConfirmCheckin = async () => {
+        if (!scanData) return;
+        setIsProcessingCheckin(true);
         setScanError(null);
-    }
+        setFeedbackMessage(null);
+        try {
+            await checkInPerson(scanData.confirmation.id, scanData.promoter.name);
+            setFeedbackMessage(`${scanData.promoter.name} teve seu check-in realizado com sucesso!`);
+            playSound('success');
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            setScanData(prev => prev ? ({
+                ...prev,
+                confirmation: { ...prev.confirmation, promoterCheckedInAt: Timestamp.now() }
+            }) : null);
+        } catch(err: any) {
+            setScanError(err.message || "Falha no check-in.");
+            playSound('error');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        } finally {
+            setIsProcessingCheckin(false);
+        }
+    };
+    
+    const handleScanNext = () => {
+        setScanData(null);
+        setScanError(null);
+        setFeedbackMessage(null);
+        startScanner();
+    };
 
     return (
         <div>
@@ -81,23 +173,45 @@ const QrCodeScannerPage: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div id="qr-reader" className="w-full max-w-md mx-auto rounded-lg overflow-hidden border-2 border-gray-600"></div>
+                <div id="qr-reader" ref={readerRef} className={`w-full max-w-md mx-auto rounded-lg overflow-hidden border-2 border-gray-600 ${scanData ? 'hidden' : 'block'}`}></div>
+                
+                {isFetchingData && <p className="text-yellow-400 text-center mt-4">Processando QR Code...</p>}
 
                 <div className="mt-6 text-center">
-                    {!isScanning && !scanError && <p className="text-yellow-400">Iniciando scanner...</p>}
-
                     {scanError && (
                         <div className="bg-red-900/50 text-red-300 p-4 rounded-md">
                             <p className="font-bold">Erro</p>
                             <p>{scanError}</p>
+                            <button onClick={handleScanNext} className="mt-2 text-sm text-white underline">Tentar Novamente</button>
                         </div>
                     )}
 
-                    {scanResult && (
-                        <div className="bg-green-900/50 text-green-300 p-4 rounded-md mt-4">
-                            <p className="font-bold">QR Code Lido com Sucesso:</p>
-                            <p className="break-all">{scanResult}</p>
-                            <button onClick={handleClear} className="mt-2 text-sm text-white underline">Limpar</button>
+                    {scanData && (
+                        <div className="bg-dark/70 p-4 rounded-lg mt-6 max-w-md mx-auto">
+                            <div className="flex flex-col sm:flex-row items-center gap-4">
+                                <img 
+                                    src={scanData.promoter.photoUrls?.[0] || 'https://via.placeholder.com/128/1a1a2e/e83a93?text=Foto'} 
+                                    alt={scanData.promoter.name} 
+                                    className="w-32 h-32 object-cover rounded-full border-4 border-primary" 
+                                />
+                                <div className="text-center sm:text-left">
+                                    <h3 className="text-2xl font-bold text-white">{scanData.promoter.name}</h3>
+                                    <p className="text-primary">{scanData.confirmation.campaignName}</p>
+                                    <p className="text-sm text-gray-500">{scanData.promoter.email}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 border-t border-gray-700 pt-4 text-center">
+                                {scanData.confirmation.promoterCheckedInAt ? (
+                                    <div className="text-green-400 font-bold text-lg">Check-in já realizado!</div>
+                                ) : feedbackMessage ? (
+                                    <div className="text-green-400 font-bold text-lg">{feedbackMessage}</div>
+                                ) : (
+                                    <button onClick={handleConfirmCheckin} disabled={isProcessingCheckin} className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg text-lg hover:bg-green-700 disabled:opacity-50">
+                                        {isProcessingCheckin ? 'Confirmando...' : 'Confirmar Check-in'}
+                                    </button>
+                                )}
+                                <button onClick={handleScanNext} className="mt-4 text-sm text-primary hover:underline">Escanear Próximo</button>
+                            </div>
                         </div>
                     )}
                 </div>
