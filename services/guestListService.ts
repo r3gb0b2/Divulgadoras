@@ -110,12 +110,12 @@ export const deleteGuestList = async (listId: string): Promise<void> => {
 
 
 // ===================================================================
-// LEGACY GUEST LIST CONFIRMATION FUNCTIONS (Still used for check-in)
+// GUEST LIST CONFIRMATION FUNCTIONS
 // ===================================================================
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
- * It checks for an existing confirmation to prevent duplicates.
+ * It checks for an existing confirmation to prevent duplicates and locks it after submission.
  * @param confirmationData - The data for the guest list confirmation.
  */
 export const addGuestListConfirmation = async (
@@ -124,7 +124,6 @@ export const addGuestListConfirmation = async (
   try {
     const confirmationsRef = collection(firestore, 'guestListConfirmations');
     
-    // Check if a confirmation already exists for this promoter, list, and campaign
     const q = query(
       confirmationsRef,
       where('promoterId', '==', confirmationData.promoterId),
@@ -138,14 +137,13 @@ export const addGuestListConfirmation = async (
     const dataWithTimestamp = {
       ...confirmationData,
       confirmedAt: serverTimestamp(),
+      isLocked: true, // Lock the list on submission
     };
     
     if (!existingSnapshot.empty) {
-      // Update existing confirmation
       const existingDocRef = existingSnapshot.docs[0].ref;
       batch.update(existingDocRef, dataWithTimestamp);
     } else {
-      // Create new confirmation
       const newDocRef = doc(collection(firestore, 'guestListConfirmations'));
       batch.set(newDocRef, dataWithTimestamp);
     }
@@ -155,6 +153,20 @@ export const addGuestListConfirmation = async (
   } catch (error) {
     console.error('Error adding guest list confirmation: ', error);
     throw new Error('Não foi possível confirmar a presença. Tente novamente.');
+  }
+};
+
+/**
+ * Unlocks a specific guest list confirmation, allowing the promoter to edit it again.
+ * @param confirmationId - The ID of the GuestListConfirmation document to unlock.
+ */
+export const unlockGuestListConfirmation = async (confirmationId: string): Promise<void> => {
+  try {
+    const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
+    await updateDoc(docRef, { isLocked: false });
+  } catch (error) {
+    console.error("Error unlocking guest list confirmation: ", error);
+    throw new Error("Não foi possível liberar a lista para edição.");
   }
 };
 

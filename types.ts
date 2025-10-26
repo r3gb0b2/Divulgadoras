@@ -208,6 +208,7 @@ export interface GuestListConfirmation {
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; }[];
+    isLocked?: boolean;
 }
 
 export interface PromoterStats extends Promoter {

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
-import { getActiveGuestListsForCampaign, addGuestListConfirmation } from '../services/guestListService';
-import { Promoter, GuestList, Campaign } from '../types';
+import { getActiveGuestListsForCampaign, addGuestListConfirmation, getGuestListConfirmationsByEmail } from '../services/guestListService';
+import { Promoter, GuestList, Campaign, GuestListConfirmation } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { getAllCampaigns } from '../services/settingsService';
@@ -52,7 +52,7 @@ const useCountdown = (targetDate: Date | null) => {
     return timeLeft;
 };
 
-const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter }> = ({ list, promoter }) => {
+const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
     const [isAttending, setIsAttending] = useState(true);
     const [guestNames, setGuestNames] = useState<string[]>(Array(list.guestAllowance).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +61,19 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter 
     
     const closingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
     const { days, hours, minutes, seconds, isOver } = useCountdown(closingDate);
+    const isLocked = existingConfirmation?.isLocked ?? false;
+
+    useEffect(() => {
+        if (existingConfirmation) {
+            setIsAttending(existingConfirmation.isPromoterAttending);
+            const filledGuests = [...existingConfirmation.guestNames];
+            while (filledGuests.length < list.guestAllowance) {
+                filledGuests.push('');
+            }
+            setGuestNames(filledGuests.slice(0, list.guestAllowance));
+        }
+    }, [existingConfirmation, list.guestAllowance]);
+
 
     const handleGuestNameChange = (index: number, value: string) => {
         const newGuestNames = [...guestNames];
@@ -96,9 +109,25 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter 
 
     if (success) {
         return (
-            <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
-                <p className="font-bold">Presença Confirmada!</p>
-                <p>Sua lista para <strong>{list.name}</strong> foi enviada com sucesso.</p>
+            <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
+                <h3 className="text-xl font-bold text-primary">{list.name}</h3>
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md mt-4">
+                    <p className="font-bold">Presença Confirmada!</p>
+                    <p>Sua lista para <strong>{list.name}</strong> foi enviada com sucesso.</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (isLocked) {
+        return (
+             <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4 text-center">
+                <h3 className="text-xl font-bold text-primary">{list.name}</h3>
+                {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
+                    <p className="font-bold">Lista Já Enviada!</p>
+                    <p>Você já enviou seus nomes para esta lista. Se precisar fazer alguma alteração, solicite a liberação ao organizador do evento.</p>
+                </div>
             </div>
         );
     }
@@ -106,13 +135,14 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter 
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
             <h3 className="text-xl font-bold text-primary">{list.name}</h3>
-             {closingDate && !success && (
-                <div className={`text-center mb-2 p-3 rounded-md text-white font-bold text-lg ${isOver ? 'bg-red-900/70' : 'bg-blue-900/70'}`}>
+            {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
+             {closingDate && (
+                <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${isOver ? 'bg-red-900/70' : 'bg-blue-900/70'}`}>
                     {isOver ? (
-                        <span>LISTA ENCERRADA</span>
+                        <span>PRAZO ENCERRADO</span>
                     ) : (
                         <span>
-                            ENCERRA EM: {days > 0 && `${days}d `}{hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+                            Você tem {days > 0 && `${days}d `}{hours.toString().padStart(2, '0')}h {minutes.toString().padStart(2, '0')}m {seconds.toString().padStart(2, '0')}s para colocar o nome na lista
                         </span>
                     )}
                 </div>
@@ -158,7 +188,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter 
                         disabled={isSubmitting || isOver}
                         className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
                     >
-                        {isSubmitting ? 'Confirmando...' : (isOver ? 'Lista Encerrada' : 'Confirmar Lista')}
+                        {isSubmitting ? 'Confirmando...' : (isOver ? 'Prazo Encerrado' : 'Confirmar Lista')}
                     </button>
                 </div>
             </form>
@@ -174,6 +204,7 @@ const GuestListCheck: React.FC = () => {
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [assignedLists, setAssignedLists] = useState<GuestList[] | null>(null);
     const [promoter, setPromoter] = useState<Promoter | null>(null);
+    const [existingConfirmations, setExistingConfirmations] = useState<GuestListConfirmation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
@@ -222,14 +253,21 @@ const GuestListCheck: React.FC = () => {
         setError(null);
         setPromoter(null);
         setAssignedLists(null);
+        setExistingConfirmations([]);
         setSearched(true);
         try {
-            const promoterProfiles = await findPromotersByEmail(searchEmail);
+            const [promoterProfiles, confirmations] = await Promise.all([
+                findPromotersByEmail(searchEmail),
+                getGuestListConfirmationsByEmail(searchEmail)
+            ]);
+
             if (!promoterProfiles || promoterProfiles.length === 0) {
                 setError("Nenhum cadastro de divulgadora encontrado para este e-mail.");
                 return;
             }
             
+            setExistingConfirmations(confirmations);
+
             // Find the most relevant profile (approved for this event)
             const relevantProfile = promoterProfiles.find(p => p.campaignName === campaign?.name && p.status === 'approved');
             const promoterToUse = relevantProfile || promoterProfiles[0];
@@ -269,9 +307,10 @@ const GuestListCheck: React.FC = () => {
         if (promoter && assignedLists && assignedLists.length > 0) {
             return (
                 <div className="space-y-6">
-                    {assignedLists.map(list => (
-                        <GuestListConfirmationForm key={list.id} list={list} promoter={promoter} />
-                    ))}
+                    {assignedLists.map(list => {
+                        const existingConf = existingConfirmations.find(c => c.guestListId === list.id);
+                        return <GuestListConfirmationForm key={list.id} list={list} promoter={promoter} existingConfirmation={existingConf} />
+                    })}
                 </div>
             );
         }

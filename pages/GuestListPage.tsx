@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getGuestListForCampaign } from '../services/guestListService';
+import { getGuestListForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
@@ -17,6 +17,7 @@ const GuestListPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [activeList, setActiveList] = useState<string | null>(null);
     const [filterInGroupOnly, setFilterInGroupOnly] = useState(false);
+    const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -71,6 +72,18 @@ const GuestListPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleUnlock = async (confirmationId: string) => {
+        setUnlockingId(confirmationId);
+        try {
+            await unlockGuestListConfirmation(confirmationId);
+            await fetchData(); // Refresh data to show updated lock status
+        } catch (err: any) {
+            setError(err.message || 'Falha ao liberar para edição.');
+        } finally {
+            setUnlockingId(null);
+        }
+    };
 
     const filteredConfirmations = useMemo(() => {
         if (!filterInGroupOnly) {
@@ -202,6 +215,7 @@ const GuestListPage: React.FC = () => {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Divulgadora</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Convidados</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
@@ -215,6 +229,15 @@ const GuestListPage: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
                                         {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button
+                                            onClick={() => handleUnlock(conf.id)}
+                                            disabled={!conf.isLocked || unlockingId === conf.id}
+                                            className="text-indigo-400 hover:text-indigo-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                        >
+                                            {unlockingId === conf.id ? 'Liberando...' : (conf.isLocked ? 'Liberar Edição' : 'Liberado')}
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
