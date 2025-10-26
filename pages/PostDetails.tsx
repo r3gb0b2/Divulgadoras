@@ -4,7 +4,7 @@ import { Post, PostAssignment, Promoter } from '../types';
 import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications, renewAssignmentDeadline } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon, InstagramIcon, ClockIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, UserPlusIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckCircleIcon, InstagramIcon, ClockIcon, DownloadIcon, DuplicateIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -441,6 +441,7 @@ export const PostDetails: React.FC = () => {
                     </div>
                      {canManage && (
                         <div className="flex flex-wrap gap-2 flex-shrink-0">
+                            <button onClick={() => navigate(`/admin/posts/new?fromPost=${post.id}`)} className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm"><DuplicateIcon className="w-4 h-4"/> Duplicar</button>
                             <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm"><PencilIcon className="w-4 h-4"/> Editar Conteúdo</button>
                             <button onClick={() => setIsAssignModalOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"><UserPlusIcon className="w-4 h-4"/> Atribuir a Mais</button>
                             <button onClick={handleDeletePost} className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"><TrashIcon className="w-4 h-4"/> Excluir Post</button>
