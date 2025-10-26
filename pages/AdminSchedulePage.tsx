@@ -6,33 +6,6 @@ import { ScheduledPost } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
-const timestampToDateTimeLocal = (ts: any): { date: string, time: string } => {
-    if (!ts) return { date: '', time: '' };
-    try {
-        let d: Date;
-        if (typeof ts.toDate === 'function') {
-            d = ts.toDate();
-        } else if (ts.seconds) {
-            d = new Date(ts.seconds * 1000);
-        } else {
-            d = new Date(ts);
-        }
-
-        if (isNaN(d.getTime())) {
-            return { date: '', time: '' };
-        }
-        
-        const tzOffset = d.getTimezoneOffset() * 60000;
-        const localDate = new Date(d.getTime() - tzOffset);
-        const date = localDate.toISOString().split('T')[0];
-        const time = d.toTimeString().split(' ')[0].substring(0, 5);
-        return { date, time };
-    } catch (e) {
-        console.error("Failed to parse timestamp:", ts, e);
-        return { date: '', time: '' };
-    }
-};
-
 const formatScheduledDate = (ts: any): string => {
     if (!ts) return "Não agendado";
     try {
@@ -61,75 +34,12 @@ const formatScheduledDate = (ts: any): string => {
 };
 
 
-const EditScheduleModal: React.FC<{
-    isOpen: boolean,
-    onClose: () => void,
-    post: ScheduledPost,
-    onSave: (id: string, newTimestamp: Timestamp) => Promise<void>
-}> = ({ isOpen, onClose, post, onSave }) => {
-    const { date, time } = timestampToDateTimeLocal(post.scheduledAt);
-    const [scheduleDate, setScheduleDate] = useState(date);
-    const [scheduleTime, setScheduleTime] = useState(time);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const { date, time } = timestampToDateTimeLocal(post.scheduledAt);
-        setScheduleDate(date);
-        setScheduleTime(time);
-        setError('');
-    }, [post, isOpen]);
-    
-    if (!isOpen) return null;
-
-    const handleSave = async () => {
-        setError('');
-        if (!scheduleDate || !scheduleTime) {
-            setError('Data e hora são obrigatórias.');
-            return;
-        }
-        const newDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-        setIsSaving(true);
-        try {
-            await onSave(post.id, Timestamp.fromDate(newDateTime));
-            onClose();
-        } catch(err: any) {
-            setError(err.message || 'Falha ao salvar.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-white mb-4">Editar Agendamento</h2>
-                <p className="text-sm text-gray-400 mb-4">Alterar data e hora para: <strong className="text-primary">{post.postData.campaignName}</strong></p>
-                {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-                <div className="flex gap-4">
-                    <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                    <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                </div>
-                <p className="text-xs text-gray-400 mt-2">O horário selecionado está no seu fuso horário local.</p>
-                <div className="mt-6 flex justify-end gap-3">
-                    <button onClick={onClose} disabled={isSaving} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSaving ? 'Salvando...' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
 const AdminSchedulePage: React.FC = () => {
     const navigate = useNavigate();
     const { selectedOrgId } = useAdminAuth();
     const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [editingPost, setEditingPost] = useState<ScheduledPost | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -152,15 +62,6 @@ const AdminSchedulePage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-    
-    const handleSaveSchedule = async (id: string, newTimestamp: Timestamp) => {
-        try {
-            await updateScheduledPost(id, { scheduledAt: newTimestamp });
-            await fetchData();
-        } catch (err) {
-            throw err; // Re-throw to show error in modal
-        }
-    };
     
     const handleCancel = async (id: string) => {
         if (window.confirm("Tem certeza que deseja cancelar este agendamento? A publicação não será enviada.")) {
@@ -218,7 +119,7 @@ const AdminSchedulePage: React.FC = () => {
                                     )}
                                     {post.status === 'pending' && (
                                         <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-2 justify-end text-sm">
-                                            <button onClick={() => setEditingPost(post)} className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Editar Horário</button>
+                                            <button onClick={() => navigate(`/admin/posts/new?editScheduled=${post.id}`)} className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Editar Agendamento</button>
                                             <button onClick={() => handleCancel(post.id)} className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700">Cancelar</button>
                                         </div>
                                     )}
@@ -228,14 +129,6 @@ const AdminSchedulePage: React.FC = () => {
                     </div>
                 )}
             </div>
-            {editingPost && (
-                <EditScheduleModal 
-                    isOpen={!!editingPost}
-                    onClose={() => setEditingPost(null)}
-                    post={editingPost}
-                    onSave={handleSaveSchedule}
-                />
-            )}
         </div>
     );
 };

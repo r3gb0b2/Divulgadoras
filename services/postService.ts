@@ -563,6 +563,20 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
     }
 };
 
+export const getScheduledPostById = async (id: string): Promise<ScheduledPost | null> => {
+    try {
+        const docRef = doc(firestore, 'scheduledPosts', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as ScheduledPost;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting scheduled post by ID: ", error);
+        throw new Error("Não foi possível buscar os dados do agendamento.");
+    }
+};
+
 export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
     try {
         const docRef = doc(firestore, 'scheduledPosts', id);

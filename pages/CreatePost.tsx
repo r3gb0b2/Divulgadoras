@@ -4,7 +4,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updateInstructionTemplate, deleteInstructionTemplate } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
-import { createPost, getPostWithAssignments, schedulePost } from '../services/postService';
+import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
 import { Campaign, Promoter, ScheduledPostData, InstructionTemplate } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -205,7 +205,7 @@ const CreatePost: React.FC = () => {
     const [textContent, setTextContent] = useState('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [videoUrl, setVideoUrl] = useState('');
+    const [googleDriveUrl, setGoogleDriveUrl] = useState('');
     const [instructions, setInstructions] = useState('');
     const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
@@ -220,6 +220,9 @@ const CreatePost: React.FC = () => {
     const [scheduleTime, setScheduleTime] = useState('');
     const [utcDisplayTime, setUtcDisplayTime] = useState<string | null>(null);
 
+    // Edit state
+    const [editingScheduledPostId, setEditingScheduledPostId] = useState<string | null>(null);
+    const [originalMediaPath, setOriginalMediaPath] = useState<string | null>(null);
 
     // UI states
     const [isLoading, setIsLoading] = useState(true);
@@ -265,12 +268,49 @@ const CreatePost: React.FC = () => {
                 setCampaigns(allCampaigns);
                 setInstructionTemplates(templatesData);
                 
-                // Check for duplication request
+                // Check for duplication or edit request
                 const queryParams = new URLSearchParams(location.search);
                 const fromPostId = queryParams.get('fromPost');
-                if (fromPostId) {
+                const editScheduledId = queryParams.get('editScheduled');
+
+                if (editScheduledId) {
+                    setEditingScheduledPostId(editScheduledId);
+                    const scheduledPost = await getScheduledPostById(editScheduledId);
+                    if (scheduledPost && scheduledPost.organizationId === selectedOrgId) {
+                        const { postData, assignedPromoters, scheduledAt } = scheduledPost;
+                        setSelectedState(postData.stateAbbr);
+                        setEventName(postData.eventName || '');
+                        setPostType(postData.type);
+                        setPostFormats(postData.postFormats || []);
+                        setTextContent(postData.textContent || '');
+                        setGoogleDriveUrl(postData.googleDriveUrl || '');
+
+                        if (postData.type === 'image' && postData.mediaUrl) {
+                            setOriginalMediaPath(postData.mediaUrl);
+                            const storageRef = ref(storage, postData.mediaUrl);
+                            getDownloadURL(storageRef).then(url => setMediaPreview(url)).catch(console.error);
+                        } else if (postData.type === 'video' && postData.mediaUrl) {
+                            // Handle legacy cases where GDrive URL was in mediaUrl
+                             setGoogleDriveUrl(postData.googleDriveUrl || postData.mediaUrl || '');
+                        }
+
+                        setInstructions(postData.instructions || '');
+                        setPostLink(postData.postLink || '');
+                        setIsActive(postData.isActive);
+                        setExpiresAt(timestampToInputDate(postData.expiresAt));
+                        setAutoAssign(postData.autoAssignToNewPromoters || false);
+                        setAllowLateSubmissions(postData.allowLateSubmissions || false);
+                        setAllowImmediateProof(postData.allowImmediateProof || false);
+                        setSelectedPromoters(new Set(assignedPromoters.map(p => p.id)));
+                        
+                        setIsScheduling(true);
+                        const scheduledDate = (scheduledAt as Timestamp).toDate();
+                        const localScheduledDate = new Date(scheduledDate.getTime() - (scheduledDate.getTimezoneOffset() * 60000));
+                        setScheduleDate(localScheduledDate.toISOString().split('T')[0]);
+                        setScheduleTime(localScheduledDate.toTimeString().split(' ')[0].substring(0, 5));
+                    }
+                } else if (fromPostId) {
                     const { post: originalPost } = await getPostWithAssignments(fromPostId);
-                    // Pre-fill form fields, but not the target (state/campaign/promoters)
                     setPostType(originalPost.type);
                     setTextContent(originalPost.textContent || '');
                     setInstructions(originalPost.instructions || '');
@@ -281,17 +321,11 @@ const CreatePost: React.FC = () => {
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     setAllowImmediateProof(originalPost.allowImmediateProof || false);
-                    if (originalPost.postFormats) {
-                        setPostFormats(originalPost.postFormats);
-                    }
-                    if (originalPost.type === 'video' && originalPost.mediaUrl) {
-                        setVideoUrl(originalPost.mediaUrl);
-                    }
-                    if (originalPost.type === 'image' && originalPost.mediaUrl) {
+                    if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
+                    if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
+                    if (originalPost.mediaUrl) {
                         const storageRef = ref(storage, originalPost.mediaUrl);
-                        getDownloadURL(storageRef).then(url => {
-                            setMediaPreview(url);
-                        }).catch(console.error);
+                        getDownloadURL(storageRef).then(url => setMediaPreview(url)).catch(console.error);
                     }
                 }
 
@@ -303,6 +337,22 @@ const CreatePost: React.FC = () => {
         };
         loadInitialData();
     }, [adminData, location.search, selectedOrgId]);
+
+    // This effect runs after campaigns are loaded to set the selected campaign when editing
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const editScheduledId = queryParams.get('editScheduled');
+        if (editScheduledId && campaigns.length > 0 && selectedState) {
+            getScheduledPostById(editScheduledId).then(scheduledPost => {
+                if (scheduledPost) {
+                    const campaign = campaigns.find(c => c.name === scheduledPost.postData.campaignName && c.stateAbbr === scheduledPost.postData.stateAbbr);
+                    if (campaign) {
+                        setSelectedCampaign(campaign.id);
+                    }
+                }
+            });
+        }
+    }, [campaigns, selectedState, location.search]);
     
     useEffect(() => {
         const fetchPromoters = async () => {
@@ -312,17 +362,12 @@ const CreatePost: React.FC = () => {
                     const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
                     if (campaignDetails) {
                         const promoterData = await getApprovedPromoters(selectedOrgId, selectedState, campaignDetails.name);
-                        
-                        // Sort promoters: those who joined the group first, then alphabetically.
                         promoterData.sort((a, b) => {
                             const aJoined = a.hasJoinedGroup ? 1 : 0;
                             const bJoined = b.hasJoinedGroup ? 1 : 0;
-                            if (bJoined !== aJoined) {
-                                return bJoined - aJoined; // Promoters in group come first (descending order of joined status)
-                            }
-                            return a.name.localeCompare(b.name); // Then sort by name alphabetically
+                            if (bJoined !== aJoined) return bJoined - aJoined;
+                            return a.name.localeCompare(b.name);
                         });
-
                         setPromoters(promoterData);
                     }
                 } catch(err:any) {
@@ -339,7 +384,6 @@ const CreatePost: React.FC = () => {
     
     const handleLogout = async () => {
         try {
-            // FIX: Use compat signOut method.
             await auth.signOut();
         } catch (error) {
             console.error("Logout failed", error);
@@ -406,11 +450,11 @@ const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if (postType === 'image' && !mediaFile && !mediaPreview) {
-            setError(`Selecione uma imagem para o post.`);
+        if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) {
+            setError(`Selecione uma imagem ou forneça um link do Google Drive.`);
             return;
         }
-        if (postType === 'video' && !videoUrl.trim()) {
+        if (postType === 'video' && !googleDriveUrl.trim()) {
             setError('Cole o link compartilhável do Google Drive para o vídeo.');
             return;
         }
@@ -436,12 +480,13 @@ const CreatePost: React.FC = () => {
                 expiryTimestamp = Timestamp.fromDate(expiryDate);
             }
 
-            const basePostData = {
+            const basePostData: Omit<ScheduledPostData, 'mediaUrl'> = {
                 campaignName: campaignDetails.name,
                 eventName: eventName.trim() || undefined,
                 stateAbbr: selectedState,
                 type: postType,
                 textContent: postType === 'text' ? textContent : '',
+                googleDriveUrl: googleDriveUrl.trim() || undefined,
                 instructions,
                 postLink,
                 isActive,
@@ -452,31 +497,48 @@ const CreatePost: React.FC = () => {
                 postFormats: postFormats,
             };
             
-            if (isScheduling) {
-                 if (!scheduleDate || !scheduleTime) {
-                    throw new Error("Por favor, selecione data e hora para agendar.");
+            if (editingScheduledPostId) {
+                let scheduledMediaUrl: string | undefined = undefined;
+                if (postType === 'image') {
+                    if (mediaFile) {
+                        const fileExtension = mediaFile.name.split('.').pop();
+                        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                        const storageRef = ref(storage, `posts-media/${fileName}`);
+                        await uploadBytes(storageRef, mediaFile);
+                        scheduledMediaUrl = storageRef.fullPath;
+                    } else {
+                        scheduledMediaUrl = originalMediaPath || undefined;
+                    }
                 }
+                
+                const postDataForUpdate: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
+                const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
+                const cleanPostData = JSON.parse(JSON.stringify(postDataForUpdate));
+
+                await updateScheduledPost(editingScheduledPostId, {
+                    postData: cleanPostData,
+                    assignedPromoters: promotersToAssign,
+                    scheduledAt: scheduledTimestamp,
+                });
+                alert('Agendamento atualizado com sucesso!');
+                navigate('/admin/scheduled-posts');
+
+            } else if (isScheduling) {
+                 if (!scheduleDate || !scheduleTime) throw new Error("Por favor, selecione data e hora para agendar.");
 
                 let scheduledMediaUrl: string | undefined = undefined;
                 if (postType === 'image' && mediaFile) {
-                    // Upload now, save the storage path
                     const fileExtension = mediaFile.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                     const storageRef = ref(storage, `posts-media/${fileName}`);
                     await uploadBytes(storageRef, mediaFile);
                     scheduledMediaUrl = storageRef.fullPath;
-                } else if (postType === 'video') {
-                    scheduledMediaUrl = videoUrl;
                 }
                 
-                const postDataForScheduling: ScheduledPostData = {
-                    ...basePostData,
-                    mediaUrl: scheduledMediaUrl,
-                };
-
+                const postDataForScheduling: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
                 const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
-                
                 const cleanPostData = JSON.parse(JSON.stringify(postDataForScheduling));
 
                 await schedulePost({
@@ -491,13 +553,7 @@ const CreatePost: React.FC = () => {
                 navigate('/admin/scheduled-posts');
 
             } else {
-                const postDataForImmediate = {
-                    ...basePostData,
-                    mediaUrl: postType === 'video' ? videoUrl : undefined, // createPost handles image upload itself
-                    organizationId: selectedOrgId,
-                    createdByEmail: adminData.email
-                };
-
+                const postDataForImmediate = { ...basePostData, organizationId: selectedOrgId, createdByEmail: adminData.email };
                 await createPost(postDataForImmediate, postType === 'image' ? mediaFile : null, promotersToAssign);
                 alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
                 navigate('/admin/posts');
@@ -523,7 +579,7 @@ const CreatePost: React.FC = () => {
                     </button>
                 )}
             </div>
-            <h1 className="text-3xl font-bold mb-6">Nova Publicação</h1>
+            <h1 className="text-3xl font-bold mb-6">{editingScheduledPostId ? 'Editar Agendamento' : 'Nova Publicação'}</h1>
 
             <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
@@ -586,7 +642,7 @@ const CreatePost: React.FC = () => {
                      <div className="flex gap-4 mb-4">
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /><span>Texto</span></label>
                         <label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label>
-                        <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo (Google Drive)</span></label>
+                        <label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo</span></label>
                      </div>
                      <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-400 mb-2">Formato (informativo):</label>
@@ -618,17 +674,23 @@ const CreatePost: React.FC = () => {
                         <div>
                             <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
                             {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                            {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
                         </div>
                      )}
                      {postType === 'video' && (
                         <div>
-                            <input type="text" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="Cole o link compartilhável do Google Drive" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                            <p className="text-xs text-gray-400 mt-2">
+                            <p className="text-xs text-gray-400 mb-2">
                                 No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" pode ser "Leitor" &gt; Copiar link.
                             </p>
                         </div>
                      )}
+                     <div className="flex items-center gap-2 mt-4">
+                        <hr className="flex-grow border-gray-600" />
+                        <span className="text-xs text-gray-400">OU</span>
+                        <hr className="flex-grow border-gray-600" />
+                    </div>
+                    <div>
+                        <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link do Google Drive (alternativa para imagem/vídeo)" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
+                    </div>
                      <div className="mt-4">
                         <div className="flex justify-between items-center mb-1">
                             <label htmlFor="instruction-templates" className="block text-sm font-medium text-gray-400">Usar modelo de instrução:</label>
@@ -716,7 +778,7 @@ const CreatePost: React.FC = () => {
 
                 <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? (isScheduling ? 'Agendando...' : 'Criando...') : (isScheduling ? 'Agendar Publicação' : 'Criar e Enviar Publicação')}
+                        {isSubmitting ? (editingScheduledPostId ? 'Salvando...' : (isScheduling ? 'Agendando...' : 'Criando...')) : (editingScheduledPostId ? 'Salvar Alterações' : (isScheduling ? 'Agendar Publicação' : 'Criar e Enviar Publicação'))}
                     </button>
                 </div>
             </form>
