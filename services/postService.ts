@@ -45,22 +45,23 @@ export const createPost = async (
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    let finalMediaUrl: string | undefined = undefined;
+    let finalMediaUrl: string | undefined = postData.googleDriveUrl; // Start with GDrive URL
 
-    // 1. Upload media file to Firebase Storage if provided
+    // 1. Upload media file to Firebase Storage if provided (it takes precedence)
     if (mediaFile) {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = ref(storage, `posts-media/${fileName}`);
       await uploadBytes(storageRef, mediaFile);
-      finalMediaUrl = storageRef.fullPath;
+      finalMediaUrl = await getDownloadURL(storageRef); // Get the full URL for immediate use
     }
 
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl, // This is now just for firebase path
-        // googleDriveUrl is already in postData from the form
+        mediaUrl: finalMediaUrl,
+        // The form now provides both, so let's ensure both are passed if they exist.
+        googleDriveUrl: postData.googleDriveUrl, 
     };
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
@@ -593,8 +594,8 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
             return [];
         }
 
-        // To avoid composite index, query for each orgId separately and in parallel.
         const scheduledPosts: ScheduledPost[] = [];
+        // Firestore 'in' query has a limit of 30 items. We query in parallel to be safe.
         const queryPromises = orgIds.map(orgId => {
             const q = query(
                 collection(firestore, "scheduledPosts"),
@@ -628,6 +629,9 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
         return promoterScheduledPosts;
     } catch (error) {
         console.error("Error fetching scheduled posts for promoter: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice composto no Firebase Console.");
+        }
         throw new Error("Não foi possível buscar as publicações agendadas.");
     }
 };
