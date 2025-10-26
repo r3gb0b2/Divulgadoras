@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGuestListForCampaign, checkInPerson } from '../services/guestListService';
+import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
-import { GuestListConfirmation, Promoter } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon } from '../components/Icons';
+import { GuestListConfirmation, Promoter, GuestList } from '../types';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
@@ -12,6 +12,8 @@ const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
     const [allConfirmations, setAllConfirmations] = useState<ConfirmationWithDetails[]>([]);
+    const [availableLists, setAvailableLists] = useState<GuestList[]>([]);
+    const [selectedListId, setSelectedListId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -27,28 +29,31 @@ const GuestListCheckinPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const confirmations = await getGuestListForCampaign(campaignId);
+            const [confirmations, lists] = await Promise.all([
+                getGuestListForCampaign(campaignId),
+                getActiveGuestListsForCampaign(campaignId)
+            ]);
+            
+            setAvailableLists(lists);
+
             if (confirmations.length === 0) {
                 setAllConfirmations([]);
-                setIsLoading(false);
-                return;
+            } else {
+                const promoterIds = [...new Set(confirmations.map(c => c.promoterId))];
+                const promoters = await getPromotersByIds(promoterIds);
+                const promoterPhotoMap = new Map<string, string>();
+                promoters.forEach(p => {
+                    if (p.photoUrls && p.photoUrls.length > 0) {
+                        promoterPhotoMap.set(p.id, p.photoUrls[0]);
+                    }
+                });
+
+                const confirmationsWithDetails = confirmations.map(c => ({
+                    ...c,
+                    promoterPhotoUrl: promoterPhotoMap.get(c.promoterId)
+                }));
+                setAllConfirmations(confirmationsWithDetails);
             }
-
-            const promoterIds = [...new Set(confirmations.map(c => c.promoterId))];
-            const promoters = await getPromotersByIds(promoterIds);
-            const promoterPhotoMap = new Map<string, string>();
-            promoters.forEach(p => {
-                if (p.photoUrls && p.photoUrls.length > 0) {
-                    promoterPhotoMap.set(p.id, p.photoUrls[0]);
-                }
-            });
-
-            const confirmationsWithDetails = confirmations.map(c => ({
-                ...c,
-                promoterPhotoUrl: promoterPhotoMap.get(c.promoterId)
-            }));
-
-            setAllConfirmations(confirmationsWithDetails);
         } catch (err: any) {
             setError(err.message || 'Falha ao carregar a lista.');
         } finally {
@@ -61,15 +66,20 @@ const GuestListCheckinPage: React.FC = () => {
     }, [fetchData]);
 
     const filteredConfirmations = useMemo(() => {
+        if (!selectedListId) return [];
+
+        const confirmationsOnSelectedList = allConfirmations.filter(conf => conf.guestListId === selectedListId);
+        
         if (!searchQuery.trim()) {
-            return allConfirmations;
+            return confirmationsOnSelectedList;
         }
+
         const lowercasedQuery = searchQuery.toLowerCase();
-        return allConfirmations.filter(conf =>
+        return confirmationsOnSelectedList.filter(conf =>
             conf.promoterName.toLowerCase().includes(lowercasedQuery) ||
             conf.guestNames.some(guest => guest.toLowerCase().includes(lowercasedQuery))
         );
-    }, [searchQuery, allConfirmations]);
+    }, [searchQuery, allConfirmations, selectedListId]);
 
     const handleCheckIn = async (confirmationId: string, personName: string) => {
         const checkinKey = `${confirmationId}-${personName}`;
@@ -77,11 +87,9 @@ const GuestListCheckinPage: React.FC = () => {
         setError(null);
         try {
             await checkInPerson(confirmationId, personName);
-            // On success, refetch the data to get server timestamps
             await fetchData();
         } catch (err: any) {
             setError(err.message || `Falha no check-in de ${personName}.`);
-            // No need to revert, fetchData will get the correct state
         } finally {
             setProcessingCheckin(null);
         }
@@ -94,7 +102,27 @@ const GuestListCheckinPage: React.FC = () => {
         return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     };
 
-    const renderList = () => {
+    const selectedListName = useMemo(() => {
+        if (!selectedListId) return '';
+        return availableLists.find(l => l.id === selectedListId)?.name || 'Lista';
+    }, [selectedListId, availableLists]);
+
+    const renderListSelection = () => {
+        const listMetrics = allConfirmations.reduce((acc, conf) => {
+            if (!conf.guestListId) return acc;
+    
+            let peopleCount = 0;
+            if (conf.isPromoterAttending) peopleCount++;
+            peopleCount += conf.guestNames.filter(name => name.trim() !== '').length;
+            
+            const existing = acc.get(conf.guestListId) || { confirmations: 0, people: 0 };
+            existing.confirmations++;
+            existing.people += peopleCount;
+            acc.set(conf.guestListId, existing);
+            
+            return acc;
+        }, new Map<string, { confirmations: number; people: number }>());
+
         if (isLoading) {
             return (
                 <div className="flex justify-center items-center py-10">
@@ -103,8 +131,46 @@ const GuestListCheckinPage: React.FC = () => {
             );
         }
 
-        if (allConfirmations.length === 0 && !error) {
-            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação na lista para este evento.</p>;
+        if (availableLists.length === 0) {
+            return <p className="text-gray-400 text-center py-8">Nenhuma lista de convidados ativa encontrada para este evento.</p>;
+        }
+
+        return (
+            <div className="space-y-4">
+                 <h2 className="text-xl font-bold text-white">Selecione uma lista para o check-in</h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {availableLists.map(list => {
+                        const metrics = listMetrics.get(list.id) || { confirmations: 0, people: 0 };
+                        return (
+                            <button
+                                key={list.id}
+                                onClick={() => setSelectedListId(list.id)}
+                                className="bg-dark/70 p-4 rounded-lg shadow-sm text-left hover:bg-gray-700 transition-colors"
+                            >
+                                <h3 className="font-bold text-lg text-primary">{list.name}</h3>
+                                <div className="text-sm text-gray-300 mt-2 flex items-center gap-2">
+                                    <UsersIcon className="w-4 h-4" />
+                                    <span>{metrics.people} Pessoas ({metrics.confirmations} confirmações)</span>
+                                </div>
+                            </button>
+                        )
+                    })}
+                 </div>
+            </div>
+        )
+    };
+    
+    const renderCheckinList = () => {
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center py-10">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+            );
+        }
+
+        if (filteredConfirmations.length === 0 && !searchQuery) {
+            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação encontrada para esta lista.</p>;
         }
 
         if (filteredConfirmations.length === 0) {
@@ -136,8 +202,9 @@ const GuestListCheckinPage: React.FC = () => {
                                     ) : (
                                         <button
                                             onClick={() => handleCheckIn(conf.id, conf.promoterName)}
-                                            disabled={processingCheckin === `${conf.id}-${conf.promoterName}`}
+                                            disabled={!conf.isPromoterAttending || processingCheckin === `${conf.id}-${conf.promoterName}`}
                                             className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                            title={!conf.isPromoterAttending ? "Divulgadora indicou que não vai ao evento" : ""}
                                         >
                                             {processingCheckin === `${conf.id}-${conf.promoterName}` ? '...' : 'Check-in'}
                                         </button>
@@ -145,11 +212,11 @@ const GuestListCheckinPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {conf.guestNames.length > 0 && (
+                            {conf.guestNames.filter(name => name.trim() !== '').length > 0 && (
                                 <div>
                                     <h4 className="text-sm font-semibold text-gray-300 mb-2">Convidados:</h4>
                                     <ul className="space-y-2">
-                                        {conf.guestNames.map(guestName => {
+                                        {conf.guestNames.filter(name => name.trim() !== '').map(guestName => {
                                             const checkedInTime = guestsCheckedInMap.get(guestName);
                                             return (
                                                 <li key={guestName} className="flex justify-between items-center bg-gray-800/50 p-2 rounded-md">
@@ -185,28 +252,31 @@ const GuestListCheckinPage: React.FC = () => {
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                 <div>
-                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                    <button onClick={() => selectedListId ? setSelectedListId(null) : navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
                         <ArrowLeftIcon className="w-5 h-5" />
-                        <span>Voltar para a Lista</span>
+                        <span>{selectedListId ? 'Voltar para Seleção de Listas' : 'Voltar para Eventos'}</span>
                     </button>
-                    <h1 className="text-3xl font-bold mt-1">Controle de Entrada</h1>
+                    <h1 className="text-3xl font-bold mt-1">{selectedListId ? `Check-in: ${selectedListName}` : 'Controle de Entrada'}</h1>
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="relative mb-6">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <SearchIcon className="h-5 w-5 text-gray-400" />
-                    </span>
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Pesquisar por nome da divulgadora ou convidado..."
-                        className="w-full pl-10 pr-4 py-3 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-lg focus:ring-primary focus:border-primary"
-                    />
-                </div>
+                {selectedListId && (
+                    <div className="relative mb-6">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                            <SearchIcon className="h-5 w-5 text-gray-400" />
+                        </span>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Pesquisar por nome da divulgadora ou convidado..."
+                            className="w-full pl-10 pr-4 py-3 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-lg focus:ring-primary focus:border-primary"
+                        />
+                    </div>
+                )}
                 {error && <p className="text-red-400 text-center mb-4">{error}</p>}
-                {renderList()}
+                
+                {selectedListId ? renderCheckinList() : renderListSelection()}
             </div>
         </div>
     );
