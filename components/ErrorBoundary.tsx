@@ -10,30 +10,28 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: Make ErrorBoundary a React.Component to access state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Refactored to use a state property initializer instead of a constructor.
-  // This is a more modern syntax and resolves TypeScript errors where 'this.state' and 'this.props' were not being found.
-  state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Este método de ciclo de vida é acionado após um erro ser lançado por um componente descendente.
-    // Usamos para atualizar o estado e renderizar uma UI de fallback.
     this.setState({
       hasError: true,
       error: error,
       errorInfo: errorInfo,
     });
-    // Você também pode registrar o erro em um serviço de relatórios de erro aqui
     console.error("Uncaught error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      // UI de Fallback
       return (
         <div className="bg-red-900/50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">
           <h1 className="text-2xl font-bold mb-2">Ops! Algo deu errado.</h1>
@@ -67,7 +65,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // Normalmente, apenas renderiza os filhos
     return this.props.children;
   }
 }
