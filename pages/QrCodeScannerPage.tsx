@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ArrowLeftIcon } from '../components/Icons';
 import { getPromoterById } from '../services/promoterService';
-import { getGuestListForCampaign, checkInPerson } from '../services/guestListService';
+import { checkInPerson, getConfirmationByPromoterAndList } from '../services/guestListService';
 import { Promoter, GuestListConfirmation } from '../types';
 import { Timestamp } from 'firebase/firestore';
 
@@ -67,18 +68,16 @@ const QrCodeScannerPage: React.FC = () => {
                 throw new Error("QR Code inválido ou não reconhecido.");
             }
 
-            const { promoterId, campaignId, listId } = data;
+            const { promoterId, listId } = data;
             
-            const [promoter, campaignConfirmations] = await Promise.all([
+            const [promoter, confirmation] = await Promise.all([
                 getPromoterById(promoterId),
-                getGuestListForCampaign(campaignId)
+                getConfirmationByPromoterAndList(promoterId, listId)
             ]);
 
             if (!promoter) {
                 throw new Error("Divulgadora não encontrada no banco de dados.");
             }
-            
-            const confirmation = campaignConfirmations.find(c => c.promoterId === promoterId && c.guestListId === listId);
             
             if (!confirmation) {
                 throw new Error("Esta divulgadora não confirmou presença na lista para este evento.");
@@ -190,9 +189,9 @@ const QrCodeScannerPage: React.FC = () => {
                         <div className="bg-dark/70 p-4 rounded-lg mt-6 max-w-md mx-auto">
                             <div className="flex flex-col sm:flex-row items-center gap-4">
                                 <img 
-                                    src={scanData.promoter.photoUrls?.[0] || 'https://via.placeholder.com/128/1a1a2e/e83a93?text=Foto'} 
+                                    src={scanData.promoter.photoUrls?.[0] || 'https://via.placeholder.com/160/1a1a2e/e83a93?text=Foto'} 
                                     alt={scanData.promoter.name} 
-                                    className="w-32 h-32 object-cover rounded-full border-4 border-primary" 
+                                    className="w-40 h-40 object-cover rounded-lg border-4 border-primary" 
                                 />
                                 <div className="text-center sm:text-left">
                                     <h3 className="text-2xl font-bold text-white">{scanData.promoter.name}</h3>

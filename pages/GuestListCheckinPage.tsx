@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign } from '../services/guestListService';
@@ -311,10 +312,10 @@ const GuestListCheckinPage: React.FC = () => {
                             <div className="flex items-center justify-between p-4 bg-gray-900/80">
                                 <div className="flex items-center gap-4">
                                     {person.isPromoter && person.photoUrl ? (
-                                        <img src={person.photoUrl} alt={person.name} className="w-12 h-12 object-cover rounded-full" />
+                                        <img src={person.photoUrl} alt={person.name} className="w-20 h-20 object-cover rounded-lg" />
                                     ) : (
-                                        <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <UsersIcon className="w-6 h-6 text-gray-400" />
+                                        <div className="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <UsersIcon className="w-10 h-10 text-gray-400" />
                                         </div>
                                     )}
                                     <span className={`text-xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>

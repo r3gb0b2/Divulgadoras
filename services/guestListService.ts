@@ -1,3 +1,4 @@
+
 import { firestore } from '../firebase/config';
 import {
   collection,
@@ -105,6 +106,25 @@ export const deleteGuestList = async (listId: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting guest list: ", error);
         throw new Error("Não foi possível deletar a lista.");
+    }
+};
+
+export const getConfirmationByPromoterAndList = async (promoterId: string, listId: string): Promise<GuestListConfirmation | null> => {
+    try {
+        const q = query(
+            collection(firestore, 'guestListConfirmations'),
+            where('promoterId', '==', promoterId),
+            where('guestListId', '==', listId),
+            limit(1)
+        );
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return null;
+        }
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as GuestListConfirmation;
+    } catch (error) {
+        console.error("Error getting guest list confirmation by promoter and list: ", error);
+        throw new Error("Não foi possível buscar os dados de confirmação da lista.");
     }
 };
 
