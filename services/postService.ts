@@ -600,6 +600,9 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
         const scheduledPosts: ScheduledPost[] = [];
         // Query for each organization ID separately to avoid needing a composite index for the 'in' query.
         for (const orgId of orgIds) {
+             // Add robustness in case a promoter document is missing an orgId
+            if (!orgId) continue;
+            
             const q = query(
                 collection(firestore, "scheduledPosts"),
                 where("organizationId", "==", orgId),
@@ -611,9 +614,11 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
             });
         }
         
-        const promoterScheduledPosts = scheduledPosts.filter(post => 
-            post.assignedPromoters.some(assigned => 
-                promoterIdSet.has(assigned.id) || assigned.email.toLowerCase() === lowerCaseEmail
+        const promoterScheduledPosts = scheduledPosts.filter(post =>
+            Array.isArray(post.assignedPromoters) &&
+            post.assignedPromoters.some(assigned =>
+                (assigned && assigned.id && promoterIdSet.has(assigned.id)) ||
+                (assigned && assigned.email && assigned.email.toLowerCase() === lowerCaseEmail)
             )
         );
         
