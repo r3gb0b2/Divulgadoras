@@ -37,6 +37,25 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
     </div>
 );
 
+// Helper to extract Google Drive file ID from various URL formats
+const extractGoogleDriveId = (url: string): string | null => {
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    return id;
+};
+
+
 // ===================================================================
 // START: Modal Component defined within the same file for convenience
 // ===================================================================
@@ -206,6 +225,7 @@ const CreatePost: React.FC = () => {
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [videoUrl, setVideoUrl] = useState('');
+    const [gDriveImageUrl, setGDriveImageUrl] = useState('');
     const [instructions, setInstructions] = useState('');
     const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
@@ -389,8 +409,24 @@ const CreatePost: React.FC = () => {
         if (file) {
             setMediaFile(file);
             setMediaPreview(URL.createObjectURL(file));
+            setGDriveImageUrl(''); // Clear GDrive link when a file is selected
         }
-    }
+    };
+
+    const handleGDriveLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const url = e.target.value;
+        setGDriveImageUrl(url);
+        if (url) {
+            setMediaFile(null);
+            setMediaPreview(null); // Clear file preview
+            // Try to create a preview from GDrive link
+            const fileId = extractGoogleDriveId(url);
+            if (fileId) {
+                // The StorageMedia component uses this preview URL. Let's be consistent.
+                setMediaPreview(`https://drive.google.com/file/d/${fileId}/preview`);
+            }
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -406,8 +442,8 @@ const CreatePost: React.FC = () => {
             setError("Selecione ao menos uma divulgadora.");
             return;
         }
-        if (postType === 'image' && !mediaFile && !mediaPreview) {
-            setError(`Selecione uma imagem para o post.`);
+        if (postType === 'image' && !mediaFile && !gDriveImageUrl && !mediaPreview) {
+            setError(`Selecione uma imagem para o post ou cole um link do Google Drive.`);
             return;
         }
         if (postType === 'video' && !videoUrl.trim()) {
@@ -458,13 +494,16 @@ const CreatePost: React.FC = () => {
                 }
 
                 let scheduledMediaUrl: string | undefined = undefined;
-                if (postType === 'image' && mediaFile) {
-                    // Upload now, save the storage path
-                    const fileExtension = mediaFile.name.split('.').pop();
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = ref(storage, `posts-media/${fileName}`);
-                    await uploadBytes(storageRef, mediaFile);
-                    scheduledMediaUrl = storageRef.fullPath;
+                if (postType === 'image') {
+                    if (gDriveImageUrl) {
+                        scheduledMediaUrl = gDriveImageUrl;
+                    } else if (mediaFile) {
+                        const fileExtension = mediaFile.name.split('.').pop();
+                        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                        const storageRef = ref(storage, `posts-media/${fileName}`);
+                        await uploadBytes(storageRef, mediaFile);
+                        scheduledMediaUrl = storageRef.fullPath;
+                    }
                 } else if (postType === 'video') {
                     scheduledMediaUrl = videoUrl;
                 }
@@ -493,12 +532,12 @@ const CreatePost: React.FC = () => {
             } else {
                 const postDataForImmediate = {
                     ...basePostData,
-                    mediaUrl: postType === 'video' ? videoUrl : undefined, // createPost handles image upload itself
+                    mediaUrl: postType === 'video' ? videoUrl : (postType === 'image' && gDriveImageUrl ? gDriveImageUrl : undefined),
                     organizationId: selectedOrgId,
                     createdByEmail: adminData.email
                 };
 
-                await createPost(postDataForImmediate, postType === 'image' ? mediaFile : null, promotersToAssign);
+                await createPost(postDataForImmediate, postType === 'image' && !gDriveImageUrl ? mediaFile : null, promotersToAssign);
                 alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
                 navigate('/admin/posts');
             }
@@ -615,10 +654,17 @@ const CreatePost: React.FC = () => {
                         <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Digite o texto da publicação aqui..." rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                      )}
                      {postType === 'image' && (
-                        <div>
+                        <div className="space-y-4">
                             <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                            <p className="text-center text-gray-500 my-2 text-sm">OU</p>
+                            <InputWithIcon
+                                Icon={LinkIcon}
+                                type="url"
+                                placeholder="Cole o link compartilhável do Google Drive para a imagem"
+                                value={gDriveImageUrl}
+                                onChange={handleGDriveLinkChange}
+                            />
                             {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                            {mediaPreview && !mediaFile && <p className="text-xs text-yellow-400 mt-2">Atenção: Esta é uma pré-visualização. Por favor, selecione um novo arquivo para esta publicação.</p>}
                         </div>
                      )}
                      {postType === 'video' && (

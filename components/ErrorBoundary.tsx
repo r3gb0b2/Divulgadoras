@@ -11,15 +11,13 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: The class property syntax for state was causing 'setState' and 'props' to be unrecognized. Reverted to standard constructor-based state initialization to resolve this.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: The constructor-based state initialization was causing 'setState' and 'props' to be unrecognized.
+  // Switched to class property syntax for state initialization to resolve this.
+  state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Este método de ciclo de vida é acionado após um erro ser lançado por um componente descendente.
