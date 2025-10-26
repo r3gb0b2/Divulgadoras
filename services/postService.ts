@@ -581,7 +581,6 @@ export const deleteScheduledPost = async (id: string): Promise<void> => {
     }
 };
 
-// FIX: Added missing 'getScheduledPostsForPromoter' function.
 export const getScheduledPostsForPromoter = async (email: string): Promise<ScheduledPost[]> => {
     try {
         const promoterProfiles = await findPromotersByEmail(email);
@@ -594,22 +593,24 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
             return [];
         }
 
-        // Firestore 'in' query can take up to 30 elements. Chunk if necessary.
-        const CHUNK_SIZE = 30;
+        // To avoid composite index, query for each orgId separately and in parallel.
         const scheduledPosts: ScheduledPost[] = [];
-
-        for (let i = 0; i < orgIds.length; i += CHUNK_SIZE) {
-            const orgChunk = orgIds.slice(i, i + CHUNK_SIZE);
+        const queryPromises = orgIds.map(orgId => {
             const q = query(
                 collection(firestore, "scheduledPosts"),
-                where("organizationId", "in", orgChunk),
+                where("organizationId", "==", orgId),
                 where("status", "==", "pending")
             );
-            const snapshot = await getDocs(q);
+            return getDocs(q);
+        });
+
+        const querySnapshots = await Promise.all(queryPromises);
+
+        querySnapshots.forEach(snapshot => {
             snapshot.forEach(doc => {
                 scheduledPosts.push({ id: doc.id, ...doc.data() } as ScheduledPost);
             });
-        }
+        });
         
         const promoterIdSet = new Set(promoterProfiles.map(p => p.id));
         const lowerCaseEmail = email.toLowerCase().trim();
