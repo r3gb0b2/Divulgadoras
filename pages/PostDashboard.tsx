@@ -57,6 +57,7 @@ const PostDashboard: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
+    const [filterInGroupOnly, setFilterInGroupOnly] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -130,7 +131,7 @@ const PostDashboard: React.FC = () => {
             }
         });
         
-        const finalStats = Array.from(statsMap.values()).map(stat => {
+        let finalStats = Array.from(statsMap.values()).map(stat => {
             const successfulOutcomes = stat.completed + stat.acceptedJustifications;
             if (stat.assigned > 0) {
                stat.completionRate = Math.round((successfulOutcomes / stat.assigned) * 100);
@@ -140,14 +141,19 @@ const PostDashboard: React.FC = () => {
             return stat;
         }).filter(stat => stat.assigned > 0); // Only show promoters with at least one assignment
 
+        // "In Group" filter
+        if (filterInGroupOnly) {
+            finalStats = finalStats.filter(s => s.hasJoinedGroup === true);
+        }
+
         // Search Filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
-        let searched = lowercasedQuery
-            ? finalStats.filter(s => s.name.toLowerCase().includes(lowercasedQuery) || s.email.toLowerCase().includes(lowercasedQuery))
-            : finalStats;
+        if (lowercasedQuery) {
+            finalStats = finalStats.filter(s => s.name.toLowerCase().includes(lowercasedQuery) || s.email.toLowerCase().includes(lowercasedQuery));
+        }
 
         if (colorFilter !== 'all') {
-            searched = searched.filter(s => {
+            finalStats = finalStats.filter(s => {
                 const rate = s.completionRate;
                 if (rate < 0) return false;
                 if (colorFilter === 'green') return rate === 100;
@@ -159,7 +165,7 @@ const PostDashboard: React.FC = () => {
         }
 
         // Sorting
-        searched.sort((a, b) => {
+        finalStats.sort((a, b) => {
             if (a[sortConfig.key] < b[sortConfig.key]) {
                 return sortConfig.direction === 'asc' ? -1 : 1;
             }
@@ -169,9 +175,9 @@ const PostDashboard: React.FC = () => {
             return 0;
         });
 
-        return searched;
+        return finalStats;
 
-    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig, colorFilter]);
+    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig, colorFilter, filterInGroupOnly]);
 
     const requestSort = (key: SortKey) => {
         let direction: SortDirection = 'asc';
@@ -234,6 +240,15 @@ const PostDashboard: React.FC = () => {
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                     />
+                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer flex-shrink-0">
+                        <input
+                            type="checkbox"
+                            checked={filterInGroupOnly}
+                            onChange={(e) => setFilterInGroupOnly(e.target.checked)}
+                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                        />
+                        <span>Apenas no grupo</span>
+                    </label>
                  </div>
                  <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
                     <div className="flex items-center gap-x-4">
