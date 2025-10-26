@@ -7,7 +7,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { PostAssignment, Promoter, Campaign, PromoterStats } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'state' | 'campaignName' | 'associatedCampaigns' | 'allCampaigns' | 'organizationId' | 'rejectionReason' | 'hasJoinedGroup' | 'actionTakenByUid' | 'actionTakenByEmail' | 'statusChangedAt' | 'observation' | 'lastManualNotificationAt' | 'status' | 'tiktok' | 'dateOfBirth'> | 'name';
@@ -281,7 +281,20 @@ const PostDashboard: React.FC = () => {
                             <tbody className="divide-y divide-gray-700">
                                 {processedStats.map(stat => (
                                     <tr key={stat.id} className="hover:bg-gray-700/40">
-                                        <td className="px-4 py-3 whitespace-nowrap"><div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div><div className="text-xs text-gray-400">{stat.email}</div></td>
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div>
+                                            <div className="text-xs text-gray-400">{stat.email}</div>
+                                            <div className="flex items-center gap-4 mt-2">
+                                                <a href={`https://wa.me/55${(stat.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-xs gap-1">
+                                                    <WhatsAppIcon className="w-4 h-4" />
+                                                    <span>WhatsApp</span>
+                                                </a>
+                                                <a href={`https://instagram.com/${(stat.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center text-xs gap-1">
+                                                    <InstagramIcon className="w-4 h-4" />
+                                                    <span>Instagram</span>
+                                                </a>
+                                            </div>
+                                        </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold">{stat.assigned}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-green-400">{stat.completed}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-yellow-400">{stat.justifications}</td>
