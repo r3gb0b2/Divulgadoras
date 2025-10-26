@@ -14,6 +14,7 @@ type Person = {
     isPromoter: boolean;
     confirmationId: string;
     checkedInAt: Timestamp | FieldValue | null | undefined;
+    photoUrl?: string;
 };
 
 // --- Áudio Feedback Helper ---
@@ -214,6 +215,7 @@ const GuestListCheckinPage: React.FC = () => {
                         isPromoter: true,
                         confirmationId: conf.id,
                         checkedInAt: conf.promoterCheckedInAt,
+                        photoUrl: conf.promoterPhotoUrl,
                     });
                 }
                 conf.guestNames.filter(name => name.trim()).forEach(guestName => {
@@ -222,6 +224,7 @@ const GuestListCheckinPage: React.FC = () => {
                         isPromoter: false,
                         confirmationId: conf.id,
                         checkedInAt: (conf.guestsCheckedIn || []).find(g => g.name === guestName)?.checkedInAt,
+                        // Guests don't have photos, so photoUrl is undefined
                     });
                 });
             });
@@ -306,7 +309,16 @@ const GuestListCheckinPage: React.FC = () => {
                     return (
                         <SwipeableRow key={checkinKey} onSwipeRight={() => handleCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
                             <div className="flex items-center justify-between p-4 bg-gray-900/80">
-                                <span className={`text-xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
+                                <div className="flex items-center gap-4">
+                                    {person.isPromoter && person.photoUrl ? (
+                                        <img src={person.photoUrl} alt={person.name} className="w-12 h-12 object-cover rounded-full" />
+                                    ) : (
+                                        <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <UsersIcon className="w-6 h-6 text-gray-400" />
+                                        </div>
+                                    )}
+                                    <span className={`text-xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
+                                </div>
                                 {isCheckedIn ? (
                                     <div className="flex items-center gap-2 text-lg font-semibold text-green-400">
                                         <CheckCircleIcon className="w-7 h-7" />

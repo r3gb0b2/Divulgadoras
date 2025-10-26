@@ -63,11 +63,11 @@ const QrCodeScannerPage: React.FC = () => {
 
         try {
             const data = JSON.parse(decodedText);
-            if (data.type !== 'promoter-checkin' || !data.promoterId || !data.campaignId) {
+            if (data.type !== 'promoter-checkin' || !data.promoterId || !data.campaignId || !data.listId) {
                 throw new Error("QR Code inválido ou não reconhecido.");
             }
 
-            const { promoterId, campaignId } = data;
+            const { promoterId, campaignId, listId } = data;
             
             const [promoter, campaignConfirmations] = await Promise.all([
                 getPromoterById(promoterId),
@@ -78,7 +78,7 @@ const QrCodeScannerPage: React.FC = () => {
                 throw new Error("Divulgadora não encontrada no banco de dados.");
             }
             
-            const confirmation = campaignConfirmations.find(c => c.promoterId === promoterId);
+            const confirmation = campaignConfirmations.find(c => c.promoterId === promoterId && c.guestListId === listId);
             
             if (!confirmation) {
                 throw new Error("Esta divulgadora não confirmou presença na lista para este evento.");
