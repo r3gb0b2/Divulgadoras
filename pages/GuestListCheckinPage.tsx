@@ -86,8 +86,31 @@ const GuestListCheckinPage: React.FC = () => {
         setProcessingCheckin(checkinKey);
         setError(null);
         try {
+            // Perform the DB update
             await checkInPerson(confirmationId, personName);
-            await fetchData();
+            
+            // Optimistic UI update to prevent page reload
+            setAllConfirmations(prevConfirmations => {
+                return prevConfirmations.map(conf => {
+                    if (conf.id === confirmationId) {
+                        const now = Timestamp.now();
+                        const updatedConf = { ...conf };
+                        
+                        if (personName === conf.promoterName) {
+                            updatedConf.promoterCheckedInAt = now;
+                        } else {
+                            const newGuestsCheckedIn = [
+                                ...(conf.guestsCheckedIn || []),
+                                { name: personName, checkedInAt: now }
+                            ];
+                            updatedConf.guestsCheckedIn = newGuestsCheckedIn;
+                        }
+                        return updatedConf;
+                    }
+                    return conf;
+                });
+            });
+
         } catch (err: any) {
             setError(err.message || `Falha no check-in de ${personName}.`);
         } finally {

@@ -62,6 +62,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     const closingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
     const { days, hours, minutes, seconds, isOver } = useCountdown(closingDate);
     const isLocked = existingConfirmation?.isLocked ?? false;
+    const isEditing = !!existingConfirmation;
 
     useEffect(() => {
         if (existingConfirmation) {
@@ -112,8 +113,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
             <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
                 <h3 className="text-xl font-bold text-primary">{list.name}</h3>
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md mt-4">
-                    <p className="font-bold">Presença Confirmada!</p>
-                    <p>Sua lista para <strong>{list.name}</strong> foi enviada com sucesso.</p>
+                    <p className="font-bold">{isEditing ? 'Lista Atualizada!' : 'Presença Confirmada!'}</p>
+                    <p>Sua lista para <strong>{list.name}</strong> foi {isEditing ? 'atualizada' : 'enviada'} com sucesso.</p>
                 </div>
             </div>
         );
@@ -188,7 +189,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                         disabled={isSubmitting || isOver}
                         className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
                     >
-                        {isSubmitting ? 'Confirmando...' : (isOver ? 'Prazo Encerrado' : 'Confirmar Lista')}
+                        {isSubmitting ? 'Salvando...' : (isOver ? 'Prazo Encerrado' : (isEditing ? 'Salvar Alterações' : 'Confirmar Lista'))}
                     </button>
                 </div>
             </form>

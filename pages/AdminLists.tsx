@@ -118,6 +118,7 @@ const AdminLists: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingList, setEditingList] = useState<GuestList | null>(null);
+    const [isToggling, setIsToggling] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -148,6 +149,19 @@ const AdminLists: React.FC = () => {
     const handleOpenModal = (list: GuestList | null = null) => {
         setEditingList(list);
         setIsModalOpen(true);
+    };
+
+    const handleToggleActive = async (list: GuestList) => {
+        if (isToggling) return;
+        setIsToggling(list.id);
+        try {
+            await updateGuestList(list.id, { isActive: !list.isActive });
+            await fetchData();
+        } catch (err: any) {
+            setError(err.message || "Falha ao atualizar o status da lista.");
+        } finally {
+            setIsToggling(null);
+        }
     };
 
     const handleSaveList = async (data: Partial<Omit<GuestList, 'id'>>) => {
@@ -234,9 +248,18 @@ const AdminLists: React.FC = () => {
                                         <td className="px-4 py-3 whitespace-nowrap font-medium text-white">{list.name}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.campaignName}</td>
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                            <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${list.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
-                                                {list.isActive ? 'Ativa' : 'Inativa'}
-                                            </span>
+                                            <label className="flex items-center cursor-pointer" title={list.isActive ? 'Desativar lista' : 'Ativar lista'}>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={list.isActive} 
+                                                        onChange={() => handleToggleActive(list)} 
+                                                        disabled={isToggling === list.id} 
+                                                        className="sr-only peer" 
+                                                    />
+                                                    <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                                </div>
+                                            </label>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.assignedPromoterIds.length} divulgadora(s)</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
