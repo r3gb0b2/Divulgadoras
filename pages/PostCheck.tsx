@@ -255,7 +255,7 @@ const PostCard: React.FC<{
     };
     
     const handleDownload = async () => {
-        if (isMediaProcessing || !assignment.post.mediaUrl) return;
+        if (isMediaProcessing || !assignment.post.mediaUrl || !assignment.post.isActive) return;
         setIsMediaProcessing(true);
         try {
             const { mediaUrl, type } = assignment.post;
@@ -404,10 +404,10 @@ const PostCard: React.FC<{
                         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
                             {assignment.post.mediaUrl && (
                                 <button
-                                    onClick={handleDownload} // This uses mediaUrl implicitly
-                                    disabled={isMediaProcessing}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold disabled:opacity-50"
-                                    title="Baixar do nosso servidor (Firebase)"
+                                    onClick={handleDownload}
+                                    disabled={isMediaProcessing || !assignment.post.isActive}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title={!assignment.post.isActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 1</span>
@@ -415,11 +415,12 @@ const PostCard: React.FC<{
                             )}
                             {assignment.post.googleDriveUrl && (
                                 <a
-                                    href={assignment.post.googleDriveUrl}
+                                    href={assignment.post.isActive ? assignment.post.googleDriveUrl : undefined}
+                                    onClick={(e) => !assignment.post.isActive && e.preventDefault()}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-500 text-sm font-semibold"
-                                    title="Baixar do Google Drive"
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!assignment.post.isActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!assignment.post.isActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>
