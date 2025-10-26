@@ -74,6 +74,29 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
         }
     };
 
+    const handleResetJustification = async () => {
+        if (!assignment) return;
+        if (!window.confirm("Tem certeza que deseja resetar a justificativa? Isso removerá a justificativa e permitirá que a divulgadora envie uma comprovação novamente.")) {
+            return;
+        }
+        setIsSaving(true);
+        setError('');
+        try {
+            const dataToSave: Partial<PostAssignment> = {
+                justification: '',
+                justificationStatus: null,
+                justificationSubmittedAt: null,
+                justificationImageUrls: [],
+            };
+            await onSave(assignment.id, dataToSave);
+            onClose();
+        } catch (err: any) {
+            setError(err.message || 'Falha ao resetar justificativa.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const renderJustificationSection = () => (
          <div>
             <p className="text-gray-300 mb-2">Divulgadora: <span className="font-semibold text-white">{assignment.promoterName}</span></p>
@@ -105,6 +128,18 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                     <input type="radio" value="pending" checked={justificationStatus === 'pending'} onChange={() => setJustificationStatus('pending')} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 focus:ring-primary" />
                     <span className="text-yellow-400">Manter como Pendente</span>
                 </label>
+            </div>
+            <div className="mt-6 border-t border-gray-600 pt-4">
+                <button
+                    type="button"
+                    onClick={handleResetJustification}
+                    className="w-full text-center px-4 py-2 bg-red-800 text-white rounded-md hover:bg-red-700 text-sm font-semibold"
+                >
+                    Resetar Justificativa
+                </button>
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                    Isso removerá a justificativa e permitirá que a divulgadora envie a comprovação novamente.
+                </p>
             </div>
         </div>
     );
