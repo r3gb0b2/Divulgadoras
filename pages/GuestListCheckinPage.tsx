@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign } from '../services/guestListService';
@@ -107,6 +106,42 @@ const SwipeableRow: React.FC<{
     );
 };
 
+const PhotoModal: React.FC<{ imageUrl: string | null; onClose: () => void }> = ({ imageUrl, onClose }) => {
+    if (!imageUrl) return null;
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [onClose]);
+
+    return (
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
+            onClick={onClose}
+            aria-modal="true"
+            role="dialog"
+        >
+            <div className="bg-secondary rounded-lg shadow-xl p-4 w-full max-w-sm relative" onClick={(e) => e.stopPropagation()}>
+                <img src={imageUrl} alt="Foto da divulgadora" className="w-full h-auto object-contain rounded-md" />
+                <button 
+                    onClick={onClose} 
+                    className="absolute -top-3 -right-3 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-xl font-bold leading-none hover:bg-red-700 transition-colors"
+                    aria-label="Fechar"
+                >
+                    &times;
+                </button>
+            </div>
+        </div>
+    );
+};
+
 
 const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
@@ -120,6 +155,19 @@ const GuestListCheckinPage: React.FC = () => {
     const [processingCheckin, setProcessingCheckin] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'checkedIn'>('pending');
     const [feedback, setFeedback] = useState<{ type: 'idle' | 'success' | 'error', key: number }>({ type: 'idle', key: 0 });
+
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+    const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
+
+    const openPhotoModal = (url: string) => {
+        setPhotoModalUrl(url);
+        setIsPhotoModalOpen(true);
+    };
+
+    const closePhotoModal = () => {
+        setIsPhotoModalOpen(false);
+        setPhotoModalUrl(null);
+    };
 
     // --- Modernization: High Contrast Mode ---
     useEffect(() => {
@@ -312,7 +360,9 @@ const GuestListCheckinPage: React.FC = () => {
                             <div className="flex items-center justify-between p-6 bg-gray-900/80">
                                 <div className="flex items-center gap-6">
                                     {person.isPromoter && person.photoUrl ? (
-                                        <img src={person.photoUrl} alt={person.name} className="w-28 h-28 object-cover rounded-lg flex-shrink-0" />
+                                        <button onClick={() => openPhotoModal(person.photoUrl!)} className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-primary rounded-lg transition-transform transform hover:scale-105">
+                                            <img src={person.photoUrl} alt={person.name} className="w-28 h-28 object-cover rounded-lg flex-shrink-0" />
+                                        </button>
                                     ) : (
                                         <div className="w-28 h-28 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
                                             <UsersIcon className="w-14 h-14 text-gray-400" />
@@ -377,7 +427,7 @@ const GuestListCheckinPage: React.FC = () => {
                                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                                         {(['pending', 'checkedIn', 'all'] as const).map(f => (
                                             <button key={f} onClick={() => setStatusFilter(f)} className={`px-5 py-2 text-base font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                                {{'pending': 'Pendentes', 'checkedIn': 'Feitos', 'all': 'Todos'}[f]}
+                                                {{'pending': 'Pendentes', 'checkedIn': 'Check-in Realizado', 'all': 'Todos'}[f]}
                                             </button>
                                         ))}
                                     </div>
@@ -386,9 +436,12 @@ const GuestListCheckinPage: React.FC = () => {
                             {error && <p className="text-red-400 text-center mb-4">{error}</p>}
                             {renderCheckinList()}
                         </>
-                    ) : renderListSelection()}
+                    ) : (
+                        renderListSelection()
+                    )}
                 </div>
             </div>
+            <PhotoModal imageUrl={photoModalUrl} onClose={closePhotoModal} />
         </div>
     );
 };
