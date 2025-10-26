@@ -10,18 +10,16 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Make ErrorBoundary a React.Component to access state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: All errors were related to TypeScript not correctly identifying `this.state` and `this.props` on the class instance.
+  // Refactoring state initialization from the constructor to a class property is a modern and robust way to solve this.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({
       hasError: true,
       error: error,
@@ -30,7 +28,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="bg-red-900/50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">

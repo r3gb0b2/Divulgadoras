@@ -589,7 +589,7 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
             return [];
         }
 
-        const orgIds = [...new Set(promoterProfiles.map(p => p.organizationId))];
+        const orgIds = [...new Set(promoterProfiles.map(p => p.organizationId).filter(id => !!id))];
         if (orgIds.length === 0) {
             return [];
         }
@@ -618,7 +618,7 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
 
         const promoterScheduledPosts = scheduledPosts.filter(post => 
             post.assignedPromoters.some(assigned => 
-                promoterIdSet.has(assigned.id) || assigned.email.toLowerCase() === lowerCaseEmail
+                assigned && (promoterIdSet.has(assigned.id) || (assigned.email && assigned.email.toLowerCase() === lowerCaseEmail))
             )
         );
         
