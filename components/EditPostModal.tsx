@@ -101,6 +101,13 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             const tempPreviewUrl = URL.createObjectURL(file);
             setMediaPreview(tempPreviewUrl);
             setMediaUrl(tempPreviewUrl); // Update mediaUrl state for preview component
+        } else {
+            // User cancelled file selection, revert to original
+            setMediaFile(null);
+            if (post) {
+                setMediaUrl(post.mediaUrl || '');
+                setMediaPreview(post.mediaUrl || '');
+            }
         }
     };
 
@@ -130,7 +137,10 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             updatedData.textContent = textContent;
         }
         
-        if (post.type === 'video') {
+        if (post.type === 'video' || post.type === 'image') {
+            // For images, if a new file is uploaded, mediaUrl will be a blob, which is fine.
+            // The onSave function (handleSavePost) prioritizes the file over the URL.
+            // If no file is uploaded, this will be the GDrive link or the original URL.
             updatedData.mediaUrl = mediaUrl;
         }
 
@@ -170,12 +180,31 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                         <div>
                             <label className="block text-sm font-medium text-gray-300">Mídia (Imagem)</label>
                             <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark mt-1" />
+                            
+                            <div className="flex items-center gap-2 my-2">
+                                <hr className="flex-grow border-gray-600" />
+                                <span className="text-xs text-gray-400">OU</span>
+                                <hr className="flex-grow border-gray-600" />
+                            </div>
+                    
+                            <input 
+                                type="text" 
+                                value={mediaUrl.startsWith('blob:') ? '' : mediaUrl}
+                                onChange={(e) => {
+                                    setMediaFile(null);
+                                    setMediaUrl(e.target.value);
+                                    setMediaPreview(e.target.value);
+                                }} 
+                                placeholder="Cole o link compartilhável do Google Drive" 
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            />
+                    
                             {mediaPreview && (
                                 <div className="mt-4">
                                      <StorageMedia path={mediaPreview} type="image" className="max-h-60 rounded-md" />
                                 </div>
                             )}
-                             <p className="text-xs text-yellow-400 mt-2">Selecionar um novo arquivo substituirá o atual.</p>
+                             <p className="text-xs text-yellow-400 mt-2">Selecionar um novo arquivo ou preencher o link substituirá a mídia atual.</p>
                         </div>
                     )}
                      {post.type === 'video' && (

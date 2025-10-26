@@ -287,7 +287,7 @@ const PostCard: React.FC<{
         try {
             const { mediaUrl, type } = assignment.post;
             
-            if ((type === 'video' || type === 'image') && mediaUrl.includes('drive.google.com')) {
+            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
                 const fileId = extractGoogleDriveId(mediaUrl);
                 if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
                 const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
