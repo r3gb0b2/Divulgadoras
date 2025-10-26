@@ -309,27 +309,27 @@ const GuestListCheckinPage: React.FC = () => {
                     const isCheckedIn = !!person.checkedInAt;
                     return (
                         <SwipeableRow key={checkinKey} onSwipeRight={() => handleCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
-                            <div className="flex items-center justify-between p-4 bg-gray-900/80">
-                                <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-between p-6 bg-gray-900/80">
+                                <div className="flex items-center gap-6">
                                     {person.isPromoter && person.photoUrl ? (
-                                        <img src={person.photoUrl} alt={person.name} className="w-20 h-20 object-cover rounded-lg" />
+                                        <img src={person.photoUrl} alt={person.name} className="w-28 h-28 object-cover rounded-lg flex-shrink-0" />
                                     ) : (
-                                        <div className="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <UsersIcon className="w-10 h-10 text-gray-400" />
+                                        <div className="w-28 h-28 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <UsersIcon className="w-14 h-14 text-gray-400" />
                                         </div>
                                     )}
-                                    <span className={`text-xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
+                                    <span className={`text-2xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
                                 </div>
                                 {isCheckedIn ? (
-                                    <div className="flex items-center gap-2 text-lg font-semibold text-green-400">
-                                        <CheckCircleIcon className="w-7 h-7" />
+                                    <div className="flex items-center gap-2 text-xl font-semibold text-green-400">
+                                        <CheckCircleIcon className="w-8 h-8" />
                                         <span>{formatTime(person.checkedInAt)}</span>
                                     </div>
                                 ) : (
                                     <button
                                         onClick={() => handleCheckIn(person.confirmationId, person.name)}
                                         disabled={processingCheckin === checkinKey}
-                                        className="px-5 py-3 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-lg"
+                                        className="px-6 py-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-xl"
                                     >
                                         {processingCheckin === checkinKey ? '...' : 'Check-in'}
                                     </button>

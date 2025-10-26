@@ -51,17 +51,26 @@ const QrCodeScannerPage: React.FC = () => {
     const [isScanning, setIsScanning] = useState(false);
     
     const scannerRef = useRef<Html5Qrcode | null>(null);
-    const readerRef = useRef<HTMLDivElement>(null);
 
     const onScanSuccess = useCallback(async (decodedText: string) => {
-        if (isFetchingData || scanData) return; // Prevent multiple scans
+        // Prevent multiple rapid scans by immediately stopping the scanner
+        if (scannerRef.current && scannerRef.current.isScanning) {
+            try {
+                await scannerRef.current.stop();
+                setIsScanning(false);
+            } catch (err) {
+                console.error("Falha ao parar scanner no sucesso.", err);
+            }
+        } else {
+            // Already stopped or stopping, ignore subsequent calls from the same scan
+            return;
+        }
 
+        if (navigator.vibrate) navigator.vibrate(50);
         setIsFetchingData(true);
         setScanError(null);
         setFeedbackMessage(null);
         
-        if (navigator.vibrate) navigator.vibrate(50);
-
         try {
             const data = JSON.parse(decodedText);
             if (data.type !== 'promoter-checkin' || !data.promoterId || !data.campaignId || !data.listId) {
@@ -84,11 +93,6 @@ const QrCodeScannerPage: React.FC = () => {
             }
 
             setScanData({ promoter, confirmation });
-            // Stop scanning after successful data fetch
-            if (scannerRef.current?.isScanning) {
-                await scannerRef.current.stop();
-                setIsScanning(false);
-            }
 
         } catch (err: any) {
             setScanError(err.message || "Erro ao processar QR Code.");
@@ -96,40 +100,43 @@ const QrCodeScannerPage: React.FC = () => {
         } finally {
             setIsFetchingData(false);
         }
-    }, [isFetchingData, scanData]);
+    }, []);
 
-
-    const startScanner = useCallback(async () => {
-        if (!scannerRef.current || scannerRef.current.isScanning || !readerRef.current) return;
-        setScanError(null);
-        try {
-            const cameras = await Html5Qrcode.getCameras();
-            if (cameras && cameras.length) {
-                setIsScanning(true);
-                await scannerRef.current.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    onScanSuccess,
-                    (errorMessage) => { /* ignore */ }
-                );
-            } else {
-                setScanError("Nenhuma câmera encontrada no dispositivo.");
-            }
-        } catch (err: any) {
-            setScanError(`Erro ao acessar a câmera: ${err.message}. Por favor, conceda permissão de câmera.`);
-        }
-    }, [onScanSuccess]);
-
+    // Effect for scanner lifecycle management
     useEffect(() => {
-        const qrCodeScanner = new Html5Qrcode('qr-reader');
-        scannerRef.current = qrCodeScanner;
-        startScanner();
+        if (!scannerRef.current) {
+            scannerRef.current = new Html5Qrcode('qr-reader');
+        }
+        
+        const start = async () => {
+            if (scannerRef.current && !scannerRef.current.isScanning) {
+                setScanError(null);
+                try {
+                    await scannerRef.current.start(
+                        { facingMode: "environment" },
+                        { fps: 10, qrbox: { width: 250, height: 250 } },
+                        onScanSuccess,
+                        (errorMessage) => { /* ignore */ }
+                    );
+                    setIsScanning(true);
+                } catch (err: any) {
+                    setScanError(`Erro ao acessar câmera: ${err.message}.`);
+                    setIsScanning(false);
+                }
+            }
+        };
+
+        if (!scanData) {
+            start();
+        }
+
         return () => {
             if (scannerRef.current && scannerRef.current.isScanning) {
                 scannerRef.current.stop().catch(err => console.error("Falha ao parar o scanner.", err));
+                setIsScanning(false);
             }
         };
-    }, [startScanner]);
+    }, [scanData, onScanSuccess]);
 
     const handleConfirmCheckin = async () => {
         if (!scanData) return;
@@ -159,7 +166,7 @@ const QrCodeScannerPage: React.FC = () => {
         setScanData(null);
         setScanError(null);
         setFeedbackMessage(null);
-        startScanner();
+        // The useEffect will automatically restart the scanner when scanData becomes null
     };
 
     return (
@@ -172,7 +179,7 @@ const QrCodeScannerPage: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div id="qr-reader" ref={readerRef} className={`w-full max-w-md mx-auto rounded-lg overflow-hidden border-2 border-gray-600 ${scanData ? 'hidden' : 'block'}`}></div>
+                <div id="qr-reader" className={`w-full max-w-md mx-auto rounded-lg overflow-hidden border-2 border-gray-600 ${scanData ? 'hidden' : 'block'}`}></div>
                 
                 {isFetchingData && <p className="text-yellow-400 text-center mt-4">Processando QR Code...</p>}
 
