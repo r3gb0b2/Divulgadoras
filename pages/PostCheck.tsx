@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
@@ -473,6 +473,16 @@ const PostCard: React.FC<{
                                 >
                                     {linkCopied ? 'Copiado!' : 'Copiar'}
                                 </button>
+                                <a
+                                    href={assignment.post.postLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-500 text-sm font-semibold"
+                                    title="Abrir link em nova aba"
+                                >
+                                    <ExternalLinkIcon className="w-4 h-4" />
+                                    <span>Abrir</span>
+                                </a>
                             </div>
                         </div>
                     </div>
