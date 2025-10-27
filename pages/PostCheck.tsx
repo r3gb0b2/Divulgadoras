@@ -254,8 +254,12 @@ const PostCard: React.FC<{
         });
     };
     
+    const now = new Date();
+    const isExpired = assignment.post.expiresAt && toDateSafe(assignment.post.expiresAt) < now;
+    const isPostDownloadable = assignment.post.isActive && !isExpired;
+
     const handleDownload = async () => {
-        if (!assignment.post.isActive) {
+        if (!isPostDownloadable) {
             alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
             return;
         }
@@ -411,8 +415,8 @@ const PostCard: React.FC<{
                                 <button
                                     onClick={handleDownload}
                                     disabled={isMediaProcessing}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!assignment.post.isActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
-                                    title={!assignment.post.isActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 1</span>
@@ -420,17 +424,17 @@ const PostCard: React.FC<{
                             )}
                             {assignment.post.googleDriveUrl && (
                                 <a
-                                    href={assignment.post.isActive ? assignment.post.googleDriveUrl : undefined}
+                                    href={isPostDownloadable ? assignment.post.googleDriveUrl : undefined}
                                     onClick={(e) => {
-                                        if (!assignment.post.isActive) {
+                                        if (!isPostDownloadable) {
                                             e.preventDefault();
                                             alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
                                         }
                                     }}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!assignment.post.isActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    title={!assignment.post.isActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>
@@ -722,12 +726,14 @@ const PostCheck: React.FC = () => {
     
         const active: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
         const archived: (PostAssignment & { promoterHasJoinedGroup: boolean })[] = [];
+        const now = new Date();
     
         assignments.forEach(a => {
             const isCompleted = !!a.proofSubmittedAt || !!a.justification;
-            const isMissed = !a.post.isActive; // Inactive posts are always archived
+            const isExpired = a.post.expiresAt && toDateSafe(a.post.expiresAt) < now;
+            const isArchivable = isCompleted || !a.post.isActive || isExpired;
     
-            if (isCompleted || isMissed) {
+            if (isArchivable) {
                 archived.push(a);
             } else {
                 active.push(a);
