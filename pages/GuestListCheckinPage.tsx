@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign } from '../services/guestListService';
+import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList } from '../types';
 import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, ChartBarIcon } from '../components/Icons';
 // FIX: Imported FieldValue to resolve type error.
 import { Timestamp, FieldValue } from 'firebase/firestore';
-import Fuse from 'fuse.js';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
 type Person = {
@@ -142,6 +141,101 @@ const PhotoModal: React.FC<{ imageUrl: string | null; onClose: () => void }> = (
     );
 };
 
+type GroupedConfirmation = {
+    confirmation: ConfirmationWithDetails;
+    promoterPerson: Person | null;
+    guestPersons: Person[];
+};
+
+const formatTime = (timestamp: any): string => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Inválido';
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const PersonRow: React.FC<{ 
+    person: Person;
+    onCheckIn: (confirmationId: string, personName: string) => void;
+    processingCheckin: string | null;
+    openPhotoModal: (url: string) => void;
+}> = ({ person, onCheckIn, processingCheckin, openPhotoModal }) => {
+    const checkinKey = `${person.confirmationId}-${person.name}`;
+    const isCheckedIn = !!person.checkedInAt;
+    
+    return (
+        <SwipeableRow onSwipeRight={() => onCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
+            <div className="flex items-center justify-between p-4 bg-gray-800">
+                <div className="flex items-center gap-4">
+                    {person.isPromoter && person.photoUrl ? (
+                        <button onClick={() => openPhotoModal(person.photoUrl!)} className="focus:outline-none rounded-full">
+                            <img src={person.photoUrl} alt={person.name} className="w-12 h-12 object-cover rounded-full flex-shrink-0" />
+                        </button>
+                    ) : (
+                        <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center flex-shrink-0">
+                            <UsersIcon className="w-6 h-6 text-gray-400" />
+                        </div>
+                    )}
+                    <div>
+                        <span className={`text-lg font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
+                        {person.isPromoter && <span className="text-xs text-primary font-bold ml-2 block">DIVULGADORA</span>}
+                    </div>
+                </div>
+                 {isCheckedIn ? (
+                    <div className="flex items-center gap-2 text-md font-semibold text-green-400">
+                        <CheckCircleIcon className="w-6 h-6" />
+                        <span>{formatTime(person.checkedInAt)}</span>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => onCheckIn(person.confirmationId, person.name)}
+                        disabled={processingCheckin === checkinKey}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-md"
+                    >
+                        {processingCheckin === checkinKey ? '...' : 'Check-in'}
+                    </button>
+                )}
+            </div>
+        </SwipeableRow>
+    );
+};
+
+const ConfirmationCard: React.FC<{
+    group: { confirmation: ConfirmationWithDetails; promoterPerson: Person | null; guestPersons: Person[] };
+    onCheckIn: (confirmationId: string, personName: string) => void;
+    onUnlock: (confirmationId: string) => void;
+    processingCheckin: string | null;
+    unlockingId: string | null;
+    openPhotoModal: (url: string) => void;
+}> = ({ group, onCheckIn, onUnlock, processingCheckin, unlockingId, openPhotoModal }) => {
+    const { confirmation, promoterPerson, guestPersons } = group;
+    const isLocked = confirmation.isLocked ?? false;
+
+    return (
+        <div className="bg-gray-900/80 rounded-lg overflow-hidden">
+            <div className="p-4 bg-dark/70 flex justify-between items-center">
+                <div>
+                    <h3 className="text-xl font-bold text-white">{confirmation.promoterName}</h3>
+                    <p className="text-sm text-gray-400">{confirmation.listName}</p>
+                </div>
+                {isLocked && (
+                    <button
+                        onClick={() => onUnlock(confirmation.id)}
+                        disabled={unlockingId === confirmation.id}
+                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        {unlockingId === confirmation.id ? '...' : 'Liberar Edição'}
+                    </button>
+                )}
+            </div>
+            <div className="space-y-px">
+                {promoterPerson && <PersonRow person={promoterPerson} onCheckIn={onCheckIn} processingCheckin={processingCheckin} openPhotoModal={openPhotoModal} />}
+                {guestPersons.map(guest => <PersonRow key={guest.name} person={guest} onCheckIn={onCheckIn} processingCheckin={processingCheckin} openPhotoModal={openPhotoModal} />)}
+            </div>
+        </div>
+    );
+};
+
 
 const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
@@ -155,6 +249,7 @@ const GuestListCheckinPage: React.FC = () => {
     const [processingCheckin, setProcessingCheckin] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'checkedIn'>('pending');
     const [feedback, setFeedback] = useState<{ type: 'idle' | 'success' | 'error', key: number }>({ type: 'idle', key: 0 });
+    const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
     const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
@@ -229,6 +324,22 @@ const GuestListCheckinPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+    
+    const handleUnlock = async (confirmationId: string) => {
+        setUnlockingId(confirmationId);
+        setError(null);
+        try {
+            await unlockGuestListConfirmation(confirmationId);
+            setAllConfirmations(prev => prev.map(conf => 
+                conf.id === confirmationId ? { ...conf, isLocked: false } : conf
+            ));
+        } catch (err: any) {
+            setError(err.message || 'Falha ao liberar para edição.');
+        } finally {
+            setUnlockingId(null);
+        }
+    };
+
 
     const listStats = useMemo(() => {
         if (!selectedListId) return { total: 0, checkedIn: 0, pending: 0, rate: 0 };
@@ -251,48 +362,73 @@ const GuestListCheckinPage: React.FC = () => {
         return { total: totalPeople, checkedIn: checkedInCount, pending: pendingCount, rate: rate };
     }, [allConfirmations, selectedListId]);
 
-    // --- Modernization: Fuzzy Search ---
-    const allPeopleForFuse = useMemo(() => {
+    const groupedPeople = useMemo(() => {
         if (!selectedListId) return [];
-        const people: Person[] = [];
-        allConfirmations
+
+        const groups: GroupedConfirmation[] = allConfirmations
             .filter(conf => conf.guestListId === selectedListId)
-            .forEach(conf => {
+            .map(conf => {
+                let promoterPerson: Person | null = null;
                 if (conf.isPromoterAttending) {
-                    people.push({
+                    promoterPerson = {
                         name: conf.promoterName,
                         isPromoter: true,
                         confirmationId: conf.id,
                         checkedInAt: conf.promoterCheckedInAt,
                         photoUrl: conf.promoterPhotoUrl,
-                    });
+                    };
                 }
-                conf.guestNames.filter(name => name.trim()).forEach(guestName => {
-                    people.push({
+
+                const guestPersons: Person[] = conf.guestNames
+                    .filter(name => name.trim())
+                    .map(guestName => ({
                         name: guestName,
                         isPromoter: false,
                         confirmationId: conf.id,
                         checkedInAt: (conf.guestsCheckedIn || []).find(g => g.name === guestName)?.checkedInAt,
-                        // Guests don't have photos, so photoUrl is undefined
-                    });
-                });
+                    }));
+                
+                return { confirmation: conf, promoterPerson, guestPersons };
             });
-        return people;
+
+        return groups.sort((a,b) => a.confirmation.promoterName.localeCompare(b.confirmation.promoterName));
     }, [allConfirmations, selectedListId]);
 
-    const fuse = useMemo(() => new Fuse(allPeopleForFuse, {
-        keys: ['name'],
-        threshold: 0.3, // Adjust for desired fuzziness
-    }), [allPeopleForFuse]);
 
-    const filteredPeople = useMemo(() => {
-        let people = searchQuery.trim() ? fuse.search(searchQuery.trim()).map(result => result.item) : allPeopleForFuse;
-
-        if (statusFilter !== 'all') {
-            people = people.filter(p => statusFilter === 'checkedIn' ? !!p.checkedInAt : !p.checkedInAt);
+    const filteredGroups = useMemo(() => {
+        let results = groupedPeople;
+        if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.toLowerCase();
+            results = results.filter(group => {
+                const promoterMatch = group.promoterPerson?.name.toLowerCase().includes(lowerQuery);
+                const guestMatch = group.guestPersons.some(p => p.name.toLowerCase().includes(lowerQuery));
+                return promoterMatch || guestMatch;
+            });
         }
-        return people;
-    }, [searchQuery, allPeopleForFuse, statusFilter, fuse]);
+    
+        const finalResults = results.map(group => {
+            let filteredPromoter = group.promoterPerson;
+            let filteredGuests = group.guestPersons;
+    
+            if (statusFilter !== 'all') {
+                if (filteredPromoter) {
+                    const promoterIsCheckedIn = !!filteredPromoter.checkedInAt;
+                    if ((statusFilter === 'checkedIn' && !promoterIsCheckedIn) || (statusFilter === 'pending' && promoterIsCheckedIn)) {
+                        filteredPromoter = null;
+                    }
+                }
+                filteredGuests = filteredGuests.filter(p => {
+                    const isCheckedIn = !!p.checkedInAt;
+                    return !((statusFilter === 'checkedIn' && !isCheckedIn) || (statusFilter === 'pending' && isCheckedIn));
+                });
+            }
+            
+            return { ...group, promoterPerson: filteredPromoter, guestPersons: filteredGuests };
+        }).filter(group => group.promoterPerson || group.guestPersons.length > 0);
+    
+        return finalResults;
+    
+    }, [groupedPeople, searchQuery, statusFilter]);
 
 
     const handleCheckIn = async (confirmationId: string, personName: string) => {
@@ -325,13 +461,6 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
-    const formatTime = (timestamp: any): string => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        if (isNaN(date.getTime())) return 'Inválido';
-        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    };
-
     const selectedListName = useMemo(() => availableLists.find(l => l.id === selectedListId)?.name || 'Lista', [selectedListId, availableLists]);
 
     // --- RENDER FUNCTIONS ---
@@ -348,46 +477,21 @@ const GuestListCheckinPage: React.FC = () => {
     
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-        if (filteredPeople.length === 0) return <p className="text-gray-400 text-center text-lg py-8">Nenhum nome encontrado.</p>;
+        if (filteredGroups.length === 0) return <p className="text-gray-400 text-center text-lg py-8">Nenhum nome encontrado.</p>;
 
         return (
             <div className="space-y-4">
-                {filteredPeople.map(person => {
-                    const checkinKey = `${person.confirmationId}-${person.name}`;
-                    const isCheckedIn = !!person.checkedInAt;
-                    return (
-                        <SwipeableRow key={checkinKey} onSwipeRight={() => handleCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
-                            <div className="flex items-center justify-between p-6 bg-gray-900/80">
-                                <div className="flex items-center gap-6">
-                                    {person.isPromoter && person.photoUrl ? (
-                                        <button onClick={() => openPhotoModal(person.photoUrl!)} className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-primary rounded-lg transition-transform transform hover:scale-105">
-                                            <img src={person.photoUrl} alt={person.name} className="w-28 h-28 object-cover rounded-lg flex-shrink-0" />
-                                        </button>
-                                    ) : (
-                                        <div className="w-28 h-28 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <UsersIcon className="w-14 h-14 text-gray-400" />
-                                        </div>
-                                    )}
-                                    <span className={`text-2xl font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
-                                </div>
-                                {isCheckedIn ? (
-                                    <div className="flex items-center gap-2 text-xl font-semibold text-green-400">
-                                        <CheckCircleIcon className="w-8 h-8" />
-                                        <span>{formatTime(person.checkedInAt)}</span>
-                                    </div>
-                                ) : (
-                                    <button
-                                        onClick={() => handleCheckIn(person.confirmationId, person.name)}
-                                        disabled={processingCheckin === checkinKey}
-                                        className="px-6 py-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-xl"
-                                    >
-                                        {processingCheckin === checkinKey ? '...' : 'Check-in'}
-                                    </button>
-                                )}
-                            </div>
-                        </SwipeableRow>
-                    );
-                })}
+                {filteredGroups.map(group => (
+                    <ConfirmationCard 
+                        key={group.confirmation.id}
+                        group={group}
+                        onCheckIn={handleCheckIn}
+                        onUnlock={handleUnlock}
+                        processingCheckin={processingCheckin}
+                        unlockingId={unlockingId}
+                        openPhotoModal={openPhotoModal}
+                    />
+                ))}
             </div>
         );
     };
@@ -404,7 +508,7 @@ const GuestListCheckinPage: React.FC = () => {
                     <div>
                         <button onClick={() => selectedListId ? setSelectedListId(null) : navigate(-1)} className="inline-flex items-center gap-2 text-lg font-medium text-primary hover:text-primary-dark transition-colors mb-2">
                             <ArrowLeftIcon className="w-6 h-6" />
-                            <span>{selectedListId ? 'Voltar' : 'Sair'}</span>
+                            <span>{selectedListId ? 'Trocar Lista' : 'Sair'}</span>
                         </button>
                         <h1 className="text-4xl font-bold mt-1">{selectedListId ? selectedListName : 'Controle de Entrada'}</h1>
                     </div>
