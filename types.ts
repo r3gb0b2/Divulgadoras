@@ -175,6 +175,7 @@ export interface PostAssignment {
   justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
   justificationSubmittedAt?: Timestamp | FieldValue | null;
   justificationImageUrls?: string[];
+  justificationResponse?: string;
 }
 
 // New model for individual guest lists

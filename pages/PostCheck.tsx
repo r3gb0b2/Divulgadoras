@@ -333,7 +333,13 @@ const PostCard: React.FC<{
                 <div className="mt-4 text-center">
                     <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
                     <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
-                    <div className="text-xs">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                    <div className="text-xs mb-2">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                    {assignment.justificationResponse && (
+                        <div className="mt-2 text-left bg-dark p-3 rounded-md border-l-4 border-primary">
+                            <p className="text-sm font-semibold text-primary mb-1">Resposta do Organizador:</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap">{assignment.justificationResponse}</p>
+                        </div>
+                    )}
                 </div>
             );
         }

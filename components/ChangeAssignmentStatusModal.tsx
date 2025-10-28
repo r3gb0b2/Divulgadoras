@@ -13,6 +13,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
     const [action, setAction] = useState<'change_status' | 'manage_justification'>('change_status');
     const [selectedStatus, setSelectedStatus] = useState<'pending' | 'confirmed' | 'completed_manual'>('pending');
     const [justificationStatus, setJustificationStatus] = useState<'accepted' | 'rejected' | 'pending'>('pending');
+    const [justificationResponse, setJustificationResponse] = useState('');
 
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
@@ -28,8 +29,10 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             if (assignment.justification) {
                 setAction('manage_justification');
                 setJustificationStatus(assignment.justificationStatus || 'pending');
+                setJustificationResponse(assignment.justificationResponse || '');
             } else {
                 setAction('change_status');
+                setJustificationResponse('');
             }
         }
     }, [assignment]);
@@ -60,7 +63,8 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             }
         } else if (action === 'manage_justification') {
             dataToSave = {
-                justificationStatus: justificationStatus
+                justificationStatus: justificationStatus,
+                justificationResponse: justificationResponse,
             };
         }
         
@@ -128,6 +132,19 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                     <input type="radio" value="pending" checked={justificationStatus === 'pending'} onChange={() => setJustificationStatus('pending')} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 focus:ring-primary" />
                     <span className="text-yellow-400">Manter como Pendente</span>
                 </label>
+            </div>
+            <div className="mt-4">
+                <label htmlFor="justificationResponse" className="block text-sm font-medium text-gray-300">
+                    Resposta para a Divulgadora (Opcional)
+                </label>
+                <textarea
+                    id="justificationResponse"
+                    value={justificationResponse}
+                    onChange={(e) => setJustificationResponse(e.target.value)}
+                    rows={3}
+                    placeholder="Deixe um feedback sobre a justificativa..."
+                    className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-800 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                />
             </div>
             <div className="mt-6 border-t border-gray-600 pt-4">
                 <button

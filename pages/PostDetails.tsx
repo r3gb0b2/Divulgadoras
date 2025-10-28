@@ -570,6 +570,12 @@ export const PostDetails: React.FC = () => {
                                                     <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
                                                     <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
                                                 </div>
+                                                {assignment.justificationResponse && (
+                                                    <div className="mt-1 border-t border-gray-600 pt-1">
+                                                         <p className="text-xs font-semibold text-primary">Resposta:</p>
+                                                         <p className="text-sm italic text-gray-300">{assignment.justificationResponse}</p>
+                                                    </div>
+                                                )}
                                                 {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                                                     <div className="flex items-center gap-2">
                                                         {assignment.justificationImageUrls.map((url, index) => (
@@ -653,6 +659,12 @@ export const PostDetails: React.FC = () => {
                                             <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
                                             <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
                                         </div>
+                                        {assignment.justificationResponse && (
+                                            <div className="mt-1 border-t border-gray-600 pt-1">
+                                                <p className="text-xs font-semibold text-primary">Resposta:</p>
+                                                <p className="text-sm italic text-gray-300">{assignment.justificationResponse}</p>
+                                            </div>
+                                        )}
                                         {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                                             <div className="flex items-center gap-2">
                                                 {assignment.justificationImageUrls.map((url, index) => (

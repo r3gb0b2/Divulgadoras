@@ -469,8 +469,13 @@ const CreatePost: React.FC = () => {
             const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
             if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
 
-            const promotersToAssign = promoters
-                .filter(p => selectedPromoters.has(p.id))
+            // FIX: The createPost function expects an array of full Promoter objects,
+            // while schedulePost and updateScheduledPost expect a mapped object.
+            // We create both versions here to satisfy both function signatures.
+            const promotersToAssignFull = promoters
+                .filter(p => selectedPromoters.has(p.id));
+
+            const promotersToAssignMapped = promotersToAssignFull
                 .map(p => ({ id: p.id, email: p.email, name: p.name }));
 
             let expiryTimestamp = null;
@@ -518,7 +523,7 @@ const CreatePost: React.FC = () => {
 
                 await updateScheduledPost(editingScheduledPostId, {
                     postData: cleanPostData,
-                    assignedPromoters: promotersToAssign,
+                    assignedPromoters: promotersToAssignMapped,
                     scheduledAt: scheduledTimestamp,
                 });
                 alert('Agendamento atualizado com sucesso!');
@@ -543,7 +548,7 @@ const CreatePost: React.FC = () => {
 
                 await schedulePost({
                     postData: cleanPostData,
-                    assignedPromoters: promotersToAssign,
+                    assignedPromoters: promotersToAssignMapped,
                     scheduledAt: scheduledTimestamp,
                     organizationId: selectedOrgId,
                     createdByEmail: adminData.email,
@@ -554,7 +559,7 @@ const CreatePost: React.FC = () => {
 
             } else {
                 const postDataForImmediate = { ...basePostData, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                await createPost(postDataForImmediate, postType === 'image' ? mediaFile : null, promotersToAssign);
+                await createPost(postDataForImmediate, postType === 'image' ? mediaFile : null, promotersToAssignFull);
                 alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
                 navigate('/admin/posts');
             }
