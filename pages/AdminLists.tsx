@@ -35,6 +35,7 @@ const ListModal: React.FC<{
                 campaignId: list?.campaignId || '',
                 description: list?.description || '',
                 guestAllowance: list?.guestAllowance || 0,
+                startsAt: list?.startsAt || null,
                 closesAt: list?.closesAt || null,
                 isActive: list?.isActive !== undefined ? list.isActive : true,
             });
@@ -56,8 +57,8 @@ const ListModal: React.FC<{
     
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        const closesAtTimestamp = value ? Timestamp.fromDate(new Date(value)) : null;
-        setFormData(prev => ({ ...prev, [name]: closesAtTimestamp }));
+        const timestampValue = value ? Timestamp.fromDate(new Date(value)) : null;
+        setFormData(prev => ({ ...prev, [name]: timestampValue }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -90,6 +91,10 @@ const ListModal: React.FC<{
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Nº de Convidados Permitidos</label>
                         <input type="number" name="guestAllowance" min="0" value={formData.guestAllowance} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Início da Lista (opcional)</label>
+                        <input type="datetime-local" name="startsAt" value={formData.startsAt ? timestampToDateTimeLocal(formData.startsAt) : ''} onChange={handleDateChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" style={{colorScheme: 'dark'}} />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Encerramento da Lista (opcional)</label>

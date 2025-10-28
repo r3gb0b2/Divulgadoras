@@ -187,6 +187,7 @@ export interface GuestList {
   name: string;
   description?: string;
   guestAllowance: number;
+  startsAt: Timestamp | FieldValue | null;
   closesAt: Timestamp | FieldValue | null;
   isActive: boolean;
   assignedPromoterIds: string[]; // Simple array of promoter IDs

@@ -39,51 +39,67 @@ const PromoterQrCode: React.FC<{ promoter: Promoter, list: GuestList }> = ({ pro
     );
 };
 
+type CountdownStatus = 'upcoming' | 'open' | 'closed';
 
-const useCountdown = (targetDate: Date | null) => {
-    const [timeLeft, setTimeLeft] = useState({
-        days: 0,
-        hours: 0,
-        minutes: 0,
-        seconds: 0,
-        isOver: false,
-    });
+const useCountdown = (startDate: Date | null, endDate: Date | null) => {
+    const [status, setStatus] = useState<CountdownStatus>('closed');
+    const [timeLeft, setTimeLeft] = useState('');
 
     useEffect(() => {
-        if (!targetDate) {
-            setTimeLeft(prev => ({ ...prev, isOver: false })); // No deadline, not over
-            return;
-        }
-        
-        // Initial check
-        if (targetDate.getTime() < new Date().getTime()) {
-             setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isOver: true });
-             return;
-        }
-
         const interval = setInterval(() => {
             const now = new Date();
-            const difference = targetDate.getTime() - now.getTime();
+            let currentStatus: CountdownStatus = 'closed';
+            let targetDate: Date | null = null;
+            let prefix = '';
 
-            if (difference > 0) {
-                setTimeLeft({
-                    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-                    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-                    minutes: Math.floor((difference / 1000 / 60) % 60),
-                    seconds: Math.floor((difference / 1000) % 60),
-                    isOver: false,
-                });
+            if (startDate && now < startDate) {
+                currentStatus = 'upcoming';
+                targetDate = startDate;
+                prefix = 'Abre em: ';
+            } else if (!endDate || now < endDate) {
+                currentStatus = 'open';
+                targetDate = endDate;
+                prefix = 'Fecha em: ';
             } else {
-                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, isOver: true });
-                clearInterval(interval);
+                currentStatus = 'closed';
             }
+            
+            setStatus(currentStatus);
+
+            if (targetDate) {
+                const difference = targetDate.getTime() - now.getTime();
+                if (difference > 0) {
+                    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+                    const minutes = Math.floor((difference / 1000 / 60) % 60);
+                    const seconds = Math.floor((difference / 1000) % 60);
+
+                    let timeString = '';
+                    if (days > 0) timeString += `${days}d `;
+                    timeString += `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+                    setTimeLeft(prefix + timeString);
+                } else {
+                    // This handles the case where the timer just ran out
+                    setStatus('closed');
+                    setTimeLeft('');
+                }
+            } else {
+                // No end date means it's always open (if started)
+                 if (currentStatus === 'open') {
+                    setTimeLeft('Aberto por tempo indeterminado');
+                } else {
+                    setTimeLeft('');
+                }
+            }
+
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [targetDate]);
+    }, [startDate, endDate]);
 
-    return timeLeft;
+    return { status, timeLeft };
 };
+
 
 const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
     const [isAttending, setIsAttending] = useState(true);
@@ -92,10 +108,14 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     
+    const startDate = list.startsAt ? (list.startsAt as Timestamp).toDate() : null;
     const closingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
-    const { days, hours, minutes, seconds, isOver } = useCountdown(closingDate);
+    const { status, timeLeft } = useCountdown(startDate, closingDate);
     const isLocked = existingConfirmation?.isLocked ?? false;
     const isEditing = !!existingConfirmation;
+
+    const isFormDisabled = status !== 'open' || isLocked;
+
 
     useEffect(() => {
         if (existingConfirmation) {
@@ -171,14 +191,16 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
             <h3 className="text-xl font-bold text-primary">{list.name}</h3>
             {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
-             {closingDate && (
-                <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${isOver ? 'bg-red-900/70' : 'bg-blue-900/70'}`}>
-                    {isOver ? (
+            {(startDate || closingDate) && (
+                <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${
+                    status === 'upcoming' ? 'bg-blue-900/70' :
+                    status === 'open' ? 'bg-green-900/70' :
+                    'bg-red-900/70'
+                }`}>
+                    { status === 'closed' && closingDate ? (
                         <span>PRAZO ENCERRADO</span>
                     ) : (
-                        <span>
-                            Você tem {days > 0 && `${days}d `}{hours.toString().padStart(2, '0')}h {minutes.toString().padStart(2, '0')}m {seconds.toString().padStart(2, '0')}s para colocar o nome na lista
-                        </span>
+                        <span>{timeLeft}</span>
                     )}
                 </div>
             )}
@@ -191,7 +213,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                             type="checkbox"
                             checked={isAttending}
                             onChange={(e) => setIsAttending(e.target.checked)}
-                            disabled={isOver}
+                            disabled={isFormDisabled}
                             className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary disabled:opacity-50"
                         />
                         <span className="ml-3 font-medium text-gray-200">Confirmar minha presença</span>
@@ -209,7 +231,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                                     value={guestNames[index]}
                                     onChange={(e) => handleGuestNameChange(index, e.target.value)}
                                     placeholder={`Nome completo do Convidado ${index + 1}`}
-                                    disabled={isOver}
+                                    disabled={isFormDisabled}
                                     className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
                                 />
                             ))}
@@ -220,10 +242,13 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 <div className="text-right">
                     <button
                         type="submit"
-                        disabled={isSubmitting || isOver}
+                        disabled={isSubmitting || isFormDisabled}
                         className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
                     >
-                        {isSubmitting ? 'Salvando...' : (isOver ? 'Prazo Encerrado' : (isEditing ? 'Salvar Alterações' : 'Confirmar Lista'))}
+                        {isSubmitting ? 'Salvando...' : 
+                         status === 'upcoming' ? 'Aguardando Abertura' : 
+                         status === 'closed' ? 'Prazo Encerrado' : 
+                         (isEditing ? 'Salvar Alterações' : 'Confirmar Lista')}
                     </button>
                 </div>
             </form>
