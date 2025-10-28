@@ -80,25 +80,6 @@ const AdminCheckinDashboard: React.FC = () => {
                         ))}
                     </div>
                 </div>
-
-                <div>
-                    <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">Check-in por Câmera</h2>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div className="bg-green-900/20 border border-green-700 p-4 rounded-lg flex flex-col justify-between">
-                             <div>
-                                <p className="font-bold text-lg text-green-300">Scanner de QR Code</p>
-                                <p className="text-sm text-gray-300">Valide entradas de forma rápida e segura usando a câmera.</p>
-                            </div>
-                            <Link
-                                to={`/admin/checkin-scanner`}
-                                className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold"
-                            >
-                                <QrCodeIcon className="w-5 h-5" />
-                                <span>Abrir Scanner</span>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
             </div>
         );
     };
