@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
-import { GuestListConfirmation, Promoter, GuestList } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, ChartBarIcon } from '../components/Icons';
-// FIX: Imported FieldValue to resolve type error.
+import { GuestListConfirmation, Promoter, GuestList, Campaign } from '../types';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
 import { Timestamp, FieldValue } from 'firebase/firestore';
+import { getAllCampaigns } from '../services/settingsService';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
 type Person = {
@@ -14,6 +15,8 @@ type Person = {
     confirmationId: string;
     checkedInAt: Timestamp | FieldValue | null | undefined;
     photoUrl?: string;
+    listName: string;
+    promoterName: string;
 };
 
 // --- Áudio Feedback Helper ---
@@ -141,11 +144,6 @@ const PhotoModal: React.FC<{ imageUrl: string | null; onClose: () => void }> = (
     );
 };
 
-type GroupedConfirmation = {
-    confirmation: ConfirmationWithDetails;
-    promoterPerson: Person | null;
-    guestPersons: Person[];
-};
 
 const formatTime = (timestamp: any): string => {
     if (!timestamp) return '';
@@ -157,9 +155,12 @@ const formatTime = (timestamp: any): string => {
 const PersonRow: React.FC<{ 
     person: Person;
     onCheckIn: (confirmationId: string, personName: string) => void;
+    onUnlock: (confirmationId: string) => void;
+    isLocked: boolean;
     processingCheckin: string | null;
+    unlockingId: string | null;
     openPhotoModal: (url: string) => void;
-}> = ({ person, onCheckIn, processingCheckin, openPhotoModal }) => {
+}> = ({ person, onCheckIn, onUnlock, isLocked, processingCheckin, unlockingId, openPhotoModal }) => {
     const checkinKey = `${person.confirmationId}-${person.name}`;
     const isCheckedIn = !!person.checkedInAt;
     
@@ -178,7 +179,10 @@ const PersonRow: React.FC<{
                     )}
                     <div>
                         <span className={`text-lg font-medium ${isCheckedIn ? 'text-gray-500 line-through' : 'text-gray-100'}`}>{person.name}</span>
-                        {person.isPromoter && <span className="text-xs text-primary font-bold ml-2 block">DIVULGADORA</span>}
+                        <div className="text-xs text-gray-400">
+                            <span>{person.listName}</span>
+                            {!person.isPromoter && <span title={`Adicionado por ${person.promoterName}`}> • via {person.promoterName}</span>}
+                        </div>
                     </div>
                 </div>
                  {isCheckedIn ? (
@@ -186,53 +190,29 @@ const PersonRow: React.FC<{
                         <CheckCircleIcon className="w-6 h-6" />
                         <span>{formatTime(person.checkedInAt)}</span>
                     </div>
-                ) : (
-                    <button
-                        onClick={() => onCheckIn(person.confirmationId, person.name)}
-                        disabled={processingCheckin === checkinKey}
-                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-md"
-                    >
-                        {processingCheckin === checkinKey ? '...' : 'Check-in'}
-                    </button>
+                 ) : (
+                     <div className="flex items-center gap-2">
+                        {isLocked && person.isPromoter && (
+                            <button
+                                onClick={() => onUnlock(person.confirmationId)}
+                                disabled={unlockingId === person.confirmationId}
+                                className="px-2 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                title="Liberar lista para edição"
+                            >
+                                {unlockingId === person.confirmationId ? '...' : 'Liberar'}
+                            </button>
+                        )}
+                        <button
+                            onClick={() => onCheckIn(person.confirmationId, person.name)}
+                            disabled={processingCheckin === checkinKey}
+                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50 text-md"
+                        >
+                            {processingCheckin === checkinKey ? '...' : 'Check-in'}
+                        </button>
+                    </div>
                 )}
             </div>
         </SwipeableRow>
-    );
-};
-
-const ConfirmationCard: React.FC<{
-    group: { confirmation: ConfirmationWithDetails; promoterPerson: Person | null; guestPersons: Person[] };
-    onCheckIn: (confirmationId: string, personName: string) => void;
-    onUnlock: (confirmationId: string) => void;
-    processingCheckin: string | null;
-    unlockingId: string | null;
-    openPhotoModal: (url: string) => void;
-}> = ({ group, onCheckIn, onUnlock, processingCheckin, unlockingId, openPhotoModal }) => {
-    const { confirmation, promoterPerson, guestPersons } = group;
-    const isLocked = confirmation.isLocked ?? false;
-
-    return (
-        <div className="bg-gray-900/80 rounded-lg overflow-hidden">
-            <div className="p-4 bg-dark/70 flex justify-between items-center">
-                <div>
-                    <h3 className="text-xl font-bold text-white">{confirmation.promoterName}</h3>
-                    <p className="text-sm text-gray-400">{confirmation.listName}</p>
-                </div>
-                {isLocked && (
-                    <button
-                        onClick={() => onUnlock(confirmation.id)}
-                        disabled={unlockingId === confirmation.id}
-                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                        {unlockingId === confirmation.id ? '...' : 'Liberar Edição'}
-                    </button>
-                )}
-            </div>
-            <div className="space-y-px">
-                {promoterPerson && <PersonRow person={promoterPerson} onCheckIn={onCheckIn} processingCheckin={processingCheckin} openPhotoModal={openPhotoModal} />}
-                {guestPersons.map(guest => <PersonRow key={guest.name} person={guest} onCheckIn={onCheckIn} processingCheckin={processingCheckin} openPhotoModal={openPhotoModal} />)}
-            </div>
-        </div>
     );
 };
 
@@ -241,8 +221,7 @@ const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
     const [allConfirmations, setAllConfirmations] = useState<ConfirmationWithDetails[]>([]);
-    const [availableLists, setAvailableLists] = useState<GuestList[]>([]);
-    const [selectedListId, setSelectedListId] = useState<string | null>(null);
+    const [campaignName, setCampaignName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -289,17 +268,22 @@ const GuestListCheckinPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const [confirmations, lists] = await Promise.all([
+            const [confirmations, activeLists, allCampaigns] = await Promise.all([
                 getGuestListForCampaign(campaignId),
-                getActiveGuestListsForCampaign(campaignId)
+                getActiveGuestListsForCampaign(campaignId),
+                getAllCampaigns() // simpler to get all and find
             ]);
             
-            setAvailableLists(lists);
+            const camp = allCampaigns.find(c => c.id === campaignId);
+            setCampaignName(camp?.name || 'Evento');
+            
+            const activeListIds = new Set(activeLists.map(l => l.id));
+            const filteredConfirmations = confirmations.filter(c => c.guestListId && activeListIds.has(c.guestListId));
 
-            if (confirmations.length === 0) {
+            if (filteredConfirmations.length === 0) {
                 setAllConfirmations([]);
             } else {
-                const promoterIds = [...new Set(confirmations.map(c => c.promoterId))];
+                const promoterIds = [...new Set(filteredConfirmations.map(c => c.promoterId))];
                 const promoters = await getPromotersByIds(promoterIds);
                 const promoterPhotoMap = new Map<string, string>();
                 promoters.forEach(p => {
@@ -308,7 +292,7 @@ const GuestListCheckinPage: React.FC = () => {
                     }
                 });
 
-                const confirmationsWithDetails = confirmations.map(c => ({
+                const confirmationsWithDetails = filteredConfirmations.map(c => ({
                     ...c,
                     promoterPhotoUrl: promoterPhotoMap.get(c.promoterId)
                 }));
@@ -340,95 +324,66 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
-
-    const listStats = useMemo(() => {
-        if (!selectedListId) return { total: 0, checkedIn: 0, pending: 0, rate: 0 };
-        const confirmationsForList = allConfirmations.filter(conf => conf.guestListId === selectedListId);
-        let totalPeople = 0;
-        let checkedInCount = 0;
-
-        confirmationsForList.forEach(conf => {
-            const guestList = conf.guestNames.filter(name => name.trim() !== '');
+    const allPeople = useMemo(() => {
+        const people: Person[] = [];
+        allConfirmations.forEach(conf => {
             if (conf.isPromoterAttending) {
-                totalPeople++;
-                if (conf.promoterCheckedInAt) checkedInCount++;
-            }
-            totalPeople += guestList.length;
-            checkedInCount += (conf.guestsCheckedIn || []).length;
-        });
-
-        const pendingCount = totalPeople - checkedInCount;
-        const rate = totalPeople > 0 ? Math.round((checkedInCount / totalPeople) * 100) : 0;
-        return { total: totalPeople, checkedIn: checkedInCount, pending: pendingCount, rate: rate };
-    }, [allConfirmations, selectedListId]);
-
-    const groupedPeople = useMemo(() => {
-        if (!selectedListId) return [];
-
-        const groups: GroupedConfirmation[] = allConfirmations
-            .filter(conf => conf.guestListId === selectedListId)
-            .map(conf => {
-                let promoterPerson: Person | null = null;
-                if (conf.isPromoterAttending) {
-                    promoterPerson = {
-                        name: conf.promoterName,
-                        isPromoter: true,
-                        confirmationId: conf.id,
-                        checkedInAt: conf.promoterCheckedInAt,
-                        photoUrl: conf.promoterPhotoUrl,
-                    };
-                }
-
-                const guestPersons: Person[] = conf.guestNames
-                    .filter(name => name.trim())
-                    .map(guestName => ({
-                        name: guestName,
-                        isPromoter: false,
-                        confirmationId: conf.id,
-                        checkedInAt: (conf.guestsCheckedIn || []).find(g => g.name === guestName)?.checkedInAt,
-                    }));
-                
-                return { confirmation: conf, promoterPerson, guestPersons };
-            });
-
-        return groups.sort((a,b) => a.confirmation.promoterName.localeCompare(b.confirmation.promoterName));
-    }, [allConfirmations, selectedListId]);
-
-
-    const filteredGroups = useMemo(() => {
-        let results = groupedPeople;
-        if (searchQuery.trim()) {
-            const lowerQuery = searchQuery.toLowerCase();
-            results = results.filter(group => {
-                const promoterMatch = group.promoterPerson?.name.toLowerCase().includes(lowerQuery);
-                const guestMatch = group.guestPersons.some(p => p.name.toLowerCase().includes(lowerQuery));
-                return promoterMatch || guestMatch;
-            });
-        }
-    
-        const finalResults = results.map(group => {
-            let filteredPromoter = group.promoterPerson;
-            let filteredGuests = group.guestPersons;
-    
-            if (statusFilter !== 'all') {
-                if (filteredPromoter) {
-                    const promoterIsCheckedIn = !!filteredPromoter.checkedInAt;
-                    if ((statusFilter === 'checkedIn' && !promoterIsCheckedIn) || (statusFilter === 'pending' && promoterIsCheckedIn)) {
-                        filteredPromoter = null;
-                    }
-                }
-                filteredGuests = filteredGuests.filter(p => {
-                    const isCheckedIn = !!p.checkedInAt;
-                    return !((statusFilter === 'checkedIn' && !isCheckedIn) || (statusFilter === 'pending' && isCheckedIn));
+                people.push({
+                    name: conf.promoterName,
+                    isPromoter: true,
+                    confirmationId: conf.id,
+                    checkedInAt: conf.promoterCheckedInAt,
+                    photoUrl: conf.promoterPhotoUrl,
+                    listName: conf.listName,
+                    promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
-            
-            return { ...group, promoterPerson: filteredPromoter, guestPersons: filteredGuests };
-        }).filter(group => group.promoterPerson || group.guestPersons.length > 0);
-    
-        return finalResults;
-    
-    }, [groupedPeople, searchQuery, statusFilter]);
+            conf.guestNames.filter(name => name.trim()).forEach(guestName => {
+                people.push({
+                    name: guestName,
+                    isPromoter: false,
+                    confirmationId: conf.id,
+                    checkedInAt: (conf.guestsCheckedIn || []).find(g => g.name === guestName)?.checkedInAt,
+                    photoUrl: undefined,
+                    listName: conf.listName,
+                    promoterName: conf.promoterName
+                });
+            });
+        });
+        return people.sort((a, b) => a.name.localeCompare(b.name));
+    }, [allConfirmations]);
+
+    const listStats = useMemo(() => {
+        const total = allPeople.length;
+        const checkedIn = allPeople.filter(p => p.checkedInAt).length;
+        const pending = total - checkedIn;
+        const rate = total > 0 ? Math.round((checkedIn / total) * 100) : 0;
+        return { total, checkedIn, pending, rate };
+    }, [allPeople]);
+
+
+    const filteredPeople = useMemo(() => {
+        let results = allPeople;
+
+        if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.toLowerCase();
+            results = results.filter(p =>
+                p.name.toLowerCase().includes(lowerQuery) ||
+                p.promoterName.toLowerCase().includes(lowerQuery)
+            );
+        }
+
+        if (statusFilter !== 'all') {
+            results = results.filter(p => {
+                const isCheckedIn = !!p.checkedInAt;
+                if (statusFilter === 'checkedIn') return isCheckedIn;
+                if (statusFilter === 'pending') return !isCheckedIn;
+                return true;
+            });
+        }
+
+        return results;
+    }, [allPeople, searchQuery, statusFilter]);
 
 
     const handleCheckIn = async (confirmationId: string, personName: string) => {
@@ -461,37 +416,30 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
-    const selectedListName = useMemo(() => availableLists.find(l => l.id === selectedListId)?.name || 'Lista', [selectedListId, availableLists]);
 
-    // --- RENDER FUNCTIONS ---
-    const renderListSelection = () => (
-        <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-white">Selecione uma lista para o check-in</h2>
-            {isLoading ? <div className="text-center py-8">Carregando listas...</div> : availableLists.length === 0 ? <p className="text-gray-400 text-center py-8">Nenhuma lista ativa para este evento.</p> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {availableLists.map(list => <button key={list.id} onClick={() => setSelectedListId(list.id)} className="bg-dark/70 p-6 rounded-lg text-left hover:bg-gray-800 transition-colors"><h3 className="font-bold text-2xl text-primary">{list.name}</h3></button>)}
-                </div>
-            )}
-        </div>
-    );
-    
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-        if (filteredGroups.length === 0) return <p className="text-gray-400 text-center text-lg py-8">Nenhum nome encontrado.</p>;
+        if (error) return <p className="text-red-400 text-center">{error}</p>;
+        if (allConfirmations.length === 0) return <p className="text-gray-400 text-center text-lg py-8">Nenhuma lista foi enviada para este evento ainda.</p>;
+        if (filteredPeople.length === 0) return <p className="text-gray-400 text-center text-lg py-8">Nenhum nome encontrado.</p>;
 
         return (
-            <div className="space-y-4">
-                {filteredGroups.map(group => (
-                    <ConfirmationCard 
-                        key={group.confirmation.id}
-                        group={group}
-                        onCheckIn={handleCheckIn}
-                        onUnlock={handleUnlock}
-                        processingCheckin={processingCheckin}
-                        unlockingId={unlockingId}
-                        openPhotoModal={openPhotoModal}
-                    />
-                ))}
+            <div className="space-y-2">
+                {filteredPeople.map(person => {
+                    const confirmation = allConfirmations.find(c => c.id === person.confirmationId);
+                    return (
+                        <PersonRow 
+                            key={`${person.confirmationId}-${person.name}`}
+                            person={person}
+                            onCheckIn={handleCheckIn}
+                            onUnlock={handleUnlock}
+                            isLocked={confirmation?.isLocked ?? false}
+                            processingCheckin={processingCheckin}
+                            unlockingId={unlockingId}
+                            openPhotoModal={openPhotoModal}
+                        />
+                    );
+                })}
             </div>
         );
     };
@@ -506,43 +454,39 @@ const GuestListCheckinPage: React.FC = () => {
             <div className="max-w-4xl mx-auto">
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <button onClick={() => selectedListId ? setSelectedListId(null) : navigate(-1)} className="inline-flex items-center gap-2 text-lg font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-lg font-medium text-primary hover:text-primary-dark transition-colors mb-2">
                             <ArrowLeftIcon className="w-6 h-6" />
-                            <span>{selectedListId ? 'Trocar Lista' : 'Sair'}</span>
+                            <span>Voltar</span>
                         </button>
-                        <h1 className="text-4xl font-bold mt-1">{selectedListId ? selectedListName : 'Controle de Entrada'}</h1>
+                        <h1 className="text-4xl font-bold mt-1">Check-in: {campaignName}</h1>
                     </div>
                 </div>
                 <div className="bg-gray-900 shadow-lg rounded-lg p-6">
-                    {selectedListId ? (
-                        <>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Total</h3><p className="text-4xl font-bold text-white">{listStats.total}</p></div>
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Check-ins</h3><p className="text-4xl font-bold text-green-400">{listStats.checkedIn}</p></div>
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Pendentes</h3><p className="text-4xl font-bold text-yellow-400">{listStats.pending}</p></div>
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Taxa</h3><p className="text-4xl font-bold text-primary">{listStats.rate}%</p></div>
+                    <>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Total</h3><p className="text-4xl font-bold text-white">{listStats.total}</p></div>
+                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Check-ins</h3><p className="text-4xl font-bold text-green-400">{listStats.checkedIn}</p></div>
+                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Pendentes</h3><p className="text-4xl font-bold text-yellow-400">{listStats.pending}</p></div>
+                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Taxa</h3><p className="text-4xl font-bold text-primary">{listStats.rate}%</p></div>
+                        </div>
+                        <div className="space-y-6 mb-6">
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-4"><SearchIcon className="h-6 w-6 text-gray-400" /></span>
+                                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar nome ou divulgadora..." className="w-full pl-14 pr-4 py-4 border-2 border-gray-600 rounded-lg bg-gray-800 text-gray-100 text-xl focus:ring-primary focus:border-primary" />
                             </div>
-                            <div className="space-y-6 mb-6">
-                                <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 flex items-center pl-4"><SearchIcon className="h-6 w-6 text-gray-400" /></span>
-                                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar nome..." className="w-full pl-14 pr-4 py-4 border-2 border-gray-600 rounded-lg bg-gray-800 text-gray-100 text-xl focus:ring-primary focus:border-primary" />
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-                                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                                        {(['pending', 'checkedIn', 'all'] as const).map(f => (
-                                            <button key={f} onClick={() => setStatusFilter(f)} className={`px-5 py-2 text-base font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                                {{'pending': 'Pendentes', 'checkedIn': 'Check-in Realizado', 'all': 'Todos'}[f]}
-                                            </button>
-                                        ))}
-                                    </div>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                                    {(['pending', 'checkedIn', 'all'] as const).map(f => (
+                                        <button key={f} onClick={() => setStatusFilter(f)} className={`px-5 py-2 text-base font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                            {{'pending': 'Pendentes', 'checkedIn': 'Check-in Realizado', 'all': 'Todos'}[f]}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                            {error && <p className="text-red-400 text-center mb-4">{error}</p>}
-                            {renderCheckinList()}
-                        </>
-                    ) : (
-                        renderListSelection()
-                    )}
+                        </div>
+                        {error && <p className="text-red-400 text-center mb-4">{error}</p>}
+                        {renderCheckinList()}
+                    </>
                 </div>
             </div>
             <PhotoModal imageUrl={photoModalUrl} onClose={closePhotoModal} />
