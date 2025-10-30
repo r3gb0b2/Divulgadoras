@@ -7,6 +7,16 @@ import { Campaign, OneTimePost } from '../types';
 import { storage } from '../firebase/config';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 
+const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Icon: React.ElementType }> = ({ Icon, ...props }) => (
+    <div className="relative">
+        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+            <Icon className="h-5 w-5 text-gray-400" />
+        </span>
+        <input {...props} className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200" />
+    </div>
+);
+
+
 const CreateOneTimePost: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -156,9 +166,31 @@ const CreateOneTimePost: React.FC = () => {
                      <div className="flex gap-4"><label><input type="radio" name="type" value="image" checked={formData.type === 'image'} onChange={handleChange} /> Imagem</label><label><input type="radio" name="type" value="text" checked={formData.type === 'text'} onChange={handleChange} /> Texto</label><label><input type="radio" name="type" value="video" checked={formData.type === 'video'} onChange={handleChange} /> Vídeo</label></div>
                      
                      {formData.type === 'text' && <textarea name="textContent" value={formData.textContent} onChange={handleChange} placeholder="Texto da publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />}
-                     {formData.type === 'image' && <input type="file" accept="image/*" onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />}
-                     {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                     {(formData.type === 'image' || formData.type === 'video') && <input type="url" name="googleDriveUrl" placeholder="Ou cole o link do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />}
+                     
+                     {formData.type === 'image' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload para Servidor</label>
+                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
+                                <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} />
+                            </div>
+                        </div>
+                     )}
+
+                     {formData.type === 'video' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
+                             <p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p>
+                            <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={formData.googleDriveUrl} onChange={handleChange} required />
+                        </div>
+                     )}
                      
                      <textarea name="instructions" value={formData.instructions} onChange={handleChange} placeholder="Instruções para a publicação" rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                 </fieldset>

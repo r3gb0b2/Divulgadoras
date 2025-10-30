@@ -8,6 +8,24 @@ import StorageMedia from '../components/StorageMedia';
 
 type PageStep = 'view_post' | 'submit_name' | 'complete';
 
+// Helper to extract Google Drive file ID from various URL formats
+const extractGoogleDriveId = (url: string): string | null => {
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    return id;
+};
+
 const OneTimePostPage: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
@@ -27,6 +45,7 @@ const OneTimePostPage: React.FC = () => {
 
     // General state
     const [isLoading, setIsLoading] = useState(true);
+    const [isMediaProcessing, setIsMediaProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -115,6 +134,52 @@ const OneTimePostPage: React.FC = () => {
         }
     };
 
+    const handleFirebaseDownload = async () => {
+        if (isMediaProcessing || !post?.mediaUrl) return;
+
+        setIsMediaProcessing(true);
+        try {
+            const path = post.mediaUrl;
+            let finalUrl = path;
+
+            if (!path.startsWith('http')) {
+                const storageRef = storage.ref(path);
+                finalUrl = await storageRef.getDownloadURL();
+            }
+            
+            const link = document.createElement('a');
+            link.href = finalUrl;
+            const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || 'download';
+            link.setAttribute('download', filename);
+            link.setAttribute('target', '_blank');
+            link.setAttribute('rel', 'noopener noreferrer');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (error: any) {
+            console.error('Failed to download from Firebase:', error);
+            setError(`Não foi possível baixar a mídia do Link 1: ${error.message}`);
+        } finally {
+            setIsMediaProcessing(false);
+        }
+    };
+
+    const handleGoogleDriveDownload = () => {
+        if (!post?.googleDriveUrl) return;
+
+        const { googleDriveUrl, type } = post;
+        let urlToOpen = googleDriveUrl;
+
+        if (type === 'video') {
+            const fileId = extractGoogleDriveId(googleDriveUrl);
+            if (fileId) {
+                urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            }
+        }
+        window.open(urlToOpen, '_blank');
+    };
+
     if (isLoading) {
         return <div className="text-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
     }
@@ -136,11 +201,19 @@ const OneTimePostPage: React.FC = () => {
                             {(post.type === 'image' || post.type === 'video') && (post.mediaUrl || post.googleDriveUrl) && (
                                 <div className="mb-4">
                                     <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full max-w-sm mx-auto rounded-md" controls={post.type === 'video'} />
-                                    <div className="flex justify-center mt-4">
-                                        <a href={post.mediaUrl || post.googleDriveUrl || '#'} download target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold hover:bg-gray-500">
-                                            <DownloadIcon className="w-4 h-4" /> Baixar Mídia
-                                        </a>
+                                    <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
+                                        {post.mediaUrl && (
+                                            <button type="button" onClick={handleFirebaseDownload} disabled={isMediaProcessing} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 hover:bg-gray-500" title="Baixar do nosso servidor (Firebase)">
+                                                <DownloadIcon className="w-4 h-4" /> <span>Download Link 1</span>
+                                            </button>
+                                        )}
+                                        {post.googleDriveUrl && (
+                                            <button type="button" onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-500" title="Baixar do Google Drive">
+                                                <DownloadIcon className="w-4 h-4" /> <span>Download Link 2</span>
+                                            </button>
+                                        )}
                                     </div>
+                                    {post.mediaUrl && post.googleDriveUrl && <p className="text-center text-xs text-gray-400 mt-2">Link 1 é do servidor da plataforma, Link 2 é do Google Drive.</p>}
                                 </div>
                             )}
                             {post.type === 'text' && <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm bg-gray-800 p-3 rounded-md mb-4">{post.textContent}</pre>}
