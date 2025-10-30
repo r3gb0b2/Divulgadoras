@@ -1,6 +1,3 @@
-
-
-
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -19,6 +16,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   // potentially resolving typing issues with `this` context in some build environments where
   // properties inherited from React.Component were not being recognized.
   constructor(props: Props) {
+    // FIX: A constructor in a React component subclass must call super(props) before any other statement.
     super(props);
     this.state = {
       hasError: false,
