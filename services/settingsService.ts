@@ -39,7 +39,7 @@ export const getStatesConfig = async (): Promise<StatesConfig> => {
 
     } catch (error) {
         console.error("Error getting states config: ", error);
-        throw new Error("Não foi possível carregar a configuração das localidades.");
+        throw new Error("Não foi possível carregar a configuração das regiões.");
     }
 };
 
@@ -69,7 +69,7 @@ export const setStatesConfig = async (config: StatesConfig): Promise<void> => {
         await docRef.set(config);
     } catch (error) {
         console.error("Error setting states config: ", error);
-        throw new Error("Não foi possível salvar a configuração das localidades.");
+        throw new Error("Não foi possível salvar a configuração das regiões.");
     }
 };
 

@@ -239,9 +239,9 @@ const SuperAdminDashboard: React.FC = () => {
                     <Link to="/admin/states" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
                             <MapPinIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Localidades</h2>
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Regiões</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Ativar, desativar e definir regras gerais para as localidades de inscrição.</p>
+                        <p className="mt-2 text-gray-400">Ativar, desativar e definir regras gerais para as regiões de inscrição.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                     

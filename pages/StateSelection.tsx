@@ -47,7 +47,7 @@ const StateSelection: React.FC = () => {
                 setActiveStates(available);
 
             } catch (err: any) {
-                setError(err.message || 'Não foi possível carregar as localidades.');
+                setError(err.message || 'Não foi possível carregar as regiões.');
             } finally {
                 setIsLoading(false);
             }
@@ -76,7 +76,7 @@ const StateSelection: React.FC = () => {
             </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-gray-100 mb-2">
-                    {organization?.name || 'Selecione a Localidade'}
+                    {organization?.name || 'Selecione a Região'}
                 </h1>
                 <p className="text-gray-400 mb-8">
                     Escolha o estado onde você deseja se cadastrar como divulgadora.
@@ -94,7 +94,7 @@ const StateSelection: React.FC = () => {
                         ))}
                     </div>
                 ) : (
-                    <p className="text-gray-400">Nenhuma localidade ativa para cadastro nesta organização no momento.</p>
+                    <p className="text-gray-400">Nenhuma região ativa para cadastro nesta organização no momento.</p>
                 )}
             </div>
         </div>

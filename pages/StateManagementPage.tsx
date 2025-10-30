@@ -185,8 +185,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
             const newConfig = { ...statesConfig, [stateAbbr]: { ...statesConfig[stateAbbr], isActive } };
             await setStatesConfig(newConfig);
             setStatesConfig(newConfig);
-        } catch(err: any) {
-            setError(err.message || 'Falha ao atualizar status da localidade.');
+        } catch (err: any) {
+            setError(err.message || 'Falha ao atualizar status da região.');
         }
     };
     
@@ -195,7 +195,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Gerenciar: {stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Localidade'}</h1>
+                <h1 className="text-3xl font-bold">Gerenciar: {stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Região'}</h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
@@ -211,7 +211,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                             <div className={`block w-14 h-8 rounded-full ${currentStateConfig.isActive ? 'bg-primary' : 'bg-gray-600'}`}></div>
                             <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${currentStateConfig.isActive ? 'transform translate-x-full' : ''}`}></div>
                         </div>
-                        <span className="text-white font-medium">Inscrições {currentStateConfig.isActive ? 'ATIVAS' : 'INATIVAS'} para esta localidade</span>
+                        <span className="text-white font-medium">Inscrições {currentStateConfig.isActive ? 'ATIVAS' : 'INATIVAS'} para esta região</span>
                     </label>
                 </div>
             )}
@@ -225,7 +225,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         </button>
                     )}
                 </div>
-                {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta localidade.</p> : (
+                {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta região.</p> : (
                     <div className="space-y-3">
                         {campaigns.map(c => (
                             <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">

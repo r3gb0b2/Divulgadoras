@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getStatesConfig } from '../services/settingsService';
@@ -33,7 +34,7 @@ const StatesListPage: React.FC = () => {
         const config = await getStatesConfig();
         setStatesConfig(config);
       } catch (err: any) {
-        setError(err.message || "Não foi possível carregar as localidades.");
+        setError(err.message || "Não foi possível carregar as regiões.");
       } finally {
         setIsLoading(false);
       }
@@ -70,8 +71,8 @@ const StatesListPage: React.FC = () => {
         return (
             <p className="text-gray-400 text-center">
                 {isSuperAdmin 
-                    ? "Nenhuma localidade encontrada." 
-                    : "Sua organização ainda não possui localidades atribuídas. Peça a um Super Admin para adicioná-las."
+                    ? "Nenhuma região encontrada." 
+                    : "Sua organização ainda não possui regiões atribuídas. Peça a um Super Admin para adicioná-las."
                 }
             </p>
         );
@@ -108,10 +109,10 @@ const StatesListPage: React.FC = () => {
     );
   };
 
-  const pageTitle = isSuperAdmin ? "Gerenciar Localidades (Global)" : "Minhas Localidades";
+  const pageTitle = isSuperAdmin ? "Gerenciar Regiões (Global)" : "Minhas Regiões";
   const pageDescription = isSuperAdmin 
-    ? "Selecione uma localidade para gerenciar eventos de todas as organizações e editar as configurações globais de inscrição."
-    : "Selecione uma localidade para gerenciar suas divulgadoras e criar seus eventos/gêneros.";
+    ? "Selecione uma região para gerenciar eventos de todas as organizações e editar as configurações globais de inscrição."
+    : "Selecione uma região para gerenciar suas divulgadoras e criar seus eventos/gêneros.";
 
   return (
     <div>
