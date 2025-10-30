@@ -651,9 +651,16 @@ export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdA
 
 export const getOneTimePostsForOrg = async (organizationId: string): Promise<OneTimePost[]> => {
     try {
-        const q = firestore.collection("oneTimePosts").where("organizationId", "==", organizationId).orderBy("createdAt", "desc");
+        const q = firestore.collection("oneTimePosts").where("organizationId", "==", organizationId);
         const snapshot = await q.get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost));
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost));
+        // Sort client-side to avoid needing a composite index
+        posts.sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Descending
+        });
+        return posts;
     } catch (error) {
         console.error("Error getting one-time posts: ", error);
         throw new Error("Não foi possível buscar os posts únicos.");
@@ -692,9 +699,16 @@ export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmissi
 
 export const getOneTimePostSubmissions = async (postId: string): Promise<OneTimePostSubmission[]> => {
     try {
-        const q = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId).orderBy("submittedAt", "desc");
+        const q = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId);
         const snapshot = await q.get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission));
+        const submissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission));
+        // Sort client-side to avoid needing a composite index
+        submissions.sort((a, b) => {
+            const timeA = (a.submittedAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.submittedAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Descending
+        });
+        return submissions;
     } catch (error) {
         console.error("Error getting one-time post submissions: ", error);
         throw new Error("Não foi possível buscar as submissões.");
