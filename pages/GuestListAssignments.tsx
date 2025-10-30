@@ -95,6 +95,24 @@ const GuestListAssignments: React.FC = () => {
         });
     }, [promoters, postAssignments]);
     
+    // NEW: Categorize promoters by performance color
+    const promotersByColor = useMemo(() => {
+        const categories: { green: string[], blue: string[], yellow: string[], red: string[] } = {
+            green: [],
+            blue: [],
+            yellow: [],
+            red: []
+        };
+        promotersWithStats.forEach(p => {
+            const rate = p.completionRate;
+            if (rate === 100) categories.green.push(p.id);
+            else if (rate >= 60) categories.blue.push(p.id);
+            else if (rate >= 31) categories.yellow.push(p.id);
+            else if (rate >= 0) categories.red.push(p.id);
+        });
+        return categories;
+    }, [promotersWithStats]);
+
     const filteredPromoters = useMemo(() => {
         let results = promotersWithStats;
         if (searchQuery.trim()) {
@@ -142,6 +160,21 @@ const GuestListAssignments: React.FC = () => {
         });
     };
 
+    // NEW: Handle automatic assignment by color
+    const handleAutoAssign = (color: 'green' | 'blue' | 'yellow' | 'red') => {
+        const promoterIdsToAdd = promotersByColor[color];
+        if (promoterIdsToAdd.length === 0) {
+            const colorNameMap = { green: 'verdes', blue: 'azuis', yellow: 'amarelas', red: 'vermelhas' };
+            alert(`Nenhuma divulgadora encontrada na categoria ${colorNameMap[color]}.`);
+            return;
+        }
+        setAssignedIds(prev => {
+            const newSet = new Set(prev);
+            promoterIdsToAdd.forEach(id => newSet.add(id));
+            return newSet;
+        });
+    };
+
     const handleSave = async () => {
         if (!listId) return;
         setIsSaving(true);
@@ -166,6 +199,30 @@ const GuestListAssignments: React.FC = () => {
         }
         return (
             <div className="space-y-6">
+                {/* NEW: Auto Assignment Section */}
+                <div className="mb-6 p-4 border border-gray-700 rounded-lg">
+                    <h2 className="text-lg font-semibold text-white mb-3">Atribuição Automática por Cor</h2>
+                    <p className="text-sm text-gray-400 mb-4">Selecione todas as divulgadoras de uma categoria de aproveitamento com um clique. A seleção será <strong className="text-gray-300">adicionada</strong> à sua seleção manual atual.</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <button type="button" onClick={() => handleAutoAssign('green')} className="p-3 bg-green-900/50 rounded-lg text-left hover:bg-green-900/80 transition-colors">
+                            <p className="font-bold text-green-300">Verdes (100%)</p>
+                            <p className="text-2xl font-bold text-white">{promotersByColor.green.length}</p>
+                        </button>
+                        <button type="button" onClick={() => handleAutoAssign('blue')} className="p-3 bg-blue-900/50 rounded-lg text-left hover:bg-blue-900/80 transition-colors">
+                            <p className="font-bold text-blue-300">Azuis (60-99%)</p>
+                            <p className="text-2xl font-bold text-white">{promotersByColor.blue.length}</p>
+                        </button>
+                        <button type="button" onClick={() => handleAutoAssign('yellow')} className="p-3 bg-yellow-900/50 rounded-lg text-left hover:bg-yellow-900/80 transition-colors">
+                            <p className="font-bold text-yellow-300">Amarelas (31-59%)</p>
+                            <p className="text-2xl font-bold text-white">{promotersByColor.yellow.length}</p>
+                        </button>
+                        <button type="button" onClick={() => handleAutoAssign('red')} className="p-3 bg-red-900/50 rounded-lg text-left hover:bg-red-900/80 transition-colors">
+                            <p className="font-bold text-red-300">Vermelhas (0-30%)</p>
+                            <p className="text-2xl font-bold text-white">{promotersByColor.red.length}</p>
+                        </button>
+                    </div>
+                </div>
+
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400">
                         <span className="font-semibold text-gray-300">Aproveitamento:</span>
