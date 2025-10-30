@@ -63,9 +63,9 @@ export const createPost = async (
   } catch (error) {
     console.error("Error creating post via cloud function: ", error);
     if (error instanceof Error) {
-        throw error;
+        throw new Error(`Não foi possível criar a publicação. Detalhes: ${error.message}`);
     }
-    throw new Error("Não foi possível criar a publicação.");
+    throw new Error("Não foi possível criar a publicação. Ocorreu um erro desconhecido.");
   }
 };
 
@@ -642,7 +642,10 @@ export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdA
     return docRef.id;
   } catch (error) {
     console.error("Error creating one-time post: ", error);
-    throw new Error("Não foi possível criar o post único.");
+    if (error instanceof Error) {
+        throw new Error(`Não foi possível criar o post único. Detalhes: ${error.message}`);
+    }
+    throw new Error("Não foi possível criar o post único. Ocorreu um erro desconhecido.");
   }
 };
 
@@ -680,7 +683,10 @@ export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmissi
         return docRef.id;
     } catch (error) {
         console.error("Error creating one-time post submission: ", error);
-        throw new Error("Não foi possível enviar sua comprovação e nome.");
+        if (error instanceof Error) {
+            throw new Error(`Não foi possível enviar sua comprovação e nome. Detalhes: ${error.message}`);
+        }
+        throw new Error("Não foi possível enviar sua comprovação e nome. Ocorreu um erro desconhecido.");
     }
 };
 
