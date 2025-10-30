@@ -276,7 +276,7 @@ export interface OneTimePost {
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
   isActive: boolean;
-  // FIX: Add submissionCount property to the OneTimePost type to resolve type error.
+  expiresAt?: Timestamp | FieldValue | null;
   submissionCount?: number;
 }
 
@@ -286,6 +286,7 @@ export interface OneTimePostSubmission {
     organizationId: string;
     campaignId: string;
     guestName: string;
+    instagram?: string;
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;
 }

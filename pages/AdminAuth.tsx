@@ -35,6 +35,7 @@ import AdminCheckinDashboard from './AdminCheckinDashboard'; // Import new page
 import QrCodeScannerPage from './QrCodeScannerPage'; // Importar a nova página
 import AdminOneTimePosts from './AdminOneTimePosts';
 import CreateOneTimePost from './CreateOneTimePost';
+import EditOneTimePost from './EditOneTimePost';
 import OneTimePostDetails from './OneTimePostDetails';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
@@ -241,6 +242,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="one-time-posts" element={<ProtectedRoute><AdminOneTimePosts /></ProtectedRoute>} />
                     <Route path="one-time-posts/new" element={<ProtectedRoute><CreateOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/edit/:postId" element={<ProtectedRoute><EditOneTimePost /></ProtectedRoute>} />
                     <Route path="one-time-posts/:postId" element={<ProtectedRoute><OneTimePostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
@@ -269,6 +271,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
                     <Route path="one-time-posts" element={<ProtectedRoute><AdminOneTimePosts /></ProtectedRoute>} />
                     <Route path="one-time-posts/new" element={<ProtectedRoute><CreateOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/edit/:postId" element={<ProtectedRoute><EditOneTimePost /></ProtectedRoute>} />
                     <Route path="one-time-posts/:postId" element={<ProtectedRoute><OneTimePostDetails /></ProtectedRoute>} />
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />

@@ -649,6 +649,19 @@ export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdA
   }
 };
 
+export const updateOneTimePost = async (postId: string, data: Partial<Omit<OneTimePost, 'id' | 'createdAt'>>): Promise<void> => {
+  try {
+    const docRef = firestore.collection('oneTimePosts').doc(postId);
+    await docRef.update(data);
+  } catch (error) {
+    console.error("Error updating one-time post: ", error);
+    if (error instanceof Error) {
+        throw new Error(`Não foi possível atualizar o post único. Detalhes: ${error.message}`);
+    }
+    throw new Error("Não foi possível atualizar o post único. Ocorreu um erro desconhecido.");
+  }
+};
+
 export const getOneTimePostsForOrg = async (organizationId: string): Promise<OneTimePost[]> => {
     try {
         const q = firestore.collection("oneTimePosts").where("organizationId", "==", organizationId);

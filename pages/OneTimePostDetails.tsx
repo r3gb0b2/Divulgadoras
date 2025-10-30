@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { OneTimePost, OneTimePostSubmission, Timestamp } from '../types';
 import { getOneTimePostById, getOneTimePostSubmissions } from '../services/postService';
-import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, InstagramIcon } from '../components/Icons';
 
 const OneTimePostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
@@ -48,8 +48,8 @@ const OneTimePostDetails: React.FC = () => {
     
     const handleDownloadCSV = () => {
         if (submissions.length === 0 || !post) return;
-        const headers = ["Nome na Lista", "Data de Envio"];
-        const rows = submissions.map(sub => `"${sub.guestName}","${formatDate(sub.submittedAt)}"`);
+        const headers = ["Nome na Lista", "Instagram", "Data de Envio"];
+        const rows = submissions.map(sub => `"${sub.guestName}","${sub.instagram || ''}","${formatDate(sub.submittedAt)}"`);
         const csvContent = [headers.join(','), ...rows].join('\n');
         
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
@@ -81,6 +81,7 @@ const OneTimePostDetails: React.FC = () => {
                              <h2 className="text-2xl font-bold">{post.campaignName}</h2>
                              {post.eventName && <p className="text-lg text-primary">{post.eventName}</p>}
                              <p className="text-sm text-gray-400">Nome da Lista: <span className="font-semibold">{post.guestListName}</span></p>
+                             {post.expiresAt && <p className="text-sm text-yellow-400">Expira em: <span className="font-semibold">{formatDate(post.expiresAt)}</span></p>}
                         </div>
                         
                         <div className="flex justify-between items-center mb-4">
@@ -96,17 +97,28 @@ const OneTimePostDetails: React.FC = () => {
                                 <thead className="bg-gray-700/50">
                                     <tr>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome na Lista</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Instagram</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data de Envio</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Comprovação</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700">
                                     {submissions.length === 0 ? (
-                                        <tr><td colSpan={3} className="text-center py-8 text-gray-400">Nenhuma submissão recebida.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhuma submissão recebida.</td></tr>
                                     ) : (
                                         submissions.map(sub => (
                                             <tr key={sub.id} className="hover:bg-gray-700/40">
                                                 <td className="px-4 py-3 whitespace-nowrap font-medium text-white">{sub.guestName}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    {sub.instagram ? (
+                                                        <a href={`https://instagram.com/${sub.instagram}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-pink-400 hover:underline">
+                                                            <InstagramIcon className="w-4 h-4" />
+                                                            <span>{sub.instagram}</span>
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-gray-500">N/A</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{formatDate(sub.submittedAt)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                      <div className="flex gap-2">

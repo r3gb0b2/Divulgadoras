@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllCampaigns } from '../services/settingsService';
-import { createOneTimePost } from '../services/postService';
-import { Campaign, OneTimePost, Timestamp, FieldValue } from '../types';
+import { getOneTimePostById, updateOneTimePost } from '../services/postService';
+import { Campaign, OneTimePost, Timestamp } from '../types';
 import { storage } from '../firebase/config';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import firebase from 'firebase/compat/app';
@@ -17,8 +17,18 @@ const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Ic
     </div>
 );
 
+const timestampToDateTimeLocal = (ts: any): string => {
+    if (!ts) return '';
+    try {
+        const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+        if (isNaN(date.getTime())) return '';
+        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+        return localDate.toISOString().slice(0, 16);
+    } catch (e) { return ''; }
+};
 
-const CreateOneTimePost: React.FC = () => {
+const EditOneTimePost: React.FC = () => {
+    const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
 
@@ -40,25 +50,55 @@ const CreateOneTimePost: React.FC = () => {
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [originalMediaPath, setOriginalMediaPath] = useState<string | null>(null);
 
     useEffect(() => {
-        const loadCampaigns = async () => {
-            if (!selectedOrgId) {
-                setError("Nenhuma organização selecionada.");
+        const loadInitialData = async () => {
+            if (!selectedOrgId || !postId) {
+                setError("Dados ausentes para carregar a página.");
                 setIsLoading(false);
                 return;
             }
             try {
-                const campaignsData = await getAllCampaigns(selectedOrgId);
+                const [campaignsData, postData] = await Promise.all([
+                    getAllCampaigns(selectedOrgId),
+                    getOneTimePostById(postId)
+                ]);
+
                 setCampaigns(campaignsData.sort((a,b) => a.name.localeCompare(b.name)));
+
+                if (postData) {
+                    setFormData({
+                        campaignId: postData.campaignId,
+                        eventName: postData.eventName || '',
+                        guestListName: postData.guestListName,
+                        type: postData.type,
+                        textContent: postData.textContent || '',
+                        googleDriveUrl: postData.googleDriveUrl || '',
+                        instructions: postData.instructions,
+                        isActive: postData.isActive,
+                        expiresAt: timestampToDateTimeLocal(postData.expiresAt),
+                    });
+                    setOriginalMediaPath(postData.mediaUrl || null);
+                    if (postData.mediaUrl) {
+                        if (postData.mediaUrl.startsWith('http')) {
+                            setMediaPreview(postData.mediaUrl);
+                        } else {
+                            storage.ref(postData.mediaUrl).getDownloadURL().then(setMediaPreview);
+                        }
+                    }
+                } else {
+                    setError("Post não encontrado.");
+                }
+
             } catch (err: any) {
                 setError(err.message);
             } finally {
                 setIsLoading(false);
             }
         };
-        loadCampaigns();
-    }, [selectedOrgId]);
+        loadInitialData();
+    }, [selectedOrgId, postId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -79,35 +119,12 @@ const CreateOneTimePost: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedOrgId || !adminData?.email) {
-            setError("Dados do administrador inválidos.");
-            return;
-        }
-        const { campaignId, guestListName, type, textContent, googleDriveUrl } = formData;
-        if (!campaignId || !guestListName.trim()) {
-            setError("Evento e Nome da Lista são obrigatórios.");
-            return;
-        }
-         if (type === 'image' && !mediaFile && !googleDriveUrl) {
-            setError(`Selecione uma imagem ou forneça um link do Google Drive.`);
-            return;
-        }
-        if (type === 'video' && !googleDriveUrl.trim()) {
-            setError('Cole o link compartilhável do Google Drive para o vídeo.');
-            return;
-        }
-        if (type === 'text' && !textContent.trim()) {
-            setError("Escreva o conteúdo do post de texto.");
-            return;
-        }
+        if (!postId) return;
 
         setIsSubmitting(true);
         setError('');
         try {
-            const selectedCampaign = campaigns.find(c => c.id === campaignId);
-            if (!selectedCampaign) throw new Error("Evento inválido.");
-
-            let finalMediaUrl: string | undefined = undefined;
+            let finalMediaUrl = originalMediaPath;
             if (mediaFile) {
                 const fileExtension = mediaFile.name.split('.').pop();
                 const fileName = `one-time-posts/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
@@ -116,24 +133,20 @@ const CreateOneTimePost: React.FC = () => {
                 finalMediaUrl = storageRef.fullPath;
             }
 
-            const postData: Omit<OneTimePost, 'id' | 'createdAt'> = {
-                organizationId: selectedOrgId,
-                campaignId: selectedCampaign.id,
-                campaignName: selectedCampaign.name,
-                guestListName: formData.guestListName.trim(),
-                type: formData.type,
-                instructions: formData.instructions,
-                isActive: formData.isActive,
-                createdByEmail: adminData.email,
-                expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
-                ...(formData.eventName.trim() && { eventName: formData.eventName.trim() }),
-                ...(formData.type === 'text' && { textContent: formData.textContent }),
-                ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
-                ...(formData.googleDriveUrl.trim() && { googleDriveUrl: formData.googleDriveUrl.trim() }),
-            };
+            const selectedCampaign = campaigns.find(c => c.id === formData.campaignId);
 
-            await createOneTimePost(postData);
-            alert("Post Único criado com sucesso!");
+            const postData: Partial<OneTimePost> = {
+                ...formData,
+                campaignName: selectedCampaign?.name,
+                mediaUrl: finalMediaUrl || undefined,
+                expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
+            };
+            
+            // Clean undefined values
+            Object.keys(postData).forEach(key => (postData as any)[key] === undefined && delete (postData as any)[key]);
+
+            await updateOneTimePost(postId, postData);
+            alert("Post Único atualizado com sucesso!");
             navigate('/admin/one-time-posts');
 
         } catch (err: any) {
@@ -143,13 +156,17 @@ const CreateOneTimePost: React.FC = () => {
         }
     };
 
+    if (isLoading) {
+        return <div className="text-center py-10">Carregando post...</div>;
+    }
+
     return (
         <div>
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
                 <ArrowLeftIcon className="w-5 h-5" />
                 <span>Voltar</span>
             </button>
-            <h1 className="text-3xl font-bold mb-6">Criar Post Único</h1>
+            <h1 className="text-3xl font-bold mb-6">Editar Post Único</h1>
 
             <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
@@ -177,34 +194,24 @@ const CreateOneTimePost: React.FC = () => {
                      {formData.type === 'image' && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload para Servidor</label>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
                                 <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
                                 {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
                             </div>
-                            <div className="flex items-center gap-2">
-                                <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
-                            </div>
+                            <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
                                 <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} />
                             </div>
                         </div>
                      )}
-
-                     {formData.type === 'video' && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
-                             <p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={formData.googleDriveUrl} onChange={handleChange} required />
-                        </div>
-                     )}
-                     
+                     {formData.type === 'video' && <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} required />}
                      <textarea name="instructions" value={formData.instructions} onChange={handleChange} placeholder="Instruções para a publicação" rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                 </fieldset>
 
                 <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting || isLoading} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Criando...' : 'Criar Post e Gerar Link'}
+                        {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                     </button>
                 </div>
             </form>
@@ -212,4 +219,4 @@ const CreateOneTimePost: React.FC = () => {
     );
 };
 
-export default CreateOneTimePost;
+export default EditOneTimePost;

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { OneTimePost } from '../types';
-import { getOneTimePostsForOrg, deleteOneTimePost } from '../services/postService';
-import { ArrowLeftIcon, LinkIcon, TrashIcon } from '../components/Icons';
+import { getOneTimePostsForOrg, deleteOneTimePost, updateOneTimePost } from '../services/postService';
+import { ArrowLeftIcon, LinkIcon, TrashIcon, PencilIcon } from '../components/Icons';
 
 const AdminOneTimePosts: React.FC = () => {
     const navigate = useNavigate();
@@ -13,6 +13,7 @@ const AdminOneTimePosts: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
+    const [isToggling, setIsToggling] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -52,6 +53,19 @@ const AdminOneTimePosts: React.FC = () => {
             } catch (err: any) {
                 setError(err.message || "Falha ao deletar post.");
             }
+        }
+    };
+
+    const handleToggleActive = async (post: OneTimePost) => {
+        if (isToggling) return;
+        setIsToggling(post.id);
+        try {
+            await updateOneTimePost(post.id, { isActive: !post.isActive });
+            await fetchData();
+        } catch (err: any) {
+            setError(err.message || "Falha ao atualizar o status do post.");
+        } finally {
+            setIsToggling(null);
         }
     };
 
@@ -97,9 +111,19 @@ const AdminOneTimePosts: React.FC = () => {
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{post.guestListName}</td>
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
-                                                {post.isActive ? 'Ativo' : 'Inativo'}
-                                            </span>
+                                            <label className="flex items-center cursor-pointer" title={post.isActive ? 'Desativar post' : 'Ativar post'}>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={post.isActive} 
+                                                        onChange={() => handleToggleActive(post)} 
+                                                        disabled={isToggling === post.id} 
+                                                        className="sr-only peer" 
+                                                    />
+                                                    <div className={`block w-11 h-6 rounded-full ${post.isActive ? 'bg-primary' : 'bg-gray-600'}`}></div>
+                                                    <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${post.isActive ? 'transform translate-x-full' : ''}`}></div>
+                                                </div>
+                                            </label>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end items-center gap-4">
@@ -107,6 +131,7 @@ const AdminOneTimePosts: React.FC = () => {
                                                 <button onClick={() => handleCopyLink(post.id)} className="text-blue-400 hover:text-blue-300" title="Copiar Link Compartilhável">
                                                     {copiedLink === post.id ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}
                                                 </button>
+                                                <button onClick={() => navigate(`/admin/one-time-posts/edit/${post.id}`)} className="text-yellow-400 hover:text-yellow-300" title="Editar"><PencilIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => handleDelete(post)} className="text-red-400 hover:text-red-300" title="Excluir"><TrashIcon className="w-5 h-5"/></button>
                                             </div>
                                         </td>

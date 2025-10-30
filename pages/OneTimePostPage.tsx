@@ -1,12 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOneTimePostById, submitOneTimePostSubmission } from '../services/postService';
-import { OneTimePost } from '../types';
+import { OneTimePost, Timestamp } from '../types';
 import { storage } from '../firebase/config';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, InstagramIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 
 type PageStep = 'view_post' | 'submit_name' | 'complete';
+type CountdownStatus = 'upcoming' | 'open' | 'closed';
+
+const useCountdown = (endDate: Date | null) => {
+    const [status, setStatus] = useState<CountdownStatus>('closed');
+    const [timeLeft, setTimeLeft] = useState('');
+
+    useEffect(() => {
+        if (!endDate) {
+            setStatus('open');
+            setTimeLeft('Aberto por tempo indeterminado');
+            return;
+        }
+
+        const interval = setInterval(() => {
+            const now = new Date();
+            const difference = endDate.getTime() - now.getTime();
+            
+            if (difference > 0) {
+                setStatus('open');
+                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+                const minutes = Math.floor((difference / 1000 / 60) % 60);
+                const seconds = Math.floor((difference / 1000) % 60);
+
+                let timeString = '';
+                if (days > 0) timeString += `${days}d `;
+                timeString += `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+                setTimeLeft('Fecha em: ' + timeString);
+            } else {
+                setStatus('closed');
+                setTimeLeft('Prazo Encerrado');
+                clearInterval(interval);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [endDate]);
+
+    return { status, timeLeft };
+};
+
 
 // Helper to extract Google Drive file ID from various URL formats
 const extractGoogleDriveId = (url: string): string | null => {
@@ -41,12 +82,17 @@ const OneTimePostPage: React.FC = () => {
     // Step 2 state
     const [uploadedProofUrls, setUploadedProofUrls] = useState<string[]>([]);
     const [guestName, setGuestName] = useState('');
+    const [instagram, setInstagram] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // General state
     const [isLoading, setIsLoading] = useState(true);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const closingDate = post?.expiresAt ? (post.expiresAt as Timestamp).toDate() : null;
+    const { status: countdownStatus, timeLeft } = useCountdown(closingDate);
+
 
     useEffect(() => {
         if (!postId) {
@@ -118,12 +164,16 @@ const OneTimePostPage: React.FC = () => {
         setIsSubmitting(true);
         setError(null);
         
+        // Sanitize instagram handle
+        const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
+
         try {
             await submitOneTimePostSubmission({
                 oneTimePostId: post.id,
                 organizationId: post.organizationId,
                 campaignId: post.campaignId,
                 guestName: guestName.trim(),
+                instagram: sanitizedInstagram || undefined,
                 proofImageUrls: uploadedProofUrls,
             });
             setStep('complete');
@@ -230,14 +280,14 @@ const OneTimePostPage: React.FC = () => {
                                 <div className="mt-2 flex items-center gap-4">
                                     <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md text-sm text-gray-200 hover:bg-gray-600">
                                        <CameraIcon className="w-5 h-5 mr-2 inline-block" /> <span>{proofPreviews.length > 0 ? 'Trocar' : 'Enviar'} prints</span>
-                                        <input id="photo-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                                        <input id="photo-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={countdownStatus === 'closed'} />
                                     </label>
                                     <div className="flex-grow flex items-center gap-3">
                                         {proofPreviews.map((p, i) => <img key={i} className="h-20 w-20 rounded-lg object-cover" src={p} alt={`Prévia ${i + 1}`} />)}
                                     </div>
                                 </div>
                             </div>
-                             <button type="submit" disabled={isUploading || proofFiles.length === 0} className="w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                             <button type="submit" disabled={isUploading || proofFiles.length === 0 || countdownStatus === 'closed'} className="w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                                 {isUploading ? 'Enviando...' : 'Continuar'}
                             </button>
                         </form>
@@ -253,6 +303,20 @@ const OneTimePostPage: React.FC = () => {
                              <div className="flex gap-2">{uploadedProofUrls.map((url, i) => <img key={i} src={url} className="h-16 w-16 rounded-lg object-cover" alt={`Comprovação ${i+1}`} />)}</div>
                         </div>
                         <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Seu nome completo" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                        
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                <InstagramIcon className="h-5 w-5 text-gray-400" />
+                            </span>
+                            <input
+                                type="text"
+                                value={instagram}
+                                onChange={e => setInstagram(e.target.value)}
+                                placeholder="Seu usuário do Instagram (opcional)"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                            />
+                        </div>
+
                         <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                             {isSubmitting ? 'Finalizando...' : 'Entrar na Lista'}
                         </button>
@@ -273,7 +337,14 @@ const OneTimePostPage: React.FC = () => {
         <div className="max-w-2xl mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
                 <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{post.campaignName}</h1>
-                {post.eventName && <p className="text-center text-primary font-semibold mb-6">{post.eventName}</p>}
+                {post.eventName && <p className="text-center text-primary font-semibold">{post.eventName}</p>}
+                
+                <div className={`text-center my-4 p-3 rounded-md text-white font-semibold text-base ${
+                    countdownStatus === 'open' ? 'bg-green-900/70' :
+                    'bg-red-900/70'
+                }`}>
+                    {timeLeft}
+                </div>
                 
                 {renderStep()}
             </div>
