@@ -255,58 +255,55 @@ const PostCard: React.FC<{
     const now = new Date();
     const isExpired = assignment.post.expiresAt && toDateSafe(assignment.post.expiresAt) < now;
     const isPostDownloadable = assignment.post.isActive && !isExpired;
-
-    const handleDownload = async () => {
-        if (!isPostDownloadable) {
-            alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
-            return;
-        }
-        if (isMediaProcessing || !assignment.post.mediaUrl) return;
+    
+    const handleFirebaseDownload = async () => {
+        if (!isPostDownloadable || isMediaProcessing || !assignment.post.mediaUrl) return;
 
         setIsMediaProcessing(true);
         try {
-            const { mediaUrl, type } = assignment.post;
-            
-            if (type === 'video' && mediaUrl.includes('drive.google.com')) {
-                const fileId = extractGoogleDriveId(mediaUrl);
-                if (!fileId) throw new Error('ID do arquivo do Google Drive não encontrado no link.');
-                const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-                window.open(downloadUrl, '_blank');
-                return;
-            }
-            
-            let finalUrl = mediaUrl;
-            if (!mediaUrl.startsWith('http')) {
-                const storageRef = storage.ref(mediaUrl);
+            const path = assignment.post.mediaUrl;
+            let finalUrl = path;
+
+            // If it's not a full URL, get one from Firebase Storage
+            if (!path.startsWith('http')) {
+                const storageRef = storage.ref(path);
                 finalUrl = await storageRef.getDownloadURL();
             }
             
-            // Create a temporary link to trigger the download
+            // Trigger download
             const link = document.createElement('a');
             link.href = finalUrl;
-            
-            // Add download attribute. For cross-origin, this is a suggestion.
-            // The browser may ignore it and use its own filename.
             const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || 'download';
             link.setAttribute('download', filename);
-            
-            // To support all browsers and prevent navigation, open in a new tab.
-            // This is a reliable fallback if the 'download' attribute is ignored.
             link.setAttribute('target', '_blank');
             link.setAttribute('rel', 'noopener noreferrer');
-            
-            // Append to the DOM, click it, and then remove it.
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
         } catch (error: any) {
-            console.error('Failed to download media:', error);
-            alert(`Não foi possível baixar a mídia: ${error.message}`);
+            console.error('Failed to download from Firebase:', error);
+            alert(`Não foi possível baixar a mídia do Link 1: ${error.message}`);
         } finally {
             setIsMediaProcessing(false);
         }
     };
+
+     const handleGoogleDriveDownload = () => {
+        if (!isPostDownloadable || !assignment.post.googleDriveUrl) return;
+
+        const { googleDriveUrl, type } = assignment.post;
+        let urlToOpen = googleDriveUrl;
+
+        if (type === 'video') {
+            const fileId = extractGoogleDriveId(googleDriveUrl);
+            if (fileId) {
+                urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`;
+            }
+        }
+        window.open(urlToOpen, '_blank');
+    };
+
 
     const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
         const styles = {
@@ -417,7 +414,7 @@ const PostCard: React.FC<{
                         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
                             {assignment.post.mediaUrl && (
                                 <button
-                                    onClick={handleDownload}
+                                    onClick={handleFirebaseDownload}
                                     disabled={isMediaProcessing}
                                     className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
                                     title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
@@ -427,22 +424,15 @@ const PostCard: React.FC<{
                                 </button>
                             )}
                             {assignment.post.googleDriveUrl && (
-                                <a
-                                    href={isPostDownloadable ? assignment.post.googleDriveUrl : undefined}
-                                    onClick={(e) => {
-                                        if (!isPostDownloadable) {
-                                            e.preventDefault();
-                                            alert("O prazo para esta publicação já passou e ela não está mais ativa. O download foi desabilitado.");
-                                        }
-                                    }}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    onClick={handleGoogleDriveDownload}
+                                    disabled={!isPostDownloadable}
                                     className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
                                     title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>
-                                </a>
+                                </button>
                             )}
                         </div>
                         {assignment.post.mediaUrl && assignment.post.googleDriveUrl && (

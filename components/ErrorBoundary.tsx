@@ -11,14 +11,8 @@ interface State {
 }
 
 // FIX: The ErrorBoundary class must extend React.Component to have access to state, props, and lifecycle methods.
-// FIX: Extend React.Component to make this a valid class component. This fixes errors related to missing 'state' and 'props' properties.
-// FIX: Added `extends React.Component<Props, State>` to make this a valid React component.
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Using a constructor is the most explicit and robust way to initialize state,
-  // potentially resolving typing issues with `this` context in some build environments where
-  // properties inherited from React.Component were not being recognized.
   constructor(props: Props) {
-    // FIX: A constructor in a React component subclass must call super(props) before any other statement.
     super(props);
     this.state = {
       hasError: false,
