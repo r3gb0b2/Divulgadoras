@@ -6,8 +6,6 @@ import { createOneTimePost } from '../services/postService';
 import { Campaign, OneTimePost } from '../types';
 import { storage } from '../firebase/config';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
-// FIX: Add firebase import to resolve "Cannot find name 'firebase'" error.
-import firebase from 'firebase/compat/app';
 
 const CreateOneTimePost: React.FC = () => {
     const navigate = useNavigate();
@@ -100,8 +98,8 @@ const CreateOneTimePost: React.FC = () => {
             let finalMediaUrl: string | undefined = googleDriveUrl || undefined;
             if (mediaFile) {
                 const fileExtension = mediaFile.name.split('.').pop();
-                const fileName = `one-time-posts/${Date.now()}.${fileExtension}`;
-                const storageRef = firebase.storage().ref(fileName);
+                const fileName = `one-time-posts/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = storage.ref(fileName);
                 await storageRef.put(mediaFile);
                 finalMediaUrl = await storageRef.getDownloadURL();
             }

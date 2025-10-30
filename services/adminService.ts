@@ -1,4 +1,5 @@
 
+
 import firebase from 'firebase/compat/app';
 import { firestore, functions } from '../firebase/config';
 import { AdminUserData, AdminApplication } from '../types';
