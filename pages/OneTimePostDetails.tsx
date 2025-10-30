@@ -110,14 +110,10 @@ const OneTimePostDetails: React.FC = () => {
                                             <tr key={sub.id} className="hover:bg-gray-700/40">
                                                 <td className="px-4 py-3 whitespace-nowrap font-medium text-white">{sub.guestName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
-                                                    {sub.instagram ? (
-                                                        <a href={`https://instagram.com/${sub.instagram}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-pink-400 hover:underline">
-                                                            <InstagramIcon className="w-4 h-4" />
-                                                            <span>{sub.instagram}</span>
-                                                        </a>
-                                                    ) : (
-                                                        <span className="text-gray-500">N/A</span>
-                                                    )}
+                                                    <a href={`https://instagram.com/${sub.instagram}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-pink-400 hover:underline">
+                                                        <InstagramIcon className="w-4 h-4" />
+                                                        <span>{sub.instagram}</span>
+                                                    </a>
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{formatDate(sub.submittedAt)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">

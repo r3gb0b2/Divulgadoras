@@ -156,24 +156,26 @@ const OneTimePostPage: React.FC = () => {
 
     const handleNameSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!guestName.trim() || !post) {
-            setError("Por favor, insira seu nome completo.");
+        if (!post) return;
+        
+        // Sanitize instagram handle
+        const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
+
+        if (!guestName.trim() || !sanitizedInstagram) {
+            setError("Por favor, insira seu nome completo e seu usuário do Instagram.");
             return;
         }
         
         setIsSubmitting(true);
         setError(null);
         
-        // Sanitize instagram handle
-        const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
-
         try {
             await submitOneTimePostSubmission({
                 oneTimePostId: post.id,
                 organizationId: post.organizationId,
                 campaignId: post.campaignId,
                 guestName: guestName.trim(),
-                instagram: sanitizedInstagram || undefined,
+                instagram: sanitizedInstagram,
                 proofImageUrls: uploadedProofUrls,
             });
             setStep('complete');
@@ -312,8 +314,9 @@ const OneTimePostPage: React.FC = () => {
                                 type="text"
                                 value={instagram}
                                 onChange={e => setInstagram(e.target.value)}
-                                placeholder="Seu usuário do Instagram (opcional)"
+                                placeholder="Seu usuário do Instagram (obrigatório)"
                                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                                required
                             />
                         </div>
 

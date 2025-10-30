@@ -286,7 +286,7 @@ export interface OneTimePostSubmission {
     organizationId: string;
     campaignId: string;
     guestName: string;
-    instagram?: string;
+    instagram: string;
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;
 }
