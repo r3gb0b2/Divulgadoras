@@ -4,7 +4,7 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { getGuestListsForOrg, createGuestList, updateGuestList, deleteGuestList } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
-import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, UsersIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, CheckCircleIcon } from '../components/Icons';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -185,7 +185,6 @@ const AdminLists: React.FC = () => {
                     ...data,
                     organizationId: selectedOrgId,
                     campaignName: selectedCampaign.name,
-                    assignedPromoterIds: [],
                     createdByEmail: adminData.email
                 } as Omit<GuestList, 'id' | 'createdAt'>;
                 await createGuestList(listData);
@@ -241,15 +240,14 @@ const AdminLists: React.FC = () => {
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome da Lista</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Evento</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Atribuições</th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
                             </tr>
                         </thead>
                          <tbody className="divide-y divide-gray-700">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="text-center py-8">Carregando...</td></tr>
+                                <tr><td colSpan={4} className="text-center py-8">Carregando...</td></tr>
                             ) : lists.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-8 text-gray-400">Nenhuma lista criada ainda.</td></tr>
+                                <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhuma lista criada ainda.</td></tr>
                             ) : (
                                 lists.map(list => (
                                     <tr key={list.id} className="hover:bg-gray-700/40">
@@ -269,11 +267,9 @@ const AdminLists: React.FC = () => {
                                                 </div>
                                             </label>
                                         </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.assignedPromoterIds.length} divulgadora(s)</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex justify-end items-center gap-4">
                                                 <button onClick={() => navigate(`/admin/checkin/${list.campaignId}`)} className="text-green-400 hover:text-green-300" title="Controlar Entrada (Check-in)"><CheckCircleIcon className="w-5 h-5"/></button>
-                                                <button onClick={() => navigate(`/admin/guestlist-assignments/${list.id}`)} className="text-indigo-400 hover:text-indigo-300" title="Gerenciar Atribuições"><UsersIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => handleCopyLink(list.campaignId)} className="text-blue-400 hover:text-blue-300" title="Copiar Link do Evento">{copiedLink === list.campaignId ? 'Copiado!' : <LinkIcon className="w-5 h-5"/>}</button>
                                                 <button onClick={() => handleOpenModal(list)} className="text-yellow-400 hover:text-yellow-300" title="Editar"><PencilIcon className="w-5 h-5"/></button>
                                                 <button onClick={() => handleDelete(list.id)} className="text-red-400 hover:text-red-300" title="Excluir"><TrashIcon className="w-5 h-5"/></button>

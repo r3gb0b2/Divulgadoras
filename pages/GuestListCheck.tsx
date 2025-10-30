@@ -290,21 +290,30 @@ const GuestListCheck: React.FC = () => {
                 setError("Nenhum cadastro de divulgadora encontrado para este e-mail.");
                 return;
             }
+
+            const campaignName = campaign?.name;
+            const orgId = campaign?.organizationId;
+
+            const approvedProfile = promoterProfiles.find(p => 
+                p.status === 'approved' &&
+                p.organizationId === orgId &&
+                (p.campaignName === campaignName || (p.associatedCampaigns || []).includes(campaignName || ''))
+            );
+
+            if (!approvedProfile) {
+                setError("Você não tem permissão para acessar as listas deste evento. Verifique se seu cadastro foi aprovado para este evento específico.");
+                return;
+            }
             
+            setPromoter(approvedProfile);
             setExistingConfirmations(confirmations);
 
-            // Find the most relevant profile (approved for this event)
-            const relevantProfile = promoterProfiles.find(p => p.campaignName === campaign?.name && p.status === 'approved');
-            const promoterToUse = relevantProfile || promoterProfiles[0];
-            setPromoter(promoterToUse);
+            const activeLists = await getActiveGuestListsForCampaign(campaignId);
 
-            const allListsForCampaign = await getActiveGuestListsForCampaign(campaignId);
-            const promoterAssignedLists = allListsForCampaign.filter(l => l.assignedPromoterIds.includes(promoterToUse.id));
-
-            if (promoterAssignedLists.length > 0) {
-                setAssignedLists(promoterAssignedLists);
+            if (activeLists.length > 0) {
+                setAssignedLists(activeLists);
             } else {
-                setError("Você não foi atribuída para nenhuma lista neste evento. Entre em contato com o organizador.");
+                setError("Nenhuma lista de convidados está ativa para este evento no momento.");
             }
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro ao verificar seu acesso.');

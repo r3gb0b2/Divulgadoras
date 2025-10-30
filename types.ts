@@ -194,9 +194,10 @@ export interface GuestList {
   startsAt: Timestamp | FieldValue | null;
   closesAt: Timestamp | FieldValue | null;
   isActive: boolean;
-  assignedPromoterIds: string[]; // Simple array of promoter IDs
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
+  // FIX: Add 'assignedPromoterIds' to allow for specific promoter access to lists.
+  assignedPromoterIds?: string[];
 }
 
 export interface GuestListConfirmation {
