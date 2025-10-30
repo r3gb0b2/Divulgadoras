@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp } from '../types';
@@ -498,4 +499,92 @@ export const PostDetails: React.FC = () => {
                         </div>
                     )}
                 </div>
-                 {error && <div className="bg-red-900/50 text-red-30
+                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4">{error}</div>}
+                 <div className="flex flex-wrap gap-2 mb-4">
+                    {filterButtons.map(({ label, value, count }) => (
+                        <button
+                            key={value}
+                            onClick={() => setFilter(value)}
+                            className={`px-3 py-1 text-sm font-medium rounded-full transition-colors ${filter === value ? 'bg-primary text-white' : 'bg-dark text-gray-300 hover:bg-gray-700'}`}
+                        >
+                            {label} ({count})
+                        </button>
+                    ))}
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Comprovação / Justificativa</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {filteredAssignments.map(assignment => (
+                                <tr key={assignment.id} className="hover:bg-gray-700/40">
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        <div className="font-medium text-white">{assignment.promoterName}</div>
+                                        <div className="text-xs text-gray-400">{assignment.promoterEmail}</div>
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        {getStatusBadge(assignment)}
+                                        {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                            <ProofCountdownTimer confirmedAt={assignment.confirmedAt} allowLateSubmissions={post.allowLateSubmissions ?? false} />
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
+                                            <div className="flex gap-2">
+                                                {assignment.proofImageUrls.map((url, i) => (
+                                                    <button key={i} onClick={() => openPhotoViewer(assignment.proofImageUrls, i)} className="focus:outline-none">
+                                                        {url === 'manual' ? (
+                                                            <div className="w-12 h-12 bg-gray-600 rounded-md flex items-center justify-center text-xs text-center text-gray-300" title="Comprovação manual">Manual</div>
+                                                        ) : (
+                                                            <img src={url} alt={`Prova ${i+1}`} className="w-12 h-12 object-cover rounded-md" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {assignment.justification && (
+                                            <div className="text-xs text-yellow-300 italic truncate" title={assignment.justification}>"{assignment.justification}"</div>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                        <div className="flex justify-end items-center gap-3">
+                                            <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="text-blue-400 hover:text-blue-300" title="Ver estatísticas"><ChartBarIcon className="w-5 h-5"/></button>
+                                            {canManage && assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
+                                                <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50" title="Enviar lembrete"><MegaphoneIcon className="w-5 h-5"/></button>
+                                            )}
+                                            {canManage && (
+                                                <button onClick={() => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }} className="text-indigo-400 hover:text-indigo-300" title="Alterar status"><PencilIcon className="w-5 h-5"/></button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {filteredAssignments.length === 0 && <p className="text-center text-gray-400 py-8">Nenhuma tarefa encontrada com os filtros atuais.</p>}
+                </div>
+            </div>
+
+            {canManage && post && (
+                <EditPostModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} post={post} onSave={handleSavePost} />
+            )}
+            {canManage && post && (
+                <AssignPostModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} post={post} existingAssignments={assignments} onSuccess={fetchData} />
+            )}
+            {selectedAssignment && (
+                <PromoterPostStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} assignment={selectedAssignment} />
+            )}
+            {canManage && selectedAssignment && (
+                <ChangeAssignmentStatusModal isOpen={isChangeStatusModalOpen} onClose={() => setIsChangeStatusModalOpen(false)} assignment={selectedAssignment} onSave={handleUpdateAssignment} />
+            )}
+            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
+        </div>
+    );
+};
