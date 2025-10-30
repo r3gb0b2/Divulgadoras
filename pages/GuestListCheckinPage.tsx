@@ -1,12 +1,16 @@
 
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
-import { GuestListConfirmation, Promoter, GuestList, Campaign } from '../types';
+import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
-import { Timestamp, FieldValue } from 'firebase/firestore';
 import { getAllCampaigns } from '../services/settingsService';
+// FIX: Import firebase to use Timestamp as a value.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
 type Person = {
@@ -398,7 +402,8 @@ const GuestListCheckinPage: React.FC = () => {
 
             setAllConfirmations(prev => prev.map(conf => {
                 if (conf.id === confirmationId) {
-                    const now = Timestamp.now();
+                    // FIX: Use firebase.firestore.Timestamp.now() as Timestamp is only a type.
+                    const now = firebase.firestore.Timestamp.now();
                     const updatedConf = { ...conf };
                     if (personName === conf.promoterName) updatedConf.promoterCheckedInAt = now;
                     else updatedConf.guestsCheckedIn = [...(conf.guestsCheckedIn || []), { name: personName, checkedInAt: now }];

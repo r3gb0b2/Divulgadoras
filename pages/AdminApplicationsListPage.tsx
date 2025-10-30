@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
 import { getOrganizations } from '../services/organizationService';
-import { AdminApplication, Organization } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import { AdminApplication, Organization, Timestamp } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 
 // Approval Modal Component

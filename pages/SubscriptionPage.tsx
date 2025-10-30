@@ -5,8 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization, updateOrganization } from '../services/organizationService';
 import { getStripePublishableKey, createStripeCheckoutSession } from '../services/credentialsService';
-import { Organization } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import { Organization, Timestamp } from '../types';
 import { plans } from './PricingPage';
 import { ArrowLeftIcon, CreditCardIcon, UserIcon, PhoneIcon } from '../components/Icons';
 

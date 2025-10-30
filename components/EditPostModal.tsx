@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Post } from '../types';
+import { Post, Timestamp } from '../types';
 import { LinkIcon } from './Icons';
 import { storage } from '../firebase/config';
-import { ref, uploadBytes } from 'firebase/storage';
 import StorageMedia from './StorageMedia';
-import { Timestamp } from 'firebase/firestore';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -115,11 +113,10 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const handleSave = async () => {
         setIsSaving(true);
         
-        let expiryTimestamp: Timestamp | null = null;
+        let expiryTimestamp: Date | null = null;
         if (expiresAt) {
             const [year, month, day] = expiresAt.split('-').map(Number);
-            const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
-            expiryTimestamp = Timestamp.fromDate(expiryDate);
+            expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59);
         }
 
         const updatedData: Partial<Post> = {

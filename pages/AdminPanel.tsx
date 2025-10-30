@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-// FIX: Removed modular signOut import to use compat syntax.
+import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getRejectionReasons, findPromotersByEmail } from '../services/promoterService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
-import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment } from '../types';
+import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
 import { states } from '../constants/states';
 import { Link } from 'react-router-dom';
 // FIX: Changed to a named import to resolve module export error.
@@ -16,7 +15,6 @@ import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
 import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
-import { serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -81,7 +79,7 @@ const getPerformanceColor = (rate: number): string => {
     return 'text-red-400';
 };
 
-const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [allAssignments, setAllAssignments] = useState<PostAssignment[]>([]);
@@ -259,7 +257,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (data.status && data.status !== currentPromoter.status) {
                 updatedData.actionTakenByUid = adminData.uid;
                 updatedData.actionTakenByEmail = adminData.email;
-                updatedData.statusChangedAt = serverTimestamp();
+                updatedData.statusChangedAt = firebase.firestore.FieldValue.serverTimestamp();
             }
             
             await updatePromoter(id, updatedData);
@@ -281,7 +279,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             // If they are leaving, confirm and then call the cloud function.
             if (window.confirm(`Tem certeza que deseja marcar "${promoter.name}" como fora do grupo? Isso a removerá de TODAS as publicações ativas para este evento.`)) {
                 try {
-                    const removePromoter = httpsCallable(functions, 'removePromoterFromAllAssignments');
+                    const removePromoter = functions.httpsCallable('removePromoterFromAllAssignments');
                     await removePromoter({ promoterId: promoter.id });
                     
                     alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
@@ -312,20 +310,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         
         setNotifyingId(promoter.id);
         try {
-            const manuallySendStatusEmail = httpsCallable(functions, 'manuallySendStatusEmail');
+            const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
             const result = await manuallySendStatusEmail({ promoterId: promoter.id });
             const data = result.data as { success: boolean, message: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
             
             // On success, update the timestamp
-            const updateData = { lastManualNotificationAt: serverTimestamp() };
+            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
             
             // Optimistic UI update for the timestamp
             setAllPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
-                ? { ...p, lastManualNotificationAt: Timestamp.now() } as Promoter 
+                ? { ...p, lastManualNotificationAt: firebase.firestore.Timestamp.now() } as Promoter 
                 : p
             ));
 
@@ -344,7 +342,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
             setProcessingId(promoter.id);
             try {
-                const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
+                const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
                 await setPromoterStatusToRemoved({ promoterId: promoter.id });
                 alert(`${promoter.name} foi removida com sucesso.`);
                 await fetchAllData(); // Refresh the entire view
@@ -466,8 +464,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const processedPromoters = useMemo(() => {
         // Sort all promoters by date first
         let sorted = [...promotersWithStats].sort((a, b) => {
-            const timeA = (a.createdAt instanceof Timestamp) ? a.createdAt.toMillis() : 0;
-            const timeB = (b.createdAt instanceof Timestamp) ? b.createdAt.toMillis() : 0;
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
             return timeB - timeA;
         });
 
@@ -525,7 +523,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     const handlePrevPage = () => {
         if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
+            setCurrentPage(currentPage + 1);
         }
     };
 
@@ -540,237 +538,100 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada", removed: "Removida" };
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
-    
-    const renderContent = () => {
-        if (isLoading && allPromoters.length === 0) return <div className="text-center py-10">Carregando divulgadoras...</div>;
-        if (error) return <div className="text-red-400 text-center py-10">{error}</div>;
-        if (displayPromoters.length === 0) return <div className="text-center text-gray-400 py-10">Nenhuma divulgadora encontrada com o filtro selecionado.</div>;
 
+
+    if (isLoading && allPromoters.length === 0) {
         return (
-            <div className="space-y-4 mt-4">
-                {displayPromoters.map(promoter => (
-                    <div key={promoter.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-start mb-3">
-                            <div>
-                                <p className={`font-bold text-lg ${getPerformanceColor((promoter as any).completionRate)}`}>{promoter.name}</p>
-                                {isSuperAdmin && <p className="text-xs text-gray-400 font-medium">{allOrganizations.find(o => o.id === promoter.organizationId)?.name || 'Organização Desconhecida'}</p>}
-                                {promoter.campaignName && <p className="text-sm text-primary font-semibold">{promoter.campaignName}</p>}
-                                {promoter.associatedCampaigns && promoter.associatedCampaigns.length > 0 && (
-                                    <div className="mt-1">
-                                        <span className="text-xs font-semibold text-gray-400">Eventos Adicionais: </span>
-                                        <span className="text-xs text-gray-300">
-                                            {promoter.associatedCampaigns.join(', ')}
-                                        </span>
-                                    </div>
-                                )}
-                                <p className="text-sm text-gray-400">{promoter.email}</p>
-                                <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
-                            </div>
-                            <div className="mt-2 sm:mt-0 flex-shrink-0">{getStatusBadge(promoter.status)}</div>
-                        </div>
-
-                        <div className="text-xs text-gray-500 mb-3 space-y-1">
-                            <p title={formatDate(promoter.createdAt)}><span className="font-semibold">Cadastrado:</span> {formatRelativeTime(promoter.createdAt)}</p>
-                            {promoter.status !== 'pending' && promoter.statusChangedAt && promoter.actionTakenByEmail && (
-                                <p title={formatDate(promoter.statusChangedAt)}><span className="font-semibold">Ação por:</span> {promoter.actionTakenByEmail} ({formatRelativeTime(promoter.statusChangedAt)})</p>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-4 mb-3">
-                            <span className="text-sm font-medium text-gray-300">Fotos:</span>
-                            <div className="flex -space-x-2">
-                                {(promoter.photoUrls || []).map((url, index) => (
-                                    <img key={index} src={url} alt={`Foto ${index + 1}`} className="w-8 h-8 rounded-full object-cover border-2 border-secondary cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, index)}/>
-                                ))}
-                            </div>
-                        </div>
-                        
-                        <div className="border-t border-gray-700 pt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                            <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center"><WhatsAppIcon className="w-4 h-4 mr-2" /><span>WhatsApp</span></a>
-                            <a href={`https://instagram.com/${(promoter.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center"><InstagramIcon className="w-4 h-4 mr-2" /><span>Instagram</span></a>
-                            {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:underline flex items-center"><TikTokIcon className="w-4 h-4 mr-2" /><span>TikTok</span></a>}
-                        </div>
-                        
-                        {promoter.observation && (
-                            <div className="mt-3 pt-3 border-t border-gray-700">
-                                <p className="text-sm text-gray-300 bg-gray-800/50 p-2 rounded-md">
-                                    <span className="font-semibold text-yellow-400">Obs:</span>
-                                    <span className="italic ml-2">{promoter.observation}</span>
-                                </p>
-                            </div>
-                        )}
-
-                        {canManage && (
-                            <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-y-2 justify-between items-center text-sm font-medium">
-                                <div>
-                                    {promoter.status === 'approved' && (
-                                        <label className="flex items-center space-x-2 cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={!!promoter.hasJoinedGroup} 
-                                                onChange={(e) => handleGroupStatusChange(promoter, e.target.checked)}
-                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                                            />
-                                            <span className="text-gray-300">Entrou no grupo</span>
-                                        </label>
-                                    )}
-                                </div>
-                                
-                                <div className="flex flex-wrap gap-x-4 gap-y-2 justify-end items-center">
-                                    {(promoter.status === 'pending' || promoter.status === 'rejected_editable') && (
-                                        <>
-                                            <button onClick={() => handleUpdatePromoter(promoter.id, {status: 'approved'})} className="text-green-400 hover:text-green-300">Aprovar</button>
-                                            <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
-                                        </>
-                                    )}
-                                    {promoter.status === 'approved' && (
-                                        <div className="flex items-center gap-x-4">
-                                            {promoter.lastManualNotificationAt && (
-                                                <span className="text-xs text-gray-500 italic" title={formatDate(promoter.lastManualNotificationAt)}>
-                                                    Último envio: {formatDate(promoter.lastManualNotificationAt)}
-                                                </span>
-                                            )}
-                                            <button
-                                                onClick={() => handleManualNotify(promoter)}
-                                                disabled={notifyingId === promoter.id}
-                                                className="text-blue-400 hover:text-blue-300 disabled:text-gray-500 disabled:cursor-wait"
-                                            >
-                                                {notifyingId === promoter.id ? 'Enviando...' : 'Notificar Manualmente'}
-                                            </button>
-                                            <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="text-red-500 hover:text-red-400 disabled:opacity-50">
-                                                {processingId === promoter.id ? 'Removendo...' : 'Remover da Equipe'}
-                                            </button>
-                                        </div>
-                                    )}
-                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                    {isSuperAdmin && (
-                                        <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-400 hover:text-gray-300">Excluir</button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
         );
-    };
-
+    }
+    
     return (
-        <div>
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                <h1 className="text-3xl font-bold">Painel do Organizador</h1>
-                <div className="flex items-center gap-2">
-                    {canManage && (
-                        <Link to="/admin/settings" className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500" title="Configurações">
-                            <CogIcon className="w-5 h-5"/>
-                        </Link>
-                    )}
-                    <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
-                        Sair
-                    </button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Total de Cadastros</h3><p className="text-2xl font-bold text-white">{stats.total}</p></div>
-                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
-                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Aprovados</h3><p className="text-2xl font-bold text-green-400">{stats.approved}</p></div>
-                <div className="bg-secondary p-4 rounded-lg shadow"><h3 className="text-gray-400 text-sm">Rejeitados</h3><p className="text-2xl font-bold text-red-400">{stats.rejected}</p></div>
-            </div>
-
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                        {(['pending', 'approved', 'rejected', 'removed', 'all'] as const).map(f => (
-                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${filter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                {{'pending': 'Pendentes', 'approved': 'Aprovados', 'rejected': 'Rejeitados', 'removed': 'Removidos', 'all': 'Todos'}[f]}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    {isSuperAdmin && (
-                        <div className="flex flex-wrap gap-2 flex-grow">
-                             <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todas Organizações</option>
-                                {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                            </select>
-                            <select value={selectedState} onChange={e => setSelectedState(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todos Estados</option>
-                                {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
-                            </select>
-                             <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="px-3 py-2 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200">
-                                <option value="all">Todos Eventos</option>
-                                {[...new Set(allCampaigns.map(c => c.name))].sort().map(name => (
-                                    <option key={name} value={name}>{name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                     <div className="relative flex-grow w-full sm:w-auto sm:max-w-xs">
-                        <input 
-                            type="text"
-                            placeholder="Buscar por nome, e-mail, telefone, evento..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                        />
-                    </div>
-                </div>
-
-                 <div className={`flex flex-wrap items-center ${isSuperAdmin ? 'justify-between' : 'justify-end'} gap-4 mb-4 border-t border-gray-700 pt-4`}>
-                    {isSuperAdmin && (
-                         <div className="flex-grow">
-                            <label className="text-sm font-medium text-gray-300">Diagnóstico Rápido</label>
-                             <div className="flex gap-2 mt-1 w-full sm:w-auto sm:max-w-sm">
-                                <input 
-                                    type="email"
-                                    placeholder="Buscar por e-mail exato..."
-                                    value={lookupEmail}
-                                    onChange={(e) => setLookupEmail(e.target.value)}
-                                    className="flex-grow px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                                />
-                                <button 
-                                    type="button" 
-                                    onClick={handleLookupPromoter}
-                                    disabled={isLookingUp}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-semibold disabled:opacity-50"
-                                >
-                                    {isLookingUp ? '...' : 'Buscar'}
-                                </button>
-                            </div>
-                         </div>
-                    )}
-                     {canManage && (
-                        <button
-                            onClick={() => {
-                                if (organizationIdForReasons) {
-                                    setIsReasonsModalOpen(true);
-                                }
-                            }}
-                            disabled={!organizationIdForReasons}
-                            className="text-sm text-primary hover:underline flex-shrink-0 disabled:text-gray-500 disabled:cursor-not-allowed disabled:no-underline"
-                            title={isSuperAdmin && !organizationIdForReasons ? "Selecione uma organização para gerenciar os motivos" : "Gerenciar Motivos de Rejeição"}
-                        >
-                            Gerenciar Motivos
+        <div className="space-y-6">
+            <div className="bg-secondary p-4 rounded-lg shadow-lg">
+                 <div className="flex flex-col md:flex-row gap-4">
+                    {/* Stats section */}
+                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center md:w-1/3">
+                        <button onClick={() => setFilter('pending')} className={`p-3 rounded-lg ${filter === 'pending' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Pendentes</h4>
+                            <p className="text-2xl font-bold">{stats.pending}</p>
                         </button>
-                    )}
+                        <button onClick={() => setFilter('approved')} className={`p-3 rounded-lg ${filter === 'approved' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Aprovadas</h4>
+                            <p className="text-2xl font-bold">{stats.approved}</p>
+                        </button>
+                        <button onClick={() => setFilter('rejected')} className={`p-3 rounded-lg ${filter === 'rejected' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Rejeitadas</h4>
+                            <p className="text-2xl font-bold">{stats.rejected}</p>
+                        </button>
+                         <button onClick={() => setFilter('all')} className={`p-3 rounded-lg ${filter === 'all' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Total</h4>
+                            <p className="text-2xl font-bold">{stats.total}</p>
+                        </button>
+                    </div>
+                    {/* Search and Manage section */}
+                     <div className="flex-grow space-y-3">
+                         <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, e-mail, telefone ou evento..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                            />
+                         </div>
+                         <div className="flex flex-col sm:flex-row gap-2">
+                             <input
+                                type="email"
+                                placeholder="Buscar todos os cadastros por e-mail..."
+                                value={lookupEmail}
+                                onChange={(e) => setLookupEmail(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                            />
+                            <button onClick={handleLookupPromoter} disabled={isLookingUp} className="px-4 py-2 bg-indigo-600 text-white rounded-md whitespace-nowrap">
+                                {isLookingUp ? 'Buscando...' : 'Buscar Global'}
+                            </button>
+                             {canManage && organizationIdForReasons && (
+                                <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
+                                    <CogIcon className="w-5 h-5"/>
+                                    <span>Gerenciar Motivos</span>
+                                </button>
+                             )}
+                         </div>
+                     </div>
                  </div>
-                
-                {allAssignments.length > 0 && filter === 'approved' && (
-                    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-4 mt-4">
-                        <div className="flex items-center gap-x-4 flex-wrap">
-                            <span className="font-semibold text-gray-300">Aproveitamento:</span>
+                 {isSuperAdmin && (
+                    <div className="mt-4 flex flex-col sm:flex-row gap-2 border-t border-gray-700 pt-3">
+                        <select value={selectedOrg} onChange={(e) => setSelectedOrg(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todas as Organizações</option>
+                            {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                        </select>
+                        <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todos os Estados</option>
+                            {Object.keys(states).map(abbr => <option key={abbr} value={abbr}>{states[abbr]}</option>)}
+                        </select>
+                        <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todos os Eventos</option>
+                             {allCampaigns.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                        </select>
+                    </div>
+                 )}
+                 {filter === 'approved' && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-3">
+                        <div className="flex items-center gap-x-4">
+                            <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
                             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>100%</span></div>
                             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div><span>60-99%</span></div>
                             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31-59%</span></div>
                             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0-30%</span></div>
                         </div>
-                        <div className="flex items-center gap-x-2">
+                         <div className="flex items-center gap-x-2">
                             <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
                             <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                                 {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                    <button key={f} onClick={() => setColorFilter(f as any)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                    <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                         {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
                                         <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
                                     </button>
@@ -778,82 +639,113 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             </div>
                         </div>
                     </div>
-                )}
-                
-                {renderContent()}
+                 )}
+            </div>
+            
+            {error && <div className="text-red-400 p-2 text-center">{error}</div>}
 
-                {pageCount > 0 && (
-                    <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-700 gap-4">
-                        <span className="text-sm text-gray-400">
-                            Mostrando {displayPromoters.length} de {totalFilteredCount} resultados
-                        </span>
-                        {pageCount > 1 && (
-                            <div className="flex items-center">
-                                <button
-                                    onClick={handlePrevPage}
-                                    disabled={currentPage === 1}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                >
-                                    Anterior
-                                </button>
-                                <span className="mx-4 text-gray-300 text-sm">
-                                    Página {currentPage} de {pageCount}
-                                </span>
-                                <button
-                                    onClick={handleNextPage}
-                                    disabled={currentPage === pageCount}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                >
-                                    Próxima
-                                </button>
+            {displayPromoters.map(promoter => (
+                <div key={promoter.id} className="bg-secondary p-4 rounded-lg shadow-lg flex flex-col md:flex-row gap-4">
+                    <div className="flex-shrink-0 grid grid-cols-2 gap-2 w-full md:w-48">
+                        {promoter.photoUrls.slice(0, 4).map((url, i) => (
+                           <img
+                            key={i}
+                            src={url}
+                            alt={`Foto ${i + 1}`}
+                            className="w-full h-24 object-cover rounded-md cursor-pointer"
+                            onClick={() => openPhotoViewer(promoter.photoUrls, i)}
+                           />
+                        ))}
+                    </div>
+                    <div className="flex-grow">
+                        <div className="flex justify-between items-start">
+                           <div>
+                                <h3 className="text-lg font-bold">{promoter.name}, {calculateAge(promoter.dateOfBirth)}</h3>
+                                <p className="text-sm text-gray-400">{promoter.email}</p>
+                                <div className="flex items-center gap-4 mt-1">
+                                    <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-sm gap-1">
+                                        <WhatsAppIcon className="w-4 h-4" />
+                                        <span>WhatsApp</span>
+                                    </a>
+                                     <a href={`https://instagram.com/${(promoter.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center text-sm gap-1">
+                                        <InstagramIcon className="w-4 h-4" />
+                                        <span>Instagram</span>
+                                    </a>
+                                    {promoter.tiktok && (
+                                         <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline flex items-center text-sm gap-1">
+                                            <TikTokIcon className="w-4 h-4" />
+                                            <span>TikTok</span>
+                                        </a>
+                                    )}
+                                </div>
+                           </div>
+                           <div className="text-right">
+                                {getStatusBadge(promoter.status)}
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {isSuperAdmin && `${organizationsMap[promoter.organizationId] || promoter.organizationId} / `}
+                                    {promoter.state} / {promoter.campaignName || 'Geral'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {formatRelativeTime(promoter.createdAt)}
+                                </p>
+                           </div>
+                        </div>
+                        {promoter.status === 'approved' && (
+                             <div className="mt-2 text-sm font-bold" title="Aproveitamento em posts">
+                                <span className={getPerformanceColor((promoter as any).completionRate)}>{(promoter as any).completionRate}% de aproveitamento</span>
+                             </div>
+                        )}
+                        {promoter.observation && (
+                            <div className="mt-2 p-2 bg-dark/70 rounded text-sm text-yellow-300">
+                                <strong>Obs:</strong> {promoter.observation}
+                            </div>
+                        )}
+                         {promoter.rejectionReason && (
+                            <div className="mt-2 p-2 bg-dark/70 rounded text-sm text-red-300">
+                                <strong>Motivo da rejeição:</strong> {promoter.rejectionReason}
                             </div>
                         )}
                     </div>
-                )}
-            </div>
+                    {canManage && (
+                         <div className="flex-shrink-0 flex flex-row md:flex-col justify-start items-stretch gap-2">
+                             {promoter.status === 'pending' || promoter.status === 'rejected_editable' ? (
+                                <>
+                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="w-full px-3 py-2 bg-green-600 text-white text-sm rounded-md">Aprovar</button>
+                                    <button onClick={() => openRejectionModal(promoter)} disabled={processingId === promoter.id} className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded-md">Rejeitar</button>
+                                </>
+                             ) : promoter.status === 'approved' ? (
+                                <div className="flex flex-row md:flex-col gap-2">
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md">
+                                        {notifyingId === promoter.id ? 'Enviando...' : 'Notificar'}
+                                    </button>
+                                    <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-3 py-2 bg-red-800 text-white text-sm rounded-md">
+                                        {processingId === promoter.id ? '...' : 'Remover'}
+                                    </button>
+                                </div>
+                             ) : promoter.status === 'rejected' ? (
+                                <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="w-full px-3 py-2 bg-green-600 text-white text-sm rounded-md">Re-aprovar</button>
+                             ) : null}
+                             <button onClick={() => openEditModal(promoter)} className="w-full px-3 py-2 bg-gray-600 text-white text-sm rounded-md mt-auto">Detalhes</button>
+                             {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="w-full px-3 py-2 bg-black text-red-500 text-sm rounded-md">Excluir</button>}
+                         </div>
+                    )}
+                </div>
+            ))}
+            {totalFilteredCount > PROMOTERS_PER_PAGE && (
+                <div className="flex justify-center items-center gap-4 mt-6 text-sm">
+                    <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-700 rounded disabled:opacity-50">Anterior</button>
+                    <span>Página {currentPage} de {pageCount}</span>
+                    <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-700 rounded disabled:opacity-50">Próxima</button>
+                </div>
+            )}
+            
+            {displayPromoters.length === 0 && !isLoading && <p className="text-center text-gray-400 py-8">Nenhuma divulgadora encontrada com os filtros atuais.</p>}
 
-            {/* Modals */}
             <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
-            
-            {canManage && editingPromoter && (
-                <EditPromoterModal
-                    isOpen={isEditModalOpen}
-                    onClose={() => setIsEditModalOpen(false)}
-                    onSave={handleUpdatePromoter}
-                    promoter={editingPromoter}
-                />
-            )}
-
-            {canManage && rejectingPromoter && (
-                <RejectionModal
-                    isOpen={isRejectionModalOpen}
-                    onClose={() => setIsRejectionModalOpen(false)}
-                    onConfirm={handleConfirmReject}
-                    reasons={rejectionReasons}
-                />
-            )}
-            
-            {canManage && organizationIdForReasons && (
-                <ManageReasonsModal
-                    isOpen={isReasonsModalOpen}
-                    onClose={() => setIsReasonsModalOpen(false)}
-                    organizationId={organizationIdForReasons}
-                    onReasonsUpdated={() => getRejectionReasons(organizationIdForReasons).then(setRejectionReasons)}
-                />
-            )}
-
-            <PromoterLookupModal 
-                isOpen={isLookupModalOpen}
-                onClose={() => setIsLookupModalOpen(false)}
-                isLoading={isLookingUp}
-                error={lookupError}
-                results={lookupResults}
-                onGoToPromoter={handleGoToPromoter}
-                organizationsMap={organizationsMap}
-            />
-
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={() => {}} organizationId={organizationIdForReasons} />}
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
         </div>
     );
 };
-
-export default AdminPanel;

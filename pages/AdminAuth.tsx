@@ -4,7 +4,8 @@ import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { submitAdminApplication } from '../services/adminService';
-import AdminPanel from './AdminPanel';
+// FIX: Changed to a named import to resolve module export error.
+import { AdminPanel } from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
@@ -238,7 +239,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
-                    
+                    <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
@@ -263,7 +264,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
                     <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
-                    
+                    <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
                     <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />

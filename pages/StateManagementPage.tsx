@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Campaign, AdminUserData, StatesConfig } from '../types';
+import { Campaign, AdminUserData, StatesConfig, Timestamp } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
 import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
-import { Timestamp, FieldValue } from 'firebase/firestore';
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{

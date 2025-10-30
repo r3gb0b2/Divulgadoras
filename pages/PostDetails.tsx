@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Post, PostAssignment, Promoter } from '../types';
+import { Post, PostAssignment, Promoter, Timestamp } from '../types';
 import { getPostWithAssignments, updatePost, deletePost, sendPostReminder, sendSinglePostReminder, updateAssignment, acceptAllJustifications, renewAssignmentDeadline } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -10,10 +10,7 @@ import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
 import PromoterPostStatsModal from '../components/PromoterPostStatsModal';
 import ChangeAssignmentStatusModal from '../components/ChangeAssignmentStatusModal';
-import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { storage, functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 const formatDate = (timestamp: any): string => {
@@ -100,8 +97,8 @@ const PhotoViewerModal: React.FC<{
             } else {
                 // Otherwise, assume it's a Firebase Storage path.
                  try {
-                    const storageRef = ref(storage, originalUrl);
-                    const freshUrl = await getDownloadURL(storageRef);
+                    const storageRef = storage.ref(originalUrl);
+                    const freshUrl = await storageRef.getDownloadURL();
                     if (isMounted) setDownloadableUrl(freshUrl);
                 } catch (e) {
                     console.warn("Could not generate a fresh download URL, falling back to original URL.", e);
@@ -266,13 +263,13 @@ export const PostDetails: React.FC = () => {
     const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
         if (!post) return;
         
-        let finalMediaUrl = post.mediaUrl;
+        let finalMediaUrl = updatedData.mediaUrl;
         if (newMediaFile) {
             const fileExtension = newMediaFile.name.split('.').pop();
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-            const storageRef = ref(storage, `posts-media/${fileName}`);
-            await uploadBytes(storageRef, newMediaFile);
-            finalMediaUrl = storageRef.fullPath;
+            const storageRef = storage.ref(`posts-media/${fileName}`);
+            const uploadResult = await storageRef.put(newMediaFile);
+            finalMediaUrl = uploadResult.ref.fullPath;
         }
 
         const dataToSend = { ...updatedData, mediaUrl: finalMediaUrl };
@@ -305,7 +302,7 @@ export const PostDetails: React.FC = () => {
             setIsProcessing('general');
             try {
                 // FIX: functions and httpsCallable were not defined. Added imports.
-                const func = httpsCallable(functions, 'sendPostReminder');
+                const func = functions.httpsCallable('sendPostReminder');
                 const result = await func({ postId: post.id });
                 const data = result.data as { count: number, message: string };
                 alert(data.message || `Lembretes enviados para ${data.count} divulgadoras.`);
@@ -501,235 +498,4 @@ export const PostDetails: React.FC = () => {
                         </div>
                     )}
                 </div>
-                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
-                 
-                 <div className="flex flex-wrap gap-2 p-1 bg-dark/70 rounded-lg mb-4">
-                    {filterButtons.map(f => (
-                         <button 
-                            key={f.value} 
-                            onClick={() => setFilter(f.value)} 
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filter === f.value ? 'bg-primary text-white' : 'bg-gray-700/80 text-gray-300 hover:bg-gray-700'}`}
-                        >
-                            {f.label} ({f.count})
-                        </button>
-                    ))}
-                 </div>
-
-                 {/* DESKTOP TABLE */}
-                 <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-700">
-                        <thead className="bg-gray-700/50">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Divulgadora</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Comprovação / Justificativa</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-700">
-                            {filteredAssignments.map(assignment => (
-                                <tr key={assignment.id} className="hover:bg-gray-700/40">
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                        <p className="font-semibold text-white">{assignment.promoterName}</p>
-                                        <p className="text-xs text-gray-400">{assignment.promoterEmail}</p>
-                                        {assignment.promoterDetails?.instagram && (
-                                            <a href={`https://instagram.com/${assignment.promoterDetails.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center gap-1 text-xs mt-1">
-                                                <InstagramIcon className="w-3 h-3" />
-                                                <span>{assignment.promoterDetails.instagram}</span>
-                                            </a>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                        {getStatusBadge(assignment)}
-                                        {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                            <ProofCountdownTimer 
-                                                confirmedAt={assignment.confirmedAt} 
-                                                allowLateSubmissions={post.allowLateSubmissions ?? false} 
-                                            />
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-gray-300">
-                                        {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && (
-                                            <div className="flex items-start flex-col gap-2">
-                                                <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)})</p>
-                                                <div className="flex items-center gap-2">
-                                                    {assignment.proofImageUrls.map((url, index) => (
-                                                    url === 'manual' ? 
-                                                    <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído<br/>Manual</div>
-                                                    :
-                                                    <button type="button" key={index} onClick={() => openPhotoViewer(assignment.proofImageUrls, index)}>
-                                                        <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500 cursor-pointer hover:opacity-80 transition-opacity" />
-                                                    </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                        {assignment.justification && (
-                                            <div className="flex flex-col gap-2">
-                                                <div>
-                                                    <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
-                                                    <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
-                                                </div>
-                                                {assignment.justificationResponse && (
-                                                    <div className="mt-1 border-t border-gray-600 pt-1">
-                                                         <p className="text-xs font-semibold text-primary">Resposta:</p>
-                                                         <p className="text-sm italic text-gray-300">{assignment.justificationResponse}</p>
-                                                    </div>
-                                                )}
-                                                {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
-                                                    <div className="flex items-center gap-2">
-                                                        {assignment.justificationImageUrls.map((url, index) => (
-                                                        <button type="button" key={index} onClick={() => openPhotoViewer(assignment.justificationImageUrls, index)}>
-                                                            <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500 cursor-pointer hover:opacity-80 transition-opacity" />
-                                                        </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex justify-end items-center gap-x-4">
-                                            {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                                <button onClick={() => handleRenewDeadline(assignment.id)} disabled={isProcessing === `${assignment.id}_renew`} className="flex items-center gap-1 text-gray-400 hover:text-gray-200 disabled:opacity-50" title="Renovar prazo de 24h para envio do print">
-                                                    <ClockIcon className="w-4 h-4" /> 
-                                                    {isProcessing === `${assignment.id}_renew` ? '...' : <span className="hidden sm:inline">Renovar</span>}
-                                                </button>
-                                            )}
-                                            <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="flex items-center gap-1 text-blue-400 hover:text-blue-300"><ChartBarIcon className="w-4 h-4" /> <span className="hidden sm:inline">Estatísticas</span></button>
-                                            {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                                <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
-                                                    <EnvelopeIcon className="w-4 h-4" /> {isProcessing === assignment.id ? '...' : <span className="hidden sm:inline">Lembrete</span>}
-                                                </button>
-                                            )}
-                                            <button onClick={() => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }} className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300"><PencilIcon className="w-4 h-4" /> <span className="hidden sm:inline">Alterar</span></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                 </div>
-
-                 {/* MOBILE CARDS */}
-                 <div className="block md:hidden space-y-4">
-                    {filteredAssignments.map(assignment => (
-                        <div key={assignment.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
-                            <div className="flex justify-between items-start mb-3">
-                                <div>
-                                    <p className="font-semibold text-white">{assignment.promoterName}</p>
-                                    <p className="text-xs text-gray-400">{assignment.promoterEmail}</p>
-                                    {assignment.promoterDetails?.instagram && (
-                                        <a href={`https://instagram.com/${assignment.promoterDetails.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center gap-1 text-xs mt-1">
-                                            <InstagramIcon className="w-3 h-3" />
-                                            <span>{assignment.promoterDetails.instagram}</span>
-                                        </a>
-                                    )}
-                                </div>
-                                <div className="flex-shrink-0 text-right">
-                                    {getStatusBadge(assignment)}
-                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                        <ProofCountdownTimer 
-                                            confirmedAt={assignment.confirmedAt} 
-                                            allowLateSubmissions={post.allowLateSubmissions ?? false} 
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                            
-                            <div className="border-t border-gray-700 pt-3 text-sm text-gray-300">
-                                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Comprovação / Justificativa</h4>
-                                {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (
-                                    <div className="flex items-start flex-col gap-2">
-                                        <p className="text-xs text-gray-400">({formatDate(assignment.proofSubmittedAt)})</p>
-                                        <div className="flex items-center gap-2">
-                                            {assignment.proofImageUrls.map((url, index) => (
-                                            url === 'manual' ? 
-                                            <div key={index} className="w-16 h-16 bg-gray-800 rounded-md flex items-center justify-center text-center text-xs text-gray-300">Concluído<br/>Manual</div>
-                                            :
-                                            <button type="button" key={index} onClick={() => openPhotoViewer(assignment.proofImageUrls, index)}>
-                                                <img src={url} alt={`Prova ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-green-500 cursor-pointer hover:opacity-80 transition-opacity" />
-                                            </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : assignment.justification ? (
-                                    <div className="flex flex-col gap-2">
-                                        <div>
-                                            <p className="text-xs text-gray-400">({formatDate(assignment.justificationSubmittedAt)})</p>
-                                            <p className="text-sm italic bg-gray-800/50 p-1 rounded">"{assignment.justification}"</p>
-                                        </div>
-                                        {assignment.justificationResponse && (
-                                            <div className="mt-1 border-t border-gray-600 pt-1">
-                                                <p className="text-xs font-semibold text-primary">Resposta:</p>
-                                                <p className="text-sm italic text-gray-300">{assignment.justificationResponse}</p>
-                                            </div>
-                                        )}
-                                        {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
-                                            <div className="flex items-center gap-2">
-                                                {assignment.justificationImageUrls.map((url, index) => (
-                                                <button type="button" key={index} onClick={() => openPhotoViewer(assignment.justificationImageUrls, index)}>
-                                                    <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border border-yellow-500 cursor-pointer hover:opacity-80 transition-opacity" />
-                                                </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-gray-500">Nenhuma comprovação ou justificativa enviada.</p>
-                                )}
-                            </div>
-
-                            <div className="border-t border-gray-700 mt-3 pt-3">
-                                <div className="flex justify-end items-center flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
-                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                        <button onClick={() => handleRenewDeadline(assignment.id)} disabled={isProcessing === `${assignment.id}_renew`} className="flex items-center gap-1 text-gray-400 hover:text-gray-200 disabled:opacity-50" title="Renovar prazo de 24h para envio do print">
-                                            <ClockIcon className="w-4 h-4" /> 
-                                            <span>{isProcessing === `${assignment.id}_renew` ? '...' : 'Renovar'}</span>
-                                        </button>
-                                    )}
-                                    <button onClick={() => { setSelectedAssignment(assignment); setIsStatsModalOpen(true); }} className="flex items-center gap-1 text-blue-400 hover:text-blue-300">
-                                        <ChartBarIcon className="w-4 h-4" /> <span>Estatísticas</span>
-                                    </button>
-                                    {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && !assignment.justification && (
-                                        <button onClick={() => handleSingleReminder(assignment)} disabled={isProcessing === assignment.id} className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 disabled:opacity-50">
-                                            <EnvelopeIcon className="w-4 h-4" /> <span>{isProcessing === assignment.id ? '...' : 'Lembrete'}</span>
-                                        </button>
-                                    )}
-                                    <button onClick={() => { setSelectedAssignment(assignment); setIsChangeStatusModalOpen(true); }} className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300">
-                                        <PencilIcon className="w-4 h-4" /> <span>Alterar</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                 </div>
-
-                 {filteredAssignments.length === 0 && (
-                    <p className="text-gray-400 text-center py-8">Nenhuma tarefa encontrada com este filtro.</p>
-                 )}
-            </div>
-
-            {/* Modals */}
-            {canManage && (
-                <>
-                    <EditPostModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} post={post} onSave={handleSavePost}/>
-                    <AssignPostModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} post={post} existingAssignments={assignments} onSuccess={fetchData}/>
-                    <ChangeAssignmentStatusModal 
-                        isOpen={isChangeStatusModalOpen}
-                        onClose={() => setIsChangeStatusModalOpen(false)}
-                        assignment={selectedAssignment}
-                        onSave={handleUpdateAssignment}
-                    />
-                </>
-            )}
-            <PromoterPostStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={selectedAssignment}/>
-            <PhotoViewerModal
-                isOpen={isPhotoViewerOpen}
-                onClose={() => setIsPhotoViewerOpen(false)}
-                imageUrls={photoViewerUrls}
-                startIndex={photoViewerStartIndex}
-            />
-        </div>
-    );
-};
+                 {error && <div className="bg-red-900/50 text-red-30

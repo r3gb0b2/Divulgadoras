@@ -1,4 +1,8 @@
-import { Timestamp, FieldValue } from 'firebase/firestore';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
+
+export type Timestamp = firebase.firestore.Timestamp;
+export type FieldValue = firebase.firestore.FieldValue;
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 

@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getAssignmentById, submitProof } from '../services/postService';
-import { PostAssignment } from '../types';
+import { PostAssignment, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
 import StorageMedia from '../components/StorageMedia';
 
 const ProofUploadPage: React.FC = () => {

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
 import { getActiveGuestListsForCampaign, addGuestListConfirmation, getGuestListConfirmationsByEmail } from '../services/guestListService';
-import { Promoter, GuestList, Campaign, GuestListConfirmation } from '../types';
+import { Promoter, GuestList, Campaign, GuestListConfirmation, Timestamp } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
 import { getAllCampaigns } from '../services/settingsService';
 
 type CountdownStatus = 'upcoming' | 'open' | 'closed';

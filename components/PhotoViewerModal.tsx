@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DownloadIcon } from './Icons';
-import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 interface PhotoViewerModalProps {
@@ -46,8 +45,8 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, s
                     // Remove query params like token before decoding
                     const decodedPath = decodeURIComponent(encodedPath.split('?')[0]); 
                     
-                    const storageRef = ref(storage, decodedPath);
-                    const freshUrl = await getDownloadURL(storageRef);
+                    const storageRef = storage.ref(decodedPath);
+                    const freshUrl = await storageRef.getDownloadURL();
                     if (isMounted) setDownloadableUrl(freshUrl);
                 } else {
                      if (isMounted) setDownloadableUrl(originalUrl); // Fallback if path parsing fails

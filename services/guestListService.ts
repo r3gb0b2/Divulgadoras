@@ -1,23 +1,6 @@
-
+import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  serverTimestamp,
-  limit,
-  writeBatch,
-  doc,
-  runTransaction,
-  Timestamp,
-  updateDoc,
-  getDoc,
-  deleteDoc,
-  orderBy,
-} from 'firebase/firestore';
-import { GuestListConfirmation, GuestList } from '../types';
+import { GuestListConfirmation, GuestList, Timestamp } from '../types';
 
 // ===================================================================
 // NEW GUEST LIST MODEL FUNCTIONS (Post-refactor)
@@ -25,9 +8,9 @@ import { GuestListConfirmation, GuestList } from '../types';
 
 export const getGuestListById = async (listId: string): Promise<GuestList | null> => {
     try {
-        const docRef = doc(firestore, 'guestLists', listId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        const docRef = firestore.collection('guestLists').doc(listId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
             return { id: docSnap.id, ...docSnap.data() } as GuestList;
         }
         return null;
@@ -39,12 +22,10 @@ export const getGuestListById = async (listId: string): Promise<GuestList | null
 
 export const getActiveGuestListsForCampaign = async (campaignId: string): Promise<GuestList[]> => {
     try {
-        const q = query(
-            collection(firestore, "guestLists"),
-            where("campaignId", "==", campaignId),
-            where("isActive", "==", true)
-        );
-        const snapshot = await getDocs(q);
+        const q = firestore.collection("guestLists")
+            .where("campaignId", "==", campaignId)
+            .where("isActive", "==", true);
+        const snapshot = await q.get();
         const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
         return lists;
     } catch (error) {
@@ -55,11 +36,9 @@ export const getActiveGuestListsForCampaign = async (campaignId: string): Promis
 
 export const getGuestListsForOrg = async (organizationId: string): Promise<GuestList[]> => {
     try {
-        const q = query(
-            collection(firestore, "guestLists"),
-            where("organizationId", "==", organizationId)
-        );
-        const snapshot = await getDocs(q);
+        const q = firestore.collection("guestLists")
+            .where("organizationId", "==", organizationId);
+        const snapshot = await q.get();
         const lists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestList));
         
         // Sort client-side to avoid needing a composite index
@@ -78,9 +57,9 @@ export const getGuestListsForOrg = async (organizationId: string): Promise<Guest
 
 export const createGuestList = async (data: Omit<GuestList, 'id' | 'createdAt'>): Promise<string> => {
     try {
-        const docRef = await addDoc(collection(firestore, 'guestLists'), {
+        const docRef = await firestore.collection('guestLists').add({
             ...data,
-            createdAt: serverTimestamp(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         return docRef.id;
     } catch (error) {
@@ -91,8 +70,8 @@ export const createGuestList = async (data: Omit<GuestList, 'id' | 'createdAt'>)
 
 export const updateGuestList = async (listId: string, data: Partial<Omit<GuestList, 'id'>>): Promise<void> => {
     try {
-        const docRef = doc(firestore, 'guestLists', listId);
-        await updateDoc(docRef, data);
+        const docRef = firestore.collection('guestLists').doc(listId);
+        await docRef.update(data);
     } catch (error) {
         console.error("Error updating guest list: ", error);
         throw new Error("Não foi possível atualizar a lista.");
@@ -102,7 +81,7 @@ export const updateGuestList = async (listId: string, data: Partial<Omit<GuestLi
 export const deleteGuestList = async (listId: string): Promise<void> => {
     try {
         // Potentially, we could also delete all confirmations associated with this list in a transaction
-        await deleteDoc(doc(firestore, "guestLists", listId));
+        await firestore.collection("guestLists").doc(listId).delete();
     } catch (error) {
         console.error("Error deleting guest list: ", error);
         throw new Error("Não foi possível deletar a lista.");
@@ -111,13 +90,11 @@ export const deleteGuestList = async (listId: string): Promise<void> => {
 
 export const getConfirmationByPromoterAndList = async (promoterId: string, listId: string): Promise<GuestListConfirmation | null> => {
     try {
-        const q = query(
-            collection(firestore, 'guestListConfirmations'),
-            where('promoterId', '==', promoterId),
-            where('guestListId', '==', listId),
-            limit(1)
-        );
-        const snapshot = await getDocs(q);
+        const q = firestore.collection('guestListConfirmations')
+            .where('promoterId', '==', promoterId)
+            .where('guestListId', '==', listId)
+            .limit(1);
+        const snapshot = await q.get();
         if (snapshot.empty) {
             return null;
         }
@@ -142,21 +119,19 @@ export const addGuestListConfirmation = async (
   confirmationData: Omit<GuestListConfirmation, 'id' | 'confirmedAt'>
 ): Promise<void> => {
   try {
-    const confirmationsRef = collection(firestore, 'guestListConfirmations');
+    const confirmationsRef = firestore.collection('guestListConfirmations');
     
-    const q = query(
-      confirmationsRef,
-      where('promoterId', '==', confirmationData.promoterId),
-      where('guestListId', '==', confirmationData.guestListId),
-      limit(1)
-    );
+    const q = confirmationsRef
+      .where('promoterId', '==', confirmationData.promoterId)
+      .where('guestListId', '==', confirmationData.guestListId)
+      .limit(1);
     
-    const existingSnapshot = await getDocs(q);
-    const batch = writeBatch(firestore);
+    const existingSnapshot = await q.get();
+    const batch = firestore.batch();
 
     const dataWithTimestamp = {
       ...confirmationData,
-      confirmedAt: serverTimestamp(),
+      confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
       isLocked: true, // Lock the list on submission
     };
     
@@ -164,7 +139,7 @@ export const addGuestListConfirmation = async (
       const existingDocRef = existingSnapshot.docs[0].ref;
       batch.update(existingDocRef, dataWithTimestamp);
     } else {
-      const newDocRef = doc(collection(firestore, 'guestListConfirmations'));
+      const newDocRef = firestore.collection('guestListConfirmations').doc();
       batch.set(newDocRef, dataWithTimestamp);
     }
 
@@ -182,8 +157,8 @@ export const addGuestListConfirmation = async (
  */
 export const unlockGuestListConfirmation = async (confirmationId: string): Promise<void> => {
   try {
-    const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
-    await updateDoc(docRef, { isLocked: false });
+    const docRef = firestore.collection('guestListConfirmations').doc(confirmationId);
+    await docRef.update({ isLocked: false });
   } catch (error) {
     console.error("Error unlocking guest list confirmation: ", error);
     throw new Error("Não foi possível liberar a lista para edição.");
@@ -200,12 +175,10 @@ export const getGuestListForCampaign = async (
   campaignId: string
 ): Promise<GuestListConfirmation[]> => {
   try {
-    const q = query(
-      collection(firestore, 'guestListConfirmations'),
-      where('campaignId', '==', campaignId)
-    );
+    const q = firestore.collection('guestListConfirmations')
+      .where('campaignId', '==', campaignId);
     
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await q.get();
     const confirmations: GuestListConfirmation[] = [];
     querySnapshot.forEach((doc) => {
       confirmations.push({ id: doc.id, ...doc.data() } as GuestListConfirmation);
@@ -228,12 +201,10 @@ export const getGuestListConfirmationsByEmail = async (
   email: string
 ): Promise<GuestListConfirmation[]> => {
   try {
-    const q = query(
-      collection(firestore, 'guestListConfirmations'),
-      where('promoterEmail', '==', email.toLowerCase().trim())
-    );
+    const q = firestore.collection('guestListConfirmations')
+      .where('promoterEmail', '==', email.toLowerCase().trim());
     
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await q.get();
     const confirmations: GuestListConfirmation[] = [];
     querySnapshot.forEach((doc) => {
       confirmations.push({ id: doc.id, ...doc.data() } as GuestListConfirmation);
@@ -258,16 +229,16 @@ export const getGuestListConfirmationsByEmail = async (
  * @param personName The name of the person to check in.
  */
 export const checkInPerson = async (confirmationId: string, personName: string): Promise<void> => {
-  const docRef = doc(firestore, 'guestListConfirmations', confirmationId);
+  const docRef = firestore.collection('guestListConfirmations').doc(confirmationId);
   try {
-    await runTransaction(firestore, async (transaction) => {
+    await firestore.runTransaction(async (transaction) => {
       const docSnap = await transaction.get(docRef);
-      if (!docSnap.exists()) {
+      if (!docSnap.exists) {
         throw new Error("Confirmação não encontrada.");
       }
 
       const data = docSnap.data() as GuestListConfirmation;
-      const now = Timestamp.now();
+      const now = firebase.firestore.Timestamp.now();
 
       if (personName === data.promoterName) {
         if (data.promoterCheckedInAt) {

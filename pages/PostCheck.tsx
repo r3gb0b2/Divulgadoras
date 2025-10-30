@@ -3,13 +3,11 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 // FIX: Added 'getScheduledPostsForPromoter' to import.
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { PostAssignment, Promoter, ScheduledPost } from '../types';
+import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
-import { ref, getDownloadURL } from 'firebase/storage';
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -279,8 +277,8 @@ const PostCard: React.FC<{
             
             let finalUrl = mediaUrl;
             if (!mediaUrl.startsWith('http')) {
-                const storageRef = ref(storage, mediaUrl);
-                finalUrl = await getDownloadURL(storageRef);
+                const storageRef = storage.ref(mediaUrl);
+                finalUrl = await storageRef.getDownloadURL();
             }
             
             // Create a temporary link to trigger the download

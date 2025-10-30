@@ -1,3 +1,4 @@
+
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -11,22 +12,20 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Reverted to constructor-based state initialization to resolve issues where `this.props` and `this.setState` were not found on the class instance, likely due to build configuration problems with class properties.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: Replaced constructor with a class property for state initialization.
+  // This is a more modern syntax that correctly types `this.state` for the component instance,
+  // resolving multiple errors where `state` and `props` were not found.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // FIX: With a proper constructor, `this.setState` will be available as it's inherited from React.Component.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -68,7 +67,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: With a proper constructor, `this.props` will be available on the component instance.
     return this.props.children;
   }
 }

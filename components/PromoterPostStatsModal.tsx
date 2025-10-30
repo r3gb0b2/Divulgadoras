@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { PostAssignment } from '../types';
-import { getStatsForPromoter } from '../services/postService';
-import { Timestamp } from 'firebase/firestore';
+import { PostAssignment, Promoter, Timestamp } from '../types';
+import { getStatsForPromoterByEmail } from '../services/postService';
 
-interface PromoterPostStatsModalProps {
+interface PromoterPublicStatsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    promoter: PostAssignment | null; // We pass the whole assignment to get promoterId and name
+    promoter: Promoter | null;
 }
 
 interface Stats {
@@ -92,7 +91,7 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
     return { text: 'Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
 };
 
-const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen, onClose, promoter }) => {
+const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isOpen, onClose, promoter }) => {
     const [stats, setStats] = useState<Stats | null>(null);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -104,7 +103,7 @@ const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen,
                 setIsLoading(true);
                 setError(null);
                 try {
-                    const result = await getStatsForPromoter(promoter.promoterId);
+                    const result = await getStatsForPromoterByEmail(promoter.email);
                     setStats(result.stats);
                     setAssignments(result.assignments);
                 } catch (err: any) {
@@ -119,11 +118,17 @@ const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen,
 
     if (!isOpen || !promoter) return null;
 
+    const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
+    const completionPercentage = stats && stats.assigned > 0
+        ? ((successfulOutcomes / stats.assigned) * 100).toFixed(0)
+        : '0';
+
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-white">Estatísticas de Posts: <span className="text-primary">{promoter.promoterName}</span></h2>
+                    <h2 className="text-2xl font-bold text-white">Minhas Estatísticas: <span className="text-primary">{promoter.name}</span></h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
                 </div>
                 
@@ -137,12 +142,13 @@ const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen,
                     ) : stats && (
                         <>
                             {/* Stats Cards */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{stats.assigned}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Concluídas</h3><p className="text-2xl font-bold text-green-400">{stats.completed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Justificativas</h3><p className="text-2xl font-bold text-yellow-400">{stats.justifications}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Perdidas</h3><p className="text-2xl font-bold text-red-400">{stats.missed}</p></div>
                                 <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Aproveitamento</h3><p className="text-2xl font-bold text-blue-400">{completionPercentage}%</p></div>
                             </div>
                             
                             {/* Assignments List */}
@@ -171,9 +177,14 @@ const PromoterPostStatsModal: React.FC<PromoterPostStatsModalProps> = ({ isOpen,
                         </>
                     )}
                 </div>
+                 <div className="mt-6 flex justify-end border-t border-gray-700 pt-4">
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
+                        Fechar
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
 
-export default PromoterPostStatsModal;
+export default PromoterPublicStatsModal;

@@ -1,12 +1,16 @@
 
+
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ArrowLeftIcon } from '../components/Icons';
 import { getPromoterById } from '../services/promoterService';
 import { checkInPerson, getConfirmationByPromoterAndList } from '../services/guestListService';
-import { Promoter, GuestListConfirmation } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import { Promoter, GuestListConfirmation, Timestamp } from '../types';
+// FIX: Import firebase to use Timestamp as a value.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 // --- Audio Feedback Helper ---
 const playSound = (type: 'success' | 'error') => {
@@ -151,7 +155,8 @@ const QrCodeScannerPage: React.FC = () => {
 
             setScanData(prev => prev ? ({
                 ...prev,
-                confirmation: { ...prev.confirmation, promoterCheckedInAt: Timestamp.now() }
+                // FIX: Use firebase.firestore.Timestamp.now() as Timestamp is only a type.
+                confirmation: { ...prev.confirmation, promoterCheckedInAt: firebase.firestore.Timestamp.now() }
             }) : null);
         } catch(err: any) {
             setScanError(err.message || "Falha no check-in.");

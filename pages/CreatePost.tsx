@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -5,13 +6,11 @@ import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updateInstructionTemplate, deleteInstructionTemplate } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
-import { Campaign, Promoter, ScheduledPostData, InstructionTemplate } from '../types';
+import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, Timestamp } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
-// FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
 import { storage } from '../firebase/config';
-import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
+import firebase from 'firebase/compat/app';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -287,8 +286,8 @@ const CreatePost: React.FC = () => {
 
                         if (postData.type === 'image' && postData.mediaUrl) {
                             setOriginalMediaPath(postData.mediaUrl);
-                            const storageRef = ref(storage, postData.mediaUrl);
-                            getDownloadURL(storageRef).then(url => setMediaPreview(url)).catch(console.error);
+                            const storageRef = storage.ref(postData.mediaUrl);
+                            storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
                         } else if (postData.type === 'video' && postData.mediaUrl) {
                             // Handle legacy cases where GDrive URL was in mediaUrl
                              setGoogleDriveUrl(postData.googleDriveUrl || postData.mediaUrl || '');
@@ -324,8 +323,8 @@ const CreatePost: React.FC = () => {
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
-                        const storageRef = ref(storage, originalPost.mediaUrl);
-                        getDownloadURL(storageRef).then(url => setMediaPreview(url)).catch(console.error);
+                        const storageRef = storage.ref(originalPost.mediaUrl);
+                        storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
                     }
                 }
 
@@ -478,11 +477,10 @@ const CreatePost: React.FC = () => {
             const promotersToAssignMapped = promotersToAssignFull
                 .map(p => ({ id: p.id, email: p.email, name: p.name }));
 
-            let expiryTimestamp = null;
+            let expiryTimestamp: Date | null = null;
             if (expiresAt) {
                 const [year, month, day] = expiresAt.split('-').map(Number);
-                const expiryDate = new Date(year, month - 1, day, 23, 59, 59);
-                expiryTimestamp = Timestamp.fromDate(expiryDate);
+                expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59);
             }
 
             const basePostData: Omit<ScheduledPostData, 'mediaUrl'> = {
@@ -508,8 +506,8 @@ const CreatePost: React.FC = () => {
                     if (mediaFile) {
                         const fileExtension = mediaFile.name.split('.').pop();
                         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                        const storageRef = ref(storage, `posts-media/${fileName}`);
-                        await uploadBytes(storageRef, mediaFile);
+                        const storageRef = storage.ref(`posts-media/${fileName}`);
+                        await storageRef.put(mediaFile);
                         scheduledMediaUrl = storageRef.fullPath;
                     } else {
                         scheduledMediaUrl = originalMediaPath || undefined;
@@ -518,7 +516,8 @@ const CreatePost: React.FC = () => {
                 
                 const postDataForUpdate: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
+                // FIX: Use firebase.firestore.Timestamp.fromDate instead of Timestamp.fromDate
+                const scheduledTimestamp = firebase.firestore.Timestamp.fromDate(scheduledDateTime);
                 const cleanPostData = JSON.parse(JSON.stringify(postDataForUpdate));
 
                 await updateScheduledPost(editingScheduledPostId, {
@@ -536,14 +535,15 @@ const CreatePost: React.FC = () => {
                 if (postType === 'image' && mediaFile) {
                     const fileExtension = mediaFile.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = ref(storage, `posts-media/${fileName}`);
-                    await uploadBytes(storageRef, mediaFile);
+                    const storageRef = storage.ref(`posts-media/${fileName}`);
+                    await storageRef.put(mediaFile);
                     scheduledMediaUrl = storageRef.fullPath;
                 }
                 
                 const postDataForScheduling: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                const scheduledTimestamp = Timestamp.fromDate(scheduledDateTime);
+                // FIX: Use firebase.firestore.Timestamp.fromDate instead of Timestamp.fromDate
+                const scheduledTimestamp = firebase.firestore.Timestamp.fromDate(scheduledDateTime);
                 const cleanPostData = JSON.parse(JSON.stringify(postDataForScheduling));
 
                 await schedulePost({

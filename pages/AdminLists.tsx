@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { GuestList, Campaign } from '../types';
+import { GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { getGuestListsForOrg, createGuestList, updateGuestList, deleteGuestList } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, UsersIcon, CheckCircleIcon } from '../components/Icons';
-import { Timestamp, FieldValue } from 'firebase/firestore';
+// FIX: Import firebase to use Timestamp as a value.
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 const timestampToDateTimeLocal = (ts: any): string => {
     if (!ts) return '';
@@ -57,7 +59,8 @@ const ListModal: React.FC<{
     
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        const timestampValue = value ? Timestamp.fromDate(new Date(value)) : null;
+        // FIX: Use firebase.firestore.Timestamp.fromDate() as Timestamp is only a type.
+        const timestampValue = value ? firebase.firestore.Timestamp.fromDate(new Date(value)) : null;
         setFormData(prev => ({ ...prev, [name]: timestampValue }));
     };
 

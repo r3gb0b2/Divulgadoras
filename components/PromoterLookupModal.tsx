@@ -1,6 +1,5 @@
 import React from 'react';
-import { Promoter, PromoterStatus } from '../types';
-import { Timestamp } from 'firebase/firestore';
+import { Promoter, PromoterStatus, Timestamp } from '../types';
 
 interface PromoterLookupModalProps {
   isOpen: boolean;

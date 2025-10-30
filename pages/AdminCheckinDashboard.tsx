@@ -54,31 +54,52 @@ const AdminCheckinDashboard: React.FC = () => {
             return <p className="text-red-400 text-center">{error}</p>;
         }
         
-        if (campaigns.length === 0) {
-            return <p className="text-gray-400 text-center py-8">Nenhum evento ativo encontrado para iniciar o check-in.</p>;
-        }
+        const hasActiveCampaigns = campaigns.length > 0;
 
         return (
-            <div className="space-y-6">
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">Check-in por QR Code</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="bg-gray-700/50 p-4 rounded-lg flex flex-col justify-between">
+                            <div>
+                                <p className="font-bold text-lg text-primary">Scanner de QR Code</p>
+                                <p className="text-sm text-gray-300 mt-1">Use a câmera para fazer o check-in rápido de divulgadoras na entrada do evento.</p>
+                            </div>
+                            <Link
+                                to={`/admin/checkin/scanner`}
+                                className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-semibold"
+                            >
+                                <QrCodeIcon className="w-5 h-5" />
+                                <span>Abrir Scanner</span>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <h2 className="text-xl font-semibold text-gray-200 mb-4 border-b border-gray-700 pb-2">Check-in por Lista Manual</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {campaigns.map(campaign => (
-                            <div key={campaign.id} className="bg-gray-700/50 p-4 rounded-lg flex flex-col justify-between">
-                                <div>
-                                    <p className="font-bold text-lg text-primary">{campaign.name}</p>
-                                    <p className="text-sm text-gray-300">{campaign.stateAbbr}</p>
+                     {!hasActiveCampaigns ? (
+                        <p className="text-gray-400 text-center py-8">Nenhum evento ativo encontrado para iniciar o check-in.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {campaigns.map(campaign => (
+                                <div key={campaign.id} className="bg-gray-700/50 p-4 rounded-lg flex flex-col justify-between">
+                                    <div>
+                                        <p className="font-bold text-lg text-primary">{campaign.name}</p>
+                                        <p className="text-sm text-gray-300">{campaign.stateAbbr}</p>
+                                    </div>
+                                    <Link
+                                        to={`/admin/checkin/${campaign.id}`}
+                                        className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
+                                    >
+                                        <CheckCircleIcon className="w-5 h-5" />
+                                        <span>Ver Lista de Nomes</span>
+                                    </Link>
                                 </div>
-                                <Link
-                                    to={`/admin/checkin/${campaign.id}`}
-                                    className="mt-4 flex items-center justify-center gap-2 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
-                                >
-                                    <CheckCircleIcon className="w-5 h-5" />
-                                    <span>Ver Lista</span>
-                                </Link>
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         );

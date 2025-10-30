@@ -7,7 +7,6 @@ import { Campaign } from '../types';
 // FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 // Lista de nomes masculinos para o aviso de gênero
@@ -255,9 +254,9 @@ const PromoterForm: React.FC = () => {
                 photoFiles.map(async (photo) => {
                     const fileExtension = photo.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = ref(storage, `promoters-photos/${fileName}`);
-                    await uploadBytes(storageRef, photo);
-                    return await getDownloadURL(storageRef);
+                    const storageRef = storage.ref(`promoters-photos/${fileName}`);
+                    await storageRef.put(photo);
+                    return await storageRef.getDownloadURL();
                 })
             );
         }
