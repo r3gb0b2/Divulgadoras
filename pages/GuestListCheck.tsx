@@ -310,10 +310,17 @@ const GuestListCheck: React.FC = () => {
 
             const activeLists = await getActiveGuestListsForCampaign(campaignId);
 
-            if (activeLists.length > 0) {
-                setAssignedLists(activeLists);
+            const accessibleLists = activeLists.filter(list => {
+                if (!list.assignedPromoterIds || !Array.isArray(list.assignedPromoterIds) || list.assignedPromoterIds.length === 0) {
+                    return true;
+                }
+                return list.assignedPromoterIds.includes(approvedProfile.id);
+            });
+
+            if (accessibleLists.length > 0) {
+                setAssignedLists(accessibleLists);
             } else {
-                setError("Nenhuma lista de convidados está ativa para este evento no momento.");
+                setError("Nenhuma lista de convidados está ativa para você neste evento no momento.");
             }
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro ao verificar seu acesso.');

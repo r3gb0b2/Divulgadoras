@@ -241,6 +241,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
                     <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
@@ -265,6 +266,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
                     <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
                     <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />

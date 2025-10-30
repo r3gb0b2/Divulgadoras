@@ -19,7 +19,7 @@ const getPerformanceColor = (rate: number): string => {
 const GuestListAssignments: React.FC = () => {
     const { listId } = useParams<{ listId: string }>();
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
 
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -39,8 +39,7 @@ const GuestListAssignments: React.FC = () => {
         try {
             const listData = await getGuestListById(listId);
             if (!listData) throw new Error("Lista de convidados não encontrada.");
-            
-            // FIX: Fetch all campaigns to find the state for the current one.
+
             const allCampaigns = await getAllCampaigns(listData.organizationId);
             const associatedCampaign = allCampaigns.find(c => c.id === listData.campaignId);
             
@@ -48,11 +47,10 @@ const GuestListAssignments: React.FC = () => {
                 throw new Error(`Evento associado (ID: ${listData.campaignId}) não foi encontrado.`);
             }
 
-            // FIX: Use the correct stateAbbr from the campaign, not campaignName.
             const [approvedPromoters, orgAssignments] = await Promise.all([
                 getApprovedPromoters(
                     listData.organizationId,
-                    associatedCampaign.stateAbbr, // Correct state
+                    associatedCampaign.stateAbbr,
                     listData.campaignName
                 ),
                 getAssignmentsForOrganization(listData.organizationId)
@@ -95,7 +93,6 @@ const GuestListAssignments: React.FC = () => {
         });
     }, [promoters, postAssignments]);
     
-    // NEW: Categorize promoters by performance color
     const promotersByColor = useMemo(() => {
         const categories: { green: string[], blue: string[], yellow: string[], red: string[] } = {
             green: [],
@@ -160,7 +157,6 @@ const GuestListAssignments: React.FC = () => {
         });
     };
 
-    // NEW: Handle automatic assignment by color
     const handleAutoAssign = (color: 'green' | 'blue' | 'yellow' | 'red') => {
         const promoterIdsToAdd = promotersByColor[color];
         if (promoterIdsToAdd.length === 0) {
@@ -199,7 +195,6 @@ const GuestListAssignments: React.FC = () => {
         }
         return (
             <div className="space-y-6">
-                {/* NEW: Auto Assignment Section */}
                 <div className="mb-6 p-4 border border-gray-700 rounded-lg">
                     <h2 className="text-lg font-semibold text-white mb-3">Atribuição Automática por Cor</h2>
                     <p className="text-sm text-gray-400 mb-4">Selecione todas as divulgadoras de uma categoria de aproveitamento com um clique. A seleção será <strong className="text-gray-300">adicionada</strong> à sua seleção manual atual.</p>
@@ -235,9 +230,9 @@ const GuestListAssignments: React.FC = () => {
                         <span className="font-semibold text-gray-300 text-xs">Filtrar:</span>
                         <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                             {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                     {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
-                                    <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
+                                    <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Amarelas', 'red': 'Vermelhas'}[f]}</span>
                                 </button>
                             ))}
                         </div>

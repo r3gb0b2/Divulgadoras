@@ -1,4 +1,5 @@
 
+
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -11,6 +12,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: The ErrorBoundary class must extend React.Component to have access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
   // FIX: Using a constructor is the most explicit and robust way to initialize state,
   // potentially resolving typing issues with `this` context in some build environments where

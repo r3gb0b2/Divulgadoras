@@ -196,7 +196,6 @@ export interface GuestList {
   isActive: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
-  // FIX: Add 'assignedPromoterIds' to allow for specific promoter access to lists.
   assignedPromoterIds?: string[];
 }
 
