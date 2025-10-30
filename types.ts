@@ -260,3 +260,32 @@ export interface InstructionTemplate {
   organizationId: string;
   createdAt?: Timestamp | FieldValue;
 }
+
+export interface OneTimePost {
+  id: string;
+  organizationId: string;
+  campaignId: string;
+  campaignName: string;
+  eventName?: string;
+  guestListName: string;
+  type: 'image' | 'text' | 'video';
+  mediaUrl?: string; // Can be Firebase Storage path or GDrive URL for video
+  googleDriveUrl?: string;
+  textContent?: string;
+  instructions: string;
+  createdAt: Timestamp | FieldValue;
+  createdByEmail: string;
+  isActive: boolean;
+  // FIX: Add submissionCount property to the OneTimePost type to resolve type error.
+  submissionCount?: number;
+}
+
+export interface OneTimePostSubmission {
+    id: string;
+    oneTimePostId: string;
+    organizationId: string;
+    campaignId: string;
+    guestName: string;
+    proofImageUrls: string[];
+    submittedAt: Timestamp | FieldValue;
+}

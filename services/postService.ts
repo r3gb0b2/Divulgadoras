@@ -1,6 +1,6 @@
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
-import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission } from '../types';
 import { findPromotersByEmail } from './promoterService';
 
 // Helper to safely convert various date formats to a Date object
@@ -630,4 +630,84 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
         }
         throw new Error("Não foi possível buscar as publicações agendadas.");
     }
+};
+
+// --- One-Time Post Functions ---
+export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdAt'>): Promise<string> => {
+  try {
+    const docRef = await firestore.collection('oneTimePosts').add({
+      ...data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error creating one-time post: ", error);
+    throw new Error("Não foi possível criar o post único.");
+  }
+};
+
+export const getOneTimePostsForOrg = async (organizationId: string): Promise<OneTimePost[]> => {
+    try {
+        const q = firestore.collection("oneTimePosts").where("organizationId", "==", organizationId).orderBy("createdAt", "desc");
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost));
+    } catch (error) {
+        console.error("Error getting one-time posts: ", error);
+        throw new Error("Não foi possível buscar os posts únicos.");
+    }
+};
+
+export const getOneTimePostById = async (postId: string): Promise<OneTimePost | null> => {
+    try {
+        const docRef = firestore.collection('oneTimePosts').doc(postId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+            return { id: docSnap.id, ...docSnap.data() } as OneTimePost;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting one-time post by ID: ", error);
+        throw new Error("Não foi possível buscar os dados do post.");
+    }
+};
+
+export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmission, 'id' | 'submittedAt'>): Promise<string> => {
+    try {
+        const docRef = await firestore.collection('oneTimePostSubmissions').add({
+            ...data,
+            submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error creating one-time post submission: ", error);
+        throw new Error("Não foi possível enviar sua comprovação e nome.");
+    }
+};
+
+export const getOneTimePostSubmissions = async (postId: string): Promise<OneTimePostSubmission[]> => {
+    try {
+        const q = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId).orderBy("submittedAt", "desc");
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission));
+    } catch (error) {
+        console.error("Error getting one-time post submissions: ", error);
+        throw new Error("Não foi possível buscar as submissões.");
+    }
+};
+
+export const deleteOneTimePost = async (postId: string): Promise<void> => {
+  const batch = firestore.batch();
+  try {
+      const q = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId);
+      const submissionsSnapshot = await q.get();
+      submissionsSnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+      });
+      const postDocRef = firestore.collection('oneTimePosts').doc(postId);
+      batch.delete(postDocRef);
+      await batch.commit();
+  } catch (error) {
+      console.error("Error deleting one-time post and submissions: ", error);
+      throw new Error("Não foi possível deletar o post e suas submissões.");
+  }
 };

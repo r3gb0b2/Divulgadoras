@@ -109,6 +109,23 @@ const SettingsPage: React.FC = () => {
               Acessar &rarr;
             </div>
           </Link>
+          
+           {/* Post Único */}
+          <Link
+            to="/admin/one-time-posts"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <MegaphoneIcon className="w-8 h-8 text-purple-400" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Post Único</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Gerenciar &rarr;
+            </div>
+          </Link>
 
           {/* Gerenciar Listas de Convidados */}
           <Link
