@@ -108,15 +108,15 @@ const CreateOneTimePost: React.FC = () => {
                 organizationId: selectedOrgId,
                 campaignId: selectedCampaign.id,
                 campaignName: selectedCampaign.name,
-                eventName: formData.eventName.trim() || undefined,
                 guestListName: formData.guestListName.trim(),
                 type: formData.type,
-                textContent: formData.type === 'text' ? formData.textContent : undefined,
-                mediaUrl: finalMediaUrl,
-                googleDriveUrl: formData.googleDriveUrl.trim() || undefined,
                 instructions: formData.instructions,
                 isActive: formData.isActive,
                 createdByEmail: adminData.email,
+                ...(formData.eventName.trim() && { eventName: formData.eventName.trim() }),
+                ...(formData.type === 'text' && { textContent: formData.textContent }),
+                ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
+                ...(formData.googleDriveUrl.trim() && { googleDriveUrl: formData.googleDriveUrl.trim() }),
             };
 
             await createOneTimePost(postData);
