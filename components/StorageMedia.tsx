@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { ref, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 // Helper to extract Google Drive file ID from various URL formats
@@ -56,9 +55,9 @@ const StorageMedia: React.FC<StorageMediaProps> = ({ path, type, ...props }) => 
                 return;
             }
 
-            // If it's not a full URL, assume it's a Firebase Storage path (for images)
-            const storageRef = ref(storage, path);
-            getDownloadURL(storageRef)
+            // If it's not a full URL, assume it's a Firebase Storage path
+            const storageRef = storage.ref(path);
+            storageRef.getDownloadURL()
                 .then(downloadUrl => {
                     if (isMounted) {
                         setUrl(downloadUrl);

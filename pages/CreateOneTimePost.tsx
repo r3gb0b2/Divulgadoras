@@ -95,13 +95,13 @@ const CreateOneTimePost: React.FC = () => {
             const selectedCampaign = campaigns.find(c => c.id === campaignId);
             if (!selectedCampaign) throw new Error("Evento inválido.");
 
-            let finalMediaUrl: string | undefined = googleDriveUrl || undefined;
+            let finalMediaUrl: string | undefined = undefined;
             if (mediaFile) {
                 const fileExtension = mediaFile.name.split('.').pop();
                 const fileName = `one-time-posts/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                 const storageRef = storage.ref(fileName);
                 await storageRef.put(mediaFile);
-                finalMediaUrl = await storageRef.getDownloadURL();
+                finalMediaUrl = storageRef.fullPath;
             }
 
             const postData: Omit<OneTimePost, 'id' | 'createdAt'> = {
