@@ -14,7 +14,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon } from '../components/Icons';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -593,6 +593,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             <button onClick={handleLookupPromoter} disabled={isLookingUp} className="px-4 py-2 bg-indigo-600 text-white rounded-md whitespace-nowrap">
                                 {isLookingUp ? 'Buscando...' : 'Buscar Global'}
                             </button>
+                            {canManage && (
+                                adminData.role === 'superadmin' ? (
+                                    <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2" title="Voltar ao painel principal">
+                                        <BuildingOfficeIcon className="w-5 h-5"/>
+                                        <span>Painel Principal</span>
+                                    </Link>
+                                ) : (
+                                    <Link to="/admin/settings" className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
+                                        <CogIcon className="w-5 h-5"/>
+                                        <span>Configurações</span>
+                                    </Link>
+                                )
+                            )}
                              {canManage && organizationIdForReasons && (
                                 <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
                                     <CogIcon className="w-5 h-5"/>
