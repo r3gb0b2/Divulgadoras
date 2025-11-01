@@ -1,13 +1,12 @@
-
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { ArrowLeftIcon } from '../components/Icons';
 import { getPromoterById } from '../services/promoterService';
 import { checkInPerson, getConfirmationByPromoterAndList } from '../services/guestListService';
-import { Promoter, GuestListConfirmation, Timestamp } from '../types';
+import { Promoter, GuestListConfirmation, Timestamp, Campaign } from '../types';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { getAllCampaigns } from '../services/settingsService';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
@@ -47,6 +46,11 @@ interface ScanData {
 
 const QrCodeScannerPage: React.FC = () => {
     const navigate = useNavigate();
+    const { selectedOrgId } = useAdminAuth();
+
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [currentCampaignId, setCurrentCampaignId] = useState<string>('');
+    
     const [scanData, setScanData] = useState<ScanData | null>(null);
     const [scanError, setScanError] = useState<string | null>(null);
     const [isFetchingData, setIsFetchingData] = useState(false);
@@ -56,8 +60,21 @@ const QrCodeScannerPage: React.FC = () => {
     
     const scannerRef = useRef<Html5Qrcode | null>(null);
 
+    useEffect(() => {
+        if (selectedOrgId) {
+            getAllCampaigns(selectedOrgId)
+                .then(data => {
+                    const activeCampaigns = data.filter(c => c.isActive);
+                    setCampaigns(activeCampaigns);
+                    if (activeCampaigns.length > 0) {
+                        setCurrentCampaignId(activeCampaigns[0].id);
+                    }
+                })
+                .catch(err => setScanError(err.message));
+        }
+    }, [selectedOrgId]);
+
     const onScanSuccess = useCallback(async (decodedText: string) => {
-        // Prevent multiple rapid scans by immediately stopping the scanner
         if (scannerRef.current && scannerRef.current.isScanning) {
             try {
                 await scannerRef.current.stop();
@@ -66,7 +83,6 @@ const QrCodeScannerPage: React.FC = () => {
                 console.error("Falha ao parar scanner no sucesso.", err);
             }
         } else {
-            // Already stopped or stopping, ignore subsequent calls from the same scan
             return;
         }
 
@@ -76,9 +92,19 @@ const QrCodeScannerPage: React.FC = () => {
         setFeedbackMessage(null);
         
         try {
+            if (!currentCampaignId) {
+                throw new Error("Por favor, selecione um setor de check-in antes de escanear.");
+            }
+
             const data = JSON.parse(decodedText);
             if (data.type !== 'promoter-checkin' || !data.promoterId || !data.campaignId || !data.listId) {
                 throw new Error("QR Code inválido ou não reconhecido.");
+            }
+            
+            if (data.campaignId !== currentCampaignId) {
+                const scannedCampaign = campaigns.find(c => c.id === data.campaignId);
+                const scannedCampaignName = scannedCampaign ? scannedCampaign.name : "Desconhecido";
+                throw new Error(`Acesso Negado. Esta credencial é para o setor: ${scannedCampaignName}.`);
             }
 
             const { promoterId, listId } = data;
@@ -104,7 +130,7 @@ const QrCodeScannerPage: React.FC = () => {
         } finally {
             setIsFetchingData(false);
         }
-    }, []);
+    }, [currentCampaignId, campaigns]);
 
     // Effect for scanner lifecycle management
     useEffect(() => {
@@ -124,7 +150,7 @@ const QrCodeScannerPage: React.FC = () => {
                     );
                     setIsScanning(true);
                 } catch (err: any) {
-                    setScanError(`Erro ao acessar câmera: ${err.message}.`);
+                    setScanError(`Erro ao acessar câmera: ${err.message}. Verifique as permissões do navegador.`);
                     setIsScanning(false);
                 }
             }
@@ -171,7 +197,6 @@ const QrCodeScannerPage: React.FC = () => {
         setScanData(null);
         setScanError(null);
         setFeedbackMessage(null);
-        // The useEffect will automatically restart the scanner when scanData becomes null
     };
 
     return (
@@ -184,6 +209,20 @@ const QrCodeScannerPage: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
+                 <div className="mb-4 text-center">
+                    <label htmlFor="sector-select" className="block text-sm font-medium text-gray-300">Setor de Check-in Atual</label>
+                    <select
+                        id="sector-select"
+                        value={currentCampaignId}
+                        onChange={(e) => setCurrentCampaignId(e.target.value)}
+                        className="mt-1 w-full max-w-md mx-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                        disabled={isScanning || isFetchingData || !!scanData}
+                    >
+                        {campaigns.length === 0 && <option>Carregando setores...</option>}
+                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
+                    </select>
+                </div>
+
                 <div id="qr-reader" className={`w-full max-w-md mx-auto rounded-lg overflow-hidden border-2 border-gray-600 ${scanData ? 'hidden' : 'block'}`}></div>
                 
                 {isFetchingData && <p className="text-yellow-400 text-center mt-4">Processando QR Code...</p>}
@@ -193,7 +232,7 @@ const QrCodeScannerPage: React.FC = () => {
                         <div className="bg-red-900/50 text-red-300 p-4 rounded-md">
                             <p className="font-bold">Erro</p>
                             <p>{scanError}</p>
-                            <button onClick={handleScanNext} className="mt-2 text-sm text-white underline">Tentar Novamente</button>
+                            <button onClick={handleScanNext} className="mt-2 text-sm text-white underline">Escanear Próximo</button>
                         </div>
                     )}
 

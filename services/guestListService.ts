@@ -245,21 +245,56 @@ export const checkInPerson = async (confirmationId: string, personName: string):
           console.warn("Divulgadora já tem check-in.");
           return; // Already checked in
         }
-        transaction.update(docRef, { promoterCheckedInAt: now });
+        transaction.update(docRef, { promoterCheckedInAt: now, promoterCheckedOutAt: null });
       } else {
         const guestsCheckedIn = data.guestsCheckedIn || [];
-        if (guestsCheckedIn.some(g => g.name === personName)) {
-          console.warn(`Convidado ${personName} já tem check-in.`);
-          return; // Guest already checked in
+        if (guestsCheckedIn.some(g => g.name === personName && !g.checkedOutAt)) {
+          console.warn(`Convidado ${personName} já tem check-in ativo.`);
+          return; // Guest already checked in and not checked out
         }
         
         // Add the new guest to the array of checked-in guests
-        const newGuestsCheckedIn = [...guestsCheckedIn, { name: personName, checkedInAt: now }];
+        const newGuestsCheckedIn = [...guestsCheckedIn, { name: personName, checkedInAt: now, checkedOutAt: null }];
         transaction.update(docRef, { guestsCheckedIn: newGuestsCheckedIn });
       }
     });
   } catch (error) {
     console.error("Erro durante a transação de check-in: ", error);
     throw new Error("Não foi possível realizar o check-in.");
+  }
+};
+
+/**
+ * Checks out a person (promoter or guest) for a specific event confirmation.
+ * Uses a transaction to ensure data integrity.
+ * @param confirmationId The ID of the GuestListConfirmation document.
+ * @param personName The name of the person to check out.
+ */
+export const checkOutPerson = async (confirmationId: string, personName: string): Promise<void> => {
+  const docRef = firestore.collection('guestListConfirmations').doc(confirmationId);
+  try {
+    await firestore.runTransaction(async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists) throw new Error("Confirmação não encontrada.");
+
+      const data = docSnap.data() as GuestListConfirmation;
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+
+      if (personName === data.promoterName) {
+        if (!data.promoterCheckedInAt) throw new Error("Não pode fazer check-out sem ter feito check-in.");
+        transaction.update(docRef, { promoterCheckedOutAt: now });
+      } else {
+        const guestsCheckedIn = data.guestsCheckedIn || [];
+        const guestIndex = guestsCheckedIn.findIndex(g => g.name === personName && !g.checkedOutAt); // Find the active check-in
+        if (guestIndex === -1) throw new Error("Convidado não encontrado na lista de check-in ativo.");
+        
+        const newGuestsCheckedIn = [...guestsCheckedIn];
+        newGuestsCheckedIn[guestIndex] = { ...newGuestsCheckedIn[guestIndex], checkedOutAt: now as any };
+        transaction.update(docRef, { guestsCheckedIn: newGuestsCheckedIn });
+      }
+    });
+  } catch (error) {
+    console.error("Erro na transação de check-out: ", error);
+    throw new Error("Não foi possível realizar o check-out.");
   }
 };

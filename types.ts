@@ -213,7 +213,8 @@ export interface GuestListConfirmation {
     guestNames: string[];
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
-    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; }[];
+    promoterCheckedOutAt?: Timestamp | FieldValue | null;
+    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; checkedOutAt?: Timestamp | FieldValue | null; }[];
     isLocked?: boolean;
 }
 

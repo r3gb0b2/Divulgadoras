@@ -92,23 +92,6 @@ const SettingsPage: React.FC = () => {
               Acessar &rarr;
             </div>
           </Link>
-
-          {/* Gerenciar Posts */}
-          <Link
-            to="/admin/posts"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <MegaphoneIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Crie publicações de texto ou imagem e designe para suas divulgadoras aprovadas.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
           
            {/* Post Único */}
           <Link

@@ -1,9 +1,6 @@
-
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGuestListForCampaign, checkInPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
+import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
@@ -18,6 +15,7 @@ type Person = {
     isPromoter: boolean;
     confirmationId: string;
     checkedInAt: Timestamp | FieldValue | null | undefined;
+    checkedOutAt: Timestamp | FieldValue | null | undefined;
     photoUrl?: string;
     listName: string;
     promoterName: string;
@@ -159,14 +157,16 @@ const formatTime = (timestamp: any): string => {
 const PersonRow: React.FC<{ 
     person: Person;
     onCheckIn: (confirmationId: string, personName: string) => void;
+    onCheckOut: (confirmationId: string, personName: string) => void;
     onUnlock: (confirmationId: string) => void;
     isLocked: boolean;
     processingCheckin: string | null;
     unlockingId: string | null;
     openPhotoModal: (url: string) => void;
-}> = ({ person, onCheckIn, onUnlock, isLocked, processingCheckin, unlockingId, openPhotoModal }) => {
+}> = ({ person, onCheckIn, onCheckOut, onUnlock, isLocked, processingCheckin, unlockingId, openPhotoModal }) => {
     const checkinKey = `${person.confirmationId}-${person.name}`;
     const isCheckedIn = !!person.checkedInAt;
+    const isCheckedOut = !!person.checkedOutAt;
     
     return (
         <SwipeableRow onSwipeRight={() => onCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
@@ -189,11 +189,22 @@ const PersonRow: React.FC<{
                         </div>
                     </div>
                 </div>
-                 {isCheckedIn ? (
-                    <div className="flex items-center gap-2 text-md font-semibold text-green-400">
-                        <CheckCircleIcon className="w-6 h-6" />
-                        <span>{formatTime(person.checkedInAt)}</span>
+                 {isCheckedOut ? (
+                    <div className="text-sm text-gray-400 text-right">
+                        <span className="block">Entrada: {formatTime(person.checkedInAt)}</span>
+                        <span className="block">Saída: {formatTime(person.checkedOutAt)}</span>
                     </div>
+                 ) : isCheckedIn ? (
+                    <div className="flex items-center gap-2">
+                        <span className="text-md font-semibold text-green-400">{formatTime(person.checkedInAt)}</span>
+                        <button
+                           onClick={() => onCheckOut(person.confirmationId, person.name)}
+                           disabled={processingCheckin === checkinKey}
+                           className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 disabled:opacity-50 text-md"
+                       >
+                           {processingCheckin === checkinKey ? '...' : 'Saída'}
+                       </button>
+                   </div>
                  ) : (
                      <div className="flex items-center gap-2">
                         {isLocked && person.isPromoter && (
@@ -337,17 +348,20 @@ const GuestListCheckinPage: React.FC = () => {
                     isPromoter: true,
                     confirmationId: conf.id,
                     checkedInAt: conf.promoterCheckedInAt,
+                    checkedOutAt: conf.promoterCheckedOutAt,
                     photoUrl: conf.promoterPhotoUrl,
                     listName: conf.listName,
                     promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
             conf.guestNames.filter(name => name.trim()).forEach(guestName => {
+                 const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guestName);
                 people.push({
                     name: guestName,
                     isPromoter: false,
                     confirmationId: conf.id,
-                    checkedInAt: (conf.guestsCheckedIn || []).find(g => g.name === guestName)?.checkedInAt,
+                    checkedInAt: guestCheckinData?.checkedInAt,
+                    checkedOutAt: guestCheckinData?.checkedOutAt,
                     photoUrl: undefined,
                     listName: conf.listName,
                     promoterName: conf.promoterName
@@ -359,9 +373,9 @@ const GuestListCheckinPage: React.FC = () => {
 
     const listStats = useMemo(() => {
         const total = allPeople.length;
-        const checkedIn = allPeople.filter(p => p.checkedInAt).length;
-        const pending = total - checkedIn;
-        const rate = total > 0 ? Math.round((checkedIn / total) * 100) : 0;
+        const checkedIn = allPeople.filter(p => p.checkedInAt && !p.checkedOutAt).length; // Currently inside
+        const pending = total - allPeople.filter(p => p.checkedInAt).length;
+        const rate = total > 0 ? Math.round((allPeople.filter(p => p.checkedInAt).length / total) * 100) : 0;
         return { total, checkedIn, pending, rate };
     }, [allPeople]);
 
@@ -405,8 +419,18 @@ const GuestListCheckinPage: React.FC = () => {
                     // FIX: Use firebase.firestore.Timestamp.now() as Timestamp is only a type.
                     const now = firebase.firestore.Timestamp.now();
                     const updatedConf = { ...conf };
-                    if (personName === conf.promoterName) updatedConf.promoterCheckedInAt = now;
-                    else updatedConf.guestsCheckedIn = [...(conf.guestsCheckedIn || []), { name: personName, checkedInAt: now }];
+                    if (personName === conf.promoterName) {
+                        updatedConf.promoterCheckedInAt = now;
+                        updatedConf.promoterCheckedOutAt = null; // Reset checkout on new check-in
+                    }
+                    else {
+                         const guestIndex = (updatedConf.guestsCheckedIn || []).findIndex(g => g.name === personName);
+                         if (guestIndex > -1) {
+                             updatedConf.guestsCheckedIn![guestIndex] = { ...updatedConf.guestsCheckedIn![guestIndex], checkedInAt: now, checkedOutAt: null };
+                         } else {
+                            updatedConf.guestsCheckedIn = [...(conf.guestsCheckedIn || []), { name: personName, checkedInAt: now, checkedOutAt: null }];
+                         }
+                    }
                     return updatedConf;
                 }
                 return conf;
@@ -416,6 +440,38 @@ const GuestListCheckinPage: React.FC = () => {
             playSound('error');
             if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
             setFeedback({ type: 'error', key: Date.now() });
+        } finally {
+            setProcessingCheckin(null);
+        }
+    };
+
+    const handleCheckOut = async (confirmationId: string, personName: string) => {
+        const checkinKey = `${confirmationId}-${personName}`;
+        setProcessingCheckin(checkinKey);
+        setError(null);
+        try {
+            await checkOutPerson(confirmationId, personName);
+            playSound('success');
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            setAllConfirmations(prev => prev.map(conf => {
+                if (conf.id === confirmationId) {
+                    const now = firebase.firestore.Timestamp.now();
+                    const updatedConf = { ...conf };
+                    if (personName === conf.promoterName) {
+                        updatedConf.promoterCheckedOutAt = now;
+                    } else {
+                        updatedConf.guestsCheckedIn = (conf.guestsCheckedIn || []).map(g => 
+                            g.name === personName ? { ...g, checkedOutAt: now } : g
+                        );
+                    }
+                    return updatedConf;
+                }
+                return conf;
+            }));
+        } catch (err: any) {
+            setError(err.message || `Falha no check-out de ${personName}.`);
+            playSound('error');
         } finally {
             setProcessingCheckin(null);
         }
@@ -437,6 +493,7 @@ const GuestListCheckinPage: React.FC = () => {
                             key={`${person.confirmationId}-${person.name}`}
                             person={person}
                             onCheckIn={handleCheckIn}
+                            onCheckOut={handleCheckOut}
                             onUnlock={handleUnlock}
                             isLocked={confirmation?.isLocked ?? false}
                             processingCheckin={processingCheckin}
@@ -470,7 +527,7 @@ const GuestListCheckinPage: React.FC = () => {
                     <>
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Total</h3><p className="text-4xl font-bold text-white">{listStats.total}</p></div>
-                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Check-ins</h3><p className="text-4xl font-bold text-green-400">{listStats.checkedIn}</p></div>
+                            <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Presentes</h3><p className="text-4xl font-bold text-green-400">{listStats.checkedIn}</p></div>
                             <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Pendentes</h3><p className="text-4xl font-bold text-yellow-400">{listStats.pending}</p></div>
                             <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400">Taxa</h3><p className="text-4xl font-bold text-primary">{listStats.rate}%</p></div>
                         </div>
