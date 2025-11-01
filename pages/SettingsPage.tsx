@@ -93,6 +93,23 @@ const SettingsPage: React.FC = () => {
             </div>
           </Link>
           
+           {/* Gerenciamento de Posts */}
+           <Link
+              to="/admin/posts"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <MegaphoneIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Crie, edite e acompanhe o desempenho das publicações para suas divulgadoras.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
+
            {/* Post Único */}
           <Link
             to="/admin/one-time-posts"
