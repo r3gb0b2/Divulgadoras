@@ -7,14 +7,14 @@ import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
 import { states } from '../constants/states';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 // FIX: Changed to a named import to resolve module export error.
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon } from '../components/Icons';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -81,6 +81,7 @@ const getPerformanceColor = (rate: number): string => {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
+    const navigate = useNavigate();
 
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [allAssignments, setAllAssignments] = useState<PostAssignment[]>([]);
@@ -395,8 +396,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const handleLogout = async () => {
         try {
-            // FIX: Use compat signOut method.
             await auth.signOut();
+            navigate('/admin/login');
         } catch (error) {
             console.error("Logout failed", error);
         }
@@ -611,6 +612,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
                                     <CogIcon className="w-5 h-5"/>
                                     <span>Gerenciar Motivos</span>
+                                </button>
+                            )}
+                             {adminData.role !== 'superadmin' && (
+                                <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
+                                    <LogoutIcon className="w-5 h-5" />
+                                    <span>Sair</span>
                                 </button>
                             )}
                         </div>
