@@ -11,6 +11,7 @@ interface State {
 }
 
 // FIX: The ErrorBoundary class must extend React.Component to have access to state, props, and lifecycle methods.
+// Fix: ErrorBoundary must extend React.Component to have access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
