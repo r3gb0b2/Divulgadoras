@@ -552,6 +552,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     return (
         <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">Painel de Divulgadoras</h1>
+                <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center justify-center gap-2">
+                    <LogoutIcon className="w-5 h-5" />
+                    <span>Sair</span>
+                </button>
+            </div>
+            
             <div className="bg-secondary p-4 rounded-lg shadow-lg">
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Stats section */}
@@ -612,12 +620,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
                                     <CogIcon className="w-5 h-5"/>
                                     <span>Gerenciar Motivos</span>
-                                </button>
-                            )}
-                             {adminData.role !== 'superadmin' && (
-                                <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
-                                    <LogoutIcon className="w-5 h-5" />
-                                    <span>Sair</span>
                                 </button>
                             )}
                         </div>
