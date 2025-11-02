@@ -70,6 +70,7 @@ const AdminPosts: React.FC = () => {
     const handleLogout = async () => {
         try {
             await auth.signOut();
+            navigate('/admin/login');
         } catch (error) {
             console.error("Logout failed", error);
         }
@@ -205,7 +206,7 @@ const AdminPosts: React.FC = () => {
                             + Nova Publicação
                         </button>
                     )}
-                     {adminData?.role === 'poster' && (
+                     {adminData && (
                         <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
                             Sair
                         </button>
