@@ -60,7 +60,6 @@ const ProofUploadPage: React.FC = () => {
             const fileList = Array.from(files).slice(0, 2); // Max 2 files
             setImageFiles(fileList);
             
-            // FIX: Explicitly cast `file` to `Blob` to resolve TypeScript error where it was being inferred as `unknown`.
             const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
             setImagePreviews(previewUrls);
         }

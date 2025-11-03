@@ -7,7 +7,6 @@ import { checkInPerson, getConfirmationByPromoterAndList } from '../services/gue
 import { Promoter, GuestListConfirmation, Timestamp, Campaign } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllCampaigns } from '../services/settingsService';
-// FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -64,7 +63,6 @@ const QrCodeScannerPage: React.FC = () => {
         if (selectedOrgId) {
             getAllCampaigns(selectedOrgId)
                 .then(data => {
-                    // FIX: Changed filter condition from 'c.isActive' to 'c.status === "active"' to match the Campaign type definition.
                     const activeCampaigns = data.filter(c => c.status === 'active');
                     setCampaigns(activeCampaigns);
                     if (activeCampaigns.length > 0) {
@@ -182,7 +180,6 @@ const QrCodeScannerPage: React.FC = () => {
 
             setScanData(prev => prev ? ({
                 ...prev,
-                // FIX: Use firebase.firestore.Timestamp.now() as Timestamp is only a type.
                 confirmation: { ...prev.confirmation, promoterCheckedInAt: firebase.firestore.Timestamp.now() }
             }) : null);
         } catch(err: any) {

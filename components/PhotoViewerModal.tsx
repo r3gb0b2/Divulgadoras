@@ -9,7 +9,6 @@ interface PhotoViewerModalProps {
   onClose: () => void;
 }
 
-// FIX: Changed to a named export to resolve a module resolution error.
 export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ imageUrls, startIndex, isOpen, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [downloadableUrl, setDownloadableUrl] = useState<string | null>(null);

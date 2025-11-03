@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { PostAssignment, Promoter } from '../types';
+import { PostAssignment, Promoter, Timestamp } from '../types';
 import { getStatsForPromoterByEmail } from '../services/postService';
-import { Timestamp } from 'firebase/firestore';
 
 interface PromoterPublicStatsModalProps {
     isOpen: boolean;
