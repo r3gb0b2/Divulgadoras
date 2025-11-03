@@ -27,7 +27,7 @@ const AdminCheckinDashboard: React.FC = () => {
             const campaignsData = await getAllCampaigns(orgId);
             // Filter for only active campaigns and sort by name
             const activeCampaigns = campaignsData
-                .filter(c => c.isActive)
+                .filter(c => c.status === 'active')
                 .sort((a, b) => a.name.localeCompare(b.name));
             setCampaigns(activeCampaigns);
         } catch (err: any) {

@@ -64,7 +64,8 @@ const QrCodeScannerPage: React.FC = () => {
         if (selectedOrgId) {
             getAllCampaigns(selectedOrgId)
                 .then(data => {
-                    const activeCampaigns = data.filter(c => c.isActive);
+                    // FIX: Changed filter condition from 'c.isActive' to 'c.status === "active"' to match the Campaign type definition.
+                    const activeCampaigns = data.filter(c => c.status === 'active');
                     setCampaigns(activeCampaigns);
                     if (activeCampaigns.length > 0) {
                         setCurrentCampaignId(activeCampaigns[0].id);

@@ -50,11 +50,13 @@ export interface RejectionReason {
   organizationId: string;
 }
 
+export type CampaignStatus = 'active' | 'inactive' | 'hidden';
+
 export interface Campaign {
   id: string;
   name: string;
   description: string;
-  isActive: boolean;
+  status: CampaignStatus;
   whatsappLink: string;
   rules: string;
   stateAbbr: string;

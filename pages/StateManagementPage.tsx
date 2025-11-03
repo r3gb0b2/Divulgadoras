@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Campaign, AdminUserData, StatesConfig, Timestamp } from '../types';
+import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
 import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
@@ -20,7 +20,7 @@ const CampaignModal: React.FC<{
         description: '', 
         whatsappLink: '', 
         rules: '', 
-        isActive: true,
+        status: 'active' as CampaignStatus,
     });
     
     useEffect(() => {
@@ -30,10 +30,10 @@ const CampaignModal: React.FC<{
                 description: campaign.description || '',
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
-                isActive: campaign.isActive !== undefined ? campaign.isActive : true,
+                status: campaign.status || 'active',
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active' });
         }
     }, [campaign, isOpen]);
     
@@ -54,7 +54,18 @@ const CampaignModal: React.FC<{
                     <textarea placeholder="Descrição (opcional)" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[80px]"/>
                     <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
-                    <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                         <select 
+                            value={formData.status} 
+                            onChange={e => setFormData({...formData, status: e.target.value as CampaignStatus})} 
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                        >
+                            <option value="active">Ativo (visível para cadastro)</option>
+                            <option value="inactive">Inativo (não permite novos cadastros)</option>
+                            <option value="hidden">Oculto (não aparece na lista de eventos)</option>
+                        </select>
+                    </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
@@ -68,6 +79,16 @@ const CampaignModal: React.FC<{
 interface StateManagementPageProps {
   adminData: AdminUserData;
 }
+
+const getStatusBadge = (status: CampaignStatus) => {
+    const styles: Record<CampaignStatus, string> = {
+        active: "bg-green-900/50 text-green-300",
+        inactive: "bg-red-900/50 text-red-300",
+        hidden: "bg-gray-700 text-gray-400",
+    };
+    const text: Record<CampaignStatus, string> = { active: "Ativo", inactive: "Inativo", hidden: "Oculto" };
+    return <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${styles[status]}`}>{text[status]}</span>;
+};
 
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
     const { stateAbbr } = useParams<{ stateAbbr: string }>();
@@ -230,7 +251,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         {campaigns.map(c => (
                             <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                                 <div>
-                                    <p className="font-semibold text-white">{c.name} <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span></p>
+                                    <p className="font-semibold text-white flex items-center">{c.name} {getStatusBadge(c.status)}</p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
                                 </div>
                                 {adminData.role !== 'viewer' && (

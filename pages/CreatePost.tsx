@@ -598,7 +598,9 @@ const CreatePost: React.FC = () => {
                         </select>
                          <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} disabled={!selectedState} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:opacity-50">
                             <option value="" disabled>Selecione um Evento/Gênero</option>
-                            {filteredCampaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {filteredCampaigns.map(c => <option key={c.id} value={c.id} disabled={c.status !== 'active'}>
+                                {c.name} {c.status !== 'active' ? `(${c.status === 'inactive' ? 'Inativo' : 'Oculto'})` : ''}
+                            </option>)}
                         </select>
                     </div>
                      <div className="mt-4">

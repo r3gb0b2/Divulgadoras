@@ -414,7 +414,7 @@ const RegistrationFlowPage: React.FC = () => {
             setIsLoading(true);
             getCampaigns(state, organizationId)
                 .then(data => {
-                    const activeCampaigns = data.filter(c => c.isActive);
+                    const activeCampaigns = data.filter(c => c.status === 'active');
                     setCampaigns(activeCampaigns);
                 })
                 .catch(() => setError("Erro ao carregar os eventos disponíveis."))
