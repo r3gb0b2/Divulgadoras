@@ -345,51 +345,60 @@ export const PostDetails: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                     {filteredAssignments.map(assignment => (
-                        <div key={assignment.id} className="bg-dark/80 p-4 rounded-lg border border-gray-700/50 flex flex-col">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className={`font-bold text-lg ${getPerformanceColor(assignment.completionRate)}`}>{assignment.promoterName}</p>
-                                    <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
-                                        <a href={`https://instagram.com/${promotersMap.get(assignment.promoterId)?.instagram?.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><InstagramIcon className="w-4 h-4"/> <span>{promotersMap.get(assignment.promoterId)?.instagram || 'N/A'}</span></a>
-                                        <a href={`https://wa.me/55${promotersMap.get(assignment.promoterId)?.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-green-400"><WhatsAppIcon className="w-4 h-4"/> <span>WhatsApp</span></a>
+                <div className="space-y-3">
+                     {filteredAssignments.map(assignment => {
+                        const promoter = promotersMap.get(assignment.promoterId);
+                        return (
+                            <div key={assignment.id} className="bg-dark/80 p-4 rounded-lg border border-gray-700/50">
+                                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                    <div className="flex items-center gap-4">
+                                        {promoter?.photoUrls?.[0] && (
+                                            <img src={promoter.photoUrls[0]} alt={assignment.promoterName} className="w-12 h-12 object-cover rounded-full flex-shrink-0" />
+                                        )}
+                                        <div>
+                                            <p className={`font-bold text-lg ${getPerformanceColor(assignment.completionRate)}`}>{assignment.promoterName}</p>
+                                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                                <a href={`https://instagram.com/${promoter?.instagram?.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><InstagramIcon className="w-4 h-4"/> <span>{promoter?.instagram || 'N/A'}</span></a>
+                                                <a href={`https://wa.me/55${promoter?.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-green-400"><WhatsAppIcon className="w-4 h-4"/></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-shrink-0 flex flex-col items-start sm:items-end gap-2">
+                                        <div>
+                                            {assignment.justification ? getJustificationStatusBadge(assignment.justificationStatus) : 
+                                            assignment.proofSubmittedAt ? <span className="px-2 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span> :
+                                            assignment.status === 'confirmed' ? <span className="px-2 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span> :
+                                            <span className="px-2 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                                            }
+                                        </div>
+                                        <p className="font-bold text-blue-400 text-lg">{assignment.completionRate >= 0 ? `${assignment.completionRate}%` : 'N/A'}</p>
                                     </div>
                                 </div>
-                                <div className="text-right">
-                                     {assignment.justification ? getJustificationStatusBadge(assignment.justificationStatus) : 
-                                     assignment.proofSubmittedAt ? <span className="px-2 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span> :
-                                     assignment.status === 'confirmed' ? <span className="px-2 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span> :
-                                     <span className="px-2 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
-                                     }
-                                     <p className="text-xs text-blue-300 font-bold mt-1">{assignment.completionRate}%</p>
+                                <div className="mt-4 flex flex-col md:flex-row items-center justify-between gap-4 border-t border-gray-700/50 pt-3">
+                                    <div className="flex-grow w-full md:w-auto">
+                                        {(assignment.proofImageUrls && assignment.proofImageUrls.length > 0) || assignment.justification ? (
+                                            <div onClick={() => handleOpenStatusModal(assignment)} className="bg-gray-800/50 p-2 rounded-md flex items-center gap-3 cursor-pointer hover:bg-gray-800/80">
+                                                {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && assignment.proofImageUrls[0] !== 'manual' ? (
+                                                    assignment.proofImageUrls.map((url, i) => (
+                                                        <img key={i} src={url} className="w-12 h-12 object-cover rounded-md" alt={`Prova ${i + 1}`} />
+                                                    ))
+                                                ) : assignment.justification ? (
+                                                    <>
+                                                        <p className="text-yellow-300 text-sm font-semibold">Justificativa</p>
+                                                        <p className="text-xs text-gray-400 italic line-clamp-2">"{assignment.justification}"</p>
+                                                    </>
+                                                ) : <p className="text-sm text-gray-400">Completado Manualmente</p>}
+                                            </div>
+                                        ) : <div className="text-center text-xs text-gray-500 h-full flex items-center justify-center">Aguardando ação da divulgadora.</div>}
+                                    </div>
+                                    <div className="flex-shrink-0 flex gap-2 w-full md:w-auto">
+                                        <button onClick={() => handleOpenStatsModal(assignment.promoterId)} className="flex-1 text-center text-sm py-2 px-3 bg-gray-600 rounded-md hover:bg-gray-500">Ver Stats</button>
+                                        <button onClick={() => handleOpenStatusModal(assignment)} className="flex-1 text-center text-sm py-2 px-3 bg-primary rounded-md hover:bg-primary-dark">Analisar</button>
+                                    </div>
                                 </div>
                             </div>
-
-                            {(assignment.proofImageUrls && assignment.proofImageUrls.length > 0) || (assignment.justification) ? (
-                                <div onClick={() => handleOpenStatusModal(assignment)} className="mt-3 bg-gray-800/50 p-2 rounded-md flex-grow flex flex-col justify-center items-center cursor-pointer hover:bg-gray-800/80">
-                                    {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (
-                                         <div className="flex gap-2">
-                                            {assignment.proofImageUrls.map((url, i) => (
-                                                <img key={i} src={url} className="w-16 h-16 object-cover rounded-md" alt={`Prova ${i + 1}`} />
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <p className="text-yellow-300 text-sm font-semibold">Justificativa Enviada</p>
-                                            <p className="text-xs text-gray-400 text-center italic mt-1 line-clamp-2">"{assignment.justification}"</p>
-                                            {assignment.justificationResponse && <p className="text-xs text-primary mt-2">Você respondeu</p>}
-                                        </>
-                                    )}
-                                </div>
-                            ) : null}
-                            
-                            <div className="mt-auto pt-3 border-t border-gray-700/50 mt-3 flex gap-2">
-                                <button onClick={() => handleOpenStatsModal(assignment.promoterId)} className="flex-1 text-center text-sm py-2 bg-gray-600 rounded-md hover:bg-gray-500">Ver Stats</button>
-                                <button onClick={() => handleOpenStatusModal(assignment)} className="flex-1 text-center text-sm py-2 bg-primary rounded-md hover:bg-primary-dark">Analisar</button>
-                            </div>
-                        </div>
-                     ))}
+                        )
+                     })}
                      {filteredAssignments.length === 0 && <p className="text-gray-400 text-center col-span-full py-8">Nenhuma tarefa encontrada com os filtros atuais.</p>}
                 </div>
             </div>

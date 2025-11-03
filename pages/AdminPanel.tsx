@@ -667,80 +667,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             {error && <div className="text-red-400 p-2 text-center">{error}</div>}
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {displayPromoters.map(promoter => (
-                    <div key={promoter.id} className="bg-secondary p-4 rounded-lg shadow-lg">
-                        <div className="flex items-start gap-4">
+                    <div key={promoter.id} className="bg-secondary rounded-lg shadow-lg flex flex-col border border-gray-700/50 overflow-hidden">
+                        <div className="relative">
                             <img
                                 src={promoter.photoUrls[0]}
                                 alt={promoter.name}
-                                className="w-16 h-16 object-cover rounded-full cursor-pointer border-2 border-gray-700"
+                                className="w-full h-48 object-cover cursor-pointer"
                                 onClick={() => openPhotoViewer(promoter.photoUrls, 0)}
                             />
-                            <div className="flex-grow">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h3 className="text-lg font-bold">{promoter.name}, {calculateAge(promoter.dateOfBirth)}</h3>
-                                        <p className="text-sm text-gray-400">{promoter.email}</p>
-                                        <div className="flex items-center gap-4 mt-1">
-                                            <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-sm gap-1">
-                                                <WhatsAppIcon className="w-4 h-4" />
-                                            </a>
-                                            <a href={`https://instagram.com/${(promoter.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center text-sm gap-1">
-                                                <InstagramIcon className="w-4 h-4" />
-                                            </a>
-                                            {promoter.tiktok && (
-                                                <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline flex items-center text-sm gap-1">
-                                                    <TikTokIcon className="w-4 h-4" />
-                                                </a>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0 ml-4">
-                                        {getStatusBadge(promoter.status)}
-                                        <p className="text-xs text-gray-500 mt-1">
-                                            {isSuperAdmin && `${organizationsMap[promoter.organizationId] || promoter.organizationId} / `}
-                                            {promoter.state} / {promoter.campaignName || 'Geral'}
-                                        </p>
-                                    </div>
+                            <div className="absolute top-2 right-2">{getStatusBadge(promoter.status)}</div>
+                        </div>
+                        <div className="p-4 flex-grow flex flex-col">
+                            <h3 className="text-lg font-bold truncate" title={promoter.name}>{promoter.name}</h3>
+                            <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
+                            
+                            <div className="flex items-center gap-4 mt-2">
+                                <a href={`https://wa.me/55${(promoter.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300"><WhatsAppIcon className="w-5 h-5" /></a>
+                                <a href={`https://instagram.com/${(promoter.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:text-pink-300"><InstagramIcon className="w-5 h-5" /></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${(promoter.tiktok || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300"><TikTokIcon className="w-5 h-5" /></a>}
+                            </div>
+                    
+                            <p className="text-xs text-gray-500 mt-2">
+                                {isSuperAdmin && `${organizationsMap[promoter.organizationId] || promoter.organizationId} / `}
+                                {promoter.state} / {promoter.campaignName || 'Geral'}
+                            </p>
+                    
+                            {promoter.status === 'approved' && (
+                                <div className="mt-2 text-sm font-bold" title="Aproveitamento em posts">
+                                    <span className={getPerformanceColor((promoter as any).completionRate)}>{(promoter as any).completionRate >= 0 ? `${(promoter as any).completionRate}% aproveitamento` : 'Sem dados'}</span>
                                 </div>
-                                {promoter.status === 'approved' && (
-                                    <div className="mt-2 text-sm font-bold" title="Aproveitamento em posts">
-                                        <span className={getPerformanceColor((promoter as any).completionRate)}>{(promoter as any).completionRate}% de aproveitamento</span>
-                                    </div>
-                                )}
+                            )}
+                            
+                            <div className="flex-grow">
                                 {promoter.observation && (
-                                    <div className="mt-2 p-2 bg-dark/70 rounded text-sm text-yellow-300">
-                                        <strong>Obs:</strong> {promoter.observation}
-                                    </div>
+                                    <div className="mt-2 p-2 bg-dark/70 rounded text-xs text-yellow-300"><strong>Obs:</strong> {promoter.observation}</div>
                                 )}
                                 {promoter.rejectionReason && (
-                                    <div className="mt-2 p-2 bg-dark/70 rounded text-sm text-red-300">
-                                        <strong>Motivo:</strong> {promoter.rejectionReason}
-                                    </div>
+                                    <div className="mt-2 p-2 bg-dark/70 rounded text-xs text-red-300"><strong>Motivo:</strong> {promoter.rejectionReason}</div>
                                 )}
                             </div>
+                    
+                            {canManage && (
+                                <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap items-center justify-end gap-2">
+                                    {promoter.status === 'pending' || promoter.status === 'rejected_editable' ? (
+                                        <>
+                                            <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Aprovar</button>
+                                            <button onClick={() => openRejectionModal(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-md">Rejeitar</button>
+                                        </>
+                                    ) : promoter.status === 'approved' ? (
+                                        <>
+                                            <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md">{notifyingId === promoter.id ? '...' : 'Notificar'}</button>
+                                            <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-800 text-white text-sm rounded-md">{processingId === promoter.id ? '...' : 'Remover'}</button>
+                                        </>
+                                    ) : promoter.status === 'rejected' ? (
+                                        <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Re-aprovar</button>
+                                    ) : null}
+                                    <button onClick={() => openEditModal(promoter)} className="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md">Detalhes</button>
+                                    {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="px-3 py-1.5 bg-black text-red-500 text-sm rounded-md">Excluir</button>}
+                                </div>
+                            )}
                         </div>
-                        
-                        {canManage && (
-                            <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap items-center justify-end gap-2">
-                                {promoter.status === 'pending' || promoter.status === 'rejected_editable' ? (
-                                    <>
-                                        <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Aprovar</button>
-                                        <button onClick={() => openRejectionModal(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-md">Rejeitar</button>
-                                    </>
-                                ) : promoter.status === 'approved' ? (
-                                    <>
-                                        <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md">{notifyingId === promoter.id ? '...' : 'Notificar'}</button>
-                                        <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-800 text-white text-sm rounded-md">{processingId === promoter.id ? '...' : 'Remover'}</button>
-                                    </>
-                                ) : promoter.status === 'rejected' ? (
-                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Re-aprovar</button>
-                                ) : null}
-                                <button onClick={() => openEditModal(promoter)} className="px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md">Detalhes</button>
-                                {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="px-3 py-1.5 bg-black text-red-500 text-sm rounded-md">Excluir</button>}
-                            </div>
-                        )}
                     </div>
                 ))}
             </div>
