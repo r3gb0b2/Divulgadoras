@@ -117,7 +117,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
          <div>
             <p className="text-gray-300 mb-2">Divulgadora: <span className="font-semibold text-white">{assignment.promoterName}</span></p>
             <div className="bg-dark/70 p-3 rounded-md mb-4">
-                <p className="text-sm text-gray-400 italic">"{assignment.justification}"</p>
+                <p className="text-sm text-gray-400 italic whitespace-pre-wrap break-words">"{assignment.justification}"</p>
             </div>
             {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                 <div className="mb-4">
@@ -197,39 +197,43 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-white mb-4">Analisar Tarefa</h2>
-                {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+                <div className="flex-shrink-0">
+                    <h2 className="text-xl font-bold text-white mb-4">Analisar Tarefa</h2>
+                    {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+                </div>
                 
-                {hasProof && (
-                    <div className="mb-4 border-b border-gray-700 pb-4">
-                        <h3 className="text-lg font-semibold text-white">Comprovação Enviada</h3>
-                        <div className="flex gap-2 mt-2">
-                            {assignment.proofImageUrls!.map((url, index) => (
-                                <img
-                                    key={index}
-                                    src={url}
-                                    alt={`Comprovação ${index + 1}`}
-                                    onClick={() => openPhotoViewer(index)}
-                                    className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary"
-                                />
-                            ))}
+                <div className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-4">
+                    {hasProof && (
+                        <div className="mb-4 border-b border-gray-700 pb-4">
+                            <h3 className="text-lg font-semibold text-white">Comprovação Enviada</h3>
+                            <div className="flex gap-2 mt-2">
+                                {assignment.proofImageUrls!.map((url, index) => (
+                                    <img
+                                        key={index}
+                                        src={url}
+                                        alt={`Comprovação ${index + 1}`}
+                                        onClick={() => openPhotoViewer(index)}
+                                        className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary"
+                                    />
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {assignment.justification ? (
-                    <div className="space-y-4">
-                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-4 w-fit">
-                            <button onClick={() => setAction('manage_justification')} className={`px-3 py-1 text-sm rounded-md ${action === 'manage_justification' ? 'bg-primary' : ''}`}>Analisar Justificativa</button>
-                            <button onClick={() => setAction('change_status')} className={`px-3 py-1 text-sm rounded-md ${action === 'change_status' ? 'bg-primary' : ''}`}>Alterar Status Geral</button>
+                    {assignment.justification ? (
+                        <div className="space-y-4">
+                            <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-4 w-fit">
+                                <button onClick={() => setAction('manage_justification')} className={`px-3 py-1 text-sm rounded-md ${action === 'manage_justification' ? 'bg-primary' : 'hover:bg-gray-700'}`}>Analisar Justificativa</button>
+                                <button onClick={() => setAction('change_status')} className={`px-3 py-1 text-sm rounded-md ${action === 'change_status' ? 'bg-primary' : 'hover:bg-gray-700'}`}>Alterar Status Geral</button>
+                            </div>
+                            {action === 'manage_justification' ? renderJustificationSection() : renderStatusChangeSection()}
                         </div>
-                        {action === 'manage_justification' ? renderJustificationSection() : renderStatusChangeSection()}
-                    </div>
-                ) : (
-                    renderStatusChangeSection()
-                )}
+                    ) : (
+                        renderStatusChangeSection()
+                    )}
+                </div>
                 
-                <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
+                <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4 flex-shrink-0">
                     <button onClick={onClose} disabled={isSaving} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
                     <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
                         {isSaving ? 'Salvando...' : 'Salvar Alterações'}
