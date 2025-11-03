@@ -70,7 +70,7 @@ const Header: React.FC = () => {
                   <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
-                      <button onClick={handleLogout} className="flex items-center gap-2 text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">
+                      <button onClick={handleLogout} className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
                           <LogoutIcon className="h-5 w-5" />
                           <span>Sair</span>
                       </button>
@@ -107,7 +107,7 @@ const Header: React.FC = () => {
                       <Link to="/planos" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Planos</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                       {adminData && (
-                          <button onClick={handleLogout} className="w-full text-left flex items-center gap-2 text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">
+                          <button onClick={handleLogout} className="w-full text-left flex items-center gap-2 text-red-400 hover:text-red-500 px-3 py-2 rounded-md text-base font-medium">
                               <LogoutIcon className="h-5 w-5" />
                               <span>Sair</span>
                           </button>
