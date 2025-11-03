@@ -77,7 +77,7 @@ export interface AdminUserData {
   assignedCampaigns?: { [stateAbbr: string]: string[] };
 }
 
-export type OrganizationStatus = 'active' | 'trial' | 'expired' | 'hidden';
+export type OrganizationStatus = 'active' | 'trial' | 'hidden' | 'deactivated';
 
 export type PlanId = 'basic' | 'professional';
 

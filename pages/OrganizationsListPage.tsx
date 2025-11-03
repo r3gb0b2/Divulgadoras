@@ -34,14 +34,14 @@ const OrganizationsListPage: React.FC = () => {
     const styles: Record<OrganizationStatus, string> = {
       active: "bg-green-900/50 text-green-300",
       trial: "bg-blue-900/50 text-blue-300",
-      expired: "bg-red-900/50 text-red-300",
+      deactivated: "bg-red-900/50 text-red-300",
       hidden: "bg-gray-700 text-gray-400",
     };
     const text: Record<OrganizationStatus, string> = {
-      active: "Ativa",
-      trial: "Teste",
-      expired: "Expirada",
-      hidden: "Oculta",
+      active: "Ativo",
+      trial: "Em Teste",
+      deactivated: "Desativado",
+      hidden: "Oculto",
     };
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
   };

@@ -35,7 +35,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         associatedCampaigns: promoter.associatedCampaigns || [],
       });
       
-      // Fetch campaigns for this promoter's organization
       if (isOpen) {
         setIsLoadingCampaigns(true);
         getAllCampaigns(promoter.organizationId)
@@ -106,26 +105,26 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
             <h2 className="text-2xl font-bold text-white">Detalhes da Divulgadora</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="md:col-span-2">
-                <h3 className="font-bold text-lg mb-2 text-gray-200">Fotos</h3>
-                <div className="flex gap-4 overflow-x-auto">
-                    {(promoter.photoUrls || []).map((url, index) => (
-                        <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
-                            <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg" />
-                        </a>
-                    ))}
-                </div>
-            </div>
-        </div>
-
-        <form className="space-y-4">
+        <form className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-4" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="md:col-span-2">
+                  <h3 className="font-bold text-lg mb-2 text-gray-200">Fotos</h3>
+                  <div className="flex gap-4 overflow-x-auto">
+                      {(promoter.photoUrls || []).map((url, index) => (
+                          <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
+                              <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg" />
+                          </a>
+                      ))}
+                  </div>
+              </div>
+          </div>
+          
           {promoter.campaignName && (
             <div>
               <label className="block text-sm font-medium text-gray-300">Evento / Gênero</label>
@@ -178,7 +177,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                         <div key={stateAbbr}>
                             <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
                             <div className="pl-2 space-y-1">
-                                {/* FIX: Cast `campaigns` to `Campaign[]` to resolve TypeScript error where it was being inferred as `unknown`. */}
                                 {(campaigns as Campaign[]).map(campaign => (
                                     <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
                                         <input
@@ -237,11 +235,11 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             </div>
           )}
 
-          <div className="mt-6 flex justify-end space-x-3">
+          <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-700">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
               Cancelar
             </button>
-            <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
