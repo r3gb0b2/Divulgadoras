@@ -35,6 +35,17 @@ const getPerformanceColor = (rate: number): string => {
     return 'text-red-400';
 };
 
+const getJustificationStatusBadge = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
+    const effectiveStatus = status || 'pending';
+    const styles = {
+        pending: "bg-yellow-900/50 text-yellow-300",
+        accepted: "bg-green-900/50 text-green-300",
+        rejected: "bg-red-900/50 text-red-300",
+    };
+    const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
+    return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[effectiveStatus]}`}>{text[effectiveStatus]}</span>;
+};
+
 export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
@@ -181,7 +192,15 @@ export const PostDetails: React.FC = () => {
         return { total, pending, confirmed, completed, justifications, pendingJustifications };
     }, [assignments]);
     
-    const getStatusBadge = (assignment: PostAssignment) => { /* ... existing code ... */ };
+    const getStatusBadge = (assignment: PostAssignment) => {
+        if (assignment.proofSubmittedAt) {
+            return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span>;
+        }
+        if (assignment.status === 'confirmed') {
+             return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span>;
+        }
+        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>;
+    };
 
     if (isLoading) return <div className="text-center py-10">Carregando...</div>;
     if (error && !post) return <div className="text-red-400 text-center py-10">{error}</div>;
@@ -201,12 +220,12 @@ export const PostDetails: React.FC = () => {
                         {post.eventName && <p className="text-lg text-primary">{post.eventName}</p>}
                     </div>
                     <div className="md:w-2/3">
-                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-center mb-4">
-                            <div className="bg-dark/70 p-3 rounded-lg"><h4 className="text-xs text-gray-400">Total</h4><p className="text-2xl font-bold">{stats.total}</p></div>
-                            <div className="bg-dark/70 p-3 rounded-lg"><h4 className="text-xs text-gray-400">Pendentes</h4><p className="text-2xl font-bold">{stats.pending}</p></div>
-                            <div className="bg-dark/70 p-3 rounded-lg"><h4 className="text-xs text-gray-400">Confirmadas</h4><p className="text-2xl font-bold">{stats.confirmed}</p></div>
-                            <div className="bg-dark/70 p-3 rounded-lg"><h4 className="text-xs text-gray-400">Concluídas</h4><p className="text-2xl font-bold">{stats.completed}</p></div>
-                            <div className="bg-dark/70 p-3 rounded-lg"><h4 className="text-xs text-gray-400">Justificativas</h4><p className="text-2xl font-bold">{stats.justifications}</p></div>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            <button onClick={() => setFilter('all')} className={`p-3 rounded-lg text-left ${filter === 'all' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Todas ({stats.total})</h4></button>
+                            <button onClick={() => setFilter('pending')} className={`p-3 rounded-lg text-left ${filter === 'pending' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Pendentes ({stats.pending})</h4></button>
+                            <button onClick={() => setFilter('confirmed')} className={`p-3 rounded-lg text-left ${filter === 'confirmed' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Confirmadas ({stats.confirmed})</h4></button>
+                            <button onClick={() => setFilter('completed')} className={`p-3 rounded-lg text-left ${filter === 'completed' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Concluídas ({stats.completed})</h4></button>
+                            <button onClick={() => setFilter('justification')} className={`p-3 rounded-lg text-left ${filter === 'justification' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Justificativas ({stats.justifications})</h4></button>
                         </div>
                         <div className="flex flex-wrap gap-2 mb-4">
                             <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 rounded-md text-sm"><PencilIcon className="w-4 h-4" />Editar Post</button>
@@ -220,18 +239,9 @@ export const PostDetails: React.FC = () => {
                 </div>
 
                 <h2 className="text-xl font-bold mb-4">Tarefas das Divulgadoras</h2>
-                <div className="flex flex-col md:flex-row gap-4 mb-4">
-                    <div className="relative flex-grow">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou email..." className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-gray-200" />
-                    </div>
-                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                        {(['all', 'pending', 'confirmed', 'completed', 'justification'] as const).map(f => (
-                            <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-sm rounded-md ${filter === f ? 'bg-primary' : 'hover:bg-gray-700'}`}>
-                                {{'all': 'Todas', 'pending': 'Pendentes', 'confirmed': 'Confirmadas', 'completed': 'Concluídas', 'justification': 'Justificativas'}[f]}
-                            </button>
-                        ))}
-                    </div>
+                <div className="relative mb-4">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou email..." className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-gray-200" />
                 </div>
 
                 {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
@@ -259,9 +269,20 @@ export const PostDetails: React.FC = () => {
                                         <p className="text-xs text-gray-400">Prova enviada em: {formatDate(a.proofSubmittedAt)}</p>
                                         
                                         {a.justification && (
-                                            <div className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded cursor-pointer" onClick={() => openStatusModal(a)}>
-                                                <strong className="block">Justificativa:</strong>
-                                                <p className="italic truncate">"{a.justification}"</p>
+                                            <div className="mt-2 text-xs">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-yellow-300">Justificativa:</span>
+                                                    {getJustificationStatusBadge(a.justificationStatus)}
+                                                </div>
+                                                <div className="bg-black/20 p-2 rounded mt-1 cursor-pointer" onClick={() => openStatusModal(a)}>
+                                                    <p className="italic text-gray-400 truncate">"{a.justification}"</p>
+                                                </div>
+                                                {a.justificationResponse && (
+                                                    <div className="mt-1 bg-indigo-900/30 p-2 rounded">
+                                                        <p className="font-bold text-indigo-300">Resposta do Admin:</p>
+                                                        <p className="text-gray-300 whitespace-pre-wrap">{a.justificationResponse}</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

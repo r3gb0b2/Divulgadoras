@@ -117,7 +117,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
          <div>
             <p className="text-gray-300 mb-2">Divulgadora: <span className="font-semibold text-white">{assignment.promoterName}</span></p>
             <div className="bg-dark/70 p-3 rounded-md mb-4">
-                <p className="text-sm text-gray-400 italic whitespace-pre-wrap break-words">"{assignment.justification}"</p>
+                <p className="text-sm text-gray-400 italic whitespace-pre-wrap break-all">"{assignment.justification}"</p>
             </div>
             {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                 <div className="mb-4">
