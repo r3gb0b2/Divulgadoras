@@ -9,7 +9,7 @@ import AssignPostModal from '../components/AssignPostModal';
 import ChangeAssignmentStatusModal from '../components/ChangeAssignmentStatusModal';
 import StorageMedia from '../components/StorageMedia';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
-import firebase from 'firebase/compat/app';
+import { storage } from '../firebase/config';
 
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
@@ -56,6 +56,7 @@ export const PostDetails: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [processingAction, setProcessingAction] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     // Modals state
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -69,6 +70,10 @@ export const PostDetails: React.FC = () => {
     const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'justification'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
+    const showSuccessMessage = (message: string) => {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(null), 4000);
+    };
 
     const fetchData = useCallback(async () => {
         if (!postId) {
@@ -129,52 +134,136 @@ export const PostDetails: React.FC = () => {
     }, [assignments, allOrgAssignments]);
 
     const filteredAssignments = useMemo(() => {
-        const lowercasedQuery = searchQuery.toLowerCase().trim();
-        return assignmentsWithStats.filter(a => {
-            // Filter by search query
-            const promoter = promotersMap.get(a.promoterId);
-            const matchesSearch = lowercasedQuery === '' ||
-                promoter?.name.toLowerCase().includes(lowercasedQuery) ||
-                promoter?.email.toLowerCase().includes(lowercasedQuery);
+        let results = assignmentsWithStats;
+        if (filter !== 'all') {
+            results = results.filter(a => {
+                switch (filter) {
+                    case 'pending': return a.status === 'pending';
+                    case 'confirmed': return a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification;
+                    case 'completed': return !!a.proofSubmittedAt;
+                    case 'justification': return !!a.justification;
+                    default: return true;
+                }
+            });
+        }
+        if (searchQuery) {
+            const lowerQuery = searchQuery.toLowerCase();
+            results = results.filter(a =>
+                a.promoterName.toLowerCase().includes(lowerQuery) ||
+                promotersMap.get(a.promoterId)?.instagram?.toLowerCase().includes(lowerQuery)
+            );
+        }
+        return results;
+    }, [assignmentsWithStats, filter, searchQuery, promotersMap]);
 
-            if (!matchesSearch) return false;
+    const counts = useMemo(() => ({
+        all: assignments.length,
+        pending: assignments.filter(a => a.status === 'pending').length,
+        confirmed: assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification).length,
+        completed: assignments.filter(a => !!a.proofSubmittedAt).length,
+        justification: assignments.filter(a => !!a.justification).length,
+    }), [assignments]);
 
-            // Filter by status
-            switch (filter) {
-                case 'pending': return a.status === 'pending';
-                case 'confirmed': return a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification;
-                case 'completed': return !!a.proofSubmittedAt;
-                case 'justification': return !!a.justification;
-                case 'all': default: return true;
-            }
-        });
-    }, [assignmentsWithStats, searchQuery, filter, promotersMap]);
 
-    const handleSendAllReminders = async () => { /* ... existing code ... */ };
-    const handleSendSingleReminder = async (assignmentId: string) => { /* ... existing code ... */ };
-    const handleAcceptAllJustifications = async () => { /* ... existing code ... */ };
-    const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => { /* ... existing code ... */ };
-    const handleDeletePost = async () => { /* ... existing code ... */ };
-
-    const handleSaveAssignmentStatus = async (assignmentId: string, data: Partial<PostAssignment>) => {
-        setProcessingAction(`status-${assignmentId}`);
+    const handleSavePost = async (updatedData: Partial<Post>, newMediaFile: File | null) => {
+        if (!post) return;
+        setProcessingAction('save');
+        setError('');
         try {
-            await updateAssignment(assignmentId, data);
+            const dataToSave: Partial<Post> = { ...updatedData };
+            
+            if (newMediaFile) {
+                // Delete old file from storage if it exists and is a firebase storage URL
+                if (post.mediaUrl && post.mediaUrl.includes('firebasestorage')) {
+                    try {
+                        const oldRef = storage.refFromURL(post.mediaUrl);
+                        await oldRef.delete();
+                    } catch (deleteError: any) {
+                        console.warn("Could not delete old media file:", deleteError.message);
+                    }
+                }
+                
+                // Upload new file
+                const fileExtension = newMediaFile.name.split('.').pop();
+                const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = storage.ref(fileName);
+                await storageRef.put(newMediaFile);
+                dataToSave.mediaUrl = await storageRef.getDownloadURL();
+            }
+            
+            await updatePost(post.id, dataToSave);
+            showSuccessMessage('Publicação atualizada com sucesso!');
             await fetchData();
+            setIsEditModalOpen(false);
         } catch (err: any) {
-            setError(err.message || 'Falha ao salvar status da tarefa.');
-            throw err;
+            setError(err.message || 'Falha ao salvar as alterações.');
         } finally {
             setProcessingAction(null);
         }
     };
-    
-    const openStatusModal = (assignment: PostAssignment) => {
+
+    const handleDeletePost = async () => {
+        if (!post || !window.confirm(`Tem certeza que deseja DELETAR esta publicação (${post.campaignName}) e todas as suas ${assignments.length} tarefas associadas? Esta ação é irreversível.`)) {
+            return;
+        }
+        setProcessingAction('delete');
+        setError('');
+        try {
+            await deletePost(post.id);
+            alert("Publicação deletada com sucesso.");
+            navigate('/admin/posts');
+        } catch (err: any) {
+            setError(err.message || "Falha ao deletar a publicação.");
+        } finally {
+            setProcessingAction(null);
+        }
+    };
+
+    const handleSendReminders = async () => {
+        if (!post || !window.confirm("Isso enviará um e-mail de lembrete para todas as divulgadoras que confirmaram mas ainda não enviaram a comprovação. Deseja continuar?")) {
+            return;
+        }
+        setProcessingAction('remind');
+        setError('');
+        try {
+            const result = await sendPostReminder(post.id);
+            showSuccessMessage(result.message || `${result.count} lembretes enviados.`);
+            await fetchData(); // To update last reminder timestamps
+        } catch (err: any) {
+            setError(err.message || 'Falha ao enviar lembretes.');
+        } finally {
+            setProcessingAction(null);
+        }
+    };
+
+    const handleAcceptAllJustifications = async () => {
+        if (!post || !window.confirm("Tem certeza que deseja aceitar TODAS as justificativas pendentes para esta publicação?")) {
+            return;
+        }
+        setProcessingAction('accept_all_justifications');
+        setError('');
+        try {
+            const result = await acceptAllJustifications(post.id);
+            showSuccessMessage(result.message || `${result.count} justificativas aceitas.`);
+            await fetchData();
+        } catch (err: any) {
+            setError(err.message || 'Falha ao aceitar justificativas.');
+        } finally {
+            setProcessingAction(null);
+        }
+    };
+
+    const handleOpenStatusModal = (assignment: PostAssignment) => {
         setSelectedAssignment(assignment);
         setIsStatusModalOpen(true);
     };
-
-     const openStatsModal = (promoterId: string) => {
+    
+    const handleSaveAssignmentStatus = async (assignmentId: string, data: Partial<PostAssignment>) => {
+        await updateAssignment(assignmentId, data);
+        await fetchData(); // Refresh list
+    };
+    
+    const handleOpenStatsModal = (promoterId: string) => {
         const promoter = promotersMap.get(promoterId);
         if (promoter) {
             setSelectedPromoter(promoter);
@@ -182,136 +271,127 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const stats = useMemo(() => {
-        const total = assignments.length;
-        const pending = assignments.filter(a => a.status === 'pending').length;
-        const confirmed = assignments.filter(a => a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification).length;
-        const completed = assignments.filter(a => !!a.proofSubmittedAt).length;
-        const justifications = assignments.filter(a => !!a.justification).length;
-        const pendingJustifications = assignments.filter(a => a.justificationStatus === 'pending').length;
-        return { total, pending, confirmed, completed, justifications, pendingJustifications };
-    }, [assignments]);
-    
-    const getStatusBadge = (assignment: PostAssignment) => {
-        if (assignment.proofSubmittedAt) {
-            return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span>;
-        }
-        if (assignment.status === 'confirmed') {
-             return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span>;
-        }
-        return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>;
-    };
+    if (isLoading && !post) {
+        return <div className="text-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    }
+    if (error && !post) {
+        return <div className="text-red-400 text-center py-10">{error}</div>;
+    }
+    if (!post) {
+        return <div className="text-center py-10">Publicação não encontrada.</div>;
+    }
 
-    if (isLoading && !post) return <div className="text-center py-10">Carregando...</div>;
-    if (error && !post) return <div className="text-red-400 text-center py-10">{error}</div>;
-    if (!post) return <div className="text-center py-10">Publicação não encontrada.</div>;
+    const isExpired = post.expiresAt && toDateSafe(post.expiresAt) < new Date();
 
     return (
         <div>
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                <ArrowLeftIcon className="w-5 h-5" />
-                <span>Voltar</span>
-            </button>
-            <div className="bg-secondary shadow-lg rounded-lg p-6 mb-6">
-                <div className="flex flex-col md:flex-row gap-6">
-                    <div className="md:w-1/3">
-                        <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full rounded-lg mb-4" />
-                        <h1 className="text-2xl font-bold">{post.campaignName}</h1>
-                        {post.eventName && <p className="text-lg text-primary">{post.eventName}</p>}
-                    </div>
-                    <div className="md:w-2/3">
-                        <div className="flex flex-wrap gap-2">
-                            <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 rounded-md text-sm"><PencilIcon className="w-4 h-4" />Editar Post</button>
-                            <button onClick={() => setIsAssignModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 rounded-md text-sm"><UserPlusIcon className="w-4 h-4" />Atribuir Mais</button>
-                            <button onClick={handleSendAllReminders} disabled={processingAction === 'sendAllReminders'} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 rounded-md text-sm"><MegaphoneIcon className="w-4 h-4" />Lembrar Todos</button>
-                            {stats.pendingJustifications > 0 && 
-                                <button onClick={handleAcceptAllJustifications} disabled={processingAction === 'acceptAllJustifications'} className="flex items-center gap-2 px-3 py-1.5 bg-green-600 rounded-md text-sm"><CheckCircleIcon className="w-4 h-4" />Aceitar Justificativas ({stats.pendingJustifications})</button>}
-                            <button onClick={handleDeletePost} disabled={!!processingAction} className="flex items-center gap-2 px-3 py-1.5 bg-red-800 rounded-md text-sm"><TrashIcon className="w-4 h-4" />Deletar Post</button>
-                        </div>
-                    </div>
+            <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Todas as Publicações</span>
+                    </button>
+                    <h1 className="text-3xl font-bold mt-1">{post.campaignName}</h1>
+                    {post.eventName && <p className="text-lg text-primary -mt-1">{post.eventName}</p>}
                 </div>
             </div>
+            {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
+            {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
 
-            <h2 className="text-xl font-bold mb-4">Tarefas das Divulgadoras</h2>
-            
-            {/* Filters and Search */}
+            {/* Post Content & Actions */}
             <div className="bg-secondary p-4 rounded-lg shadow-lg mb-6">
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center md:w-auto">
-                        <button onClick={() => setFilter('all')} className={`p-2 rounded-lg text-sm ${filter === 'all' ? 'bg-primary' : 'bg-dark/70'}`}>Todas ({stats.total})</button>
-                        <button onClick={() => setFilter('pending')} className={`p-2 rounded-lg text-sm ${filter === 'pending' ? 'bg-primary' : 'bg-dark/70'}`}>Pendentes ({stats.pending})</button>
-                        <button onClick={() => setFilter('confirmed')} className={`p-2 rounded-lg text-sm ${filter === 'confirmed' ? 'bg-primary' : 'bg-dark/70'}`}>Confirmadas ({stats.confirmed})</button>
-                        <button onClick={() => setFilter('completed')} className={`p-2 rounded-lg text-sm ${filter === 'completed' ? 'bg-primary' : 'bg-dark/70'}`}>Concluídas ({stats.completed})</button>
-                        <button onClick={() => setFilter('justification')} className={`p-2 rounded-lg text-sm ${filter === 'justification' ? 'bg-primary' : 'bg-dark/70'}`}>Justificativas ({stats.justifications})</button>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-1">
+                        <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full h-auto object-contain rounded-md bg-dark" />
                     </div>
-                    <div className="flex-grow w-full md:w-auto">
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou email..." className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-gray-200" />
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="flex justify-between items-start">
+                             <div>
+                                <p>Status: <span className={`font-semibold ${post.isActive && !isExpired ? 'text-green-400' : 'text-red-400'}`}>{post.isActive && !isExpired ? 'Ativo' : 'Inativo/Expirado'}</span></p>
+                                <p className="text-sm text-gray-400">Criado em: {formatDate(post.createdAt)}</p>
+                                {post.expiresAt && <p className="text-sm text-gray-400">Expira em: {formatDate(post.expiresAt)}</p>}
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsEditModalOpen(true)} className="p-2 bg-gray-600 rounded-md hover:bg-gray-500" title="Editar Conteúdo"><PencilIcon className="w-5 h-5"/></button>
+                                <button onClick={handleDeletePost} disabled={!!processingAction} className="p-2 bg-red-800 rounded-md hover:bg-red-700 disabled:opacity-50" title="Deletar Post"><TrashIcon className="w-5 h-5"/></button>
+                            </div>
+                        </div>
+                        <div className="space-y-3 bg-dark/50 p-3 rounded-md">
+                             <h3 className="font-semibold">Ações em Massa</h3>
+                             <div className="flex flex-wrap gap-2">
+                                <button onClick={() => setIsAssignModalOpen(true)} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><UserPlusIcon className="w-4 h-4"/> Atribuir Novas</button>
+                                <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Enviar Lembretes</button>
+                                <button onClick={handleAcceptAllJustifications} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><CheckCircleIcon className="w-4 h-4"/> Aceitar Justificativas</button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                 </div>
             </div>
 
-            {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
-            
-            <div className="space-y-4">
-                {filteredAssignments.length === 0 ? <p className="text-center text-gray-400 py-8">Nenhuma tarefa encontrada com os filtros atuais.</p> : filteredAssignments.map(a => {
-                    const promoter = promotersMap.get(a.promoterId);
-                    return (
-                         <div key={a.id} className="bg-dark/70 p-4 rounded-lg flex flex-col md:flex-row gap-4 items-start">
-                            {/* Promoter Info */}
-                            <div className="w-full md:w-1/3">
-                                <p className={`font-bold text-lg ${getPerformanceColor(a.completionRate)}`}>{promoter?.name || a.promoterName}</p>
-                                <div className="flex items-center gap-4 mt-1">
-                                     <a href={`https://instagram.com/${(promoter?.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center text-sm gap-1"><InstagramIcon className="w-4 h-4" /><span>Instagram</span></a>
-                                     <a href={`https://wa.me/55${(promoter?.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-sm gap-1"><WhatsAppIcon className="w-4 h-4" /><span>WhatsApp</span></a>
+            {/* Assignments List */}
+            <div className="bg-secondary p-4 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-bold mb-4">Tarefas das Divulgadoras</h2>
+                 <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">
+                     <div className="relative flex-grow w-full">
+                        <SearchIcon className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2" />
+                        <input type="text" placeholder="Buscar por nome ou @" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-dark rounded-md border border-gray-600 focus:ring-primary focus:border-primary" />
+                    </div>
+                     <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg w-full md:w-auto overflow-x-auto">
+                        {(['all', 'pending', 'confirmed', 'completed', 'justification'] as const).map(f => (
+                            <button key={f} onClick={() => setFilter(f)} className={`flex-shrink-0 px-3 py-1.5 text-sm rounded-md transition-colors ${filter === f ? 'bg-primary' : 'hover:bg-gray-700'}`}>
+                                { {all: 'Todas', pending: 'Pendentes', confirmed: 'Confirmadas', completed: 'Concluídas', justification: 'Justificativas'}[f] } ({counts[f]})
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                     {filteredAssignments.map(assignment => (
+                        <div key={assignment.id} className="bg-dark/80 p-4 rounded-lg border border-gray-700/50 flex flex-col">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className={`font-bold text-lg ${getPerformanceColor(assignment.completionRate)}`}>{assignment.promoterName}</p>
+                                    <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
+                                        <a href={`https://instagram.com/${promotersMap.get(assignment.promoterId)?.instagram?.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-primary"><InstagramIcon className="w-4 h-4"/> <span>{promotersMap.get(assignment.promoterId)?.instagram || 'N/A'}</span></a>
+                                        <a href={`https://wa.me/55${promotersMap.get(assignment.promoterId)?.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-green-400"><WhatsAppIcon className="w-4 h-4"/> <span>WhatsApp</span></a>
+                                    </div>
                                 </div>
-                                 <button onClick={() => openStatsModal(a.promoterId)} className="text-xs text-blue-400 hover:underline mt-1">Ver Stats</button>
+                                <div className="text-right">
+                                     {assignment.justification ? getJustificationStatusBadge(assignment.justificationStatus) : 
+                                     assignment.proofSubmittedAt ? <span className="px-2 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span> :
+                                     assignment.status === 'confirmed' ? <span className="px-2 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span> :
+                                     <span className="px-2 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>
+                                     }
+                                     <p className="text-xs text-blue-300 font-bold mt-1">{assignment.completionRate}%</p>
+                                </div>
                             </div>
-                            
-                            {/* Status & Proof */}
-                            <div className="w-full md:w-2/3 flex flex-col sm:flex-row gap-4">
-                                <div className="flex-1 space-y-2">
-                                    <div>{getStatusBadge(a)}</div>
-                                    <p className="text-xs text-gray-400">Confirmado em: {formatDate(a.confirmedAt)}</p>
-                                    <p className="text-xs text-gray-400">Prova enviada em: {formatDate(a.proofSubmittedAt)}</p>
-                                    
-                                    {a.justification && (
-                                        <div className="mt-2 text-xs">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-yellow-300">Justificativa:</span>
-                                                {getJustificationStatusBadge(a.justificationStatus)}
-                                            </div>
-                                            <div className="bg-black/20 p-2 rounded mt-1 cursor-pointer" onClick={() => openStatusModal(a)}>
-                                                <p className="italic text-gray-400 truncate">"{a.justification}"</p>
-                                            </div>
-                                            {a.justificationResponse && (
-                                                <div className="mt-1 bg-indigo-900/30 p-2 rounded">
-                                                    <p className="font-bold text-indigo-300">Resposta do Admin:</p>
-                                                    <p className="text-gray-300 whitespace-pre-wrap">{a.justificationResponse}</p>
-                                                </div>
-                                            )}
+
+                            {(assignment.proofImageUrls && assignment.proofImageUrls.length > 0) || (assignment.justification) ? (
+                                <div onClick={() => handleOpenStatusModal(assignment)} className="mt-3 bg-gray-800/50 p-2 rounded-md flex-grow flex flex-col justify-center items-center cursor-pointer hover:bg-gray-800/80">
+                                    {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (
+                                         <div className="flex gap-2">
+                                            {assignment.proofImageUrls.map((url, i) => (
+                                                <img key={i} src={url} className="w-16 h-16 object-cover rounded-md" alt={`Prova ${i + 1}`} />
+                                            ))}
                                         </div>
+                                    ) : (
+                                        <>
+                                            <p className="text-yellow-300 text-sm font-semibold">Justificativa Enviada</p>
+                                            <p className="text-xs text-gray-400 text-center italic mt-1 line-clamp-2">"{assignment.justification}"</p>
+                                            {assignment.justificationResponse && <p className="text-xs text-primary mt-2">Você respondeu</p>}
+                                        </>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {(a.proofImageUrls || []).map((url, i) => (
-                                        <img key={i} src={url} alt={`Prova ${i+1}`} className="w-20 h-20 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary" onClick={() => openStatusModal(a)} />
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="w-full md:w-auto flex flex-row md:flex-col gap-2 items-stretch justify-end flex-shrink-0">
-                                {a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification && (
-                                    <button onClick={() => handleSendSingleReminder(a.id)} disabled={!!processingAction} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md w-full">Lembrar</button>
-                                )}
-                                <button onClick={() => openStatusModal(a)} disabled={!!processingAction} className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md w-full">Analisar</button>
+                            ) : null}
+                            
+                            <div className="mt-auto pt-3 border-t border-gray-700/50 mt-3 flex gap-2">
+                                <button onClick={() => handleOpenStatsModal(assignment.promoterId)} className="flex-1 text-center text-sm py-2 bg-gray-600 rounded-md hover:bg-gray-500">Ver Stats</button>
+                                <button onClick={() => handleOpenStatusModal(assignment)} className="flex-1 text-center text-sm py-2 bg-primary rounded-md hover:bg-primary-dark">Analisar</button>
                             </div>
                         </div>
-                    );
-                })}
+                     ))}
+                     {filteredAssignments.length === 0 && <p className="text-gray-400 text-center col-span-full py-8">Nenhuma tarefa encontrada com os filtros atuais.</p>}
+                </div>
             </div>
 
             <EditPostModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} post={post} onSave={handleSavePost} />
