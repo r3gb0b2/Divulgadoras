@@ -202,7 +202,7 @@ export const PostDetails: React.FC = () => {
         return <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>;
     };
 
-    if (isLoading) return <div className="text-center py-10">Carregando...</div>;
+    if (isLoading && !post) return <div className="text-center py-10">Carregando...</div>;
     if (error && !post) return <div className="text-red-400 text-center py-10">{error}</div>;
     if (!post) return <div className="text-center py-10">Publicação não encontrada.</div>;
 
@@ -212,22 +212,15 @@ export const PostDetails: React.FC = () => {
                 <ArrowLeftIcon className="w-5 h-5" />
                 <span>Voltar</span>
             </button>
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-col md:flex-row gap-6 border-b border-gray-700 pb-6 mb-6">
+            <div className="bg-secondary shadow-lg rounded-lg p-6 mb-6">
+                <div className="flex flex-col md:flex-row gap-6">
                     <div className="md:w-1/3">
                         <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full rounded-lg mb-4" />
                         <h1 className="text-2xl font-bold">{post.campaignName}</h1>
                         {post.eventName && <p className="text-lg text-primary">{post.eventName}</p>}
                     </div>
                     <div className="md:w-2/3">
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            <button onClick={() => setFilter('all')} className={`p-3 rounded-lg text-left ${filter === 'all' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Todas ({stats.total})</h4></button>
-                            <button onClick={() => setFilter('pending')} className={`p-3 rounded-lg text-left ${filter === 'pending' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Pendentes ({stats.pending})</h4></button>
-                            <button onClick={() => setFilter('confirmed')} className={`p-3 rounded-lg text-left ${filter === 'confirmed' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Confirmadas ({stats.confirmed})</h4></button>
-                            <button onClick={() => setFilter('completed')} className={`p-3 rounded-lg text-left ${filter === 'completed' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Concluídas ({stats.completed})</h4></button>
-                            <button onClick={() => setFilter('justification')} className={`p-3 rounded-lg text-left ${filter === 'justification' ? 'bg-primary' : 'bg-dark/70'}`}><h4 className="text-sm font-semibold">Justificativas ({stats.justifications})</h4></button>
-                        </div>
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        <div className="flex flex-wrap gap-2">
                             <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 rounded-md text-sm"><PencilIcon className="w-4 h-4" />Editar Post</button>
                             <button onClick={() => setIsAssignModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 rounded-md text-sm"><UserPlusIcon className="w-4 h-4" />Atribuir Mais</button>
                             <button onClick={handleSendAllReminders} disabled={processingAction === 'sendAllReminders'} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 rounded-md text-sm"><MegaphoneIcon className="w-4 h-4" />Lembrar Todos</button>
@@ -237,73 +230,88 @@ export const PostDetails: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <h2 className="text-xl font-bold mb-4">Tarefas das Divulgadoras</h2>
-                <div className="relative mb-4">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                    <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou email..." className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-gray-200" />
+            <h2 className="text-xl font-bold mb-4">Tarefas das Divulgadoras</h2>
+            
+            {/* Filters and Search */}
+            <div className="bg-secondary p-4 rounded-lg shadow-lg mb-6">
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-center md:w-auto">
+                        <button onClick={() => setFilter('all')} className={`p-2 rounded-lg text-sm ${filter === 'all' ? 'bg-primary' : 'bg-dark/70'}`}>Todas ({stats.total})</button>
+                        <button onClick={() => setFilter('pending')} className={`p-2 rounded-lg text-sm ${filter === 'pending' ? 'bg-primary' : 'bg-dark/70'}`}>Pendentes ({stats.pending})</button>
+                        <button onClick={() => setFilter('confirmed')} className={`p-2 rounded-lg text-sm ${filter === 'confirmed' ? 'bg-primary' : 'bg-dark/70'}`}>Confirmadas ({stats.confirmed})</button>
+                        <button onClick={() => setFilter('completed')} className={`p-2 rounded-lg text-sm ${filter === 'completed' ? 'bg-primary' : 'bg-dark/70'}`}>Concluídas ({stats.completed})</button>
+                        <button onClick={() => setFilter('justification')} className={`p-2 rounded-lg text-sm ${filter === 'justification' ? 'bg-primary' : 'bg-dark/70'}`}>Justificativas ({stats.justifications})</button>
+                    </div>
+                    <div className="flex-grow w-full md:w-auto">
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Buscar por nome ou email..." className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg bg-gray-800 text-gray-200" />
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
-                
-                <div className="space-y-4">
-                    {filteredAssignments.length === 0 ? <p className="text-center text-gray-400 py-8">Nenhuma tarefa encontrada com os filtros atuais.</p> : filteredAssignments.map(a => {
-                        const promoter = promotersMap.get(a.promoterId);
-                        return (
-                             <div key={a.id} className="bg-dark/70 p-4 rounded-lg flex flex-col md:flex-row gap-4 items-start">
-                                {/* Promoter Info */}
-                                <div className="w-full md:w-1/3">
-                                    <p className={`font-bold text-lg ${getPerformanceColor(a.completionRate)}`}>{promoter?.name || a.promoterName}</p>
-                                    <div className="flex items-center gap-4 mt-1">
-                                         <a href={`https://instagram.com/${(promoter?.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center text-sm gap-1"><InstagramIcon className="w-4 h-4" /><span>Instagram</span></a>
-                                         <a href={`https://wa.me/55${(promoter?.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-sm gap-1"><WhatsAppIcon className="w-4 h-4" /><span>WhatsApp</span></a>
-                                    </div>
-                                     <button onClick={() => openStatsModal(a.promoterId)} className="text-xs text-blue-400 hover:underline mt-1">Ver Stats</button>
+            {error && <p className="text-red-400 text-sm mb-2">{error}</p>}
+            
+            <div className="space-y-4">
+                {filteredAssignments.length === 0 ? <p className="text-center text-gray-400 py-8">Nenhuma tarefa encontrada com os filtros atuais.</p> : filteredAssignments.map(a => {
+                    const promoter = promotersMap.get(a.promoterId);
+                    return (
+                         <div key={a.id} className="bg-dark/70 p-4 rounded-lg flex flex-col md:flex-row gap-4 items-start">
+                            {/* Promoter Info */}
+                            <div className="w-full md:w-1/3">
+                                <p className={`font-bold text-lg ${getPerformanceColor(a.completionRate)}`}>{promoter?.name || a.promoterName}</p>
+                                <div className="flex items-center gap-4 mt-1">
+                                     <a href={`https://instagram.com/${(promoter?.instagram || '').replace('@','')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center text-sm gap-1"><InstagramIcon className="w-4 h-4" /><span>Instagram</span></a>
+                                     <a href={`https://wa.me/55${(promoter?.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-sm gap-1"><WhatsAppIcon className="w-4 h-4" /><span>WhatsApp</span></a>
                                 </div>
-                                
-                                {/* Status & Proof */}
-                                <div className="w-full md:w-2/3 flex flex-col sm:flex-row gap-4">
-                                    <div className="flex-1 space-y-2">
-                                        <div>{getStatusBadge(a)}</div>
-                                        <p className="text-xs text-gray-400">Confirmado em: {formatDate(a.confirmedAt)}</p>
-                                        <p className="text-xs text-gray-400">Prova enviada em: {formatDate(a.proofSubmittedAt)}</p>
-                                        
-                                        {a.justification && (
-                                            <div className="mt-2 text-xs">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-yellow-300">Justificativa:</span>
-                                                    {getJustificationStatusBadge(a.justificationStatus)}
-                                                </div>
-                                                <div className="bg-black/20 p-2 rounded mt-1 cursor-pointer" onClick={() => openStatusModal(a)}>
-                                                    <p className="italic text-gray-400 truncate">"{a.justification}"</p>
-                                                </div>
-                                                {a.justificationResponse && (
-                                                    <div className="mt-1 bg-indigo-900/30 p-2 rounded">
-                                                        <p className="font-bold text-indigo-300">Resposta do Admin:</p>
-                                                        <p className="text-gray-300 whitespace-pre-wrap">{a.justificationResponse}</p>
-                                                    </div>
-                                                )}
+                                 <button onClick={() => openStatsModal(a.promoterId)} className="text-xs text-blue-400 hover:underline mt-1">Ver Stats</button>
+                            </div>
+                            
+                            {/* Status & Proof */}
+                            <div className="w-full md:w-2/3 flex flex-col sm:flex-row gap-4">
+                                <div className="flex-1 space-y-2">
+                                    <div>{getStatusBadge(a)}</div>
+                                    <p className="text-xs text-gray-400">Confirmado em: {formatDate(a.confirmedAt)}</p>
+                                    <p className="text-xs text-gray-400">Prova enviada em: {formatDate(a.proofSubmittedAt)}</p>
+                                    
+                                    {a.justification && (
+                                        <div className="mt-2 text-xs">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-yellow-300">Justificativa:</span>
+                                                {getJustificationStatusBadge(a.justificationStatus)}
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {(a.proofImageUrls || []).map((url, i) => (
-                                            <img key={i} src={url} alt={`Prova ${i+1}`} className="w-20 h-20 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary" onClick={() => openStatusModal(a)} />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="w-full md:w-auto flex flex-row md:flex-col gap-2 items-stretch justify-end flex-shrink-0">
-                                    {a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification && (
-                                        <button onClick={() => handleSendSingleReminder(a.id)} disabled={!!processingAction} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md w-full">Lembrar</button>
+                                            <div className="bg-black/20 p-2 rounded mt-1 cursor-pointer" onClick={() => openStatusModal(a)}>
+                                                <p className="italic text-gray-400 truncate">"{a.justification}"</p>
+                                            </div>
+                                            {a.justificationResponse && (
+                                                <div className="mt-1 bg-indigo-900/30 p-2 rounded">
+                                                    <p className="font-bold text-indigo-300">Resposta do Admin:</p>
+                                                    <p className="text-gray-300 whitespace-pre-wrap">{a.justificationResponse}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
-                                    <button onClick={() => openStatusModal(a)} disabled={!!processingAction} className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md w-full">Analisar</button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {(a.proofImageUrls || []).map((url, i) => (
+                                        <img key={i} src={url} alt={`Prova ${i+1}`} className="w-20 h-20 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary" onClick={() => openStatusModal(a)} />
+                                    ))}
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
+
+                            {/* Actions */}
+                            <div className="w-full md:w-auto flex flex-row md:flex-col gap-2 items-stretch justify-end flex-shrink-0">
+                                {a.status === 'confirmed' && !a.proofSubmittedAt && !a.justification && (
+                                    <button onClick={() => handleSendSingleReminder(a.id)} disabled={!!processingAction} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md w-full">Lembrar</button>
+                                )}
+                                <button onClick={() => openStatusModal(a)} disabled={!!processingAction} className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md w-full">Analisar</button>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
             <EditPostModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} post={post} onSave={handleSavePost} />
