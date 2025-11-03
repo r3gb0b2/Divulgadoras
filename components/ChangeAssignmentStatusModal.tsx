@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PostAssignment } from '../types';
 import { serverTimestamp } from 'firebase/firestore';
+import PhotoViewerModal from './PhotoViewerModal';
 
 interface ChangeAssignmentStatusModalProps {
     isOpen: boolean;
@@ -17,6 +18,10 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
 
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
+
+    // State for Photo Viewer
+    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+    const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
 
     useEffect(() => {
         if (assignment) {
@@ -101,6 +106,13 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
         }
     };
 
+    const openPhotoViewer = (index: number) => {
+        setPhotoViewerStartIndex(index);
+        setIsPhotoViewerOpen(true);
+    };
+
+    const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && assignment.proofImageUrls[0] !== 'manual';
+
     const renderJustificationSection = () => (
          <div>
             <p className="text-gray-300 mb-2">Divulgadora: <span className="font-semibold text-white">{assignment.promoterName}</span></p>
@@ -183,11 +195,28 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
     );
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-white mb-4">Alterar Status da Tarefa</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold text-white mb-4">Analisar Tarefa</h2>
                 {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
                 
+                {hasProof && (
+                    <div className="mb-4 border-b border-gray-700 pb-4">
+                        <h3 className="text-lg font-semibold text-white">Comprovação Enviada</h3>
+                        <div className="flex gap-2 mt-2">
+                            {assignment.proofImageUrls!.map((url, index) => (
+                                <img
+                                    key={index}
+                                    src={url}
+                                    alt={`Comprovação ${index + 1}`}
+                                    onClick={() => openPhotoViewer(index)}
+                                    className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary"
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {assignment.justification ? (
                     <div className="space-y-4">
                         <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-4 w-fit">
@@ -207,6 +236,14 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                     </button>
                 </div>
             </div>
+            {hasProof && (
+                <PhotoViewerModal
+                    isOpen={isPhotoViewerOpen}
+                    onClose={() => setIsPhotoViewerOpen(false)}
+                    imageUrls={assignment.proofImageUrls || []}
+                    startIndex={photoViewerStartIndex}
+                />
+            )}
         </div>
     );
 };
