@@ -339,6 +339,21 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
+            // If post is inactive or expired, only show justification button
+            if (!isPostDownloadable) {
+                return (
+                    <div className="w-full flex flex-col sm:flex-row gap-2">
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    </div>
+                );
+            }
+
+            // Otherwise, show both buttons.
             return (
                 <div className="w-full flex flex-col sm:flex-row gap-2">
                     <button 
