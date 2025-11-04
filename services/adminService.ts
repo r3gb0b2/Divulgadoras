@@ -66,6 +66,7 @@ export const setAdminUserData = async (uid: string, data: Partial<Omit<AdminUser
  */
 export const getAllAdmins = async (organizationId?: string): Promise<AdminUserData[]> => {
   try {
+    // FIX: Add firebase namespace for Query type
     let q: firebase.firestore.Query = firestore.collection('admins');
     if (organizationId) {
       q = q.where('organizationIds', 'array-contains', organizationId);

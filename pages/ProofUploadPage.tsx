@@ -111,12 +111,12 @@ const ProofUploadPage: React.FC = () => {
         if (files && files.length > 0) {
             setIsProcessingPhoto(true);
             setError(null);
-            
+
             try {
                 const fileList = Array.from(files).slice(0, 2); // Max 2 files
                 const processedFiles = await Promise.all(
                     fileList.map(async (file: File) => {
-                        // Screenshots can be large, so we compress them before upload
+                        // Screenshots can be large, então comprimimos antes do upload
                         const compressedBlob = await resizeImage(file, 800, 1200, 0.8);
                         return new File([compressedBlob], file.name, { type: 'image/jpeg' });
                     })
@@ -129,7 +129,8 @@ const ProofUploadPage: React.FC = () => {
             } catch (error) {
                 console.error("Error processing image:", error);
                 setError("Houve um problema com uma das imagens. Por favor, tente novamente.");
-                e.target.value = '';
+                // limpando o valor do input de arquivo de forma segura
+                try { (e.target as HTMLInputElement).value = ''; } catch (_) { }
             } finally {
                 setIsProcessingPhoto(false);
             }

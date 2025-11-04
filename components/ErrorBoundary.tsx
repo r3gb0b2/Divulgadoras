@@ -10,6 +10,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: The ErrorBoundary class must extend React.Component to have access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
   // FIX: Switched from constructor-based initialization to a class property for state. This modern syntax avoids potential 'this' context issues and resolves errors where properties like 'state', 'setState', and 'props' were not being recognized on the component instance.
   public state: State = {

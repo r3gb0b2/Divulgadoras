@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+// FIX: Switched from modular to compat auth to resolve export errors.
 import firebase from 'firebase/compat/app';
 import { auth } from '../firebase/config';
 import { getAdminUserData, setAdminUserData } from '../services/adminService';
@@ -6,6 +7,7 @@ import { getOrganizations } from '../services/organizationService';
 import { AdminUserData, Organization } from '../types';
 
 interface AdminAuthContextType {
+    // FIX: Use compat User type.
     user: firebase.User | null;
     adminData: AdminUserData | null;
     loading: boolean;
@@ -17,6 +19,7 @@ interface AdminAuthContextType {
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
 export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
+    // FIX: Use compat User type.
     const [user, setUser] = useState<firebase.User | null>(null);
     const [adminData, setAdminData] = useState<AdminUserData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -32,6 +35,7 @@ export const AdminAuthProvider: React.FC<{children: ReactNode}> = ({ children })
 
 
     useEffect(() => {
+        // FIX: Use compat onAuthStateChanged method.
         const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
             setLoading(true);
 

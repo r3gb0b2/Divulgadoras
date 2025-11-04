@@ -205,11 +205,7 @@ const PostDashboard: React.FC = () => {
                 const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
                 await setPromoterStatusToRemoved({ promoterId: promoter.id });
                 alert(`${promoter.name} foi removida com sucesso.`);
-                
-                // Optimistic UI update
-                setPromoters(prev => prev.filter(p => p.id !== promoter.id));
-                setAssignments(prev => prev.filter(a => a.promoterId !== promoter.id));
-
+                await fetchData(); // Refresh all data
             } catch (err: any) {
                 const message = err.message || 'Falha ao remover divulgadora.';
                 setError(message);

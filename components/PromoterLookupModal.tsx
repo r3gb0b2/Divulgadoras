@@ -19,6 +19,7 @@ const formatDate = (timestamp: any): string => {
 };
 
 const getStatusBadge = (status: PromoterStatus) => {
+    // FIX: Added 'removed' to the styles record to match the PromoterStatus type.
     const styles: Record<PromoterStatus, string> = {
         pending: "bg-yellow-900/50 text-yellow-300",
         approved: "bg-green-900/50 text-green-300",
@@ -26,6 +27,7 @@ const getStatusBadge = (status: PromoterStatus) => {
         rejected_editable: "bg-orange-900/50 text-orange-300",
         removed: "bg-gray-700 text-gray-400",
     };
+    // FIX: Added 'removed' to the text record to match the PromoterStatus type.
     const text: Record<PromoterStatus, string> = { 
         pending: "Pendente", 
         approved: "Aprovado", 
