@@ -163,6 +163,7 @@ const ProofSection: React.FC<{
         const timer = setInterval(() => {
             const now = new Date();
 
+            // 1. Check for final expiration (applies to all cases)
             if (now > expireTime) {
                 if (assignment.post.allowLateSubmissions) {
                     setTimeLeft('Envio fora do prazo liberado pelo organizador.');
@@ -175,15 +176,17 @@ const ProofSection: React.FC<{
                 return;
             }
             
+            // 2. Check if immediate proof is allowed
             if (assignment.post.allowImmediateProof) {
                 const diff = expireTime.getTime() - now.getTime();
                 const hours = Math.floor(diff / (1000 * 60 * 60));
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 setTimeLeft(`Envio liberado! Expira em: ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
                 setIsButtonEnabled(true);
-                return; 
+                return; // Keep timer running to update countdown
             }
 
+            // 3. Fallback to default 6-hour wait logic
             const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000); // 6 hours
             if (now < enableTime) {
                 const diff = enableTime.getTime() - now.getTime();
@@ -220,31 +223,6 @@ const ProofSection: React.FC<{
         );
     }
     
-    if (assignment.justification) {
-        return (
-            <div className="mt-4 text-center">
-                <p className={`text-sm font-semibold mb-2 ${
-                    assignment.justificationStatus === 'accepted' ? 'text-green-400' :
-                    assignment.justificationStatus === 'rejected' ? 'text-red-400' :
-                    'text-yellow-400'
-                }`}>
-                    {
-                        assignment.justificationStatus === 'accepted' ? 'Justificativa Aceita' :
-                        assignment.justificationStatus === 'rejected' ? 'Justificativa Rejeitada' :
-                        'Justificativa em Análise'
-                    }
-                </p>
-                <p className="text-xs text-gray-400 italic">"{assignment.justification}"</p>
-                {assignment.justificationResponse && (
-                    <div className="mt-2 text-xs p-2 bg-dark rounded-md text-left">
-                        <p className="font-semibold text-primary">Resposta do organizador:</p>
-                        <p className="text-gray-300">{assignment.justificationResponse}</p>
-                    </div>
-                )}
-            </div>
-        );
-    }
-    
     const isExpired = timeLeft === 'Tempo esgotado';
 
     return (
@@ -269,6 +247,7 @@ const ProofSection: React.FC<{
         </div>
     );
 };
+
 
 const PostCard: React.FC<{ 
     assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
@@ -323,56 +302,71 @@ const PostCard: React.FC<{
     };
     
     const now = new Date();
-    const isExpired = assignment.post.expiresAt && toDateSafe(assignment.post.expiresAt)! < now;
+    const isExpired = assignment.post.expiresAt && toDateSafe(assignment.post.expiresAt) < now;
     const isPostActionable = assignment.post.isActive && !isExpired;
     
     const handleFirebaseDownload = async () => {
-        if (!isPostActionable || isMediaProcessing || !assignment.post.mediaUrl) return;
+        if (isMediaProcessing || !assignment.post.mediaUrl) return;
 
         setIsMediaProcessing(true);
         try {
             const path = assignment.post.mediaUrl;
             let finalUrl = path;
-            
+
+            // If it's not a full URL, assume it's a Firebase Storage path
             if (!path.startsWith('http')) {
                 const storageRef = storage.ref(path);
                 finalUrl = await storageRef.getDownloadURL();
             }
-
+            
+            // Create a temporary link to trigger download
             const link = document.createElement('a');
             link.href = finalUrl;
-
+            
+            // Extract filename from URL
             const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || 'download';
-            link.setAttribute('download', filename);
-            link.setAttribute('target', '_blank');
-            link.setAttribute('rel', 'noopener noreferrer');
 
+            link.setAttribute('download', filename);
+            link.setAttribute('target', '_blank'); // Good practice for security and UX
+            link.setAttribute('rel', 'noopener noreferrer');
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
         } catch (error: any) {
-            console.error("Failed to download media:", error);
+            console.error('Failed to download from Firebase:', error);
             alert(`Não foi possível baixar a mídia: ${error.message}`);
         } finally {
             setIsMediaProcessing(false);
         }
     };
     
-    const handleGoogleDriveDownload = () => {
-        if (!isPostActionable || !assignment.post.googleDriveUrl) return;
-
+     const handleGoogleDriveDownload = () => {
         const { googleDriveUrl, type } = assignment.post;
+        if (!googleDriveUrl) return;
+
         let urlToOpen = googleDriveUrl;
 
+        // For videos, create a direct download link if possible
         if (type === 'video') {
             const fileId = extractGoogleDriveId(googleDriveUrl);
             if (fileId) {
+                // This URL forces a download prompt instead of opening in preview
                 urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`;
             }
         }
+        
         window.open(urlToOpen, '_blank');
     };
+    
+    // Determine the main status color for the card's border
+    const borderColor = !isPostActionable
+      ? 'border-gray-600'
+      : assignment.status === 'pending'
+      ? 'border-blue-500'
+      : (assignment.proofSubmittedAt || assignment.justificationStatus === 'accepted')
+      ? 'border-green-500'
+      : 'border-yellow-500';
 
 <<<<<<< HEAD
 =======
@@ -453,21 +447,16 @@ const PostCard: React.FC<{
 
 >>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
     return (
-        <div className={`p-4 rounded-lg shadow-sm ${isPostActionable ? 'bg-dark/70' : 'bg-gray-800/50'}`}>
+        <div className={`bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 ${borderColor}`}>
             <h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>
             {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
             
-            <div className="text-xs text-gray-400 mt-1">
-                {isPostActionable ? `Expira em: ${assignment.post.expiresAt ? toDateSafe(assignment.post.expiresAt)?.toLocaleDateString('pt-BR') : 'Sem data'}` : (isExpired ? 'Expirado' : 'Inativo')}
-            </div>
-
-            <div className="my-4">
+            <div className="mt-4 space-y-4">
                 {(assignment.post.type === 'image' || assignment.post.type === 'video') && (assignment.post.mediaUrl || assignment.post.googleDriveUrl) && (
-                    <div className="mb-4">
+                    <div>
                         <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md" controls={assignment.post.type === 'video'} />
                         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
                             {assignment.post.mediaUrl && (
-<<<<<<< HEAD
                                 <button type="button" onClick={handleFirebaseDownload} disabled={isMediaProcessing} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 hover:bg-gray-500" title="Baixar do nosso servidor (Firebase)">
                                     <DownloadIcon className="w-4 h-4" /> <span>Download Link 1</span>
                                 </button>
@@ -475,97 +464,125 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <button type="button" onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-500" title="Baixar do Google Drive">
                                     <DownloadIcon className="w-4 h-4" /> <span>Download Link 2</span>
-=======
-                                <button
-                                    onClick={handleFirebaseDownload}
-                                    disabled={isMediaProcessing}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
-                                >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span>Download Link 1</span>
-                                </button>
-                            )}
-                            {assignment.post.googleDriveUrl && (
-                                <button
-                                    onClick={handleGoogleDriveDownload}
-                                    disabled={!isPostGloballyActive}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
-                                >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span>Download Link 2</span>
->>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
                                 </button>
                             )}
                         </div>
+                        {assignment.post.mediaUrl && assignment.post.googleDriveUrl && <p className="text-center text-xs text-gray-400 mt-2">Link 1 é do servidor da plataforma, Link 2 é do Google Drive.</p>}
                     </div>
                 )}
-                {assignment.post.type === 'text' && <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm bg-gray-800 p-3 rounded-md mb-4">{assignment.post.textContent}</pre>}
-                
-                <h4 className="font-semibold text-gray-200">Instruções:</h4>
-                <p className="text-gray-400 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>
-
-                {assignment.post.postLink && (
-                    <div className="mt-4 flex items-center gap-2">
-                        <a href={assignment.post.postLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm font-semibold truncate flex-1">
-                            <ExternalLinkIcon className="w-4 h-4 inline mr-1" />
-                            {assignment.post.postLink}
+                {assignment.post.type === 'text' && (
+                    <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm bg-gray-800 p-3 rounded-md">{assignment.post.textContent}</pre>
+                )}
+                 <div>
+                    <h4 className="font-semibold text-gray-200">Instruções:</h4>
+                    <p className="text-gray-400 text-sm whitespace-pre-wrap">{assignment.post.instructions}</p>
+                </div>
+                 {assignment.post.postLink && (
+                    <div className="flex items-center gap-2">
+                         <a href={assignment.post.postLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-sm hover:underline flex items-center gap-1.5 break-all">
+                            <ExternalLinkIcon className="w-4 h-4 flex-shrink-0" /> Link da Publicação
                         </a>
-                        <button onClick={handleCopyLink} className="text-xs px-2 py-1 bg-gray-600 rounded-md hover:bg-gray-500">
-                            {linkCopied ? 'Copiado!' : 'Copiar'}
-                        </button>
+                         <button onClick={handleCopyLink} className="text-xs px-2 py-1 bg-gray-600 rounded-md">{linkCopied ? 'Copiado!' : 'Copiar'}</button>
                     </div>
                 )}
             </div>
 
-            {isPostActionable ? (
-                assignment.status === 'pending' ? (
-                    <div className="text-center">
-                        <button onClick={handleConfirm} disabled={isConfirming} className="w-full sm:w-auto px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors">
-                            {isConfirming ? 'Confirmando...' : 'Confirmar Leitura e Postar'}
-                        </button>
-                    </div>
-                ) : (
-                    <ProofSection assignment={assignment} onJustify={onJustify} />
-                )
-            ) : (
-                <div className="text-center">
-                    {assignment.proofSubmittedAt || assignment.justification ? (
-                        <p className="text-sm font-semibold text-gray-400">
-                            {isExpired ? 'Esta publicação expirou.' : 'Esta publicação foi desativada.'}
-                        </p>
-                    ) : (
-                        <>
-                            <p className="text-sm font-semibold text-red-400 mb-3">
-                                {isExpired ? 'Esta publicação expirou.' : 'Esta publicação não está mais ativa.'}
-                            </p>
+            {/* ACTION BUTTONS SECTION */}
+            {(() => {
+                const taskIsFinished = !!assignment.proofSubmittedAt || !!assignment.justification;
+
+                if (taskIsFinished) {
+                    return (
+                        <div className="mt-4">
+                            {assignment.proofSubmittedAt ? (
+                                <div className="text-center">
+                                    <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
+                                    <div className="flex justify-center gap-2">
+                                        {assignment.proofImageUrls!.map((url, index) => (
+                                            <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                                <img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : assignment.justification && (
+                                <div className="bg-dark/70 p-3 rounded-md">
+                                    <p className="text-sm font-semibold text-yellow-300">Justificativa Enviada:</p>
+                                    <p className="text-xs text-gray-300 italic whitespace-pre-wrap mt-1">"{assignment.justification}"</p>
+                                    {assignment.justificationStatus && (
+                                         <p className="text-xs mt-2">Status: <span className="font-bold">{assignment.justificationStatus === 'accepted' ? 'Aceita' : (assignment.justificationStatus === 'rejected' ? 'Rejeitada' : 'Pendente')}</span></p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
+
+                if (!isPostActionable) {
+                    return (
+                         <div className="mt-4 text-center">
                             <button
                                 onClick={() => onJustify(assignment)}
-                                className="w-full sm:w-auto px-6 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                                className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
                             >
                                 Justificar Ausência
                             </button>
-                        </>
-                    )}
-                </div>
-            )}
+                        </div>
+                    );
+                }
+                
+                if (assignment.status === 'pending') {
+                     return (
+                        <div className="mt-4 text-center">
+                            <button
+                                onClick={handleConfirm}
+                                disabled={isConfirming}
+                                className="w-full sm:w-auto px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors"
+                            >
+                                {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                            </button>
+                        </div>
+                    );
+                }
+
+                if (assignment.status === 'confirmed') {
+                    return (
+                        <ProofSection assignment={assignment} onJustify={onJustify} />
+                    );
+                }
+                
+                return null;
+            })()}
+
         </div>
     );
 };
 
 const JustificationModal: React.FC<{
-    assignment: PostAssignment | null;
+    isOpen: boolean;
     onClose: () => void;
-    onSubmit: (assignmentId: string, justification: string, imageFiles: File[]) => Promise<void>;
-}> = ({ assignment, onClose, onSubmit }) => {
+    assignment: PostAssignment | null;
+}> = ({ isOpen, onClose, assignment }) => {
     const [justification, setJustification] = useState('');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [uploadProgress, setUploadProgress] = useState(0);
 
-    if (!assignment) return null;
+    useEffect(() => {
+        if (!isOpen) {
+            // Reset state when modal closes
+            setJustification('');
+            setImageFiles([]);
+            setImagePreviews([]);
+            setIsSubmitting(false);
+            setError('');
+            setUploadProgress(0);
+        }
+    }, [isOpen]);
+
+    if (!isOpen || !assignment) return null;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -576,19 +593,21 @@ const JustificationModal: React.FC<{
             setImagePreviews(previewUrls);
         }
     };
-
-    const handleSubmit = async () => {
+    
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
         if (!justification.trim()) {
-            setError("Por favor, escreva o motivo da sua ausência.");
+            setError('Por favor, escreva o motivo da sua ausência.');
             return;
         }
         setIsSubmitting(true);
         setError('');
         try {
-            await onSubmit(assignment.id, justification, imageFiles);
-            onClose();
+            await submitJustification(assignment.id, justification, imageFiles, setUploadProgress);
+            onClose(); // Close on success
+            window.location.reload(); // Reload to show the updated status
         } catch (err: any) {
-            setError(err.message || "Falha ao enviar justificativa.");
+            setError(err.message || 'Falha ao enviar justificativa.');
         } finally {
             setIsSubmitting(false);
         }
@@ -598,34 +617,43 @@ const JustificationModal: React.FC<{
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-white mb-4">Justificar Ausência</h2>
-                <p className="text-sm text-gray-400 mb-4">Explique por que você não pôde realizar a postagem para o evento <span className="font-semibold text-primary">{assignment.post.campaignName}</span>.</p>
-                {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-                <textarea
-                    value={justification}
-                    onChange={e => setJustification(e.target.value)}
-                    rows={5}
-                    placeholder="Digite sua justificativa aqui..."
-                    className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"
-                />
-                <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Anexar print (opcional, máx 2)</label>
-                    <div className="mt-2 flex items-center gap-4">
-                        <label htmlFor="justification-photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md text-sm text-gray-200 hover:bg-gray-600">
-                           <CameraIcon className="w-5 h-5 mr-2 inline-block" />
-                            <span>{imagePreviews.length > 0 ? 'Trocar prints' : 'Anexar prints'}</span>
-                            <input id="justification-photo-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
-                        </label>
-                        <div className="flex-grow flex items-center gap-3">
-                            {imagePreviews.map((p, i) => <img key={i} className="h-16 w-16 rounded-lg object-cover" src={p} alt={`Prévia ${i + 1}`} />)}
+                <p className="text-sm text-gray-400 mb-4">Explique por que você não pôde/pode realizar esta postagem. Se tiver algum print que comprove, anexe abaixo.</p>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <textarea
+                        value={justification}
+                        onChange={(e) => setJustification(e.target.value)}
+                        placeholder="Escreva sua justificativa aqui..."
+                        rows={5}
+                        className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                        required
+                    />
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Anexar Prints (opcional, máx. 2)</label>
+                        <div className="mt-2 flex items-center gap-4">
+                            <label htmlFor="justification-photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md text-sm text-gray-200 hover:bg-gray-600">
+                               <CameraIcon className="w-5 h-5 mr-2 inline-block" />
+                                <span>{imagePreviews.length > 0 ? 'Trocar' : 'Enviar'}</span>
+                                <input id="justification-photo-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                            </label>
+                            <div className="flex-grow flex items-center gap-3">
+                                {imagePreviews.map((p, i) => <img key={i} className="h-16 w-16 rounded-lg object-cover" src={p} alt={`Preview ${i + 1}`} />)}
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div className="mt-6 flex justify-end gap-3">
-                    <button onClick={onClose} disabled={isSubmitting} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">
-                        {isSubmitting ? 'Enviando...' : 'Enviar Justificativa'}
-                    </button>
-                </div>
+                    {isSubmitting && (
+                        <div className="my-2">
+                            <div className="w-full bg-gray-600 rounded-full h-2"><div className="bg-primary h-2 rounded-full" style={{ width: `${uploadProgress}%` }}></div></div>
+                            <p className="text-center text-xs text-gray-300 mt-1">{uploadProgress}%</p>
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3">
+                        <button type="button" onClick={onClose} disabled={isSubmitting} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
+                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">
+                            {isSubmitting ? 'Enviando...' : 'Enviar Justificativa'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
@@ -634,25 +662,25 @@ const JustificationModal: React.FC<{
 const PostCheck: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
+
     const [email, setEmail] = useState('');
-    const [promoter, setPromoter] = useState<Promoter | null>(null);
-    const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[] | null>(null);
+    const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
     const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+    const [promoter, setPromoter] = useState<Promoter | null>(null);
+    
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
-    
-    // Modals
-    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+
+    // Modal state
     const [isJustifyModalOpen, setIsJustifyModalOpen] = useState(false);
     const [justifyingAssignment, setJustifyingAssignment] = useState<PostAssignment | null>(null);
-    
+    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true);
         setError(null);
-        setAssignments(null);
-        setPromoter(null);
         setSearched(true);
         try {
             const [promoterProfiles, assignmentData, scheduledData] = await Promise.all([
@@ -661,22 +689,32 @@ const PostCheck: React.FC = () => {
                 getScheduledPostsForPromoter(searchEmail),
             ]);
 
-            if (promoterProfiles.length === 0 && assignmentData.length === 0) {
-                setError("Nenhum cadastro ou publicação encontrada para este e-mail.");
+            if (!promoterProfiles || promoterProfiles.length === 0) {
+                setError("Nenhum cadastro de divulgadora encontrado para este e-mail.");
                 return;
             }
-            
-            setPromoter(promoterProfiles[0] || null); // Use the most recent profile
-            setScheduledPosts(scheduledData);
 
-            const promoterGroups = new Map(promoterProfiles.map(p => [p.campaignName, p.hasJoinedGroup]));
+            const primaryProfile = promoterProfiles[0];
+            setPromoter(primaryProfile);
+
+            // Create a map of promoter's group status per campaign
+            const groupStatusMap = new Map<string, boolean>();
+            promoterProfiles.forEach(p => {
+                if(p.campaignName) {
+                    groupStatusMap.set(p.campaignName, p.hasJoinedGroup || false);
+                    (p.associatedCampaigns || []).forEach(assoc => {
+                        groupStatusMap.set(assoc, p.hasJoinedGroup || false);
+                    });
+                }
+            });
             
-            const assignmentsWithGroupStatus = assignmentData.map(a => ({
+            const assignmentsWithStatus = assignmentData.map(a => ({
                 ...a,
-                promoterHasJoinedGroup: promoterGroups.get(a.post.campaignName) || false
+                promoterHasJoinedGroup: groupStatusMap.get(a.post.campaignName) || false,
             }));
-            
-            setAssignments(assignmentsWithGroupStatus);
+
+            setAssignments(assignmentsWithStatus);
+            setScheduledPosts(scheduledData);
 
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
@@ -693,27 +731,81 @@ const PostCheck: React.FC = () => {
             performSearch(emailFromQuery);
         }
     }, [location.search, performSearch]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        navigate(`/posts?email=${encodeURIComponent(email)}`);
+    
+    const handleConfirmAssignment = async (assignmentId: string) => {
+        try {
+            await confirmAssignment(assignmentId);
+            performSearch(email); // Refresh data
+        } catch (err: any) {
+            setError(err.message || 'Falha ao confirmar.');
+        }
     };
     
-    const handleConfirm = async (assignmentId: string) => {
-        await confirmAssignment(assignmentId);
-        await performSearch(email);
-    };
-
-    const handleOpenJustifyModal = (assignment: PostAssignment) => {
+    const openJustifyModal = (assignment: PostAssignment) => {
         setJustifyingAssignment(assignment);
         setIsJustifyModalOpen(true);
     };
-    
-    const handleJustificationSubmit = async (assignmentId: string, justification: string, imageFiles: File[]) => {
-        await submitJustification(assignmentId, justification, imageFiles, () => {});
-        await performSearch(email);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        performSearch(email);
     };
 
+    const renderContent = () => {
+        if (!searched) return null;
+        if (isLoading) {
+            return (
+                <div className="flex justify-center items-center h-24">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                </div>
+            );
+        }
+        if (error) return <p className="text-red-500 mt-4 text-center">{error}</p>;
+        
+        const hasPendingActions = assignments.some(a => !a.proofSubmittedAt && !a.justification);
+        
+        return (
+             <div className="space-y-6">
+                {assignments.length === 0 && scheduledPosts.length === 0 && (
+                    <p className="text-center text-gray-400 mt-4">Nenhuma publicação encontrada para você no momento.</p>
+                )}
+                
+                {hasPendingActions && (
+                    <div className="bg-blue-900/50 border-l-4 border-blue-500 text-blue-300 p-4 rounded-md">
+                        <p className="font-bold">Ação Necessária</p>
+                        <p>Você tem publicações pendentes. Por favor, confirme ou justifique sua ausência.</p>
+                    </div>
+                )}
+                
+                {scheduledPosts.length > 0 && (
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-100 mb-4">Publicações Agendadas</h2>
+                        <div className="space-y-4">
+                            {scheduledPosts.map(sp => (
+                                <div key={sp.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
+                                    <h3 className="font-bold text-lg text-primary">{sp.postData.campaignName}</h3>
+                                    {sp.postData.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{sp.postData.eventName}</p>}
+                                    <div className="mt-2">
+                                        <CountdownTimer targetDate={sp.scheduledAt} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                 {assignments.length > 0 && (
+                     <div>
+                        <h2 className="text-2xl font-bold text-gray-100 mb-4">Minhas Publicações</h2>
+                        <div className="space-y-4">
+                            {assignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={openJustifyModal} />)}
+                        </div>
+                     </div>
+                 )}
+            </div>
+        );
+    };
+    
     return (
         <div className="max-w-2xl mx-auto">
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
@@ -721,52 +813,42 @@ const PostCheck: React.FC = () => {
                 <span>Voltar</span>
             </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Minhas Publicações</h1>
-                <p className="text-center text-gray-400 mb-8">Digite seu e-mail para ver suas tarefas de postagem.</p>
+                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Portal de Publicações</h1>
+                <p className="text-center text-gray-400 mb-8">Confirme sua participação e envie a comprovação dos posts.</p>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
-                    <button type="submit" disabled={isLoading} className="w-full py-3 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Buscar'}</button>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Seu e-mail de cadastro"
+                        className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200"
+                        required
+                    />
+                     <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
+                    >
+                        {isLoading ? 'Buscando...' : 'Buscar Minhas Publicações'}
+                    </button>
                 </form>
-
+                
                 {promoter && (
                     <div className="mt-6 text-center">
-                        <button onClick={() => setIsStatsModalOpen(true)} className="text-primary hover:underline">Ver minhas estatísticas</button>
+                        <button onClick={() => setIsStatsModalOpen(true)} className="text-sm text-primary hover:underline font-semibold">
+                            Ver Minhas Estatísticas
+                        </button>
                     </div>
                 )}
                 
-                <div className="mt-8 space-y-6">
-                    {isLoading && <div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div></div>}
-                    {error && <p className="text-red-400 text-center">{error}</p>}
-                    
-                    {searched && !isLoading && !error && (
-                        <>
-                            {assignments?.length === 0 && scheduledPosts.length === 0 && <p className="text-gray-400 text-center">Nenhuma publicação encontrada para você no momento.</p>}
-                            
-                            {assignments?.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirm} onJustify={handleOpenJustifyModal} />)}
-
-                            {scheduledPosts.length > 0 && (
-                                 <div className="border-t border-gray-700 pt-6">
-                                     <h2 className="text-xl font-bold text-center text-white mb-4">Publicações Agendadas</h2>
-                                     <div className="space-y-4">
-                                         {scheduledPosts.map(sp => (
-                                             <div key={sp.id} className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
-                                                <h3 className="font-bold text-lg text-primary">{sp.postData.campaignName}</h3>
-                                                {sp.postData.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{sp.postData.eventName}</p>}
-                                                <div className="mt-2">
-                                                    <CountdownTimer targetDate={sp.scheduledAt} />
-                                                </div>
-                                             </div>
-                                         ))}
-                                     </div>
-                                 </div>
-                            )}
-                        </>
-                    )}
+                <div className="mt-8">
+                    {renderContent()}
                 </div>
             </div>
+            
+            <JustificationModal isOpen={isJustifyModalOpen} onClose={() => setIsJustifyModalOpen(false)} assignment={justifyingAssignment} />
             <PromoterPublicStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={promoter} />
-            <JustificationModal assignment={justifyingAssignment} onClose={() => setIsJustifyModalOpen(false)} onSubmit={handleJustificationSubmit} />
         </div>
     );
 };
