@@ -27,7 +27,7 @@ const app = firebase.initializeApp(firebaseConfig);
 export const firestore = firebase.firestore();
 
 // Initialize Cloud Storage and get a reference to the service using compat syntax
-export const storage = firebase.storage();
+export const storage = app.storage();
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = firebase.auth();
