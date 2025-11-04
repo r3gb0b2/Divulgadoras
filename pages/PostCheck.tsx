@@ -587,15 +587,14 @@ const ScheduledPostCard: React.FC<{ post: ScheduledPost }> = ({ post }) => {
 const JustificationModal: React.FC<{
     isOpen: boolean,
     onClose: () => void,
-    onSuccess: () => void,
+    onSubmit: (assignmentId: string, text: string, imageFiles: File[]) => Promise<void>,
     assignment: PostAssignment | null
-}> = ({ isOpen, onClose, onSuccess, assignment }) => {
+}> = ({ isOpen, onClose, onSubmit, assignment }) => {
     const [text, setText] = useState('');
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -606,7 +605,6 @@ const JustificationModal: React.FC<{
             setImagePreviews([]);
             setIsProcessingPhoto(false);
             setSubmitError(null);
-            setUploadProgress(0);
         }
     }, [isOpen]);
 
@@ -644,23 +642,18 @@ const JustificationModal: React.FC<{
         }
         setIsSubmitting(true);
         setSubmitError(null);
-        setUploadProgress(0);
         try {
-            await submitJustification(assignment.id, text, imageFiles, (progress) => {
-                setUploadProgress(progress);
-            });
-            onSuccess();
+            await onSubmit(assignment.id, text, imageFiles);
             onClose();
         } catch (err: any) {
             setSubmitError(err.message || "Ocorreu um erro desconhecido ao enviar.");
-            setUploadProgress(0);
         } finally {
             setIsSubmitting(false);
         }
     };
     
     const getButtonText = () => {
-        if (isSubmitting) return `Enviando... ${uploadProgress}%`;
+        if (isSubmitting) return 'Enviando...';
         if (isProcessingPhoto) return 'Processando imagens...';
         return 'Enviar Justificativa';
     };
@@ -699,18 +692,6 @@ const JustificationModal: React.FC<{
                         </div>
                     </div>
                 </div>
-
-                {isSubmitting && (
-                    <div className="my-4">
-                        <div className="w-full bg-gray-600 rounded-full h-2.5">
-                            <div 
-                                className="bg-primary h-2.5 rounded-full transition-all duration-300" 
-                                style={{ width: `${uploadProgress}%` }}
-                            ></div>
-                        </div>
-                        <p className="text-center text-sm text-gray-300 mt-1">{uploadProgress}%</p>
-                    </div>
-                )}
 
                 <div className="mt-6 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
@@ -832,9 +813,24 @@ const PostCheck: React.FC = () => {
         setIsJustifyModalOpen(true);
     };
     
-    const handleJustificationSuccess = useCallback(async () => {
-        await performSearch(email);
-    }, [performSearch, email]);
+    const handleJustifySubmit = async (assignmentId: string, text: string, imageFiles: File[]) => {
+        try {
+            const uploadPromise = submitJustification(assignmentId, text, imageFiles);
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error("O envio demorou muito para responder. Verifique sua conexão com a internet e tente novamente. (Código de erro: T-20s-J)"));
+                }, 20000); // 20 seconds timeout
+            });
+            
+            await Promise.race([uploadPromise, timeoutPromise]);
+            
+            await performSearch(email); // Refresh list on success
+        } catch (err: any) {
+            // Re-throw for modal
+            throw err;
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -979,7 +975,7 @@ const PostCheck: React.FC = () => {
             <JustificationModal
                 isOpen={isJustifyModalOpen}
                 onClose={() => setIsJustifyModalOpen(false)}
-                onSuccess={handleJustificationSuccess}
+                onSubmit={handleJustifySubmit}
                 assignment={justifyingAssignment}
             />
         </div>
