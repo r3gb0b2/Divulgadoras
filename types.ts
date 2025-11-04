@@ -62,7 +62,6 @@ export interface Campaign {
   stateAbbr: string;
   organizationId: string;
   associatedAdmins?: string[];
-  // FIX: Add guest list properties to Campaign type to support guest list access control.
   guestListAccess?: 'all' | 'specific';
   guestListAssignments?: { [promoterId: string]: string[] };
   guestListTypes?: string[];

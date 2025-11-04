@@ -113,7 +113,6 @@ export const getAllCampaigns = async (organizationId?: string): Promise<Campaign
             q = q.where("organizationId", "==", organizationId);
         }
         const querySnapshot = await q.get();
-        // FIX: Replace spread operator with Object.assign to resolve "Spread types may only be created from object types" error.
         return querySnapshot.docs.map(doc => Object.assign({ id: doc.id }, doc.data()) as Campaign).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
         console.error("Error getting all campaigns: ", error);

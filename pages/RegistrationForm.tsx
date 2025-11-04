@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
-// FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
-// FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { storage } from '../firebase/config';
