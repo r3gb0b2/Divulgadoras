@@ -1,3 +1,7 @@
+
+
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getStatesConfig } from '../services/settingsService';
@@ -22,7 +26,9 @@ const StatesListPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
+        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
         if (!isSuperAdmin && adminData?.organizationIds?.[0]) {
+          // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
           const orgData = await getOrganization(adminData.organizationIds[0]);
           setOrganization(orgData);
         }

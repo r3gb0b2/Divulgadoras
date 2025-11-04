@@ -1,62 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
+// FIX: Added 'getScheduledPostsForPromoter' to import.
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
-import PromoterPublicStatsModal from '../components/PromoterPostStatsModal';
+import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
-
-// Helper function to resize and compress images and return a Blob
-const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        if (!event.target?.result) {
-          return reject(new Error("FileReader did not return a result."));
-        }
-        const img = new Image();
-        img.src = event.target.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let { width, height } = img;
-  
-          if (width > height) {
-            if (width > maxWidth) {
-              height *= maxWidth / width;
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width *= maxHeight / height;
-              height = maxHeight;
-            }
-          }
-  
-          canvas.width = width;
-          canvas.height = height;
-          
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            return reject(new Error('Could not get canvas context'));
-          }
-          
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              return reject(new Error('Canvas to Blob conversion failed'));
-            }
-            resolve(blob);
-          }, 'image/jpeg', quality);
-        };
-        img.onerror = (error) => reject(error);
-      };
-      reader.onerror = (error) => reject(error);
-    });
-};
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -368,8 +319,6 @@ const PostCard: React.FC<{
     const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0;
     const hasJustification = !!assignment.justification;
 
-    const isPostGloballyActive = assignment.post.isActive && !isExpired;
-
     const renderActions = () => {
         if (hasProof) {
             return <ProofSection assignment={assignment} onJustify={onJustify} />;
@@ -390,37 +339,23 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
-            if (isPostGloballyActive) {
-                return (
-                    <div className="w-full flex flex-col sm:flex-row gap-2">
-                        <button 
-                            onClick={() => onJustify(assignment)}
-                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                            Justificar Ausência
-                        </button>
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={isConfirming}
-                            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
-                        </button>
-                    </div>
-                );
-            } else {
-                return (
-                    <div className="w-full text-center">
-                        <p className="text-xs text-red-400 mb-2">Esta publicação está inativa ou expirou.</p>
-                        <button 
-                            onClick={() => onJustify(assignment)}
-                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                            Justificar Ausência
-                        </button>
-                    </div>
-                );
-            }
+            return (
+                <div className="w-full flex flex-col sm:flex-row gap-2">
+                    <button 
+                        onClick={() => onJustify(assignment)}
+                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                    <button 
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
+                        className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                    </button>
+                </div>
+            );
         }
         if (assignment.status === 'confirmed') {
             return <ProofSection assignment={assignment} onJustify={onJustify} />;
@@ -481,8 +416,8 @@ const PostCard: React.FC<{
                                 <button
                                     onClick={handleFirebaseDownload}
                                     disabled={isMediaProcessing}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 1</span>
@@ -491,9 +426,9 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <button
                                     onClick={handleGoogleDriveDownload}
-                                    disabled={!isPostGloballyActive}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                    disabled={!isPostDownloadable}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>
@@ -594,8 +529,6 @@ const JustificationModal: React.FC<{
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-    const [submitError, setSubmitError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
@@ -603,66 +536,33 @@ const JustificationModal: React.FC<{
             setIsSubmitting(false);
             setImageFiles([]);
             setImagePreviews([]);
-            setIsProcessingPhoto(false);
-            setSubmitError(null);
         }
     }, [isOpen]);
 
     if (!isOpen || !assignment) return null;
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files && files.length > 0) {
-            setIsProcessingPhoto(true);
-            setSubmitError(null);
-            try {
-                const fileList = Array.from(files).slice(0, 2);
-                const processedFiles = await Promise.all(
-                    fileList.map(async (file: File) => {
-                        const compressedBlob = await resizeImage(file, 1080, 1920, 0.85);
-                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
-                    })
-                );
-                setImageFiles(processedFiles);
-                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
-                setImagePreviews(previewUrls);
-            } catch (error) {
-                console.error("Error processing justification images:", error);
-                 setSubmitError("Houve um problema com uma das imagens. Tente novamente.");
-            } finally {
-                setIsProcessingPhoto(false);
-            }
+        if (files) {
+            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            setImageFiles(fileList);
+            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
+            setImagePreviews(previewUrls);
         }
     };
 
     const handleSubmit = async () => {
-        if (!text.trim()) {
-            setSubmitError("Por favor, escreva o motivo da sua justificativa.");
-            return;
-        }
+        if (!text.trim()) return;
         setIsSubmitting(true);
-        setSubmitError(null);
-        try {
-            await onSubmit(assignment.id, text, imageFiles);
-            onClose();
-        } catch (err: any) {
-            setSubmitError(err.message || "Ocorreu um erro desconhecido ao enviar.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-    
-    const getButtonText = () => {
-        if (isSubmitting) return 'Enviando...';
-        if (isProcessingPhoto) return 'Processando imagens...';
-        return 'Enviar Justificativa';
+        await onSubmit(assignment.id, text, imageFiles);
+        setIsSubmitting(false);
+        onClose();
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-bold text-white mb-4">Justificar Ausência</h2>
-                {submitError && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4">{submitError}</div>}
                 <p className="text-gray-400 mb-4">Explique o motivo pelo qual você não conseguiu realizar esta postagem. Sua justificativa será enviada para análise.</p>
                 <textarea
                     value={text}
@@ -677,12 +577,10 @@ const JustificationModal: React.FC<{
                         <label htmlFor="justification-photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                             <CameraIcon className="w-5 h-5 mr-2 inline-block" />
                             <span>{imagePreviews.length > 0 ? 'Trocar imagens' : 'Enviar imagens'}</span>
-                            <input id="justification-photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto} />
+                            <input id="justification-photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
                         </label>
                         <div className="flex-grow flex items-center gap-3">
-                            {isProcessingPhoto ? (
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                            ) : imagePreviews.length > 0 ? (
+                            {imagePreviews.length > 0 ? (
                                 imagePreviews.map((preview, index) => (
                                     <img key={index} className="h-16 w-16 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                 ))
@@ -695,8 +593,8 @@ const JustificationModal: React.FC<{
 
                 <div className="mt-6 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || isProcessingPhoto || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {getButtonText()}
+                    <button onClick={handleSubmit} disabled={isSubmitting || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
+                        {isSubmitting ? 'Enviando...' : 'Enviar Justificativa'}
                     </button>
                 </div>
             </div>
@@ -815,20 +713,10 @@ const PostCheck: React.FC = () => {
     
     const handleJustifySubmit = async (assignmentId: string, text: string, imageFiles: File[]) => {
         try {
-            const uploadPromise = submitJustification(assignmentId, text, imageFiles);
-
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error("O envio demorou muito para responder. Verifique sua conexão com a internet e tente novamente. (Código de erro: T-20s-J)"));
-                }, 20000); // 20 seconds timeout
-            });
-            
-            await Promise.race([uploadPromise, timeoutPromise]);
-            
-            await performSearch(email); // Refresh list on success
+            await submitJustification(assignmentId, text, imageFiles);
+            await performSearch(email); // Refresh list
         } catch (err: any) {
-            // Re-throw for modal
-            throw err;
+            setError(err.message || 'Falha ao enviar justificativa.');
         }
     };
 

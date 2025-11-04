@@ -467,6 +467,9 @@ const CreatePost: React.FC = () => {
             const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
             if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
 
+            // FIX: The createPost function expects an array of full Promoter objects,
+            // while schedulePost and updateScheduledPost expect a mapped object.
+            // We create both versions here to satisfy both function signatures.
             const promotersToAssignFull = promoters
                 .filter(p => selectedPromoters.has(p.id));
 
@@ -512,6 +515,7 @@ const CreatePost: React.FC = () => {
                 
                 const postDataForUpdate: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                // FIX: Use firebase.firestore.Timestamp.fromDate instead of Timestamp.fromDate
                 const scheduledTimestamp = firebase.firestore.Timestamp.fromDate(scheduledDateTime);
                 const cleanPostData = JSON.parse(JSON.stringify(postDataForUpdate));
 
@@ -537,6 +541,7 @@ const CreatePost: React.FC = () => {
                 
                 const postDataForScheduling: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                // FIX: Use firebase.firestore.Timestamp.fromDate instead of Timestamp.fromDate
                 const scheduledTimestamp = firebase.firestore.Timestamp.fromDate(scheduledDateTime);
                 const cleanPostData = JSON.parse(JSON.stringify(postDataForScheduling));
 

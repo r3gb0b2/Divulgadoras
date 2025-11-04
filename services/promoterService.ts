@@ -325,7 +325,7 @@ export const getAllPromoters = async (options: {
 export const getPromoterStats = async (options: {
   organizationId?: string;
   statesForScope?: string[] | null;
-}): Promise<{ total: number, pending: number, approved: number, rejected: number, removed: number }> => {
+}): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
     try {
         let baseQuery: firebase.firestore.Query = firestore.collection("promoters");
         
@@ -339,14 +339,12 @@ export const getPromoterStats = async (options: {
         const pendingQuery = baseQuery.where("status", "in", ["pending", "rejected_editable"]);
         const approvedQuery = baseQuery.where("status", "==", "approved");
         const rejectedQuery = baseQuery.where("status", "==", "rejected");
-        const removedQuery = baseQuery.where("status", "==", "removed");
 
-        const [totalSnap, pendingSnap, approvedSnap, rejectedSnap, removedSnap] = await Promise.all([
+        const [totalSnap, pendingSnap, approvedSnap, rejectedSnap] = await Promise.all([
             baseQuery.get(),
             pendingQuery.get(),
             approvedQuery.get(),
-            rejectedQuery.get(),
-            removedQuery.get()
+            rejectedQuery.get()
         ]);
         
         return {
@@ -354,7 +352,6 @@ export const getPromoterStats = async (options: {
             pending: pendingSnap.size,
             approved: approvedSnap.size,
             rejected: rejectedSnap.size,
-            removed: removedSnap.size,
         };
     } catch (error) {
         console.error("Error getting promoter stats: ", error);

@@ -84,7 +84,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const [allPromoters, setAllPromoters] = useState<Promoter[]>([]);
     const [allAssignments, setAllAssignments] = useState<PostAssignment[]>([]);
-    const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
+    const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0 });
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [organization, setOrganization] = useState<Organization | null>(null);
@@ -562,7 +562,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             <div className="bg-secondary p-4 rounded-lg shadow-lg">
                 <div className="flex flex-col md:flex-row gap-4">
                     {/* Stats section */}
-                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center md:w-1/3">
                         <button onClick={() => setFilter('pending')} className={`p-3 rounded-lg ${filter === 'pending' ? 'bg-primary' : 'bg-dark'}`}>
                             <h4 className="text-sm font-semibold text-gray-300">Pendentes</h4>
                             <p className="text-2xl font-bold">{stats.pending}</p>
@@ -574,10 +574,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         <button onClick={() => setFilter('rejected')} className={`p-3 rounded-lg ${filter === 'rejected' ? 'bg-primary' : 'bg-dark'}`}>
                             <h4 className="text-sm font-semibold text-gray-300">Rejeitadas</h4>
                             <p className="text-2xl font-bold">{stats.rejected}</p>
-                        </button>
-                        <button onClick={() => setFilter('removed')} className={`p-3 rounded-lg ${filter === 'removed' ? 'bg-primary' : 'bg-dark'}`}>
-                            <h4 className="text-sm font-semibold text-gray-300">Removidas</h4>
-                            <p className="text-2xl font-bold">{stats.removed}</p>
                         </button>
                         <button onClick={() => setFilter('all')} className={`p-3 rounded-lg ${filter === 'all' ? 'bg-primary' : 'bg-dark'}`}>
                             <h4 className="text-sm font-semibold text-gray-300">Total</h4>
@@ -628,21 +624,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
                     </div>
                 </div>
-                {(isSuperAdmin || allCampaigns.length > 0) && (
+                {isSuperAdmin && (
                     <div className="mt-4 flex flex-col sm:flex-row gap-2 border-t border-gray-700 pt-3">
-                        {isSuperAdmin && (
-                        <>
-                            <select value={selectedOrg} onChange={(e) => setSelectedOrg(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
-                                <option value="all">Todas as Organizações</option>
-                                {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
-                            </select>
-                            <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
-                                <option value="all">Todos os Estados</option>
-                                {Object.keys(states).map(abbr => <option key={abbr} value={abbr}>{states[abbr]}</option>)}
-                            </select>
-                        </>
-                        )}
-                        <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className={`w-full ${isSuperAdmin ? 'sm:w-1/3' : ''} px-3 py-2 border border-gray-600 rounded-md bg-gray-700`}>
+                        <select value={selectedOrg} onChange={(e) => setSelectedOrg(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todas as Organizações</option>
+                            {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                        </select>
+                        <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todos os Estados</option>
+                            {Object.keys(states).map(abbr => <option key={abbr} value={abbr}>{states[abbr]}</option>)}
+                        </select>
+                        <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                             <option value="all">Todos os Eventos</option>
                             {allCampaigns.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                         </select>

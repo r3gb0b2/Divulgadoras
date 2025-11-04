@@ -41,6 +41,7 @@ const playSound = (type: 'success' | 'error') => {
         oscillator.type = 'square';
         oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
         gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+// FIX: The playSound function was incomplete, causing a syntax error.
         gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
     }
 
