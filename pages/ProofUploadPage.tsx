@@ -108,32 +108,13 @@ const ProofUploadPage: React.FC = () => {
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files && files.length > 0) {
-            setIsProcessingPhoto(true);
-            setError(null);
-
-            try {
-                const fileList = Array.from(files).slice(0, 2); // Max 2 files
-                const processedFiles = await Promise.all(
-                    fileList.map(async (file: File) => {
-                        // Screenshots can be large, então comprimimos antes do upload
-                        const compressedBlob = await resizeImage(file, 800, 1200, 0.8);
-                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
-                    })
-                );
-
-                setImageFiles(processedFiles);
-                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
-                setImagePreviews(previewUrls);
-
-            } catch (error) {
-                console.error("Error processing image:", error);
-                setError("Houve um problema com uma das imagens. Por favor, tente novamente.");
-                // limpando o valor do input de arquivo de forma segura
-                try { (e.target as HTMLInputElement).value = ''; } catch (_) { }
-            } finally {
-                setIsProcessingPhoto(false);
-            }
+        if (files) {
+            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            setImageFiles(fileList);
+            
+            // FIX: Explicitly cast `file` to `Blob` to resolve TypeScript error where it was being inferred as `unknown`.
+            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
+            setImagePreviews(previewUrls);
         }
     };
     
