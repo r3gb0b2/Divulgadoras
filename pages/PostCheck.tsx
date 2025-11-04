@@ -374,6 +374,84 @@ const PostCard: React.FC<{
         window.open(urlToOpen, '_blank');
     };
 
+<<<<<<< HEAD
+=======
+
+    const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => {
+        const styles = {
+            pending: "bg-yellow-900/50 text-yellow-300",
+            accepted: "bg-green-900/50 text-green-300",
+            rejected: "bg-red-900/50 text-red-300",
+        };
+        const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" };
+        if (!status) return <span className="text-gray-400">Pendente</span>;
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+    };
+
+    const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0;
+    const hasJustification = !!assignment.justification;
+
+    const isPostGloballyActive = assignment.post.isActive && !isExpired;
+
+    const renderActions = () => {
+        if (hasProof) {
+            return <ProofSection assignment={assignment} onJustify={onJustify} />;
+        }
+        if (hasJustification) {
+            return (
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
+                    <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
+                    <div className="text-xs mb-2">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                    {assignment.justificationResponse && (
+                        <div className="mt-2 text-left bg-dark p-3 rounded-md border-l-4 border-primary">
+                            <p className="text-sm font-semibold text-primary mb-1">Resposta do Organizador:</p>
+                            <p className="text-sm text-gray-300 whitespace-pre-wrap">{assignment.justificationResponse}</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        if (assignment.status === 'pending') {
+            if (isPostGloballyActive) {
+                return (
+                    <div className="w-full flex flex-col sm:flex-row gap-2">
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={isConfirming}
+                            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                        </button>
+                    </div>
+                );
+            } else {
+                return (
+                    <div className="w-full text-center">
+                        <p className="text-xs text-red-400 mb-2">Esta publicação está inativa ou expirou.</p>
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    </div>
+                );
+            }
+        }
+        if (assignment.status === 'confirmed') {
+            return <ProofSection assignment={assignment} onJustify={onJustify} />;
+        }
+        return null;
+    };
+
+>>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
     return (
         <div className={`p-4 rounded-lg shadow-sm ${isPostActionable ? 'bg-dark/70' : 'bg-gray-800/50'}`}>
             <h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>
@@ -389,6 +467,7 @@ const PostCard: React.FC<{
                         <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md" controls={assignment.post.type === 'video'} />
                         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
                             {assignment.post.mediaUrl && (
+<<<<<<< HEAD
                                 <button type="button" onClick={handleFirebaseDownload} disabled={isMediaProcessing} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 hover:bg-gray-500" title="Baixar do nosso servidor (Firebase)">
                                     <DownloadIcon className="w-4 h-4" /> <span>Download Link 1</span>
                                 </button>
@@ -396,6 +475,27 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <button type="button" onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-500" title="Baixar do Google Drive">
                                     <DownloadIcon className="w-4 h-4" /> <span>Download Link 2</span>
+=======
+                                <button
+                                    onClick={handleFirebaseDownload}
+                                    disabled={isMediaProcessing}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 1</span>
+                                </button>
+                            )}
+                            {assignment.post.googleDriveUrl && (
+                                <button
+                                    onClick={handleGoogleDriveDownload}
+                                    disabled={!isPostGloballyActive}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 2</span>
+>>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
                                 </button>
                             )}
                         </div>
