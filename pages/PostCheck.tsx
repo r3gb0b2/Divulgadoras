@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-// FIX: Added 'getScheduledPostsForPromoter' to import.
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
@@ -8,6 +7,56 @@ import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } 
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
+
+// Helper function to resize and compress images and return a Blob
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        if (!event.target?.result) {
+          return reject(new Error("FileReader did not return a result."));
+        }
+        const img = new Image();
+        img.src = event.target.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+  
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+  
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return reject(new Error('Could not get canvas context'));
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              return reject(new Error('Canvas to Blob conversion failed'));
+            }
+            resolve(blob);
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+};
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -545,6 +594,7 @@ const JustificationModal: React.FC<{
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
     useEffect(() => {
         if (!isOpen) {
@@ -552,18 +602,32 @@ const JustificationModal: React.FC<{
             setIsSubmitting(false);
             setImageFiles([]);
             setImagePreviews([]);
+            setIsProcessingPhoto(false);
         }
     }, [isOpen]);
 
     if (!isOpen || !assignment) return null;
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files) {
-            const fileList = Array.from(files).slice(0, 2); // Max 2 files
-            setImageFiles(fileList);
-            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
-            setImagePreviews(previewUrls);
+        if (files && files.length > 0) {
+            setIsProcessingPhoto(true);
+            try {
+                const fileList = Array.from(files).slice(0, 2);
+                const processedFiles = await Promise.all(
+                    fileList.map(async (file: File) => {
+                        const compressedBlob = await resizeImage(file, 1080, 1920, 0.85);
+                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                    })
+                );
+                setImageFiles(processedFiles);
+                const previewUrls = fileList.map(file => URL.createObjectURL(file));
+                setImagePreviews(previewUrls);
+            } catch (error) {
+                console.error("Error processing justification images:", error);
+            } finally {
+                setIsProcessingPhoto(false);
+            }
         }
     };
 
@@ -573,6 +637,12 @@ const JustificationModal: React.FC<{
         await onSubmit(assignment.id, text, imageFiles);
         setIsSubmitting(false);
         onClose();
+    };
+    
+    const getButtonText = () => {
+        if (isSubmitting) return 'Enviando...';
+        if (isProcessingPhoto) return 'Processando imagens...';
+        return 'Enviar Justificativa';
     };
 
     return (
@@ -593,10 +663,12 @@ const JustificationModal: React.FC<{
                         <label htmlFor="justification-photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                             <CameraIcon className="w-5 h-5 mr-2 inline-block" />
                             <span>{imagePreviews.length > 0 ? 'Trocar imagens' : 'Enviar imagens'}</span>
-                            <input id="justification-photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                            <input id="justification-photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto} />
                         </label>
                         <div className="flex-grow flex items-center gap-3">
-                            {imagePreviews.length > 0 ? (
+                            {isProcessingPhoto ? (
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            ) : imagePreviews.length > 0 ? (
                                 imagePreviews.map((preview, index) => (
                                     <img key={index} className="h-16 w-16 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                 ))
@@ -609,8 +681,8 @@ const JustificationModal: React.FC<{
 
                 <div className="mt-6 flex justify-end gap-3">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
-                        {isSubmitting ? 'Enviando...' : 'Enviar Justificativa'}
+                    <button onClick={handleSubmit} disabled={isSubmitting || isProcessingPhoto || !text.trim()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
+                        {getButtonText()}
                     </button>
                 </div>
             </div>

@@ -26,9 +26,7 @@ const StatesListPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
         if (!isSuperAdmin && adminData?.organizationIds?.[0]) {
-          // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
           const orgData = await getOrganization(adminData.organizationIds[0]);
           setOrganization(orgData);
         }
