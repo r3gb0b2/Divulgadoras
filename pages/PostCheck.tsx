@@ -621,7 +621,7 @@ const JustificationModal: React.FC<{
                 const fileList = Array.from(files).slice(0, 2);
                 const processedFiles = await Promise.all(
                     fileList.map(async (file: File) => {
-                        const compressedBlob = await resizeImage(file, 1080, 1920, 0.85);
+                        const compressedBlob = await resizeImage(file, 800, 1200, 0.8);
                         return new File([compressedBlob], file.name, { type: 'image/jpeg' });
                     })
                 );
