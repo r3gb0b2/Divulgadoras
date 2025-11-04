@@ -551,7 +551,12 @@ export const submitJustification = async (
         });
     } catch (error) {
         console.error("Error submitting justification: ", error);
-        throw new Error("Não foi possível enviar a justificativa.");
+        if (error instanceof Error) {
+            // Include error.code if it's a Firebase error for better debugging
+            const code = (error as any).code ? `(${(error as any).code})` : '';
+            throw new Error(`Não foi possível enviar a justificativa. Detalhes: ${error.message} ${code}`);
+        }
+        throw new Error(`Não foi possível enviar a justificativa. Erro desconhecido: ${String(error)}`);
     }
 };
 
