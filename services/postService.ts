@@ -513,8 +513,8 @@ export const submitJustification = async (
             
             for (const photo of imageFiles) {
                 const fileExtension = photo.name.split('.').pop();
-                const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = storage.ref(`justifications-proofs/${fileName}`);
+                const fileName = `justifications-proofs/${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = storage.ref(fileName);
                 
                 const url = await new Promise<string>((resolve, reject) => {
                     const uploadTask = storageRef.put(photo);
@@ -522,7 +522,7 @@ export const submitJustification = async (
                         (snapshot) => {
                             const currentFileProgress = snapshot.bytesTransferred;
                             const totalProgress = uploadedSize + currentFileProgress;
-                            const progressPercentage = totalSize > 0 ? (totalProgress / totalSize) * 100 : 0;
+                            const progressPercentage = totalSize > 0 ? (totalProgress / totalSize) * 100 : 100;
                             onProgress(Math.round(progressPercentage));
                         },
                         (error) => reject(error),
@@ -535,8 +535,10 @@ export const submitJustification = async (
                 });
                 justificationImageUrls.push(url);
             }
+        } else {
+            // If no files, progress is complete for the "upload" part
+            onProgress(100);
         }
-        onProgress(100);
 
         const docRef = firestore.collection('postAssignments').doc(assignmentId);
         await docRef.update({
