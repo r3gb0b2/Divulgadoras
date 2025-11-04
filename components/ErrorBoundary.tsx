@@ -1,4 +1,3 @@
-
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -12,14 +11,20 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Replaced constructor with a class property to initialize state.
-  // This explicitly declares the 'state' property on the ErrorBoundary class,
-  // resolving TypeScript errors where `this.state` and `this.props` were not found.
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  // FIX: This redundant declaration could cause type conflicts with the inherited 'state' property from React.Component, leading to the errors.
+  // public state: State;
+
+  // FIX: Switched from a public class field to a constructor for state initialization.
+  // This is a more traditional and widely supported syntax for React class components
+  // which resolves potential issues with tooling that may have caused the 'setState' and 'props' errors.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };

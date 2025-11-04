@@ -5,6 +5,56 @@ import { PostAssignment, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 
+// Helper function to resize and compress images and return a Blob
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        if (!event.target?.result) {
+          return reject(new Error("FileReader did not return a result."));
+        }
+        const img = new Image();
+        img.src = event.target.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+  
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+  
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return reject(new Error('Could not get canvas context'));
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              return reject(new Error('Canvas to Blob conversion failed'));
+            }
+            resolve(blob);
+          }, 'image/jpeg', quality);
+        };
+        img.onerror = (error) => reject(error);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
 const ProofUploadPage: React.FC = () => {
     const { assignmentId } = useParams<{ assignmentId: string }>();
     const navigate = useNavigate();
@@ -14,6 +64,7 @@ const ProofUploadPage: React.FC = () => {
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -54,14 +105,33 @@ const ProofUploadPage: React.FC = () => {
         fetchAssignment();
     }, [assignmentId]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (files) {
-            const fileList = Array.from(files).slice(0, 2); // Max 2 files
-            setImageFiles(fileList);
+        if (files && files.length > 0) {
+            setIsProcessingPhoto(true);
+            setError(null);
             
-            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
-            setImagePreviews(previewUrls);
+            try {
+                const fileList = Array.from(files).slice(0, 2); // Max 2 files
+                const processedFiles = await Promise.all(
+                    fileList.map(async (file: File) => {
+                        // Screenshots can be large, so we compress them before upload
+                        const compressedBlob = await resizeImage(file, 1080, 1920, 0.85);
+                        return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                    })
+                );
+
+                setImageFiles(processedFiles);
+                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
+                setImagePreviews(previewUrls);
+
+            } catch (error) {
+                console.error("Error processing image:", error);
+                setError("Houve um problema com uma das imagens. Por favor, tente novamente.");
+                e.target.value = '';
+            } finally {
+                setIsProcessingPhoto(false);
+            }
         }
     };
     
@@ -83,6 +153,12 @@ const ProofUploadPage: React.FC = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const getButtonText = () => {
+        if (isSubmitting) return 'Enviando...';
+        if (isProcessingPhoto) return 'Processando Imagens...';
+        return 'Enviar Comprovação';
     };
 
     if (isLoading) {
@@ -140,7 +216,9 @@ const ProofUploadPage: React.FC = () => {
                                 <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
                             </label>
                             <div className="flex-grow flex items-center gap-3">
-                                {imagePreviews.length > 0 ? (
+                                {isProcessingPhoto ? (
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                ) : imagePreviews.length > 0 ? (
                                     imagePreviews.map((preview, index) => (
                                        <img key={index} className="h-20 w-20 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                     ))
@@ -152,10 +230,10 @@ const ProofUploadPage: React.FC = () => {
                     </div>
                      <button
                         type="submit"
-                        disabled={isSubmitting || imageFiles.length === 0}
+                        disabled={isSubmitting || isProcessingPhoto || imageFiles.length === 0}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
                     >
-                        {isSubmitting ? 'Enviando...' : 'Enviar Comprovação'}
+                        {getButtonText()}
                     </button>
                 </form>
             </div>
