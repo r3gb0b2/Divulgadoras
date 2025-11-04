@@ -595,6 +595,7 @@ const JustificationModal: React.FC<{
     const [imagePreviews, setImagePreviews] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
@@ -603,6 +604,7 @@ const JustificationModal: React.FC<{
             setImageFiles([]);
             setImagePreviews([]);
             setIsProcessingPhoto(false);
+            setSubmitError(null);
         }
     }, [isOpen]);
 
@@ -634,9 +636,15 @@ const JustificationModal: React.FC<{
     const handleSubmit = async () => {
         if (!text.trim()) return;
         setIsSubmitting(true);
-        await onSubmit(assignment.id, text, imageFiles);
-        setIsSubmitting(false);
-        onClose();
+        setSubmitError(null);
+        try {
+            await onSubmit(assignment.id, text, imageFiles);
+            onClose();
+        } catch (err: any) {
+            setSubmitError(err.message || "Ocorreu um erro desconhecido.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
     
     const getButtonText = () => {
@@ -649,6 +657,7 @@ const JustificationModal: React.FC<{
         <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
             <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-bold text-white mb-4">Justificar Ausência</h2>
+                {submitError && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4">{submitError}</div>}
                 <p className="text-gray-400 mb-4">Explique o motivo pelo qual você não conseguiu realizar esta postagem. Sua justificativa será enviada para análise.</p>
                 <textarea
                     value={text}
@@ -801,10 +810,20 @@ const PostCheck: React.FC = () => {
     
     const handleJustifySubmit = async (assignmentId: string, text: string, imageFiles: File[]) => {
         try {
-            await submitJustification(assignmentId, text, imageFiles);
-            await performSearch(email); // Refresh list
+            const uploadPromise = submitJustification(assignmentId, text, imageFiles);
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error("O envio demorou muito para responder. Verifique sua conexão com a internet e tente novamente. (Código de erro: T-20s-J)"));
+                }, 20000); // 20 seconds timeout
+            });
+            
+            await Promise.race([uploadPromise, timeoutPromise]);
+            
+            await performSearch(email); // Refresh list on success
         } catch (err: any) {
-            setError(err.message || 'Falha ao enviar justificativa.');
+            // Re-throw for modal
+            throw err;
         }
     };
 

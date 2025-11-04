@@ -146,7 +146,16 @@ const ProofUploadPage: React.FC = () => {
         setError(null);
 
         try {
-            await submitProof(assignmentId, imageFiles);
+            const uploadPromise = submitProof(assignmentId, imageFiles);
+
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error("O envio demorou muito para responder. Verifique sua conexão com a internet e tente novamente. (Código de erro: T-20s-P)"));
+                }, 20000); // 20 seconds timeout
+            });
+
+            await Promise.race([uploadPromise, timeoutPromise]);
+
             setSuccess(true);
         } catch (err: any) {
             setError(err.message);
