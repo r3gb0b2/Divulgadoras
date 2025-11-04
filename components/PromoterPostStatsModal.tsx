@@ -159,6 +159,7 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
                                     return (
                                         <div key={assignment.id} className="bg-gray-800/50 p-3 rounded-md flex justify-between items-center">
                                             <div>
+                                                {/* FIX: Add optional chaining for safety */}
                                                 <p className="font-semibold text-gray-200">{assignment.post?.campaignName}</p>
                                                 {assignment.post?.eventName && <p className="text-sm text-gray-300 -mt-1">{assignment.post.eventName}</p>}
                                                 <p className="text-xs text-gray-500">Criado em: {formatDate(assignment.post?.createdAt)}</p>

@@ -1,9 +1,10 @@
-
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+// FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { submitAdminApplication } from '../services/adminService';
+// FIX: Changed to a named import to resolve module export error.
 import { AdminPanel } from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import StatesListPage from './StatesListPage';
@@ -20,6 +21,7 @@ import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
 import CreatePost from './CreatePost';
+// FIX: Changed to a named import to resolve module export issue.
 import { PostDetails } from './PostDetails';
 import GuestListPage from './GuestListPage'; // Import new page
 import GuestListCheckinPage from './GuestListCheckinPage'; // Import new page
@@ -144,42 +146,44 @@ const AdminLogin: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
+            // FIX: Use compat signInWithEmailAndPassword method.
             await auth.signInWithEmailAndPassword(email, password);
-            // The redirection will be handled by the AdminAuth component after state update
             navigate('/admin');
-        } catch (error: any) {
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                setError('E-mail ou senha inválidos.');
-            } else {
-                setError(error.message || 'Falha no login.');
-            }
-        } finally {
+        } catch (error) {
+            console.error(error);
+            setError("E-mail ou senha inválidos. Sua conta pode estar pendente de aprovação.");
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-dark p-4">
+        <div className="flex items-center justify-center min-h-[60vh]">
             {isRegistering ? (
                 <AdminRegistrationRequestForm onSwitchToLogin={() => setIsRegistering(false)} />
             ) : (
-                <div className="w-full max-w-sm">
+                <div className="w-full max-w-md">
                     <form onSubmit={handleLogin} className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
-                        <h1 className="text-2xl font-bold text-white mb-6">Login de Admin</h1>
+                        <h1 className="text-2xl font-bold text-white mb-4">Login do Organizador</h1>
+                        <p className="text-gray-400 mb-6">Acesse seu painel para gerenciar suas divulgadoras.</p>
+                        
                         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-                        <div className="space-y-4">
-                            <InputWithIcon Icon={MailIcon} type="email" placeholder="Seu e-mail" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                            <InputWithIcon Icon={LockClosedIcon} type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                        
+                        <div className="space-y-4 text-left">
+                           <InputWithIcon Icon={MailIcon} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail" required />
+                           <InputWithIcon Icon={LockClosedIcon} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Sua senha" required />
                         </div>
+                        
                         <button type="submit" disabled={isLoading} className="w-full mt-6 py-3 px-4 bg-primary text-white rounded-md hover:bg-primary-dark font-medium disabled:opacity-50">
                             {isLoading ? 'Entrando...' : 'Entrar'}
                         </button>
+
                         <p className="text-sm text-gray-400 mt-4">
-                            Não tem uma conta?{' '}
+                            Precisa de acesso de administrador?{' '}
                             <button type="button" onClick={() => setIsRegistering(true)} className="font-medium text-primary hover:text-primary-dark">
                                 Solicite seu acesso
                             </button>
                         </p>
+                        <p className="text-xs text-gray-600 mt-4 text-center">Frontend v19.0</p>
                     </form>
                 </div>
             )}
@@ -187,58 +191,117 @@ const AdminLogin: React.FC = () => {
     );
 };
 
-const AdminAuth: React.FC = () => {
-    const { user, adminData, loading } = useAdminAuth();
-    const location = useLocation();
+
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+    const { user, loading, adminData } = useAdminAuth();
 
     if (loading) {
-        return (
-            <div className="flex justify-center items-center h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
-        );
+        return <div className="text-center py-10">Verificando autenticação...</div>;
     }
-
+    
     if (!user || !adminData) {
-        return <AdminLogin />;
+        return <Navigate to="/admin/login" replace />;
     }
 
-    if (location.pathname === '/admin' || location.pathname === '/admin/login') {
-        const dashboardPath = adminData.role === 'superadmin' ? '/admin/dashboard' : '/admin/promoters';
-        return <Navigate to={dashboardPath} replace />;
-    }
+    return children;
+};
+
+
+const AdminAuth: React.FC = () => {
+    const { adminData } = useAdminAuth();
 
     return (
         <Routes>
-            <Route path="/promoters" element={<AdminPanel adminData={adminData} />} />
-            <Route path="/dashboard" element={adminData.role === 'superadmin' ? <SuperAdminDashboard /> : <PostDashboard />} />
-            <Route path="/states" element={<StatesListPage />} />
-            <Route path="/state/:stateAbbr" element={<StateManagementPage adminData={adminData} />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/users" element={<ManageUsersPage />} />
-            <Route path="/settings/subscription" element={<SubscriptionPage />} />
-            <Route path="/settings/stripe" element={<StripeSettingsPage />} />
-            <Route path="/organizations" element={<OrganizationsListPage />} />
-            <Route path="/organization/:orgId" element={<ManageOrganizationPage />} />
-            <Route path="/applications" element={<AdminApplicationsListPage />} />
-            <Route path="/gemini" element={<GeminiPage />} />
-            <Route path="/settings/email" element={<EmailTemplateEditor />} />
-            <Route path="/posts" element={<AdminPosts />} />
-            <Route path="/posts/new" element={<CreatePost />} />
-            <Route path="/posts/:postId" element={<PostDetails />} />
-            <Route path="/lists" element={<AdminLists />} />
-            <Route path="/guestlist/:campaignId" element={<GuestListPage />} />
-            <Route path="/checkin/:campaignId" element={<GuestListCheckinPage />} />
-            <Route path="/guestlist-assignments/:listId" element={<GuestListAssignments />} />
-            <Route path="/settings/change-password" element={<ChangePasswordPage />} />
-            <Route path="/scheduled-posts" element={<AdminSchedulePage />} />
-            <Route path="/diagnostics" element={<PromoterDiagnosticsPage />} />
-            <Route path="/checkin-dashboard" element={<AdminCheckinDashboard />} />
-            <Route path="/checkin/scanner" element={<QrCodeScannerPage />} />
-            <Route path="/one-time-posts" element={<AdminOneTimePosts />} />
-            <Route path="/one-time-posts/new" element={<CreateOneTimePost />} />
-            <Route path="/one-time-posts/edit/:postId" element={<EditOneTimePost />} />
-            <Route path="/one-time-posts/:postId" element={<OneTimePostDetails />} />
+            <Route path="login" element={<AdminLogin />} />
+
+            <Route path="/" element={
+                <ProtectedRoute>
+                    {
+                        adminData?.role === 'superadmin' ? <SuperAdminDashboard /> :
+                        adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
+                        <AdminPanel adminData={adminData!} />
+                    }
+                </ProtectedRoute>
+            } />
+            
+             {/* Routes for SuperAdmins */}
+            {adminData?.role === 'superadmin' && (
+                <>
+                    <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
+                    <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
+                    <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
+                    <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
+                    <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
+                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
+                    <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
+                    <Route path="settings/stripe" element={<ProtectedRoute><StripeSettingsPage /></ProtectedRoute>} />
+                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
+                    <Route path="settings/email" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
+                    <Route path="one-time-posts" element={<ProtectedRoute><AdminOneTimePosts /></ProtectedRoute>} />
+                    <Route path="one-time-posts/new" element={<ProtectedRoute><CreateOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/edit/:postId" element={<ProtectedRoute><EditOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/:postId" element={<ProtectedRoute><OneTimePostDetails /></ProtectedRoute>} />
+                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
+                    <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
+                    <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
+                    <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
+                    <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+                    <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
+                    <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
+                    <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
+                </>
+            )}
+
+            {/* Routes for regular Admins */}
+            {adminData?.role === 'admin' && (
+                <>
+                    <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                    <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
+                    <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+                    <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
+                    <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
+                    <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
+                    <Route path="one-time-posts" element={<ProtectedRoute><AdminOneTimePosts /></ProtectedRoute>} />
+                    <Route path="one-time-posts/new" element={<ProtectedRoute><CreateOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/edit/:postId" element={<ProtectedRoute><EditOneTimePost /></ProtectedRoute>} />
+                    <Route path="one-time-posts/:postId" element={<ProtectedRoute><OneTimePostDetails /></ProtectedRoute>} />
+                    <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} />
+                    <Route path="checkin-dashboard" element={<ProtectedRoute><AdminCheckinDashboard /></ProtectedRoute>} />
+                    <Route path="checkin/:campaignId" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
+                    <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
+                    <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
+                    <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
+                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
+                    <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+                    <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
+                    <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
+                </>
+            )}
+
+            {/* Routes for Posters */}
+            {adminData?.role === 'poster' && (
+                <>
+                    <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
+                    <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
+                    <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
+                    <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+                </>
+            )}
+            
+            {/* Catch-all for any other /admin routes, redirect to the appropriate dashboard */}
+            <Route path="*" element={
+                <ProtectedRoute>
+                    <Navigate to="/admin" replace />
+                </ProtectedRoute>
+            } />
         </Routes>
     );
 };

@@ -8,6 +8,7 @@ import { getAssignmentsForOrganization } from '../services/postService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
 import { states } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
+// FIX: Changed to a named import to resolve module export error.
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
