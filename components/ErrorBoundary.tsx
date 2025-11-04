@@ -11,6 +11,7 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
+<<<<<<< HEAD
   // FIX: Switched from a class property for state to constructor-based initialization.
   // This ensures `this` context is correctly established for React class components across different TypeScript configurations,
   // resolving errors where properties like 'state', 'setState', and 'props' are not recognized.
@@ -25,23 +26,32 @@ class ErrorBoundary extends React.Component<Props, State> {
 <<<<<<< HEAD
 <<<<<<< HEAD
 =======
+=======
+>>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
   // FIX: Switched from constructor-based state initialization to class property syntax. This explicitly declares the 'state' property on the class, which can resolve TypeScript errors where inherited properties are not correctly identified.
   state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
+<<<<<<< HEAD
 >>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
 =======
 >>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
 =======
 >>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
+=======
+>>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+<<<<<<< HEAD
+=======
+    // FIX: Correctly call this.setState to update the state with error information. This method is inherited from React.Component.
+>>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
     this.setState({
       errorInfo: errorInfo,
     });
@@ -83,6 +93,10 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+<<<<<<< HEAD
+=======
+    // FIX: Correctly access this.props.children. `props` is a property of a React.Component instance.
+>>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
     return this.props.children;
   }
 }
