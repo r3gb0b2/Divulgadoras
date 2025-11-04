@@ -117,7 +117,7 @@ const ProofUploadPage: React.FC = () => {
                 const processedFiles = await Promise.all(
                     fileList.map(async (file: File) => {
                         // Screenshots can be large, so we compress them before upload
-                        const compressedBlob = await resizeImage(file, 800, 1200, 0.8);
+                        const compressedBlob = await resizeImage(file, 1080, 1920, 0.85);
                         return new File([compressedBlob], file.name, { type: 'image/jpeg' });
                     })
                 );
