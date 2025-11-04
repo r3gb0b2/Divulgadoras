@@ -189,24 +189,46 @@ export const getAssignmentById = async (assignmentId: string): Promise<PostAssig
     }
 };
 
-export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
+export const submitProof = async (
+    assignmentId: string, 
+    imageFiles: File[],
+    onProgress: (progress: number) => void // progress is 0-100
+): Promise<string[]> => {
     if (imageFiles.length === 0 || imageFiles.length > 2) {
         throw new Error("Você deve enviar 1 ou 2 imagens.");
     }
-
+    
     try {
-        // 1. Upload images
-        const proofImageUrls = await Promise.all(
-            imageFiles.map(async (photo) => {
-                const fileExtension = photo.name.split('.').pop();
-                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = storage.ref(`posts-proofs/${fileName}`);
-                await storageRef.put(photo);
-                return await storageRef.getDownloadURL();
-            })
-        );
+        const proofImageUrls: string[] = [];
+        const totalSize = imageFiles.reduce((acc, file) => acc + file.size, 0);
+        let uploadedSize = 0;
         
-        // 2. Update Firestore document
+        for (const photo of imageFiles) {
+            const fileExtension = photo.name.split('.').pop();
+            const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+            const storageRef = storage.ref(`posts-proofs/${fileName}`);
+            
+            const url = await new Promise<string>((resolve, reject) => {
+                const uploadTask = storageRef.put(photo);
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const currentFileProgress = snapshot.bytesTransferred;
+                        const totalProgress = uploadedSize + currentFileProgress;
+                        const progressPercentage = totalSize > 0 ? (totalProgress / totalSize) * 100 : 100;
+                        onProgress(Math.round(progressPercentage));
+                    },
+                    (error) => reject(error),
+                    async () => {
+                        uploadedSize += uploadTask.snapshot.totalBytes;
+                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                        resolve(downloadURL);
+                    }
+                );
+            });
+            proofImageUrls.push(url);
+        }
+        
+        // Update Firestore document
         const docRef = firestore.collection('postAssignments').doc(assignmentId);
         await docRef.update({
             proofImageUrls: proofImageUrls,
@@ -477,20 +499,44 @@ export const renewAssignmentDeadline = async (assignmentId: string): Promise<voi
     }
 };
 
-export const submitJustification = async (assignmentId: string, justification: string, imageFiles: File[]): Promise<void> => {
+export const submitJustification = async (
+    assignmentId: string, 
+    justification: string, 
+    imageFiles: File[],
+    onProgress: (progress: number) => void
+): Promise<void> => {
     try {
         let justificationImageUrls: string[] = [];
         if (imageFiles.length > 0) {
-            justificationImageUrls = await Promise.all(
-                imageFiles.map(async (photo) => {
-                    const fileExtension = photo.name.split('.').pop();
-                    const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = storage.ref(`justifications-proofs/${fileName}`);
-                    await storageRef.put(photo);
-                    return await storageRef.getDownloadURL();
-                })
-            );
+            const totalSize = imageFiles.reduce((acc, file) => acc + file.size, 0);
+            let uploadedSize = 0;
+            
+            for (const photo of imageFiles) {
+                const fileExtension = photo.name.split('.').pop();
+                const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = storage.ref(`justifications-proofs/${fileName}`);
+                
+                const url = await new Promise<string>((resolve, reject) => {
+                    const uploadTask = storageRef.put(photo);
+                    uploadTask.on('state_changed',
+                        (snapshot) => {
+                            const currentFileProgress = snapshot.bytesTransferred;
+                            const totalProgress = uploadedSize + currentFileProgress;
+                            const progressPercentage = totalSize > 0 ? (totalProgress / totalSize) * 100 : 0;
+                            onProgress(Math.round(progressPercentage));
+                        },
+                        (error) => reject(error),
+                        async () => {
+                            uploadedSize += uploadTask.snapshot.totalBytes;
+                            const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                            resolve(downloadURL);
+                        }
+                    );
+                });
+                justificationImageUrls.push(url);
+            }
         }
+        onProgress(100);
 
         const docRef = firestore.collection('postAssignments').doc(assignmentId);
         await docRef.update({

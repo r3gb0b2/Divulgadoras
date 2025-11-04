@@ -66,6 +66,7 @@ const ProofUploadPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
@@ -144,28 +145,23 @@ const ProofUploadPage: React.FC = () => {
         
         setIsSubmitting(true);
         setError(null);
+        setUploadProgress(0);
 
         try {
-            const uploadPromise = submitProof(assignmentId, imageFiles);
-
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => {
-                    reject(new Error("O envio demorou muito para responder. Verifique sua conexão com a internet e tente novamente. (Código de erro: T-20s-P)"));
-                }, 20000); // 20 seconds timeout
+            await submitProof(assignmentId, imageFiles, (progress) => {
+                setUploadProgress(progress);
             });
-
-            await Promise.race([uploadPromise, timeoutPromise]);
-
             setSuccess(true);
         } catch (err: any) {
             setError(err.message);
+            setUploadProgress(0);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const getButtonText = () => {
-        if (isSubmitting) return 'Enviando...';
+        if (isSubmitting) return `Enviando... ${uploadProgress}%`;
         if (isProcessingPhoto) return 'Processando Imagens...';
         return 'Enviar Comprovação';
     };
@@ -237,6 +233,19 @@ const ProofUploadPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                     
+                    {isSubmitting && (
+                        <div className="my-4">
+                            <div className="w-full bg-gray-600 rounded-full h-2.5">
+                                <div 
+                                    className="bg-primary h-2.5 rounded-full transition-all duration-300" 
+                                    style={{ width: `${uploadProgress}%` }}
+                                ></div>
+                            </div>
+                            <p className="text-center text-sm text-gray-300 mt-1">{uploadProgress}%</p>
+                        </div>
+                    )}
+
                      <button
                         type="submit"
                         disabled={isSubmitting || isProcessingPhoto || imageFiles.length === 0}
