@@ -11,7 +11,9 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Reverted to constructor-based state initialization to fix type errors where 'this.props' and 'this.setState' were not found. This is a more robust way to initialize state in class components.
+  // FIX: Switched from a class property for state to constructor-based initialization.
+  // This ensures `this` context is correctly established for React class components across different TypeScript configurations,
+  // resolving errors where properties like 'state', 'setState', and 'props' are not recognized.
   constructor(props: Props) {
     super(props);
     this.state = {
