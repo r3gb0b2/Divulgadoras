@@ -11,19 +11,22 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Switched from constructor-based initialization to a class property for state. This modern syntax avoids potential 'this' context issues and resolves errors where properties like 'state', 'setState', and 'props' were not being recognized on the component instance.
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  // FIX: Switched to a constructor for state initialization. Using class properties for state (`state = ...`) can fail if the build configuration (e.g., Babel or TypeScript) isn't set up for it, leading to an undefined `this` context and errors like 'setState' or 'props' not being found. The constructor is the standard and safest way to initialize state in a React class component.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // FIX: With the state initialization corrected, 'this.setState' is now correctly recognized as an inherited method.
+    // FIX: With the constructor correctly initializing the component, 'this.setState' is now available and works as expected.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -31,6 +34,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   render() {
+    // FIX: Accessing `this.state` is now safe because it's initialized in the constructor.
     if (this.state.hasError) {
       return (
         <div className="bg-red-900/50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">
@@ -65,7 +69,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: 'this.props' is now correctly recognized as an inherited property.
+    // FIX: Accessing `this.props` is now safe because `super(props)` was called in the constructor.
     return this.props.children;
   }
 }
