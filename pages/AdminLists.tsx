@@ -5,7 +5,6 @@ import { GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { getGuestListsForOrg, createGuestList, updateGuestList, deleteGuestList } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { ArrowLeftIcon, LinkIcon, PencilIcon, TrashIcon, CheckCircleIcon, ClipboardDocumentListIcon } from '../components/Icons';
-// FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -59,7 +58,6 @@ const ListModal: React.FC<{
     
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        // FIX: Use firebase.firestore.Timestamp.fromDate() as Timestamp is only a type.
         const timestampValue = value ? firebase.firestore.Timestamp.fromDate(new Date(value)) : null;
         setFormData(prev => ({ ...prev, [name]: timestampValue }));
     };

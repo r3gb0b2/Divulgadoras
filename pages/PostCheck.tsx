@@ -4,7 +4,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
-import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
+import PromoterPublicStatsModal from '../components/PromoterPostStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 
@@ -481,8 +481,8 @@ const PostCard: React.FC<{
                                 <button
                                     onClick={handleFirebaseDownload}
                                     disabled={isMediaProcessing}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
-                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 1</span>
@@ -491,9 +491,9 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <button
                                     onClick={handleGoogleDriveDownload}
-                                    disabled={!isPostDownloadable}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                    disabled={!isPostGloballyActive}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>
@@ -621,7 +621,7 @@ const JustificationModal: React.FC<{
                     })
                 );
                 setImageFiles(processedFiles);
-                const previewUrls = fileList.map(file => URL.createObjectURL(file));
+                const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
                 setImagePreviews(previewUrls);
             } catch (error) {
                 console.error("Error processing justification images:", error);
