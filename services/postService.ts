@@ -205,7 +205,7 @@ export const submitProof = async (
         
         for (const photo of imageFiles) {
             const fileExtension = photo.name.split('.').pop();
-            const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+            const fileName = `posts-proofs/${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
             const storageRef = storage.ref(`posts-proofs/${fileName}`);
             
             const url = await new Promise<string>((resolve, reject) => {
@@ -513,7 +513,7 @@ export const submitJustification = async (
             
             for (const photo of imageFiles) {
                 const fileExtension = photo.name.split('.').pop();
-                const fileName = `justifications-proofs/${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const fileName = `posts-proofs/justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                 const storageRef = storage.ref(fileName);
                 
                 const url = await new Promise<string>((resolve, reject) => {
