@@ -325,26 +325,42 @@ export const getAllPromoters = async (options: {
 export const getPromoterStats = async (options: {
   organizationId?: string;
   statesForScope?: string[] | null;
-}): Promise<{ total: number, pending: number, approved: number, rejected: number }> => {
+  filterOrgId: string | 'all';
+  filterState: string | 'all';
+  selectedCampaign: string | 'all';
+}): Promise<{ total: number, pending: number, approved: number, rejected: number, removed: number }> => {
     try {
-        let baseQuery: firebase.firestore.Query = firestore.collection("promoters");
+        let query: firebase.firestore.Query = firestore.collection("promoters");
         
-        if (options.organizationId) {
-            baseQuery = baseQuery.where("organizationId", "==", options.organizationId);
-        }
-        if (options.statesForScope && options.statesForScope.length > 0) {
-            baseQuery = baseQuery.where("state", "in", options.statesForScope);
+        // Superadmin org filter overrides regular admin's org scope
+        if (options.filterOrgId !== 'all') {
+            query = query.where("organizationId", "==", options.filterOrgId);
+        } else if (options.organizationId) {
+            query = query.where("organizationId", "==", options.organizationId);
         }
 
-        const pendingQuery = baseQuery.where("status", "in", ["pending", "rejected_editable"]);
-        const approvedQuery = baseQuery.where("status", "==", "approved");
-        const rejectedQuery = baseQuery.where("status", "==", "rejected");
+        // Superadmin state filter overrides regular admin's state scope
+        if (options.filterState !== 'all') {
+            query = query.where("state", "==", options.filterState);
+        } else if (options.statesForScope && options.statesForScope.length > 0) {
+            query = query.where("state", "in", options.statesForScope);
+        }
 
-        const [totalSnap, pendingSnap, approvedSnap, rejectedSnap] = await Promise.all([
-            baseQuery.get(),
+        if (options.selectedCampaign !== 'all') {
+            query = query.where("campaignName", "==", options.selectedCampaign);
+        }
+
+        const pendingQuery = query.where("status", "in", ["pending", "rejected_editable"]);
+        const approvedQuery = query.where("status", "==", "approved");
+        const rejectedQuery = query.where("status", "==", "rejected");
+        const removedQuery = query.where("status", "==", "removed");
+
+        const [totalSnap, pendingSnap, approvedSnap, rejectedSnap, removedSnap] = await Promise.all([
+            query.get(),
             pendingQuery.get(),
             approvedQuery.get(),
-            rejectedQuery.get()
+            rejectedQuery.get(),
+            removedQuery.get()
         ]);
         
         return {
@@ -352,6 +368,7 @@ export const getPromoterStats = async (options: {
             pending: pendingSnap.size,
             approved: approvedSnap.size,
             rejected: rejectedSnap.size,
+            removed: removedSnap.size,
         };
     } catch (error) {
         console.error("Error getting promoter stats: ", error);
