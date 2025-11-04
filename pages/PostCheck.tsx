@@ -614,6 +614,7 @@ const JustificationModal: React.FC<{
         const files = e.target.files;
         if (files && files.length > 0) {
             setIsProcessingPhoto(true);
+            setSubmitError(null);
             try {
                 const fileList = Array.from(files).slice(0, 2);
                 const processedFiles = await Promise.all(
@@ -627,6 +628,7 @@ const JustificationModal: React.FC<{
                 setImagePreviews(previewUrls);
             } catch (error) {
                 console.error("Error processing justification images:", error);
+                 setSubmitError("Houve um problema com uma das imagens. Tente novamente.");
             } finally {
                 setIsProcessingPhoto(false);
             }
@@ -634,14 +636,17 @@ const JustificationModal: React.FC<{
     };
 
     const handleSubmit = async () => {
-        if (!text.trim()) return;
+        if (!text.trim()) {
+            setSubmitError("Por favor, escreva o motivo da sua justificativa.");
+            return;
+        }
         setIsSubmitting(true);
         setSubmitError(null);
         try {
             await onSubmit(assignment.id, text, imageFiles);
             onClose();
         } catch (err: any) {
-            setSubmitError(err.message || "Ocorreu um erro desconhecido.");
+            setSubmitError(err.message || "Ocorreu um erro desconhecido ao enviar.");
         } finally {
             setIsSubmitting(false);
         }
