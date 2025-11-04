@@ -11,47 +11,19 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-<<<<<<< HEAD
-  // FIX: Switched from a class property for state to constructor-based initialization.
-  // This ensures `this` context is correctly established for React class components across different TypeScript configurations,
-  // resolving errors where properties like 'state', 'setState', and 'props' are not recognized.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
-  // FIX: Switched from constructor-based state initialization to class property syntax. This explicitly declares the 'state' property on the class, which can resolve TypeScript errors where inherited properties are not correctly identified.
-  state: State = {
+  // FIX: Switched from constructor-based initialization to a class property for state. This modern syntax avoids potential 'this' context issues and resolves errors where properties like 'state', 'setState', and 'props' were not being recognized on the component instance.
+  public state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
-<<<<<<< HEAD
->>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
-=======
->>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
-=======
->>>>>>> parent of e2d7194 (fix(PostCheck): Simplify conditional rendering for inactive posts)
-=======
->>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-<<<<<<< HEAD
-=======
-    // FIX: Correctly call this.setState to update the state with error information. This method is inherited from React.Component.
->>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
+    // FIX: With the state initialization corrected, 'this.setState' is now correctly recognized as an inherited method.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -93,10 +65,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-<<<<<<< HEAD
-=======
-    // FIX: Correctly access this.props.children. `props` is a property of a React.Component instance.
->>>>>>> parent of acb136d (fix(storage): Organize post proofs in nested folders)
+    // FIX: 'this.props' is now correctly recognized as an inherited property.
     return this.props.children;
   }
 }

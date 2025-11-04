@@ -457,13 +457,25 @@ const PostCard: React.FC<{
                         <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} className="w-full max-w-sm mx-auto rounded-md" controls={assignment.post.type === 'video'} />
                         <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
                             {assignment.post.mediaUrl && (
-                                <button type="button" onClick={handleFirebaseDownload} disabled={isMediaProcessing} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 hover:bg-gray-500" title="Baixar do nosso servidor (Firebase)">
-                                    <DownloadIcon className="w-4 h-4" /> <span>Download Link 1</span>
+                                <button
+                                    onClick={handleFirebaseDownload}
+                                    disabled={isMediaProcessing}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 1</span>
                                 </button>
                             )}
                             {assignment.post.googleDriveUrl && (
-                                <button type="button" onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-500" title="Baixar do Google Drive">
-                                    <DownloadIcon className="w-4 h-4" /> <span>Download Link 2</span>
+                                <button
+                                    onClick={handleGoogleDriveDownload}
+                                    disabled={!isPostDownloadable}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Download Link 2</span>
                                 </button>
                             )}
                         </div>
