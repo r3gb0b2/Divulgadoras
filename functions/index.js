@@ -3,6 +3,8 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
+const { Readable } = require("stream");
+
 
 // Brevo (formerly Sendinblue) SDK for sending transactional emails
 const Brevo = require("@getbrevo/brevo");
@@ -126,16 +128,54 @@ exports.onPromoterStatusChange = functions
 
       // 2. Check for status changes to send notification emails
       const statusChanged = newValue.status !== oldValue.status;
-      const isApprovalOrRejection =
-      newValue.status === "approved" || newValue.status === "rejected";
+      const isNotificationStatus =
+      newValue.status === "approved" ||
+      newValue.status === "rejected" ||
+      newValue.status === "rejected_editable";
 
-      if (statusChanged && isApprovalOrRejection) {
+      if (statusChanged && isNotificationStatus) {
         try {
-          await sendStatusChangeEmail(newValue);
+          await sendStatusChangeEmail(newValue, promoterId);
         } catch (error) {
           console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
         }
       }
+    });
+
+/**
+ * Triggered when a new PostAssignment document is created.
+ * This function is responsible for sending the notification email to the promoter in the background.
+ */
+exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
+    .document("postAssignments/{assignmentId}")
+    .onCreate(async (snap, context) => {
+        const assignmentData = snap.data();
+        if (!assignmentData) {
+            console.error(`No data for new assignment ${context.params.assignmentId}`);
+            return;
+        }
+
+        const { organizationId, promoterEmail, promoterName, post } = assignmentData;
+        if (!organizationId || !promoterEmail || !promoterName || !post) {
+            console.error(`Incomplete data for assignment ${context.params.assignmentId}, cannot send notification.`);
+            return;
+        }
+
+        try {
+            const orgDoc = await db.collection("organizations").doc(organizationId).get();
+            const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+            await sendNewPostNotificationEmail(
+                { email: promoterEmail, name: promoterName },
+                {
+                    campaignName: post.campaignName,
+                    eventName: post.eventName,
+                    orgName: orgName,
+                }
+            );
+        } catch (error) {
+            console.error(`Failed to send notification for assignment ${context.params.assignmentId}:`, error);
+        }
     });
 
 
@@ -146,9 +186,9 @@ exports.onPromoterStatusChange = functions
  * @param {string} promoterId The ID of the promoter document.
  */
 async function assignPostsToNewPromoter(promoterData, promoterId) {
-  const { organizationId, stateAbbr, campaignName } = promoterData;
+  const { organizationId, state: stateAbbr, campaignName } = promoterData;
   if (!organizationId || !stateAbbr || !campaignName) {
-    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign.`);
+    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign. orgId: ${organizationId}, state: ${stateAbbr}, campaign: ${campaignName}`);
     return;
   }
 
@@ -170,8 +210,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
 
   const batch = db.batch();
   const assignmentsCollectionRef = db.collection("postAssignments");
-  const postsToNotify = [];
-
+  
   for (const doc of snapshot.docs) {
     const post = doc.data();
     const postId = doc.id;
@@ -188,13 +227,18 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
       post: { // denormalized data
         type: post.type,
         mediaUrl: post.mediaUrl || null,
+        googleDriveUrl: post.googleDriveUrl || null,
         textContent: post.textContent || null,
         instructions: post.instructions,
         postLink: post.postLink || null,
         campaignName: post.campaignName,
+        eventName: post.eventName || null,
         isActive: post.isActive,
         expiresAt: post.expiresAt || null,
         createdAt: post.createdAt,
+        allowLateSubmissions: post.allowLateSubmissions || false,
+        allowImmediateProof: post.allowImmediateProof || false,
+        postFormats: post.postFormats || [],
       },
       organizationId: promoterData.organizationId,
       promoterId: promoterId,
@@ -204,25 +248,11 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
       confirmedAt: null,
     };
     batch.set(assignmentDocRef, newAssignment);
-    postsToNotify.push({ post, promoterData });
   }
 
-  if (postsToNotify.length === 0) return; // No un-expired posts found
-
   await batch.commit();
-  console.log(`[Auto-Assign] Created ${postsToNotify.length} new assignments for promoter ${promoterId}.`);
-
-  // Send notifications for the newly created assignments
-  const orgDoc = await db.collection("organizations").doc(organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  const emailPromises = postsToNotify.map(({ post, promoterData: pd }) =>
-    sendNewPostNotificationEmail(pd, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-  await Promise.allSettled(emailPromises);
+  // Note: Emails are now sent by the onPostAssignmentCreated, so no email logic is needed here.
+  console.log(`[Auto-Assign] Created new assignments for promoter ${promoterId}.`);
 }
 
 
@@ -231,8 +261,9 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
  * For 'approved' status, it uses the custom HTML template from Firestore.
  * For 'rejected' status, it uses a fixed template ID from Brevo.
  * @param {object} promoterData The promoter document data.
+ * @param {string} promoterId The ID of the promoter document.
  */
-async function sendStatusChangeEmail(promoterData) {
+async function sendStatusChangeEmail(promoterData, promoterId) {
   if (!brevoApiInstance) {
     console.error("Brevo API key not configured. Cannot send email.");
     return;
@@ -277,6 +308,42 @@ async function sendStatusChangeEmail(promoterData) {
       htmlTemplate = htmlTemplate.replace(placeholder, replacements[key]);
     }
     sendSmtpEmail.htmlContent = htmlTemplate;
+  } else if (promoterData.status === "rejected_editable") {
+    sendSmtpEmail.subject = `Ação Necessária: Corrija seu cadastro para ${replacements.campaignName}`;
+
+    const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ""}?edit_id=${promoterId}`;
+    const rejectionReasonHtml = promoterData.rejectionReason ? `<p><strong>Motivo:</strong></p><div style="background-color: #ffefef; border-left: 4px solid #f87171; padding: 10px; margin-bottom: 20px;">${promoterData.rejectionReason.replace(/\n/g, "<br/>")}</div>` : "";
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Correção de Cadastro Necessária</title>
+          <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+            .header { background-color: #f97316; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 30px; }
+            .button { display: inline-block; background-color: #f97316; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header"><h1>Olá, ${promoterData.name}!</h1></div>
+            <div class="content">
+                <p>Notamos que seu cadastro para o evento <strong>${replacements.campaignName}</strong> precisa de algumas correções antes de ser aprovado.</p>
+                ${rejectionReasonHtml}
+                <p>Por favor, clique no botão abaixo para acessar seu cadastro, fazer as correções necessárias e reenviá-lo para análise.</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${editLink}" class="button">Corrigir Meu Cadastro</a>
+                </p>
+                <p>Atenciosamente,<br>Equipe ${replacements.orgName}</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+    sendSmtpEmail.htmlContent = htmlContent;
   } else { // 'rejected'
     sendSmtpEmail.subject = "Atualização sobre seu cadastro";
     sendSmtpEmail.templateId = 11; // Assumes Brevo template ID 11 for rejections
@@ -307,7 +374,8 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   }
 
   const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
-  const subject = `Nova Publicação Disponível - ${postDetails.campaignName}`;
+  const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
+  const subject = `Nova Publicação Disponível - ${eventDisplayName}`;
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -326,7 +394,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
         <div class="container">
             <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
             <div class="content">
-                <p>Uma nova publicação para o evento <strong>${postDetails.campaignName}</strong> está disponível para você.</p>
+                <p>Uma nova publicação para o evento <strong>${eventDisplayName}</strong> está disponível para você.</p>
                 <p>Acesse o portal para ver as instruções e confirmar sua postagem.</p>
                 <p style="text-align: center; margin: 30px 0;">
                     <a href="${portalLink}" class="button">Ver Publicação</a>
@@ -457,6 +525,69 @@ async function getOrgAndCampaignDetails(organizationId, stateAbbr, campaignName)
   return { orgName, campaignRules, campaignLink };
 }
 
+/**
+ * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
+ */
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  // 1. Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  // 2. Get postId
+  const { postId } = data;
+  if (!postId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação (postId) é obrigatório.");
+  }
+
+  // Get post and org details for email personalization
+  const postSnap = await db.collection("posts").doc(postId).get();
+  if (!postSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+  }
+  const post = postSnap.data();
+
+  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+
+  // 3. Query for assignments that need a reminder
+  const assignmentsQuery = db.collection("postAssignments")
+      .where("postId", "==", postId)
+      .where("status", "==", "confirmed")
+      .where("proofSubmittedAt", "==", null);
+
+  const snapshot = await assignmentsQuery.get();
+
+  // Filter out assignments that already have a justification
+  const assignmentsToSendTo = snapshot.docs.filter((doc) => !doc.data().justification);
+
+  if (assignmentsToSendTo.length === 0) {
+    return { success: true, count: 0, message: "Nenhuma divulgadora pendente de comprovação para este post." };
+  }
+
+  // 4. Iterate and send emails
+  const emailPromises = assignmentsToSendTo.map((doc) => {
+    const assignment = { id: doc.id, ...doc.data() };
+    return sendProofReminderEmail(assignment, { campaignName: post.campaignName, orgName });
+  });
+
+  await Promise.all(emailPromises);
+
+  // 5. Batch update the timestamps for sent reminders
+  const batch = db.batch();
+  const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+  assignmentsToSendTo.forEach((doc) => {
+    batch.update(doc.ref, { lastManualReminderAt: serverTimestamp });
+  });
+  await batch.commit();
+
+  return { success: true, count: assignmentsToSendTo.length, message: `${assignmentsToSendTo.length} lembretes foram enviados com sucesso.` };
+});
+
 exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
@@ -509,6 +640,290 @@ exports.sendSingleProofReminder = functions.region("southamerica-east1").https.o
 
 
 // --- Callable Functions ---
+
+/**
+ * Creates a Post and its assignments in a single transaction.
+ */
+exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem criar publicações.");
+    }
+
+    const { postData, assignedPromoters } = data;
+    if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados da publicação ou divulgadoras designadas estão ausentes.");
+    }
+
+    // 1. Create the Post document
+    const postRef = db.collection("posts").doc();
+    const newPost = {
+        ...postData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await postRef.set(newPost);
+
+    // 2. Create PostAssignment documents in a batch
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    const denormalizedPostData = {
+        type: newPost.type,
+        mediaUrl: newPost.mediaUrl || null,
+        googleDriveUrl: newPost.googleDriveUrl || null,
+        textContent: newPost.textContent || null,
+        instructions: newPost.instructions,
+        postLink: newPost.postLink || null,
+        campaignName: newPost.campaignName,
+        eventName: newPost.eventName || null,
+        isActive: newPost.isActive,
+        expiresAt: newPost.expiresAt || null,
+        createdAt: newPost.createdAt, // This will be the server timestamp object
+        allowLateSubmissions: newPost.allowLateSubmissions || false,
+        allowImmediateProof: newPost.allowImmediateProof || false,
+        postFormats: newPost.postFormats || [],
+    };
+
+    assignedPromoters.forEach(promoter => {
+        const assignmentDocRef = assignmentsCollectionRef.doc();
+        const newAssignment = {
+            postId: postRef.id,
+            post: denormalizedPostData,
+            organizationId: newPost.organizationId,
+            promoterId: promoter.id,
+            promoterEmail: promoter.email.toLowerCase(),
+            promoterName: promoter.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    });
+
+    await batch.commit();
+    // The onPostAssignmentCreated trigger will handle sending emails.
+    
+    return { success: true, postId: postRef.id };
+});
+
+/**
+ * Scheduled function to check for and process due scheduled posts.
+ */
+exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
+    .schedule("every 5 minutes").onRun(async (context) => {
+        console.log("Running scheduled post check...");
+        const now = admin.firestore.Timestamp.now();
+        const scheduledPostsRef = db.collection("scheduledPosts");
+        // Query only by status to avoid needing a composite index. Time check is done in code.
+        const query = scheduledPostsRef.where("status", "==", "pending");
+
+        const snapshot = await query.get();
+        if (snapshot.empty) {
+            console.log("No pending scheduled posts found.");
+            return null;
+        }
+
+        // Filter for posts that are actually due
+        const duePosts = snapshot.docs.filter((doc) => {
+            const data = doc.data();
+            return data.scheduledAt && data.scheduledAt.toDate() <= now.toDate();
+        });
+
+        if (duePosts.length === 0) {
+            console.log("No scheduled posts are due at this time.");
+            return null;
+        }
+
+        console.log(`Found ${duePosts.length} scheduled posts to process.`);
+
+        const processingPromises = duePosts.map(async (doc) => {
+            const scheduledPost = doc.data();
+            const { postData, assignedPromoters, createdByEmail, organizationId } = scheduledPost;
+            
+            const batch = db.batch();
+            try {
+                // Robustly handle expiresAt, which might be an ISO string from client
+                let expiresAtTimestamp = null;
+                if (postData.expiresAt) {
+                    const date = new Date(postData.expiresAt);
+                    if (!isNaN(date.getTime())) {
+                        expiresAtTimestamp = admin.firestore.Timestamp.fromDate(date);
+                    }
+                }
+
+                const postRef = db.collection("posts").doc();
+                const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+
+                const newPost = {
+                    ...postData,
+                    expiresAt: expiresAtTimestamp,
+                    organizationId,
+                    createdByEmail,
+                    createdAt: serverTimestamp,
+                };
+                batch.set(postRef, newPost);
+
+                const assignmentsCollectionRef = db.collection("postAssignments");
+                const denormalizedPostData = {
+                    type: postData.type,
+                    mediaUrl: postData.mediaUrl || null,
+                    googleDriveUrl: postData.googleDriveUrl || null,
+                    textContent: postData.textContent || null,
+                    instructions: postData.instructions,
+                    postLink: postData.postLink || null,
+                    campaignName: postData.campaignName,
+                    eventName: postData.eventName || null,
+                    isActive: postData.isActive,
+                    expiresAt: expiresAtTimestamp,
+                    createdAt: serverTimestamp,
+                    allowLateSubmissions: postData.allowLateSubmissions || false,
+                    allowImmediateProof: postData.allowImmediateProof || false,
+                    postFormats: postData.postFormats || [],
+                };
+
+                assignedPromoters.forEach((promoter) => {
+                    const assignmentDocRef = assignmentsCollectionRef.doc();
+                    const newAssignment = {
+                        postId: postRef.id,
+                        post: denormalizedPostData,
+                        organizationId: organizationId,
+                        promoterId: promoter.id,
+                        promoterEmail: promoter.email.toLowerCase(),
+                        promoterName: promoter.name,
+                        status: "pending",
+                        confirmedAt: null,
+                    };
+                    batch.set(assignmentDocRef, newAssignment);
+                });
+                
+                batch.update(doc.ref, { status: "sent" });
+
+                await batch.commit();
+                console.log(`Successfully processed scheduled post ${doc.id}`);
+
+            } catch (error) {
+                console.error(`Error processing scheduled post ${doc.id}:`, error);
+                await doc.ref.update({ status: "error", error: error.message });
+            }
+        });
+
+        await Promise.all(processingPromises);
+        console.log("Finished scheduled post check.");
+        return null;
+    });
+
+/**
+ * Updates a Post and propagates changes to its assignments.
+ */
+exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const { postId, updateData } = data;
+    if (!postId || !updateData) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados inválidos.");
+    }
+
+    const postRef = db.collection('posts').doc(postId);
+    
+    // Update the main post document
+    await postRef.update(updateData);
+    
+    // Now, update all related assignments
+    const assignmentsQuery = db.collection('postAssignments').where('postId', '==', postId);
+    const snapshot = await assignmentsQuery.get();
+    
+    if (snapshot.empty) {
+        return { success: true, message: 'Post updated, no assignments to sync.' };
+    }
+    
+    // Denormalize the fields that are allowed to change
+    const denormalizedUpdate = {};
+    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'googleDriveUrl', 'eventName'];
+    for (const key of updatableFields) {
+        if (updateData[key] !== undefined) {
+            denormalizedUpdate[`post.${key}`] = updateData[key];
+        }
+    }
+    
+    if (Object.keys(denormalizedUpdate).length === 0) {
+        return { success: true, message: 'Post updated, no relevant fields to sync to assignments.' };
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, denormalizedUpdate);
+    });
+    
+    await batch.commit();
+
+    return { success: true, message: `Post and ${snapshot.size} assignments updated.` };
+});
+
+/**
+ * Adds new assignments to an existing post.
+ */
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const { postId, promoterIds } = data;
+    if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados inválidos.");
+    }
+
+    const postRef = db.collection('posts').doc(postId);
+    const postSnap = await postRef.get();
+    if (!postSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const postData = postSnap.data();
+
+    // Get promoter details
+    const promotersRef = db.collection('promoters');
+    const promotersSnap = await promotersRef.where(admin.firestore.FieldPath.documentId(), 'in', promoterIds).get();
+    const promoters = promotersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    const denormalizedPostData = {
+        type: postData.type,
+        mediaUrl: postData.mediaUrl || null,
+        googleDriveUrl: postData.googleDriveUrl || null,
+        textContent: postData.textContent || null,
+        instructions: postData.instructions,
+        postLink: postData.postLink || null,
+        campaignName: postData.campaignName,
+        eventName: postData.eventName || null,
+        isActive: postData.isActive,
+        expiresAt: postData.expiresAt || null,
+        createdAt: postData.createdAt,
+        allowLateSubmissions: postData.allowLateSubmissions || false,
+        allowImmediateProof: postData.allowImmediateProof || false,
+        postFormats: postData.postFormats || [],
+    };
+
+    promoters.forEach(promoter => {
+        const assignmentDocRef = assignmentsCollectionRef.doc();
+        const newAssignment = {
+            postId: postId,
+            post: denormalizedPostData,
+            organizationId: postData.organizationId,
+            promoterId: promoter.id,
+            promoterEmail: promoter.email.toLowerCase(),
+            promoterName: promoter.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    });
+
+    await batch.commit();
+    return { success: true };
+});
 
 /**
  * Manually resends a status email to a promoter.
@@ -696,6 +1111,53 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
   return { success: true };
 });
 
+exports.resetGuestListsForCampaign = functions.region("southamerica-east1")
+    .runWith({ timeoutSeconds: 300 }) // Increase timeout for large deletions
+    .https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+    }
+
+    const { campaignId } = data;
+    if (!campaignId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID do evento (campaignId) é obrigatório.");
+    }
+
+    try {
+        const confirmationsRef = db.collection("guestListConfirmations");
+        const q = confirmationsRef.where("campaignId", "==", campaignId);
+        const snapshot = await q.get();
+
+        if (snapshot.empty) {
+            return { success: true, message: "Nenhuma lista para resetar.", deletedCount: 0 };
+        }
+
+        // Process deletions in chunks to avoid exceeding batch limit of 500 operations.
+        const BATCH_SIZE = 499; // Keep it slightly under the limit for safety
+        const batches = [];
+        
+        for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+            const batch = db.batch();
+            const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+            chunk.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            batches.push(batch.commit());
+        }
+
+        await Promise.all(batches);
+
+        return { success: true, message: `Todas as ${snapshot.size} listas foram resetadas.`, deletedCount: snapshot.size };
+    } catch (error) {
+        console.error(`Error resetting guest lists for campaign ${campaignId}:`, error);
+        throw new functions.https.HttpsError("internal", "Ocorreu um erro interno ao tentar resetar as listas.");
+    }
+});
+
 
 // --- User and Organization Management ---
 
@@ -803,6 +1265,90 @@ exports.removePromoterFromAllAssignments = functions
 
         return { success: true, deletedCount: assignmentsSnapshot.size };
     });
+
+exports.setPromoterStatusToRemoved = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+      }
+      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+      }
+
+      const { promoterId } = data;
+      if (!promoterId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+      }
+
+      const batch = db.batch();
+
+      // 1. Update the promoter document
+      const promoterRef = db.collection("promoters").doc(promoterId);
+      batch.update(promoterRef, {
+        status: "removed",
+        hasJoinedGroup: false,
+        actionTakenByUid: context.auth.uid,
+        actionTakenByEmail: adminDoc.data().email,
+        statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // 2. Find and delete all their post assignments
+      const assignmentsQuery = db.collection("postAssignments").where("promoterId", "==", promoterId);
+      const assignmentsSnapshot = await assignmentsQuery.get();
+
+      if (!assignmentsSnapshot.empty) {
+        assignmentsSnapshot.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+      }
+
+      // 3. Commit the batch
+      await batch.commit();
+
+      return { success: true, message: "Divulgadora removida e suas publicações foram limpas.", deletedAssignments: assignmentsSnapshot.size };
+    });
+
+/**
+ * Accepts all pending justifications for a given post.
+ */
+exports.acceptAllJustifications = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+  // 1. Auth check
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
+  }
+  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
+  }
+
+  // 2. Get postId
+  const { postId } = data;
+  if (!postId) {
+    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação (postId) é obrigatório.");
+  }
+
+  // 3. Query for assignments with pending justifications
+  const assignmentsQuery = db.collection("postAssignments")
+      .where("postId", "==", postId)
+      .where("justificationStatus", "==", "pending");
+
+  const snapshot = await assignmentsQuery.get();
+
+  if (snapshot.empty) {
+    return { success: true, count: 0, message: "Nenhuma justificativa pendente encontrada para esta publicação." };
+  }
+
+  // 4. Batch update the status to 'accepted'
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { justificationStatus: "accepted" });
+  });
+  await batch.commit();
+
+  return { success: true, count: snapshot.size, message: `${snapshot.size} justificativas foram aceitas com sucesso.` };
+});
 
 
 // --- Gemini AI assistant function ---
@@ -991,287 +1537,10 @@ exports.getEnvironmentConfig = functions.region("southamerica-east1").https.onCa
     if (!context.auth || !(await isSuperAdmin(context.auth.uid))) {
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
-    // Return the stripe config object so the frontend can display it for debugging.
-    return functions.config().stripe || {};
-});
-
-
-// --- Post Management ---
-exports.createPostAndNotify = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  // You might want to add role checks here too
-  const { postData, assignedPromoters } = data;
-  if (!postData || !assignedPromoters || assignedPromoters.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "Dados da publicação e divulgadoras são obrigatórios.");
-  }
-
-  // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
-  if (postData.expiresAt && typeof postData.expiresAt === "object" && postData.expiresAt.seconds !== undefined) {
-      postData.expiresAt = new admin.firestore.Timestamp(
-          postData.expiresAt.seconds,
-          postData.expiresAt.nanoseconds,
-      );
-  }
-
-  const batch = db.batch();
-
-  // 1. Create the main Post document
-  const postCollectionRef = db.collection("posts");
-  const postDocRef = postCollectionRef.doc();
-  const postCreatedAt = admin.firestore.FieldValue.serverTimestamp();
-
-  const newPost = {
-    ...postData,
-    createdAt: postCreatedAt,
-  };
-  batch.set(postDocRef, newPost);
-
-  // 2. Create assignments
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  const denormalizedPostData = {
-    type: postData.type,
-    mediaUrl: postData.mediaUrl,
-    textContent: postData.textContent,
-    instructions: postData.instructions,
-    postLink: postData.postLink,
-    campaignName: postData.campaignName,
-    isActive: postData.isActive,
-    expiresAt: postData.expiresAt,
-    createdAt: postCreatedAt,
-  };
-
-  for (const promoter of assignedPromoters) {
-    const assignmentDocRef = assignmentsCollectionRef.doc();
-    const newAssignment = {
-      postId: postDocRef.id,
-      post: denormalizedPostData,
-      organizationId: promoter.organizationId,
-      promoterId: promoter.id,
-      promoterEmail: promoter.email.toLowerCase(),
-      promoterName: promoter.name,
-      status: "pending",
-      confirmedAt: null,
+    // WARNING: Be careful what you expose here.
+    return {
+        brevo: functions.config().brevo,
+        stripe: functions.config().stripe,
+        gemini_key_exists: !!functions.config().gemini?.key,
     };
-    batch.set(assignmentDocRef, newAssignment);
-  }
-
-  // 3. Commit Firestore writes
-  await batch.commit();
-
-  // 4. Send notifications (after Firestore is confirmed)
-  const orgDoc = await db.collection("organizations").doc(postData.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  const emailPromises = assignedPromoters.map((promoter) =>
-    sendNewPostNotificationEmail(promoter, {
-      campaignName: postData.campaignName,
-      orgName: orgName,
-    }),
-  );
-
-  // Wait for all emails to be sent but don't fail the whole function if one fails.
-  // Log errors inside sendNewPostNotificationEmail.
-  await Promise.allSettled(emailPromises);
-
-  return { success: true, postId: postDocRef.id };
-});
-
-exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-  }
-
-  const { postId, promoterIds } = data;
-  if (!postId || !promoterIds || !Array.isArray(promoterIds) || promoterIds.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
-  }
-
-  // 1. Fetch post and organization
-  const postDocRef = db.collection("posts").doc(postId);
-  const postSnap = await postDocRef.get();
-  if (!postSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
-  }
-  const post = postSnap.data();
-
-  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  // 2. Prepare batch write for new assignments
-  const batch = db.batch();
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  const promotersToNotify = [];
-
-  const denormalizedPostData = {
-    type: post.type,
-    mediaUrl: post.mediaUrl || null,
-    textContent: post.textContent || null,
-    instructions: post.instructions,
-    postLink: post.postLink || null,
-    campaignName: post.campaignName,
-    isActive: post.isActive,
-    expiresAt: post.expiresAt || null,
-    createdAt: post.createdAt,
-  };
-
-  // 3. Fetch promoters and create assignment docs
-  for (const promoterId of promoterIds) {
-    const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-    if (promoterDoc.exists) {
-      const promoterData = promoterDoc.data();
-      const assignmentDocRef = assignmentsCollectionRef.doc();
-      const newAssignment = {
-        postId: postId,
-        post: denormalizedPostData,
-        organizationId: promoterData.organizationId,
-        promoterId: promoterId,
-        promoterEmail: promoterData.email.toLowerCase(),
-        promoterName: promoterData.name,
-        status: "pending",
-        confirmedAt: null,
-      };
-      batch.set(assignmentDocRef, newAssignment);
-      promotersToNotify.push(promoterData);
-    }
-  }
-
-  if (promotersToNotify.length === 0) {
-    console.log("Nenhuma divulgadora válida encontrada para atribuir.");
-    return { success: true, message: "Nenhuma divulgadora válida foi encontrada." };
-  }
-
-  // 4. Commit batch
-  await batch.commit();
-  console.log(`[Manual Assign] Created ${promotersToNotify.length} new assignments for post ${postId}.`);
-
-  // 5. Send notifications
-  const emailPromises = promotersToNotify.map((promoter) =>
-    sendNewPostNotificationEmail(promoter, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-  await Promise.allSettled(emailPromises);
-
-  return { success: true, message: `${promotersToNotify.length} atribuições criadas e notificadas.` };
-});
-
-exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-    }
-    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-    if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-    }
-
-    const { postId, updateData } = data;
-    if (!postId || !updateData) {
-        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
-    }
-
-    // Convert serialized timestamp from client back to a real Timestamp object for the Admin SDK
-    if (updateData.expiresAt && typeof updateData.expiresAt === "object" && updateData.expiresAt.seconds !== undefined) {
-        updateData.expiresAt = new admin.firestore.Timestamp(
-            updateData.expiresAt.seconds,
-            updateData.expiresAt.nanoseconds,
-        );
-    } else if (updateData.expiresAt === null) {
-        updateData.expiresAt = null;
-    }
-
-
-    const batch = db.batch();
-
-    // 1. Update main post document
-    const postDocRef = db.collection("posts").doc(postId);
-    batch.update(postDocRef, updateData);
-
-    // 2. Find and update all assignments
-    const assignmentsQuery = db.collection("postAssignments").where("postId", "==", postId);
-    const assignmentsSnapshot = await assignmentsQuery.get();
-
-    // Build the denormalized update object dynamically
-    const denormalizedUpdateData = {};
-    const fieldsToSync = ["isActive", "expiresAt", "instructions", "textContent", "mediaUrl", "postLink"];
-
-    for (const field of fieldsToSync) {
-      // Check if the property exists in updateData, even if its value is null or undefined
-      if (Object.prototype.hasOwnProperty.call(updateData, field)) {
-        // Firestore needs dot notation for nested objects
-        denormalizedUpdateData[`post.${field}`] = updateData[field];
-      }
-    }
-
-    if (Object.keys(denormalizedUpdateData).length > 0) {
-        assignmentsSnapshot.forEach((doc) => {
-            batch.update(doc.ref, denormalizedUpdateData);
-        });
-    }
-
-    await batch.commit();
-
-    return { success: true };
-});
-
-exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Não autenticado.");
-  }
-  const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-  if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-    throw new functions.https.HttpsError("permission-denied", "Apenas administradores podem executar esta ação.");
-  }
-
-  const { postId } = data;
-  if (!postId) {
-    throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
-  }
-
-  const postSnap = await db.collection("posts").doc(postId).get();
-  if (!postSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
-  }
-  const post = postSnap.data();
-
-  const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-  const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
-
-  // CORRECTED QUERY: Find promoters who have CONFIRMED their post.
-  // We will filter for missing proof in the next step.
-  const assignmentsQuery = db.collection("postAssignments")
-      .where("postId", "==", postId)
-      .where("status", "==", "confirmed");
-
-  const snapshot = await assignmentsQuery.get();
-  if (snapshot.empty) {
-    return { success: true, count: 0, message: "Nenhuma divulgação confirmada foi encontrada para este post." };
-  }
-
-  // In-memory filter to find those who confirmed but have not submitted proof yet.
-  // The 'proofSubmittedAt' field does not exist on these documents.
-  const promotersToRemind = snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((assignment) => !assignment.proofSubmittedAt);
-
-  if (promotersToRemind.length === 0) {
-    return { success: true, count: 0, message: "Todas as divulgadoras que confirmaram já enviaram a comprovação." };
-  }
-
-  const emailPromises = promotersToRemind.map((promoter) =>
-    sendProofReminderEmail(promoter, {
-      campaignName: post.campaignName,
-      orgName: orgName,
-    }),
-  );
-
-  await Promise.allSettled(emailPromises);
-
-  return { success: true, count: promotersToRemind.length, message: `${promotersToRemind.length} lembretes enviados.` };
 });

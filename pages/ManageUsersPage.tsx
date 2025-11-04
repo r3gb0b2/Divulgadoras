@@ -12,7 +12,7 @@ import { ArrowLeftIcon } from '../components/Icons';
 
 
 const ManageUsersPage: React.FC = () => {
-    const { adminData: currentAdmin } = useAdminAuth();
+    const { adminData: currentAdmin, selectedOrgId } = useAdminAuth();
     const [admins, setAdmins] = useState<AdminUserData[]>([]);
     const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -35,8 +35,9 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const adminDataPromise = getAllAdmins(currentAdmin?.organizationIds?.[0]);
-            const campaignDataPromise = getAllCampaigns(currentAdmin?.organizationIds?.[0]);
+            const orgIdForFetch = isSuperAdmin ? undefined : selectedOrgId;
+            const adminDataPromise = getAllAdmins(orgIdForFetch);
+            const campaignDataPromise = getAllCampaigns(orgIdForFetch);
             const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
 
             const [adminData, campaignData, orgData] = await Promise.all([
@@ -53,7 +54,7 @@ const ManageUsersPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [currentAdmin, isSuperAdmin]);
+    }, [isSuperAdmin, selectedOrgId]);
 
     useEffect(() => {
         fetchData();
@@ -150,7 +151,7 @@ const ManageUsersPage: React.FC = () => {
         if (isSuperAdmin && role !== 'superadmin' && !selectedOrg) {
             return setError("Por favor, selecione uma organização para este usuário.");
         }
-        if (!isSuperAdmin && (!currentAdmin?.organizationIds || currentAdmin.organizationIds.length === 0)) return setError("Você não está associado a uma organização.");
+        if (!isSuperAdmin && !selectedOrgId) return setError("Nenhuma organização selecionada.");
 
         setIsLoading(true);
         try {
@@ -171,7 +172,7 @@ const ManageUsersPage: React.FC = () => {
             if (isSuperAdmin) {
                 orgIds = role === 'superadmin' ? [] : (selectedOrg ? [selectedOrg] : []);
             } else if (!editingTarget) { // Regular admin creating a user
-                orgIds = currentAdmin?.organizationIds?.[0] ? [currentAdmin.organizationIds[0]] : [];
+                orgIds = selectedOrgId ? [selectedOrgId] : [];
             }
             // Note: This page only handles single-org assignment for simplicity. 
             // Multi-org assignment is done on the Manage Organization page.

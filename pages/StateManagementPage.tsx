@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Campaign, AdminUserData, StatesConfig } from '../types';
+import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
 import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
 import { ArrowLeftIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { functions } from '../firebase/config';
 
 // Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
@@ -18,12 +20,9 @@ const CampaignModal: React.FC<{
         description: '', 
         whatsappLink: '', 
         rules: '', 
-        isActive: true,
-        guestListTypes: [] as string[],
-        guestAllowance: 0,
+        status: 'active' as CampaignStatus,
     });
-    const [newListName, setNewListName] = useState('');
-
+    
     useEffect(() => {
         if (campaign) {
             setFormData({
@@ -31,27 +30,14 @@ const CampaignModal: React.FC<{
                 description: campaign.description || '',
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
-                isActive: campaign.isActive !== undefined ? campaign.isActive : true,
-                guestListTypes: campaign.guestListTypes || [],
-                guestAllowance: campaign.guestAllowance || 0,
+                status: campaign.status || 'active',
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', isActive: true, guestListTypes: [], guestAllowance: 0 });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active' });
         }
     }, [campaign, isOpen]);
     
     if (!isOpen) return null;
-
-    const handleAddListType = () => {
-        if (newListName.trim() && !formData.guestListTypes.includes(newListName.trim())) {
-            setFormData(prev => ({ ...prev, guestListTypes: [...prev.guestListTypes, newListName.trim()] }));
-            setNewListName('');
-        }
-    };
-
-    const handleRemoveListType = (nameToRemove: string) => {
-        setFormData(prev => ({ ...prev, guestListTypes: prev.guestListTypes.filter(name => name !== nameToRemove) }));
-    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,30 +54,17 @@ const CampaignModal: React.FC<{
                     <textarea placeholder="Descrição (opcional)" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[80px]"/>
                     <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
-                    <label className="flex items-center space-x-2 text-white"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativo (visível para cadastro)</span></label>
-                    
-                    <div className="border-t border-gray-700 pt-4 space-y-3">
-                        <h3 className="text-lg font-semibold text-gray-200">Lista de Convidados</h3>
-                         <p className="text-sm text-gray-400">Adicione os tipos de lista de convidados para este evento (ex: "Lista VIP", "Aniversariante"). Se nenhuma lista for adicionada, o recurso de lista de convidados ficará desativado.</p>
-                         <div className="flex gap-2">
-                            <input type="text" placeholder="Nome do tipo de lista" value={newListName} onChange={e => setNewListName(e.target.value)} className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
-                            <button type="button" onClick={handleAddListType} className="px-4 py-2 bg-primary text-white rounded-md">Adicionar</button>
-                         </div>
-                         <div className="space-y-2">
-                            {formData.guestListTypes.map(name => (
-                                <div key={name} className="flex justify-between items-center p-2 bg-gray-800 rounded">
-                                    <span className="text-gray-200">{name}</span>
-                                    <button type="button" onClick={() => handleRemoveListType(name)} className="text-red-400 hover:text-red-300">&times;</button>
-                                </div>
-                            ))}
-                         </div>
-
-                         {formData.guestListTypes.length > 0 && (
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300">Nº de convidados por divulgadora</label>
-                                 <input type="number" min="0" value={formData.guestAllowance} onChange={e => setFormData({...formData, guestAllowance: parseInt(e.target.value, 10) || 0})} className="w-full mt-1 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
-                             </div>
-                         )}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                         <select 
+                            value={formData.status} 
+                            onChange={e => setFormData({...formData, status: e.target.value as CampaignStatus})} 
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                        >
+                            <option value="active">Ativo (visível para cadastro)</option>
+                            <option value="inactive">Inativo (não permite novos cadastros)</option>
+                            <option value="hidden">Oculto (não aparece na lista de eventos)</option>
+                        </select>
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
@@ -107,8 +80,19 @@ interface StateManagementPageProps {
   adminData: AdminUserData;
 }
 
+const getStatusBadge = (status: CampaignStatus) => {
+    const styles: Record<CampaignStatus, string> = {
+        active: "bg-green-900/50 text-green-300",
+        inactive: "bg-red-900/50 text-red-300",
+        hidden: "bg-gray-700 text-gray-400",
+    };
+    const text: Record<CampaignStatus, string> = { active: "Ativo", inactive: "Inativo", hidden: "Oculto" };
+    return <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${styles[status]}`}>{text[status]}</span>;
+};
+
 const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
     const { stateAbbr } = useParams<{ stateAbbr: string }>();
+    const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
@@ -117,15 +101,15 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
-    const [copiedGuestListLink, setCopiedGuestListLink] = useState<string | null>(null);
 
     const isSuperAdmin = adminData.role === 'superadmin';
+    const orgIdForOps = isSuperAdmin ? undefined : selectedOrgId;
 
     const fetchData = useCallback(async () => {
         if (!stateAbbr) return;
 
         // Guard against calling API without orgId for non-superadmins
-        if (!isSuperAdmin && !adminData.organizationId) {
+        if (!isSuperAdmin && !selectedOrgId) {
             setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
             setIsLoading(false);
             return;
@@ -134,7 +118,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignData = await getCampaigns(stateAbbr, adminData.organizationId);
+            const campaignData = await getCampaigns(stateAbbr, orgIdForOps);
             setCampaigns(campaignData);
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
@@ -145,7 +129,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         } finally {
             setIsLoading(false);
         }
-    }, [stateAbbr, adminData.organizationId, isSuperAdmin]);
+    }, [stateAbbr, isSuperAdmin, selectedOrgId, orgIdForOps]);
 
     useEffect(() => {
         fetchData();
@@ -157,8 +141,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     };
     
     const handleCopyLink = (campaign: Campaign) => {
-        if (!stateAbbr || !adminData?.organizationId) return;
-        const link = `${window.location.origin}/#/${adminData.organizationId}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
+        if (!stateAbbr || !orgIdForOps) return;
+        const link = `${window.location.origin}/#/${orgIdForOps}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
         navigator.clipboard.writeText(link).then(() => {
             setCopiedLink(campaign.id);
             setTimeout(() => setCopiedLink(null), 2500);
@@ -168,22 +152,10 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         });
     };
 
-    const handleCopyGuestListLink = (campaign: Campaign) => {
-        if (!adminData?.organizationId) return;
-        const link = `${window.location.origin}/#/lista/${adminData.organizationId}/${campaign.id}`;
-        navigator.clipboard.writeText(link).then(() => {
-            setCopiedGuestListLink(campaign.id);
-            setTimeout(() => setCopiedGuestListLink(null), 2500);
-        }).catch(err => {
-            console.error('Failed to copy guest list link: ', err);
-            alert('Falha ao copiar o link da lista.');
-        });
-    };
-
     const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
-        if (!stateAbbr || (!adminData.organizationId && !isSuperAdmin)) return;
+        if (!stateAbbr || !orgIdForOps) return;
 
-        if (isSuperAdmin && !adminData.organizationId) {
+        if (isSuperAdmin) {
              setError("Super Admins devem gerenciar campanhas no painel da organização.");
              return;
         }
@@ -197,7 +169,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                 await addCampaign({
                     ...(campaignData as Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'>),
                     stateAbbr,
-                    organizationId: adminData.organizationId!,
+                    organizationId: orgIdForOps,
                 });
 
                 // Auto-assign the new campaign to the creating admin if they have restrictions for this state.
@@ -234,8 +206,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
             const newConfig = { ...statesConfig, [stateAbbr]: { ...statesConfig[stateAbbr], isActive } };
             await setStatesConfig(newConfig);
             setStatesConfig(newConfig);
-        } catch(err: any) {
-            setError(err.message || 'Falha ao atualizar status da localidade.');
+        } catch (err: any) {
+            setError(err.message || 'Falha ao atualizar status da região.');
         }
     };
     
@@ -244,7 +216,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Gerenciar: {stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Localidade'}</h1>
+                <h1 className="text-3xl font-bold">Gerenciar: {stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Região'}</h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
@@ -260,7 +232,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                             <div className={`block w-14 h-8 rounded-full ${currentStateConfig.isActive ? 'bg-primary' : 'bg-gray-600'}`}></div>
                             <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${currentStateConfig.isActive ? 'transform translate-x-full' : ''}`}></div>
                         </div>
-                        <span className="text-white font-medium">Inscrições {currentStateConfig.isActive ? 'ATIVAS' : 'INATIVAS'} para esta localidade</span>
+                        <span className="text-white font-medium">Inscrições {currentStateConfig.isActive ? 'ATIVAS' : 'INATIVAS'} para esta região</span>
                     </label>
                 </div>
             )}
@@ -274,25 +246,16 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         </button>
                     )}
                 </div>
-                {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta localidade.</p> : (
+                {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta região.</p> : (
                     <div className="space-y-3">
                         {campaigns.map(c => (
                             <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                                 <div>
-                                    <p className="font-semibold text-white">{c.name} <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${c.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>{c.isActive ? 'Ativo' : 'Inativo'}</span></p>
+                                    <p className="font-semibold text-white flex items-center">{c.name} {getStatusBadge(c.status)}</p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
                                 </div>
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist/${c.id}`)} className="text-green-400 hover:text-green-300">Ver Lista</button>}
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button onClick={() => navigate(`/admin/guestlist-access/${c.id}`)} className="text-yellow-400 hover:text-yellow-300">Gerenciar Acesso</button>}
-                                        {c.guestListTypes && c.guestListTypes.length > 0 && <button 
-                                            onClick={() => handleCopyGuestListLink(c)}
-                                            className="text-green-400 hover:text-green-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
-                                            disabled={copiedGuestListLink === c.id}
-                                        >
-                                            {copiedGuestListLink === c.id ? 'Link Copiado!' : 'Copiar Link da Lista'}
-                                        </button>}
                                         <button 
                                             onClick={() => handleCopyLink(c)} 
                                             className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"

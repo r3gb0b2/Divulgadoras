@@ -14,7 +14,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU",
   authDomain: "stingressos-e0a5f.firebaseapp.com",
   projectId: "stingressos-e0a5f",
-  storageBucket: "stingressos-e0a5f.firebasestorage.app",
+  storageBucket: "stingressos-e0a5f.appspot.com",
   messagingSenderId: "424186734009",
   appId: "1:424186734009:web:385f6c645a3ace2f784268",
   measurementId: "G-JTEQ46VCRY"
@@ -27,7 +27,8 @@ const app = firebase.initializeApp(firebaseConfig);
 export const firestore = firebase.firestore();
 
 // Initialize Cloud Storage and get a reference to the service using compat syntax
-export const storage = firebase.storage();
+// By explicitly providing the bucket URL, we bypass any potential resolution issues.
+export const storage = app.storage("gs://stingressos-e0a5f.appspot.com");
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = firebase.auth();

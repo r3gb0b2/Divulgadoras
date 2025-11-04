@@ -250,10 +250,11 @@ const ManageOrganizationPage: React.FC = () => {
                      <div>
                         <label className="block text-sm font-medium text-gray-300">Status</label>
                         <select name="status" value={formData.status || 'hidden'} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
-                           <option value="active">Ativa</option>
-                           <option value="trial">Teste</option>
-                           <option value="expired">Expirada</option>
-                           <option value="hidden">Oculta</option>
+                           <option value="active">Ativo</option>
+                           <option value="hidden">Oculto</option>
+                           <option value="deactivated">Desativado</option>
+                           {/* Show trial status if it's the current one, but don't allow setting it manually */}
+                           {organization?.status === 'trial' && <option value="trial">Em Teste</option>}
                         </select>
                     </div>
                     <div>

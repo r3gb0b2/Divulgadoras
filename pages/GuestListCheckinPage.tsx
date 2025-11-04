@@ -1,21 +1,62 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGuestListForCampaign, checkInPerson } from '../services/guestListService';
+import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
-import { GuestListConfirmation, Promoter } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon } from '../components/Icons';
-import { Timestamp } from 'firebase/firestore';
+import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
+import { getAllCampaigns } from '../services/settingsService';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 type ConfirmationWithDetails = GuestListConfirmation & { promoterPhotoUrl?: string };
+type Person = {
+    name: string;
+    isPromoter: boolean;
+    confirmationId: string;
+    checkedInAt: Timestamp | FieldValue | null | undefined;
+    checkedOutAt: Timestamp | FieldValue | null | undefined;
+    photoUrl?: string;
+    listName: string;
+    promoterName: string;
+};
+
+// --- Áudio Feedback Helper ---
+const playSound = (type: 'success' | 'error') => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!audioContext) return;
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    if (type === 'success') {
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2);
+    } else {
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.3);
+    }
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+};
 
 const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
-    const [allConfirmations, setAllConfirmations] = useState<ConfirmationWithDetails[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [allPeople, setAllPeople] = useState<Person[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [processingCheckin, setProcessingCheckin] = useState<string | null>(null); // Stores "confId-personName"
+    const [searchQuery, setSearchQuery] = useState('');
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -28,29 +69,44 @@ const GuestListCheckinPage: React.FC = () => {
         setError(null);
         try {
             const confirmations = await getGuestListForCampaign(campaignId);
-            if (confirmations.length === 0) {
-                setAllConfirmations([]);
-                setIsLoading(false);
-                return;
-            }
-
             const promoterIds = [...new Set(confirmations.map(c => c.promoterId))];
-            const promoters = await getPromotersByIds(promoterIds);
-            const promoterPhotoMap = new Map<string, string>();
-            promoters.forEach(p => {
-                if (p.photoUrls && p.photoUrls.length > 0) {
-                    promoterPhotoMap.set(p.id, p.photoUrls[0]);
+            const promoters = promoterIds.length > 0 ? await getPromotersByIds(promoterIds) : [];
+            const promoterPhotoMap = new Map(promoters.map(p => [p.id, p.photoUrls[0]]));
+
+            const peopleList: Person[] = [];
+            confirmations.forEach(conf => {
+                if (conf.isPromoterAttending) {
+                    peopleList.push({
+                        name: conf.promoterName,
+                        isPromoter: true,
+                        confirmationId: conf.id,
+                        checkedInAt: conf.promoterCheckedInAt,
+                        checkedOutAt: conf.promoterCheckedOutAt,
+                        photoUrl: promoterPhotoMap.get(conf.promoterId),
+                        listName: conf.listName,
+                        promoterName: conf.promoterName,
+                    });
                 }
+                conf.guestNames.forEach(guestName => {
+                    if (guestName.trim()) {
+                        const checkedInData = conf.guestsCheckedIn?.find(g => g.name === guestName);
+                        peopleList.push({
+                            name: guestName,
+                            isPromoter: false,
+                            confirmationId: conf.id,
+                            checkedInAt: checkedInData?.checkedInAt,
+                            checkedOutAt: checkedInData?.checkedOutAt,
+                            photoUrl: undefined,
+                            listName: conf.listName,
+                            promoterName: conf.promoterName,
+                        });
+                    }
+                });
             });
 
-            const confirmationsWithDetails = confirmations.map(c => ({
-                ...c,
-                promoterPhotoUrl: promoterPhotoMap.get(c.promoterId)
-            }));
-
-            setAllConfirmations(confirmationsWithDetails);
+            setAllPeople(peopleList.sort((a, b) => a.name.localeCompare(b.name)));
         } catch (err: any) {
-            setError(err.message || 'Falha ao carregar a lista.');
+            setError(err.message || 'Falha ao carregar lista de check-in.');
         } finally {
             setIsLoading(false);
         }
@@ -58,155 +114,104 @@ const GuestListCheckinPage: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+        searchInputRef.current?.focus();
     }, [fetchData]);
 
-    const filteredConfirmations = useMemo(() => {
-        if (!searchQuery.trim()) {
-            return allConfirmations;
-        }
-        const lowercasedQuery = searchQuery.toLowerCase();
-        return allConfirmations.filter(conf =>
-            conf.promoterName.toLowerCase().includes(lowercasedQuery) ||
-            conf.guestNames.some(guest => guest.toLowerCase().includes(lowercasedQuery))
-        );
-    }, [searchQuery, allConfirmations]);
+    const showFeedback = (type: 'success' | 'error', message: string) => {
+        setFeedback({ type, message });
+        playSound(type);
+        setTimeout(() => setFeedback(null), 3000);
+    };
 
-    const handleCheckIn = async (confirmationId: string, personName: string) => {
-        const checkinKey = `${confirmationId}-${personName}`;
-        setProcessingCheckin(checkinKey);
-        setError(null);
+    const handleCheckIn = async (person: Person) => {
         try {
-            await checkInPerson(confirmationId, personName);
-            // On success, refetch the data to get server timestamps
+            await checkInPerson(person.confirmationId, person.name);
+            showFeedback('success', `${person.name} - ENTRADA LIBERADA`);
             await fetchData();
+            setSearchQuery('');
         } catch (err: any) {
-            setError(err.message || `Falha no check-in de ${personName}.`);
-            // No need to revert, fetchData will get the correct state
-        } finally {
-            setProcessingCheckin(null);
+            showFeedback('error', err.message || 'Falha no check-in.');
         }
     };
 
-    const formatTime = (timestamp: any): string => {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        if (isNaN(date.getTime())) return 'Inválido';
-        return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const handleCheckOut = async (person: Person) => {
+        try {
+            await checkOutPerson(person.confirmationId, person.name);
+            showFeedback('success', `${person.name} - SAÍDA REGISTRADA`);
+            await fetchData();
+            setSearchQuery('');
+        } catch (err: any) {
+            showFeedback('error', err.message || 'Falha no check-out.');
+        }
     };
 
-    const renderList = () => {
-        if (isLoading) {
-            return (
-                <div className="flex justify-center items-center py-10">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                </div>
-            );
-        }
+    const filteredPeople = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        const lowerQuery = searchQuery.toLowerCase();
+        return allPeople.filter(p => p.name.toLowerCase().includes(lowerQuery));
+    }, [allPeople, searchQuery]);
 
-        if (allConfirmations.length === 0 && !error) {
-            return <p className="text-gray-400 text-center py-8">Nenhuma confirmação na lista para este evento.</p>;
-        }
-
-        if (filteredConfirmations.length === 0) {
-            return <p className="text-gray-400 text-center py-8">Nenhum resultado encontrado para "{searchQuery}".</p>;
-        }
-
-        return (
-            <div className="space-y-4">
-                {filteredConfirmations.map(conf => {
-                    const guestsCheckedInMap = new Map((conf.guestsCheckedIn || []).map(g => [g.name, g.checkedInAt]));
-                    return (
-                        <div key={conf.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
-                            <div className="flex items-center gap-4 border-b border-gray-700 pb-3 mb-3">
-                                <img
-                                    src={conf.promoterPhotoUrl || 'https://via.placeholder.com/80'}
-                                    alt={conf.promoterName}
-                                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-primary"
-                                />
-                                <div className="flex-grow">
-                                    <h3 className="text-lg sm:text-xl font-bold text-white">{conf.promoterName}</h3>
-                                    <p className="text-sm text-primary font-semibold">{conf.listName}</p>
-                                </div>
-                                <div className="flex-shrink-0">
-                                    {conf.promoterCheckedInAt ? (
-                                        <div className="text-center">
-                                            <CheckCircleIcon className="w-7 h-7 text-green-400 mx-auto" />
-                                            <p className="text-xs font-bold text-green-300">{formatTime(conf.promoterCheckedInAt)}</p>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => handleCheckIn(conf.id, conf.promoterName)}
-                                            disabled={processingCheckin === `${conf.id}-${conf.promoterName}`}
-                                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                            {processingCheckin === `${conf.id}-${conf.promoterName}` ? '...' : 'Check-in'}
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {conf.guestNames.length > 0 && (
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Convidados:</h4>
-                                    <ul className="space-y-2">
-                                        {conf.guestNames.map(guestName => {
-                                            const checkedInTime = guestsCheckedInMap.get(guestName);
-                                            return (
-                                                <li key={guestName} className="flex justify-between items-center bg-gray-800/50 p-2 rounded-md">
-                                                    <span className="text-gray-200">{guestName}</span>
-                                                    {checkedInTime ? (
-                                                        <div className="flex items-center gap-2 text-xs font-semibold text-green-300">
-                                                            <CheckCircleIcon className="w-5 h-5" />
-                                                            {formatTime(checkedInTime)}
-                                                        </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => handleCheckIn(conf.id, guestName)}
-                                                            disabled={processingCheckin === `${conf.id}-${guestName}`}
-                                                            className="px-3 py-1 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-500 disabled:opacity-50"
-                                                        >
-                                                             {processingCheckin === `${conf.id}-${guestName}` ? '...' : 'Check-in'}
-                                                        </button>
-                                                    )}
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        );
-    };
+    const stats = useMemo(() => {
+        const checkedIn = allPeople.filter(p => p.checkedInAt && !p.checkedOutAt).length;
+        return { total: allPeople.length, checkedIn };
+    }, [allPeople]);
 
     return (
         <div>
-            <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-                <div>
-                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
-                        <ArrowLeftIcon className="w-5 h-5" />
-                        <span>Voltar para a Lista</span>
-                    </button>
-                    <h1 className="text-3xl font-bold mt-1">Controle de Entrada</h1>
-                </div>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold">Controle de Entrada</h1>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
+                </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="relative mb-6">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <SearchIcon className="h-5 w-5 text-gray-400" />
-                    </span>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-dark p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Total na Lista</h3><p className="text-3xl font-bold text-white">{stats.total}</p></div>
+                    <div className="bg-dark p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Presentes Agora</h3><p className="text-3xl font-bold text-green-400">{stats.checkedIn}</p></div>
+                </div>
+                {feedback && (
+                    <div className={`p-4 mb-4 rounded-lg text-center text-xl font-bold ${feedback.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                        {feedback.message}
+                    </div>
+                )}
+                <div className="relative mb-4">
+                    <SearchIcon className="w-6 h-6 text-gray-400 absolute top-1/2 left-4 -translate-y-1/2" />
                     <input
+                        ref={searchInputRef}
                         type="text"
+                        placeholder="Buscar nome na lista..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Pesquisar por nome da divulgadora ou convidado..."
-                        className="w-full pl-10 pr-4 py-3 border border-gray-600 rounded-md bg-gray-800 text-gray-200 text-lg focus:ring-primary focus:border-primary"
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-14 pr-4 py-4 text-lg border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-primary focus:border-primary"
                     />
                 </div>
-                {error && <p className="text-red-400 text-center mb-4">{error}</p>}
-                {renderList()}
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {filteredPeople.map((person, index) => (
+                        <div key={`${person.confirmationId}-${person.name}-${index}`} className="bg-dark/70 p-3 rounded-lg flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                {person.photoUrl && <img src={person.photoUrl} alt={person.name} className="w-12 h-12 object-cover rounded-full" />}
+                                <div>
+                                    <p className="font-semibold text-lg text-white">{person.name}</p>
+                                    <p className="text-xs text-gray-400">Lista: {person.listName} (de {person.promoterName})</p>
+                                </div>
+                            </div>
+                            <div className="flex-shrink-0 flex gap-2">
+                                {person.checkedInAt && !person.checkedOutAt ? (
+                                    <>
+                                        <span className="flex items-center gap-1 text-green-400 text-sm"><CheckCircleIcon className="w-4 h-4" /> Entrou</span>
+                                        <button onClick={() => handleCheckOut(person)} className="px-3 py-1 bg-yellow-600 text-white text-sm font-semibold rounded-md">Saída</button>
+                                    </>
+                                ) : person.checkedInAt && person.checkedOutAt ? (
+                                    <span className="text-gray-500 text-sm">Saiu</span>
+                                ) : (
+                                    <button onClick={() => handleCheckIn(person)} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Entrada</button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {searchQuery && filteredPeople.length === 0 && <p className="text-center text-gray-400 py-4">Nenhum resultado encontrado.</p>}
+                </div>
             </div>
         </div>
     );

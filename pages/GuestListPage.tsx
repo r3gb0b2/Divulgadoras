@@ -1,23 +1,23 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getGuestListForCampaign } from '../services/guestListService';
+import { getGuestListForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
     const [confirmations, setConfirmations] = useState<(GuestListConfirmation & { promoterDetails?: Promoter })[]>([]);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [activeList, setActiveList] = useState<string | null>(null);
     const [filterInGroupOnly, setFilterInGroupOnly] = useState(false);
+    const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!campaignId) {
@@ -48,10 +48,8 @@ const GuestListPage: React.FC = () => {
             let orgId: string | undefined;
             if (confirmationData.length > 0) {
                 orgId = confirmationData[0].organizationId;
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-            } else if (adminData?.organizationIds?.[0]) {
-                // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-                orgId = adminData.organizationIds[0];
+            } else if (selectedOrgId) {
+                orgId = selectedOrgId;
             }
 
             if (orgId) {
@@ -69,11 +67,23 @@ const GuestListPage: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [campaignId, adminData]);
+    }, [campaignId, adminData, selectedOrgId]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleUnlock = async (confirmationId: string) => {
+        setUnlockingId(confirmationId);
+        try {
+            await unlockGuestListConfirmation(confirmationId);
+            await fetchData(); // Refresh data to show updated lock status
+        } catch (err: any) {
+            setError(err.message || 'Falha ao liberar para edição.');
+        } finally {
+            setUnlockingId(null);
+        }
+    };
 
     const filteredConfirmations = useMemo(() => {
         if (!filterInGroupOnly) {
@@ -205,6 +215,7 @@ const GuestListPage: React.FC = () => {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Nome da Divulgadora</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Convidados</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
@@ -218,6 +229,15 @@ const GuestListPage: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
                                         {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button
+                                            onClick={() => handleUnlock(conf.id)}
+                                            disabled={!conf.isLocked || unlockingId === conf.id}
+                                            className="text-indigo-400 hover:text-indigo-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                        >
+                                            {unlockingId === conf.id ? 'Liberando...' : (conf.isLocked ? 'Liberar Edição' : 'Liberado')}
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -255,7 +275,8 @@ const GuestListPage: React.FC = () => {
                             to={`/admin/checkin/${campaignId}`}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
                         >
-                            Controlar Entrada
+                            <CheckCircleIcon className="w-4 h-4" />
+                            <span>Controlar Entrada</span>
                         </Link>
                         <button
                             onClick={handleDownloadCSV}

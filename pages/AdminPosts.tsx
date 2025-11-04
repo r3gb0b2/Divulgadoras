@@ -1,22 +1,33 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPostsForOrg } from '../services/postService';
+import { getPostsForOrg, getAssignmentsForOrganization } from '../services/postService';
 import { getOrganizations } from '../services/organizationService';
-import { Post, Organization } from '../types';
+import { Post, Organization, PostAssignment } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
-// FIX: Removed modular signOut import to use compat syntax.
 import { auth } from '../firebase/config';
+import StorageMedia from '../components/StorageMedia';
+
+// Helper to safely convert various date formats to a Date object
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    return null;
+};
 
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData } = useAdminAuth();
+    const { adminData, selectedOrgId } = useAdminAuth();
     const [posts, setPosts] = useState<Post[]>([]);
+    const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -27,8 +38,7 @@ const AdminPosts: React.FC = () => {
             setIsLoading(true);
             setError(null);
             
-            // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-            const orgId = isSuperAdmin ? undefined : adminData.organizationIds?.[0];
+            const orgId = isSuperAdmin ? undefined : selectedOrgId;
 
             if (!isSuperAdmin && !orgId) {
                 setError("Organização não encontrada para este admin.");
@@ -38,11 +48,13 @@ const AdminPosts: React.FC = () => {
 
             try {
                 const postPromise = getPostsForOrg(orgId);
+                const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
                 const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
                 
-                const [fetchedPosts, fetchedOrgs] = await Promise.all([postPromise, orgPromise]);
+                const [fetchedPosts, fetchedAssignments, fetchedOrgs] = await Promise.all([postPromise, assignmentsPromise, orgPromise]);
 
                 setPosts(fetchedPosts);
+                setAssignments(fetchedAssignments);
                 setOrganizations(fetchedOrgs);
 
             } catch (err: any) {
@@ -53,13 +65,12 @@ const AdminPosts: React.FC = () => {
         };
 
         fetchPosts();
-    }, [adminData, isSuperAdmin]);
+    }, [adminData, isSuperAdmin, selectedOrgId]);
 
     const handleLogout = async () => {
         try {
-            // FIX: Use compat signOut method.
             await auth.signOut();
-            // The auth context listener will handle navigation
+            navigate('/admin/login');
         } catch (error) {
             console.error("Logout failed", error);
         }
@@ -72,25 +83,44 @@ const AdminPosts: React.FC = () => {
             return acc;
         }, {} as Record<string, string>);
     }, [organizations, isSuperAdmin]);
+    
+    const pendingJustificationsMap = useMemo(() => {
+        const map = new Map<string, number>();
+        assignments.forEach(a => {
+            if (a.justificationStatus === 'pending') {
+                map.set(a.postId, (map.get(a.postId) || 0) + 1);
+            }
+        });
+        return map;
+    }, [assignments]);
 
 
-    const formatDate = (timestamp: any): string => {
-        if (!timestamp) return 'N/A';
-        let date;
-        // Handle Firestore Timestamp object from SDK
-        if (timestamp.toDate) {
-            date = timestamp.toDate();
-        } else if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
-            // Handle serialized Timestamp from cloud function OR from malformed db entry
-            const seconds = timestamp.seconds || timestamp._seconds;
-            date = new Date(seconds * 1000);
-        } else {
-            // Handle string date
-            date = new Date(timestamp);
+    const { activePosts, inactivePosts } = useMemo(() => {
+        const now = new Date();
+        const active: Post[] = [];
+        const inactive: Post[] = [];
+
+        posts.forEach(p => {
+            const isExpired = p.expiresAt && toDateSafe(p.expiresAt) < now;
+            if (p.isActive && !isExpired) {
+                active.push(p);
+            } else {
+                inactive.push(p);
+            }
+        });
+        return { activePosts: active, inactivePosts: inactive };
+    }, [posts]);
+
+    const filteredPosts = useMemo(() => {
+        switch (statusFilter) {
+            case 'active':
+                return activePosts;
+            case 'inactive':
+                return inactivePosts;
+            default:
+                return posts;
         }
-        if (isNaN(date.getTime())) return 'Data inválida';
-        return date.toLocaleDateString('pt-BR');
-    };
+    }, [posts, activePosts, inactivePosts, statusFilter]);
     
     const renderContent = () => {
         if (isLoading) {
@@ -99,34 +129,60 @@ const AdminPosts: React.FC = () => {
         if (error) {
             return <div className="text-red-400 text-center py-10">{error}</div>;
         }
-        if (posts.length === 0) {
-            return <div className="text-center text-gray-400 py-10">Nenhuma publicação criada ainda.</div>;
+        if (filteredPosts.length === 0) {
+            return (
+                <div className="text-center text-gray-400 py-10">
+                    {statusFilter === 'active' && 'Nenhuma publicação ativa encontrada.'}
+                    {statusFilter === 'inactive' && 'Nenhuma publicação inativa encontrada.'}
+                    {statusFilter === 'all' && posts.length === 0 && 'Nenhuma publicação criada ainda.'}
+                    {statusFilter === 'all' && posts.length > 0 && 'Nenhuma publicação encontrada com os filtros atuais.'}
+                </div>
+            );
         }
         return (
-            <div className="space-y-4">
-                {posts.map(post => (
-                    <div key={post.id} className="bg-dark/70 p-4 rounded-lg shadow-sm">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-start">
-                            <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPosts.map(post => {
+                    const pendingCount = pendingJustificationsMap.get(post.id) || 0;
+                    return (
+                        <div key={post.id} className="bg-dark/70 rounded-lg shadow-sm flex flex-col overflow-hidden border border-gray-700/50">
+                            <div className="relative">
+                                <StorageMedia 
+                                    path={post.mediaUrl || ''} 
+                                    type={post.type === 'text' ? 'image' : post.type} // Fallback to image for text posts to show placeholder
+                                    className="h-40 w-full object-cover bg-gray-800"
+                                    alt={`Arte para ${post.campaignName}`}
+                                />
+                                {pendingCount > 0 && (
+                                     <div className="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                                        <MegaphoneIcon className="w-4 h-4" />
+                                        {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="p-4 flex flex-col flex-grow">
                                 {isSuperAdmin && <p className="text-xs font-semibold text-gray-400">{orgNameMap[post.organizationId] || 'Organização Desconhecida'}</p>}
                                 <p className="font-bold text-lg text-primary">{post.campaignName}</p>
-                                <div className="flex items-center gap-3 text-sm text-gray-400">
-                                    <span>{post.type === 'image' ? 'Imagem' : 'Texto'} - Criado em: {formatDate(post.createdAt)}</span>
-                                     <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
+                                {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
+                                <div className="flex items-center gap-3 text-sm text-gray-400 mt-2">
+                                    <span className="capitalize">{post.type}</span>
+                                    <span>-</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
                                         {post.isActive ? 'Ativo' : 'Inativo'}
                                     </span>
-                                    {post.expiresAt && <p className="text-xs text-yellow-400">Expira em: {formatDate(post.expiresAt)}</p>}
+                                </div>
+
+                                <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4">
+                                     <button 
+                                        onClick={() => navigate(`/admin/posts/${post.id}`)}
+                                        className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold"
+                                    >
+                                        Ver Detalhes e Tarefas
+                                    </button>
                                 </div>
                             </div>
-                            <button 
-                                onClick={() => navigate(`/admin/posts/${post.id}`)}
-                                className="mt-2 sm:mt-0 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm"
-                            >
-                                Ver Detalhes
-                            </button>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         );
     };
@@ -150,7 +206,7 @@ const AdminPosts: React.FC = () => {
                             + Nova Publicação
                         </button>
                     )}
-                     {adminData?.role === 'poster' && (
+                     {adminData && (
                         <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">
                             Sair
                         </button>
@@ -158,6 +214,17 @@ const AdminPosts: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
+                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-6 w-fit">
+                    {(['active', 'inactive', 'all'] as const).map(f => (
+                        <button 
+                            key={f} 
+                            onClick={() => setStatusFilter(f)} 
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                        >
+                            {{'active': 'Ativos', 'inactive': 'Inativos', 'all': 'Todos'}[f]}
+                        </button>
+                    ))}
+                </div>
                 {renderContent()}
             </div>
         </div>

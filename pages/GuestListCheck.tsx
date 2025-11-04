@@ -1,23 +1,100 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getApprovedEventsForPromoter } from '../services/promoterService';
-import { getCampaigns, getAllCampaigns } from '../services/settingsService';
-import { addGuestListConfirmation } from '../services/guestListService';
-import { Promoter, Campaign } from '../types';
+import { findPromotersByEmail } from '../services/promoterService';
+import { getActiveGuestListsForCampaign, addGuestListConfirmation, getGuestListConfirmationsByEmail } from '../services/guestListService';
+import { Promoter, GuestList, Campaign, GuestListConfirmation, Timestamp } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
+import { getAllCampaigns } from '../services/settingsService';
 
-interface EventWithCampaignAndList extends Promoter {
-    campaignDetails: Campaign;
-    listName: string;
-}
+type CountdownStatus = 'upcoming' | 'open' | 'closed';
 
-const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> = ({ event }) => {
-    const { campaignDetails, listName } = event;
+const useCountdown = (startDate: Date | null, endDate: Date | null) => {
+    const [status, setStatus] = useState<CountdownStatus>('closed');
+    const [timeLeft, setTimeLeft] = useState('');
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = new Date();
+            let currentStatus: CountdownStatus = 'closed';
+            let targetDate: Date | null = null;
+            let prefix = '';
+
+            if (startDate && now < startDate) {
+                currentStatus = 'upcoming';
+                targetDate = startDate;
+                prefix = 'Abre em: ';
+            } else if (!endDate || now < endDate) {
+                currentStatus = 'open';
+                targetDate = endDate;
+                prefix = 'Fecha em: ';
+            } else {
+                currentStatus = 'closed';
+            }
+            
+            setStatus(currentStatus);
+
+            if (targetDate) {
+                const difference = targetDate.getTime() - now.getTime();
+                if (difference > 0) {
+                    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+                    const minutes = Math.floor((difference / 1000 / 60) % 60);
+                    const seconds = Math.floor((difference / 1000) % 60);
+
+                    let timeString = '';
+                    if (days > 0) timeString += `${days}d `;
+                    timeString += `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+                    setTimeLeft(prefix + timeString);
+                } else {
+                    // This handles the case where the timer just ran out
+                    setStatus('closed');
+                    setTimeLeft('');
+                }
+            } else {
+                // No end date means it's always open (if started)
+                 if (currentStatus === 'open') {
+                    setTimeLeft('Aberto por tempo indeterminado');
+                } else {
+                    setTimeLeft('');
+                }
+            }
+
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [startDate, endDate]);
+
+    return { status, timeLeft };
+};
+
+
+const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
     const [isAttending, setIsAttending] = useState(true);
-    const [guestNames, setGuestNames] = useState<string[]>(Array(campaignDetails.guestAllowance || 0).fill(''));
+    const [guestNames, setGuestNames] = useState<string[]>(Array(list.guestAllowance).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    
+    const startDate = list.startsAt ? (list.startsAt as Timestamp).toDate() : null;
+    const closingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
+    const { status, timeLeft } = useCountdown(startDate, closingDate);
+    const isLocked = existingConfirmation?.isLocked ?? false;
+    const isEditing = !!existingConfirmation;
+
+    const isFormDisabled = status !== 'open' || isLocked;
+
+
+    useEffect(() => {
+        if (existingConfirmation) {
+            setIsAttending(existingConfirmation.isPromoterAttending);
+            const filledGuests = [...existingConfirmation.guestNames];
+            while (filledGuests.length < list.guestAllowance) {
+                filledGuests.push('');
+            }
+            setGuestNames(filledGuests.slice(0, list.guestAllowance));
+        }
+    }, [existingConfirmation, list.guestAllowance]);
+
 
     const handleGuestNameChange = (index: number, value: string) => {
         const newGuestNames = [...guestNames];
@@ -32,13 +109,14 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
         setSuccess(false);
         try {
             await addGuestListConfirmation({
-                organizationId: event.organizationId,
-                campaignId: campaignDetails.id,
-                campaignName: campaignDetails.name,
-                promoterId: event.id,
-                promoterName: event.name,
-                promoterEmail: event.email,
-                listName: listName,
+                organizationId: list.organizationId,
+                campaignId: list.campaignId,
+                campaignName: list.campaignName,
+                guestListId: list.id,
+                promoterId: promoter.id,
+                promoterName: promoter.name,
+                promoterEmail: promoter.email,
+                listName: list.name,
                 isPromoterAttending: isAttending,
                 guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
             });
@@ -52,191 +130,200 @@ const GuestListConfirmationCard: React.FC<{ event: EventWithCampaignAndList }> =
 
     if (success) {
         return (
-             <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
-                <p className="font-bold">Presença Confirmada!</p>
-                <p>Sua lista para <strong>{listName}</strong> no evento <strong>{campaignDetails.name}</strong> foi enviada com sucesso.</p>
+            <div className="space-y-4">
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
+                    <p className="font-bold">{isEditing ? 'Lista Atualizada!' : 'Presença Confirmada!'}</p>
+                    <p>Sua lista para <strong>{list.name}</strong> foi {isEditing ? 'atualizada' : 'enviada'} com sucesso.</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (isLocked) {
+        return (
+             <div className="space-y-4">
+                <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4 text-center">
+                    <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
+                        <p className="font-bold">Lista Já Enviada!</p>
+                        <p>Você já enviou seus nomes para esta lista. Se precisar fazer alguma alteração, solicite a liberação ao organizador do evento.</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <form onSubmit={handleSubmit} className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
-            <h3 className="font-bold text-lg text-primary">{campaignDetails.name} - <span className="text-gray-200">{listName}</span></h3>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            
-            <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
-                <label className="flex items-center cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={isAttending}
-                        onChange={(e) => setIsAttending(e.target.checked)}
-                        className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
-                    />
-                    <span className="ml-3 font-medium text-gray-200">Confirmar minha presença</span>
-                </label>
-            </div>
-
-            {isAttending && (campaignDetails.guestAllowance || 0) > 0 && (
-                <div>
-                    <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({campaignDetails.guestAllowance} permitidos)</h4>
-                    <div className="space-y-2">
-                        {Array.from({ length: campaignDetails.guestAllowance || 0 }).map((_, index) => (
-                            <input
-                                key={index}
-                                type="text"
-                                value={guestNames[index]}
-                                onChange={(e) => handleGuestNameChange(index, e.target.value)}
-                                placeholder={`Nome completo do Convidado ${index + 1}`}
-                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                            />
-                        ))}
-                    </div>
+        <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
+            <h3 className="text-xl font-bold text-primary">{list.name}</h3>
+            {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
+            {(startDate || closingDate) && (
+                <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${
+                    status === 'upcoming' ? 'bg-blue-900/70' :
+                    status === 'open' ? 'bg-green-900/70' :
+                    'bg-red-900/70'
+                }`}>
+                    { status === 'closed' && closingDate ? (
+                        <span>PRAZO ENCERRADO</span>
+                    ) : (
+                        <span>{timeLeft}</span>
+                    )}
                 </div>
             )}
-            
-            <div className="text-right">
-                <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
-                >
-                    {isSubmitting ? 'Confirmando...' : 'Confirmar Lista'}
-                </button>
-            </div>
-        </form>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                
+                <div className="p-3 border border-gray-600/50 rounded-md bg-black/20">
+                    <label className="flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={isAttending}
+                            onChange={(e) => setIsAttending(e.target.checked)}
+                            disabled={isFormDisabled}
+                            className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary disabled:opacity-50"
+                        />
+                        <span className="ml-3 font-medium text-gray-200">Confirmar minha presença</span>
+                    </label>
+                </div>
+
+                {isAttending && list.guestAllowance > 0 && (
+                    <div>
+                        <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({list.guestAllowance} permitidos)</h4>
+                        <div className="space-y-2">
+                            {Array.from({ length: list.guestAllowance }).map((_, index) => (
+                                <input
+                                    key={index}
+                                    type="text"
+                                    value={guestNames[index]}
+                                    onChange={(e) => handleGuestNameChange(index, e.target.value)}
+                                    placeholder={`Nome completo do Convidado ${index + 1}`}
+                                    disabled={isFormDisabled}
+                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="text-right">
+                    <button
+                        type="submit"
+                        disabled={isSubmitting || isFormDisabled}
+                        className="w-full sm:w-auto px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50"
+                    >
+                        {isSubmitting ? 'Salvando...' : 
+                         status === 'upcoming' ? 'Aguardando Abertura' : 
+                         status === 'closed' ? 'Prazo Encerrado' : 
+                         (isEditing ? 'Salvar Alterações' : 'Confirmar Lista')}
+                    </button>
+                </div>
+            </form>
+        </div>
     );
 };
 
 const GuestListCheck: React.FC = () => {
     const navigate = useNavigate();
-    const { organizationId, campaignId } = useParams<{ organizationId: string; campaignId: string }>();
+    const { campaignId } = useParams<{ campaignId: string }>();
 
     const [email, setEmail] = useState('');
-    const [events, setEvents] = useState<EventWithCampaignAndList[] | null>(null);
-    const [directCampaign, setDirectCampaign] = useState<Campaign | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [campaign, setCampaign] = useState<Campaign | null>(null);
+    const [assignedLists, setAssignedLists] = useState<GuestList[] | null>(null);
+    const [promoter, setPromoter] = useState<Promoter | null>(null);
+    const [existingConfirmations, setExistingConfirmations] = useState<GuestListConfirmation[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
 
     useEffect(() => {
-        const fetchDirectCampaign = async () => {
-            if (organizationId && campaignId) {
-                setIsLoading(true);
-                try {
-                    const allCampaignsForOrg = await getAllCampaigns(organizationId);
-                    const foundCampaign = allCampaignsForOrg.find(c => c.id === campaignId);
-
-                    if (foundCampaign && foundCampaign.guestListTypes && foundCampaign.guestListTypes.length > 0) {
-                        setDirectCampaign(foundCampaign);
-                    } else {
-                        setError("Evento não encontrado ou a lista de presença não está ativa para ele.");
-                    }
-                } catch (err: any) {
-                    setError(err.message || 'Erro ao carregar detalhes do evento.');
-                } finally {
-                    setIsLoading(false);
+        const fetchCampaign = async () => {
+            if (!campaignId) {
+                setError("Link de evento inválido.");
+                setIsLoading(false);
+                return;
+            }
+            setIsLoading(true);
+            setError(null);
+            try {
+                // We need the org ID to get all campaigns
+                const allLists = await getActiveGuestListsForCampaign(campaignId);
+                let orgId: string | undefined;
+                if (allLists.length > 0) {
+                    orgId = allLists[0].organizationId;
                 }
+                
+                if (orgId) {
+                    const allCampaigns = await getAllCampaigns(orgId);
+                    const camp = allCampaigns.find(c => c.id === campaignId);
+                    if (camp) {
+                        setCampaign(camp);
+                    } else {
+                        setError("Evento não encontrado ou não está mais ativo.");
+                    }
+                } else {
+                     setError("Este evento não possui listas de convidados ativas no momento.");
+                }
+            } catch (err: any) {
+                setError(err.message || 'Erro ao carregar detalhes do evento.');
+            } finally {
+                setIsLoading(false);
             }
         };
 
-        fetchDirectCampaign();
-    }, [organizationId, campaignId]);
+        fetchCampaign();
+    }, [campaignId]);
 
     const performSearch = async (searchEmail: string) => {
-        if (!searchEmail) return;
+        if (!searchEmail || !campaignId) return;
         setIsLoading(true);
         setError(null);
-        setEvents(null);
+        setPromoter(null);
+        setAssignedLists(null);
+        setExistingConfirmations([]);
         setSearched(true);
         try {
-            const approvedPromoterEntries = await getApprovedEventsForPromoter(searchEmail);
-            if (!approvedPromoterEntries || approvedPromoterEntries.length === 0) {
-                setEvents([]);
+            const [promoterProfiles, confirmations] = await Promise.all([
+                findPromotersByEmail(searchEmail),
+                getGuestListConfirmationsByEmail(searchEmail)
+            ]);
+
+            if (!promoterProfiles || promoterProfiles.length === 0) {
+                setError("Nenhum cadastro de divulgadora encontrado para este e-mail.");
                 return;
             }
 
-            if (directCampaign) {
-                const entryForThisEvent = approvedPromoterEntries.find(entry =>
-                    entry.organizationId === directCampaign.organizationId &&
-                    (
-                        entry.campaignName === directCampaign.name ||
-                        (entry.associatedCampaigns || []).includes(directCampaign.name)
-                    )
-                );
+            const campaignName = campaign?.name;
+            const orgId = campaign?.organizationId;
 
-                if (entryForThisEvent) {
-                    let allowedListNames: string[] = [];
-                    if (directCampaign.guestListAccess === 'specific') {
-                        allowedListNames = directCampaign.guestListAssignments?.[entryForThisEvent.id] || [];
-                    } else {
-                        allowedListNames = directCampaign.guestListTypes || [];
-                    }
+            const approvedProfile = promoterProfiles.find(p => 
+                p.status === 'approved' &&
+                p.organizationId === orgId &&
+                (p.campaignName === campaignName || (p.associatedCampaigns || []).includes(campaignName || ''))
+            );
 
-                    if (allowedListNames.length === 0) {
-                         setEvents([]);
-                         setError("Você não tem permissão para acessar a lista deste evento.");
-                         setIsLoading(false);
-                         return;
-                    }
+            if (!approvedProfile) {
+                setError("Você não tem permissão para acessar as listas deste evento. Verifique se seu cadastro foi aprovado para este evento específico.");
+                return;
+            }
+            
+            setPromoter(approvedProfile);
+            setExistingConfirmations(confirmations);
 
-                    const eventsWithLists = allowedListNames.map(listName => ({
-                        ...entryForThisEvent,
-                        campaignDetails: directCampaign,
-                        listName
-                    }));
-                    setEvents(eventsWithLists);
+            const activeLists = await getActiveGuestListsForCampaign(campaignId);
 
-                } else {
-                    setEvents([]);
-                    setError("Seu cadastro não foi encontrado ou aprovado para este evento específico. Verifique o e-mail digitado.");
+            const accessibleLists = activeLists.filter(list => {
+                if (!list.assignedPromoterIds || !Array.isArray(list.assignedPromoterIds) || list.assignedPromoterIds.length === 0) {
+                    return true;
                 }
+                return list.assignedPromoterIds.includes(approvedProfile.id);
+            });
+
+            if (accessibleLists.length > 0) {
+                setAssignedLists(accessibleLists);
             } else {
-                const eventsWithDetails: EventWithCampaignAndList[] = [];
-                const uniqueOrgIds = [...new Set(approvedPromoterEntries.map(p => p.organizationId))];
-
-                const allCampaignsPromises = uniqueOrgIds.map(orgId => getAllCampaigns(orgId));
-                const campaignsByOrgArrays = await Promise.all(allCampaignsPromises);
-                const allCampaignsFlat = campaignsByOrgArrays.flat();
-                
-                const activeGuestListCampaigns = allCampaignsFlat.filter(c => c.guestListTypes && c.guestListTypes.length > 0);
-                const campaignMap = new Map<string, Campaign>();
-                activeGuestListCampaigns.forEach(c => campaignMap.set(`${c.organizationId}-${c.name}`, c));
-
-                const addedCampaignIds = new Set<string>();
-
-                for (const entry of approvedPromoterEntries) {
-                    const potentialCampaignNames = [
-                        entry.campaignName,
-                        ...(entry.associatedCampaigns || [])
-                    ].filter((name): name is string => !!name);
-
-                    for (const campaignName of potentialCampaignNames) {
-                        const campaignDetails = campaignMap.get(`${entry.organizationId}-${campaignName}`);
-                        
-                        if (campaignDetails && campaignDetails.guestListTypes) {
-                            let allowedListNames: string[] = [];
-                            if (campaignDetails.guestListAccess === 'specific') {
-                                allowedListNames = campaignDetails.guestListAssignments?.[entry.id] || [];
-                            } else {
-                                allowedListNames = campaignDetails.guestListTypes || [];
-                            }
-
-                            if (allowedListNames.length === 0) continue;
-
-                            for (const listName of allowedListNames) {
-                                const uniqueKey = `${campaignDetails.id}-${listName}`;
-                                if (!addedCampaignIds.has(uniqueKey)) {
-                                    eventsWithDetails.push({ ...entry, campaignDetails, listName });
-                                    addedCampaignIds.add(uniqueKey);
-                                }
-                            }
-                        }
-                    }
-                }
-                setEvents(eventsWithDetails);
+                setError("Nenhuma lista de convidados está ativa para você neste evento no momento.");
             }
         } catch (err: any) {
-            setError(err.message || 'Ocorreu um erro ao buscar seus eventos.');
+            setError(err.message || 'Ocorreu um erro ao verificar seu acesso.');
         } finally {
             setIsLoading(false);
         }
@@ -256,36 +343,23 @@ const GuestListCheck: React.FC = () => {
                 </div>
             );
         }
-        if (error) return <p className="text-red-500 mt-4 text-center">{error}</p>;
-        if (!events || events.length === 0) {
-            return <p className="text-center text-gray-400 mt-4">Nenhum evento com lista de presença ativa encontrado para este e-mail.</p>;
-        }
-        return (
-            <div className="space-y-4">
-                {events.map(event => <GuestListConfirmationCard key={`${event.campaignDetails.id}-${event.listName}`} event={event} />)}
-            </div>
-        );
-    };
-
-    const renderHeader = () => {
-        if (directCampaign) {
+        if (error) return <p className="text-red-400 mt-4 text-center">{error}</p>;
+        
+        if (promoter && assignedLists && assignedLists.length > 0) {
             return (
-                <>
-                    <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Confirmar Presença</h1>
-                    <p className="text-center text-primary font-semibold text-lg mb-2">{directCampaign.name}</p>
-                    <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para confirmar sua presença e de seus convidados.</p>
-                </>
+                <div className="space-y-6">
+                    {assignedLists.map(list => {
+                        const existingConf = existingConfirmations.find(c => c.guestListId === list.id);
+                        return <GuestListConfirmationForm key={list.id} list={list} promoter={promoter} existingConfirmation={existingConf} />
+                    })}
+                </div>
             );
         }
-        return (
-            <>
-                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Confirmar Presença na Lista</h1>
-                <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para ver os eventos disponíveis e confirmar sua presença e de seus convidados.</p>
-            </>
-        );
+        
+        return null;
     };
 
-    if (isLoading && !searched) { // Initial load for direct link
+    if (isLoading && !campaign) {
         return (
             <div className="flex justify-center items-center min-h-[50vh]">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -293,8 +367,7 @@ const GuestListCheck: React.FC = () => {
         );
     }
     
-    // This handles critical error on direct link load (e.g. bad campaignId)
-    if (error && campaignId && !searched) {
+    if (error && !campaign) {
         return (
             <div className="max-w-2xl mx-auto text-center">
                  <div className="bg-secondary shadow-2xl rounded-lg p-8">
@@ -305,6 +378,8 @@ const GuestListCheck: React.FC = () => {
             </div>
         );
     }
+    
+    if (!campaign) return null;
 
     return (
         <div className="max-w-2xl mx-auto">
@@ -313,7 +388,9 @@ const GuestListCheck: React.FC = () => {
                 <span>Voltar</span>
             </button>
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                {renderHeader()}
+                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Listas de Convidados</h1>
+                <p className="text-center text-primary font-semibold text-lg mb-2">{campaign.name}</p>
+                <p className="text-center text-gray-400 mb-8">Digite seu e-mail de cadastro para ver as listas disponíveis para você e confirmar sua presença.</p>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <input
@@ -329,7 +406,7 @@ const GuestListCheck: React.FC = () => {
                         disabled={isLoading}
                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:bg-primary/50"
                     >
-                        {isLoading ? 'Verificando...' : 'Buscar'}
+                        {isLoading ? 'Verificando...' : 'Buscar Minhas Listas'}
                     </button>
                 </form>
                 

@@ -1,27 +1,31 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { adminData } = useAdminAuth();
+  const { adminData, selectedOrgId } = useAdminAuth();
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-    if (adminData?.organizationIds?.[0]) {
-      // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-      getOrganization(adminData.organizationIds[0]).then(orgData => {
-        if (orgData && adminData.uid === orgData.ownerUid) {
+    if (selectedOrgId) {
+      getOrganization(selectedOrgId).then(orgData => {
+        if (orgData && adminData?.uid === orgData.ownerUid) {
           setIsOwner(true);
+        } else {
+          setIsOwner(false);
         }
-      }).catch(err => console.error("Could not fetch organization data for owner check:", err));
+      }).catch(err => {
+        console.error("Could not fetch organization data for owner check:", err);
+        setIsOwner(false);
+      });
+    } else {
+      setIsOwner(false);
     }
-  }, [adminData]);
+  }, [adminData, selectedOrgId]);
 
   return (
     <div>
@@ -34,13 +38,12 @@ const SettingsPage: React.FC = () => {
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Gerencie os usuários, localidades, eventos e sua assinatura na plataforma.
+          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {isOwner && (
             <Link
-              // FIX: Property 'organizationId' does not exist on type 'AdminUserData'. Did you mean 'organizationIds'?
-              to={`/admin/organization/${adminData?.organizationIds?.[0]}`}
+              to={`/admin/organization/${selectedOrgId}`}
               className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
             >
               <div className="flex items-center">
@@ -48,7 +51,7 @@ const SettingsPage: React.FC = () => {
                 <h2 className="ml-4 text-xl font-semibold text-gray-100">Dados da Organização</h2>
               </div>
               <p className="mt-2 text-gray-400">
-                Edite o nome da sua organização, localidades, administradores associados e outras configurações gerais.
+                Edite o nome da sua organização, regiões, administradores associados e outras configurações gerais.
               </p>
               <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
                 Gerenciar &rarr;
@@ -56,17 +59,17 @@ const SettingsPage: React.FC = () => {
             </Link>
           )}
 
-           {/* Gerenciar Localidades e Eventos */}
+           {/* Gerenciar Regiões e Eventos */}
           <Link
             to="/admin/states"
             className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
           >
             <div className="flex items-center">
               <MapPinIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Localidades e Eventos</h2>
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Regiões e Eventos</h2>
             </div>
             <p className="mt-2 text-gray-400">
-              Visualize suas localidades ativas e crie ou edite eventos/gêneros para receber cadastros.
+              Visualize suas regiões ativas e crie ou edite eventos/gêneros para receber cadastros.
             </p>
             <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
               Acessar &rarr;
@@ -89,23 +92,126 @@ const SettingsPage: React.FC = () => {
               Acessar &rarr;
             </div>
           </Link>
+          
+           {/* Gerenciamento de Posts */}
+           <Link
+              to="/admin/posts"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <MegaphoneIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Crie, edite e acompanhe o desempenho das publicações para suas divulgadoras.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
 
-          {/* Gerenciar Posts */}
+           {/* Post Único */}
           <Link
-            to="/admin/posts"
+            to="/admin/one-time-posts"
             className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
           >
             <div className="flex items-center">
-              <MegaphoneIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
+              <MegaphoneIcon className="w-8 h-8 text-purple-400" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Post Único</h2>
             </div>
             <p className="mt-2 text-gray-400">
-              Crie publicações de texto ou imagem e designe para suas divulgadoras aprovadas.
+              Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Gerenciar &rarr;
+            </div>
+          </Link>
+
+          {/* Gerenciar Listas de Convidados */}
+          <Link
+            to="/admin/lists"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas de Convidados</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.
             </p>
             <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
               Acessar &rarr;
             </div>
           </Link>
+
+          {/* Controle de Entrada */}
+           <Link
+            to="/admin/checkin-dashboard"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <TicketIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Controle de Entrada</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Acessar &rarr;
+            </div>
+          </Link>
+          
+           {/* Desempenho das Divulgadoras */}
+          <Link
+            to="/admin/dashboard"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <ChartBarIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Desempenho das Divulgadoras</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Analisar &rarr;
+            </div>
+          </Link>
+          
+          {/* Publicações Agendadas */}
+          <Link
+            to="/admin/scheduled-posts"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <ClockIcon className="w-8 h-8 text-primary" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Publicações Agendadas</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Crie posts com antecedência e agende o envio automático para a data e hora desejada.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Gerenciar &rarr;
+            </div>
+          </Link>
+
+
+           {/* Alterar Senha */}
+           <Link
+              to="/admin/settings/change-password"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <KeyIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Alterar Senha</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Modifique sua senha de acesso ao painel de administrador.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
 
           {/* Gerenciar Assinatura */}
           <Link

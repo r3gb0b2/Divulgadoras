@@ -222,6 +222,11 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             title: 'Correção Necessária',
             message: 'Seu cadastro precisa de correções. Por favor, revise as informações abaixo e clique no botão para editar e reenviar seu cadastro.',
             styles: 'bg-orange-900/50 border-orange-500 text-orange-300'
+        },
+        removed: {
+            title: 'Cadastro Removido',
+            message: 'Você foi removida da equipe pelo organizador. Para participar de novos eventos, por favor, realize um novo cadastro.',
+            styles: 'bg-gray-800 border-gray-600 text-gray-400'
         }
     };
 
@@ -294,6 +299,15 @@ const StatusCheck: React.FC = () => {
         setSearched(true);
         try {
             const result = await checkPromoterStatus(searchEmail);
+
+            // If promoter has no applications or is already approved and in a group, redirect to posts
+            const shouldRedirect = !result || result.length === 0 || result.every(p => p.status === 'approved' && p.hasJoinedGroup);
+
+            if (shouldRedirect) {
+                navigate(`/posts?email=${encodeURIComponent(searchEmail)}`);
+                return; // Redirect will unmount, so we stop here. Finally will still run.
+            }
+
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');

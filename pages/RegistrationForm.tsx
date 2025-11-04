@@ -2,12 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
-// FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
-// FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 
 // Lista de nomes masculinos para o aviso de gênero
@@ -255,9 +252,9 @@ const PromoterForm: React.FC = () => {
                 photoFiles.map(async (photo) => {
                     const fileExtension = photo.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = ref(storage, `promoters-photos/${fileName}`);
-                    await uploadBytes(storageRef, photo);
-                    return await getDownloadURL(storageRef);
+                    const storageRef = storage.ref(`promoters-photos/${fileName}`);
+                    await storageRef.put(photo);
+                    return await storageRef.getDownloadURL();
                 })
             );
         }
@@ -408,15 +405,32 @@ const RegistrationFlowPage: React.FC = () => {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isValidCampaign, setIsValidCampaign] = useState(false); // Tracks if the URL campaign is valid
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (organizationId && state && !campaignName) { // Only fetch campaigns if one isn't already selected in the URL
+        if (organizationId && state) {
             setIsLoading(true);
+            setError(null);
+            
             getCampaigns(state, organizationId)
-                .then(data => {
-                    const activeCampaigns = data.filter(c => c.isActive);
-                    setCampaigns(activeCampaigns);
+                .then(allCampaignsForState => {
+                    if (campaignName) {
+                        const decodedCampaignName = decodeURIComponent(campaignName);
+                        const targetCampaign = allCampaignsForState.find(c => c.name === decodedCampaignName);
+                        
+                        if (targetCampaign && targetCampaign.status === 'active') {
+                            setIsValidCampaign(true);
+                        } else {
+                            setError("Este evento/gênero não está mais aceitando cadastros ou não foi encontrado.");
+                            setIsValidCampaign(false);
+                        }
+                    } else {
+                        // No campaign in URL, prepare list for selection
+                        const activeCampaigns = allCampaignsForState.filter(c => c.status === 'active');
+                        setCampaigns(activeCampaigns);
+                        setIsValidCampaign(false); // Not showing form directly
+                    }
                 })
                 .catch(() => setError("Erro ao carregar os eventos disponíveis."))
                 .finally(() => setIsLoading(false));
@@ -434,43 +448,75 @@ const RegistrationFlowPage: React.FC = () => {
     }
 
     if (error) {
-        return <p className="text-red-400 text-center">{error}</p>;
+         return (
+             <div className="max-w-4xl mx-auto text-center">
+                <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Voltar</span>
+                </button>
+                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                     <p className="text-red-400 text-center text-lg">{error}</p>
+                 </div>
+             </div>
+        );
     }
 
-    // If a campaign is already in the URL, or if there are no campaigns for this state, show the form.
-    if (campaignName || campaigns.length === 0) {
+    // Case 1: Direct link to a valid, active campaign
+    if (campaignName && isValidCampaign) {
         return <PromoterForm />;
     }
-
-    // If there are campaigns, show the selection screen.
-    return (
-        <div className="max-w-4xl mx-auto text-center">
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                <ArrowLeftIcon className="w-5 h-5" />
-                <span>Voltar</span>
-            </button>
-            <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-gray-100 mb-2">
-                    Selecione o Evento ou Gênero
-                </h1>
-                <p className="text-gray-400 mb-8">
-                    Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {campaigns.map(campaign => (
-                        <Link
-                            key={campaign.id}
-                            to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`}
-                            className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
-                        >
-                            <span className="text-xl">{campaign.name}</span>
-                            {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white transition-all">{campaign.description}</span>}
-                        </Link>
-                    ))}
+    
+    // Case 2: No campaign in URL, show selection list
+    if (!campaignName) {
+        if (campaigns.length > 0) {
+            return (
+                <div className="max-w-4xl mx-auto text-center">
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar</span>
+                    </button>
+                    <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                        <h1 className="text-3xl font-bold text-gray-100 mb-2">
+                            Selecione o Evento ou Gênero
+                        </h1>
+                        <p className="text-gray-400 mb-8">
+                            Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {campaigns.map(campaign => (
+                                <Link
+                                    key={campaign.id}
+                                    to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`}
+                                    className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
+                                >
+                                    <span className="text-xl">{campaign.name}</span>
+                                    {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white transition-all">{campaign.description}</span>}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    );
+            );
+        } else {
+            // No active campaigns for this state
+            return (
+                 <div className="max-w-4xl mx-auto text-center">
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar</span>
+                    </button>
+                    <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                        <h1 className="text-2xl font-bold text-gray-100 mb-2">
+                            Nenhum Evento Disponível
+                        </h1>
+                        <p className="text-gray-400 mt-4">No momento, não há eventos ou gêneros aceitando cadastros nesta região. Tente novamente mais tarde.</p>
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    return null; // Fallback, should be covered by loading/error states
 };
 
 interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {

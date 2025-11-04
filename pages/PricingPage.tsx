@@ -1,5 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ClipboardDocumentListIcon, CogIcon, CheckCircleIcon, MegaphoneIcon, UsersIcon, SparklesIcon } from '../components/Icons';
+
 
 const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={`w-6 h-6 ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -48,6 +50,17 @@ export const plans: Plan[] = [
         isPopular: true,
     }
 ];
+
+const FeatureCard: React.FC<{ icon: React.ElementType, title: string, description: string }> = ({ icon: Icon, title, description }) => (
+    <div className="bg-secondary p-6 rounded-lg border border-gray-700 flex flex-col items-start text-left">
+        <div className="flex items-center justify-center h-12 w-12 rounded-full bg-primary/20 mb-4">
+            <Icon className="h-6 w-6 text-primary" />
+        </div>
+        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+        <p className="text-gray-400">{description}</p>
+    </div>
+);
+
 
 const PricingPage: React.FC = () => {
     return (
@@ -102,6 +115,49 @@ const PricingPage: React.FC = () => {
                         </div>
                     </div>
                 ))}
+            </div>
+
+            {/* Features Section */}
+            <div className="mt-24 text-center">
+                <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
+                    Tudo o que você precisa para gerenciar sua equipe
+                </h2>
+                <p className="text-lg text-gray-400 max-w-3xl mx-auto">
+                    Nossa plataforma foi construída para otimizar cada etapa do seu processo de divulgação, desde a captação até o engajamento.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+                    <FeatureCard
+                        icon={ClipboardDocumentListIcon}
+                        title="Cadastro Simplificado"
+                        description="Formulários personalizados por evento e estado. As divulgadoras podem pré-preencher dados de cadastros anteriores, agilizando o processo."
+                    />
+                    <FeatureCard
+                        icon={CogIcon}
+                        title="Painel de Controle Centralizado"
+                        description="Aprove, rejeite e gerencie todas as candidatas em um só lugar. Visualize fotos, perfis e estatísticas de forma rápida e intuitiva."
+                    />
+                    <FeatureCard
+                        icon={CheckCircleIcon}
+                        title="Consulta de Status Automatizada"
+                        description="Reduza sua carga de trabalho. As divulgadoras podem verificar o status de suas inscrições a qualquer momento, sem precisar entrar em contato."
+                    />
+                    <FeatureCard
+                        icon={MegaphoneIcon}
+                        title="Gestão de Tarefas e Posts"
+                        description="Crie posts (imagem ou texto), atribua para divulgadoras específicas e acompanhe quem já confirmou. Elas podem enviar o print de comprovação diretamente pela plataforma."
+                    />
+                    <FeatureCard
+                        icon={UsersIcon}
+                        title="Gerenciamento de Listas"
+                        description="Permita que suas divulgadoras enviem nomes para listas de convidados, aniversariantes e mais. Exporte tudo em Excel (CSV) para o check-in no evento."
+                    />
+                    <FeatureCard
+                        icon={SparklesIcon}
+                        title="Assistente com IA (Gemini)"
+                        description="Falta criatividade? Use a inteligência artificial do Google para gerar textos para posts, regras de eventos, e ideias para suas redes sociais."
+                    />
+                </div>
             </div>
             
             <div className="mt-16 text-center">
