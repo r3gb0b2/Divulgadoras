@@ -27,8 +27,7 @@ const app = firebase.initializeApp(firebaseConfig);
 export const firestore = firebase.firestore();
 
 // Initialize Cloud Storage and get a reference to the service using compat syntax
-// By explicitly providing the bucket URL, we bypass any potential resolution issues.
-export const storage = app.storage("gs://stingressos-e0a5f.appspot.com");
+export const storage = app.storage();
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = firebase.auth();
