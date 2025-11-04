@@ -390,29 +390,11 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
-            if (isPostGloballyActive) {
-                return (
-                    <div className="w-full flex flex-col sm:flex-row gap-2">
-                        <button 
-                            onClick={() => onJustify(assignment)}
-                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                            Justificar Ausência
-                        </button>
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={isConfirming}
-                            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
-                        </button>
-                    </div>
-                );
-            } else {
+            if (!isPostGloballyActive) {
                 return (
                     <div className="w-full text-center">
                         <p className="text-xs text-red-400 mb-2">Esta publicação está inativa ou expirou.</p>
-                        <button 
+                        <button
                             onClick={() => onJustify(assignment)}
                             className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
                         >
@@ -421,6 +403,24 @@ const PostCard: React.FC<{
                     </div>
                 );
             }
+    
+            return (
+                <div className="w-full flex flex-col sm:flex-row gap-2">
+                    <button 
+                        onClick={() => onJustify(assignment)}
+                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                    <button 
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
+                        className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                    </button>
+                </div>
+            );
         }
         if (assignment.status === 'confirmed') {
             return <ProofSection assignment={assignment} onJustify={onJustify} />;
@@ -481,8 +481,8 @@ const PostCard: React.FC<{
                                 <button
                                     onClick={handleFirebaseDownload}
                                     disabled={isMediaProcessing}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md text-sm font-semibold disabled:opacity-50 ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do nosso servidor (Firebase)"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 1</span>
@@ -491,9 +491,9 @@ const PostCard: React.FC<{
                             {assignment.post.googleDriveUrl && (
                                 <button
                                     onClick={handleGoogleDriveDownload}
-                                    disabled={!isPostGloballyActive}
-                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostGloballyActive ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
-                                    title={!isPostGloballyActive ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
+                                    disabled={!isPostDownloadable}
+                                    className={`flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold ${!isPostDownloadable ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-500'}`}
+                                    title={!isPostDownloadable ? "Download desabilitado para posts inativos" : "Baixar do Google Drive"}
                                 >
                                     <DownloadIcon className="w-4 h-4" />
                                     <span>Download Link 2</span>

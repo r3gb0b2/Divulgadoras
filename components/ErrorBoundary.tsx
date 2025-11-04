@@ -11,22 +11,19 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Switched from class property to constructor-based state initialization. This resolves potential TypeScript type inference issues, ensuring `this` is correctly typed as a React.Component instance and has access to `setState` and `props`.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: Switched from constructor-based initialization to a class property for state. This modern syntax avoids potential 'this' context issues and resolves errors where properties like 'state', 'setState', and 'props' were not being recognized on the component instance.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // FIX: With state initialization moved to the constructor, `this.setState` is now correctly recognized as an inherited method, fixing the error.
+    // FIX: With the state initialization corrected, 'this.setState' is now correctly recognized as an inherited method.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -68,7 +65,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: `this.props` is now correctly recognized as an inherited property, fixing the error.
+    // FIX: 'this.props' is now correctly recognized as an inherited property.
     return this.props.children;
   }
 }
