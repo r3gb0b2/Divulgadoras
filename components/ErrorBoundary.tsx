@@ -11,9 +11,7 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Switched from a class property for state to constructor-based initialization.
-  // This ensures `this` context is correctly established for React class components across different TypeScript configurations,
-  // resolving errors where properties like 'state', 'setState', and 'props' are not recognized.
+  // FIX: Switched to a constructor for state initialization. Using class properties requires a specific build configuration (e.g., in Babel or TypeScript) that might not be set up correctly, leading to the 'this' context being undefined and causing errors like 'setState' or 'props' not existing. The constructor with super(props) is the standard and safest way to initialize a React class component.
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -28,6 +26,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // FIX: With the constructor correctly initializing the component, 'this.setState' is now available.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -69,6 +68,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // FIX: With the constructor correctly initializing the component, 'this.props' is now available.
     return this.props.children;
   }
 }
