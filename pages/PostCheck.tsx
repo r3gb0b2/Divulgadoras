@@ -319,6 +319,8 @@ const PostCard: React.FC<{
     const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0;
     const hasJustification = !!assignment.justification;
 
+    const isPostGloballyActive = assignment.post.isActive && !isExpired;
+
     const renderActions = () => {
         if (hasProof) {
             return <ProofSection assignment={assignment} onJustify={onJustify} />;
@@ -339,23 +341,37 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
-            return (
-                <div className="w-full flex flex-col sm:flex-row gap-2">
-                    <button 
-                        onClick={() => onJustify(assignment)}
-                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                    >
-                        Justificar Ausência
-                    </button>
-                    <button 
-                        onClick={handleConfirm}
-                        disabled={isConfirming}
-                        className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                        {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
-                    </button>
-                </div>
-            );
+            if (isPostGloballyActive) {
+                return (
+                    <div className="w-full flex flex-col sm:flex-row gap-2">
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={isConfirming}
+                            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                        </button>
+                    </div>
+                );
+            } else {
+                return (
+                    <div className="w-full text-center">
+                        <p className="text-xs text-red-400 mb-2">Esta publicação está inativa ou expirou.</p>
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    </div>
+                );
+            }
         }
         if (assignment.status === 'confirmed') {
             return <ProofSection assignment={assignment} onJustify={onJustify} />;
