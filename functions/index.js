@@ -186,73 +186,82 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
  * @param {string} promoterId The ID of the promoter document.
  */
 async function assignPostsToNewPromoter(promoterData, promoterId) {
-  const { organizationId, state: stateAbbr, campaignName } = promoterData;
-  if (!organizationId || !stateAbbr || !campaignName) {
-    console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state/campaign. orgId: ${organizationId}, state: ${stateAbbr}, campaign: ${campaignName}`);
-    return;
-  }
-
-  const now = admin.firestore.Timestamp.now();
-
-  // Find matching posts that are active and set to auto-assign
-  const postsQuery = db.collection("posts")
-      .where("organizationId", "==", organizationId)
-      .where("stateAbbr", "==", stateAbbr)
-      .where("campaignName", "==", campaignName)
-      .where("autoAssignToNewPromoters", "==", true)
-      .where("isActive", "==", true);
-
-  const snapshot = await postsQuery.get();
-  if (snapshot.empty) {
-    console.log(`[Auto-Assign] No auto-assign posts found for campaign ${campaignName}.`);
-    return;
-  }
-
-  const batch = db.batch();
-  const assignmentsCollectionRef = db.collection("postAssignments");
-  
-  for (const doc of snapshot.docs) {
-    const post = doc.data();
-    const postId = doc.id;
-
-    // Filter out expired posts (client-side since we can't have two range filters)
-    if (post.expiresAt && post.expiresAt.toDate() < now.toDate()) {
-      continue;
+    const { organizationId, state: stateAbbr, campaignName } = promoterData;
+    if (!organizationId || !stateAbbr) {
+        console.log(`[Auto-Assign] Skipping for promoter ${promoterId} due to missing org/state.`);
+        return;
     }
 
-    // Create assignment document
-    const assignmentDocRef = assignmentsCollectionRef.doc();
-    const newAssignment = {
-      postId: postId,
-      post: { // denormalized data
-        type: post.type,
-        mediaUrl: post.mediaUrl || null,
-        googleDriveUrl: post.googleDriveUrl || null,
-        textContent: post.textContent || null,
-        instructions: post.instructions,
-        postLink: post.postLink || null,
-        campaignName: post.campaignName,
-        eventName: post.eventName || null,
-        isActive: post.isActive,
-        expiresAt: post.expiresAt || null,
-        createdAt: post.createdAt,
-        allowLateSubmissions: post.allowLateSubmissions || false,
-        allowImmediateProof: post.allowImmediateProof || false,
-        postFormats: post.postFormats || [],
-      },
-      organizationId: promoterData.organizationId,
-      promoterId: promoterId,
-      promoterEmail: promoterData.email.toLowerCase(),
-      promoterName: promoterData.name,
-      status: "pending",
-      confirmedAt: null,
-    };
-    batch.set(assignmentDocRef, newAssignment);
-  }
+    const now = admin.firestore.Timestamp.now();
+    const postsToAssign = new Map(); // Use Map to avoid duplicates by ID
 
-  await batch.commit();
-  // Note: Emails are now sent by the onPostAssignmentCreated, so no email logic is needed here.
-  console.log(`[Auto-Assign] Created new assignments for promoter ${promoterId}.`);
+    const baseQuery = db.collection("posts")
+        .where("organizationId", "==", organizationId)
+        .where("stateAbbr", "==", stateAbbr)
+        .where("autoAssignToNewPromoters", "==", true)
+        .where("isActive", "==", true);
+
+    // Query 1: Get posts for the promoter's specific campaign, if they have one
+    if (campaignName) {
+        const specificPostsQuery = baseQuery.where("campaignName", "==", campaignName);
+        const snapshot = await specificPostsQuery.get();
+        snapshot.forEach(doc => postsToAssign.set(doc.id, { id: doc.id, data: doc.data() }));
+    }
+
+    // Query 2: Get general posts (campaignName is null) for everyone in the state
+    const generalPostsQuery = baseQuery.where("campaignName", "==", null);
+    const generalSnapshot = await generalPostsQuery.get();
+    generalSnapshot.forEach(doc => postsToAssign.set(doc.id, { id: doc.id, data: doc.data() }));
+
+    if (postsToAssign.size === 0) {
+        console.log(`[Auto-Assign] No auto-assign posts found for promoter ${promoterId} in campaign '${campaignName || "general"}'.`);
+        return;
+    }
+
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    for (const postInfo of postsToAssign.values()) {
+        const post = postInfo.data;
+        const postId = postInfo.id;
+
+        // Filter out expired posts
+        if (post.expiresAt && post.expiresAt.toDate() < now.toDate()) {
+            continue;
+        }
+
+        const assignmentDocRef = assignmentsCollectionRef.doc();
+        const newAssignment = {
+            postId: postId,
+            post: {
+                type: post.type,
+                mediaUrl: post.mediaUrl || null,
+                googleDriveUrl: post.googleDriveUrl || null,
+                textContent: post.textContent || null,
+                instructions: post.instructions,
+                postLink: post.postLink || null,
+                campaignName: post.campaignName,
+                eventName: post.eventName || null,
+                isActive: post.isActive,
+                expiresAt: post.expiresAt || null,
+                createdAt: post.createdAt,
+                allowLateSubmissions: post.allowLateSubmissions || false,
+                allowImmediateProof: post.allowImmediateProof || false,
+                postFormats: post.postFormats || [],
+                skipProofRequirement: post.skipProofRequirement || false,
+            },
+            organizationId: promoterData.organizationId,
+            promoterId: promoterId,
+            promoterEmail: promoterData.email.toLowerCase(),
+            promoterName: promoterData.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    }
+
+    await batch.commit();
+    console.log(`[Auto-Assign] Created ${postsToAssign.size} new assignments for promoter ${promoterId}.`);
 }
 
 
@@ -685,6 +694,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
         allowLateSubmissions: newPost.allowLateSubmissions || false,
         allowImmediateProof: newPost.allowImmediateProof || false,
         postFormats: newPost.postFormats || [],
+        skipProofRequirement: newPost.skipProofRequirement || false,
     };
 
     assignedPromoters.forEach(promoter => {
@@ -781,6 +791,7 @@ exports.checkScheduledPosts = functions.region("southamerica-east1").pubsub
                     allowLateSubmissions: postData.allowLateSubmissions || false,
                     allowImmediateProof: postData.allowImmediateProof || false,
                     postFormats: postData.postFormats || [],
+                    skipProofRequirement: postData.skipProofRequirement || false,
                 };
 
                 assignedPromoters.forEach((promoter) => {
@@ -841,7 +852,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
     
     // Denormalize the fields that are allowed to change
     const denormalizedUpdate = {};
-    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'googleDriveUrl', 'eventName'];
+    const updatableFields = ['instructions', 'postLink', 'isActive', 'expiresAt', 'allowLateSubmissions', 'allowImmediateProof', 'postFormats', 'textContent', 'mediaUrl', 'googleDriveUrl', 'eventName', 'skipProofRequirement'];
     for (const key of updatableFields) {
         if (updateData[key] !== undefined) {
             denormalizedUpdate[`post.${key}`] = updateData[key];
@@ -904,6 +915,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
         allowLateSubmissions: postData.allowLateSubmissions || false,
         allowImmediateProof: postData.allowImmediateProof || false,
         postFormats: postData.postFormats || [],
+        skipProofRequirement: postData.skipProofRequirement || false,
     };
 
     promoters.forEach(promoter => {

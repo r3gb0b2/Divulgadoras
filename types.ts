@@ -147,6 +147,7 @@ export interface Post {
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
   postFormats?: ('story' | 'reels')[];
+  skipProofRequirement?: boolean;
 }
 
 export interface PostAssignment {
@@ -168,6 +169,7 @@ export interface PostAssignment {
     autoAssignToNewPromoters?: boolean;
     allowImmediateProof?: boolean;
     postFormats?: ('story' | 'reels')[];
+    skipProofRequirement?: boolean;
   };
   organizationId: string;
   promoterId: string;
@@ -244,6 +246,7 @@ export interface ScheduledPostData {
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
   postFormats?: ('story' | 'reels')[];
+  skipProofRequirement?: boolean;
 }
 
 export interface ScheduledPost {

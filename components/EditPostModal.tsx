@@ -58,6 +58,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [autoAssignToNewPromoters, setAutoAssignToNewPromoters] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
+    const [skipProofRequirement, setSkipProofRequirement] = useState(false);
 
     useEffect(() => {
         if (post) {
@@ -84,6 +85,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setAutoAssignToNewPromoters(post.autoAssignToNewPromoters || false);
             setAllowLateSubmissions(post.allowLateSubmissions || false);
             setAllowImmediateProof(post.allowImmediateProof || false);
+            setSkipProofRequirement(post.skipProofRequirement || false);
 
             setMediaFile(null); // Reset file input on open
         }
@@ -129,6 +131,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             allowLateSubmissions,
             allowImmediateProof,
             postFormats,
+            skipProofRequirement,
             googleDriveUrl: googleDriveUrl.trim() ? googleDriveUrl.trim() : undefined,
         };
         
@@ -154,118 +157,94 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 <div className="flex-grow overflow-y-auto space-y-4 pr-2">
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Nome do Evento (Opcional)</label>
-                        <input 
-                            type="text" 
-                            value={eventName} 
-                            onChange={e => setEventName(e.target.value)} 
-                            placeholder="Ex: Festa Neon"
-                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                        />
+                        <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"/>
                     </div>
                     {post.type === 'text' && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-300">Conteúdo do Texto</label>
-                            <textarea value={textContent} onChange={e => setTextContent(e.target.value)} rows={6} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                            <label className="block text-sm font-medium text-gray-300">Texto do Post</label>
+                            <textarea value={textContent} onChange={e => setTextContent(e.target.value)} rows={5} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
                         </div>
                     )}
-                    {(post.type === 'image' || post.type === 'video') && (
-                        <div className="space-y-4">
-                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload para Servidor (substitui existente)</label>
-                                <input type="file" accept={post.type === 'image' ? 'image/*' : 'video/*'} onChange={handleFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark mt-1" />
+                    {post.type === 'image' && (
+                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
+                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
                             </div>
-                            
                             <div className="flex items-center gap-2">
-                                <hr className="flex-grow border-gray-600" />
-                                <span className="text-xs text-gray-400">E/OU</span>
-                                <hr className="flex-grow border-gray-600" />
+                                <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
                             </div>
-                    
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
-                                <input 
-                                    type="text" 
-                                    value={googleDriveUrl}
-                                    onChange={(e) => setGoogleDriveUrl(e.target.value)}
-                                    placeholder="Cole o link compartilhável do Google Drive" 
-                                    className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                                />
+                                <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
                             </div>
-                    
-                            {(mediaPreview || googleDriveUrl) && (
-                                <div className="mt-4">
-                                     <StorageMedia path={mediaPreview || googleDriveUrl} type={post.type} className="max-h-60 rounded-md" />
-                                </div>
-                            )}
                         </div>
                     )}
-
-                     <div>
-                        <label className="block text-sm font-medium text-gray-300">Formato (informativo)</label>
-                        <div className="flex gap-6 mt-2">
-                            <label className="flex items-center space-x-2">
-                                <input 
-                                    type="checkbox"
-                                    checked={postFormats.includes('story')}
-                                    onChange={() => handleFormatChange('story')}
-                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                                />
-                                <span>Story</span>
-                            </label>
-                            <label className="flex items-center space-x-2">
-                                <input 
-                                    type="checkbox"
-                                    checked={postFormats.includes('reels')}
-                                    onChange={() => handleFormatChange('reels')}
-                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                                />
-                                <span>Reels</span>
-                            </label>
+                    {post.type === 'video' && (
+                        <div>
+                             <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
+                            <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required />
+                             {googleDriveUrl && <div className="mt-2"><StorageMedia path={googleDriveUrl} type="video" className="w-full h-auto rounded-md" /></div>}
                         </div>
-                    </div>
-
+                    )}
 
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Instruções</label>
-                        <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                        <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
                     </div>
-
-                    <div>
+                     <div>
                         <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
-                         <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
                     </div>
 
                     <div className="border-t border-gray-700 pt-4 space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Opções da Publicação</h3>
-                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                        <h3 className="font-semibold text-lg">Opções da Publicação</h3>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                             <label className="flex items-center space-x-2 pt-2">
                                 <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                                <span>Ativo (visível para divulgadoras)</span>
+                                <span>Ativo</span>
                             </label>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                                <label className="block text-sm font-medium text-gray-400">Data Limite</label>
                                 <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                             </div>
                         </div>
-                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">
+                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
                             <input type="checkbox" checked={autoAssignToNewPromoters} onChange={(e) => setAutoAssignToNewPromoters(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Atribuir automaticamente para novas divulgadoras</span>
+                            <span>Atribuir para novas divulgadoras</span>
                         </label>
-                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, permite que as divulgadoras enviem a comprovação mesmo após o prazo de 24 horas ter expirado.">
+                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
                             <input type="checkbox" checked={allowLateSubmissions} onChange={(e) => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Permitir envio de comprovação fora do prazo</span>
+                            <span>Permitir comprovação fora do prazo</span>
                         </label>
-                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, as divulgadoras poderão enviar a comprovação assim que confirmarem, sem esperar 6 horas.">
+                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
                             <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Liberar envio de comprovação imediato</span>
+                            <span>Liberar comprovação imediata</span>
                         </label>
+                         <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input type="checkbox" checked={skipProofRequirement} onChange={(e) => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Não exigir envio de print (conclusão automática)</span>
+                        </label>
+                        <div>
+                             <label className="block text-sm font-medium text-gray-300 mb-2">Formato (informativo):</label>
+                            <div className="flex gap-6">
+                                <label className="flex items-center space-x-2">
+                                    <input type="checkbox" checked={postFormats.includes('story')} onChange={() => handleFormatChange('story')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
+                                    <span>Story</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input type="checkbox" checked={postFormats.includes('reels')} onChange={() => handleFormatChange('reels')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
+                                    <span>Reels</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
                 <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
-                    <button type="button" onClick={onClose} disabled={isSaving} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
+                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
                     <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">
-                        {isSaving ? 'Salvando...' : 'Salvar Conteúdo'}
+                        {isSaving ? 'Salvando...' : 'Salvar Alterações'}
                     </button>
                 </div>
             </div>

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-// FIX: Added 'getScheduledPostsForPromoter' to import.
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
+import firebase from 'firebase/compat/app';
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -202,7 +202,7 @@ const ProofSection: React.FC<{
 
 const PostCard: React.FC<{ 
     assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
-    onConfirm: (assignmentId: string) => void,
+    onConfirm: (assignment: PostAssignment) => void,
     onJustify: (assignment: PostAssignment) => void
 }> = ({ assignment, onConfirm, onJustify }) => {
     const [isConfirming, setIsConfirming] = useState(false);
@@ -235,7 +235,7 @@ const PostCard: React.FC<{
     const handleConfirm = async () => {
         setIsConfirming(true);
         try {
-            await onConfirm(assignment.id);
+            await onConfirm(assignment);
         } finally {
             setIsConfirming(false);
         }
@@ -316,12 +316,27 @@ const PostCard: React.FC<{
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
-    const hasProof = assignment.proofImageUrls && assignment.proofImageUrls.length > 0;
+    const hasProof = assignment.proofSubmittedAt;
     const hasJustification = !!assignment.justification;
 
     const renderActions = () => {
         if (hasProof) {
-            return <ProofSection assignment={assignment} onJustify={onJustify} />;
+            return (
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
+                     {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (
+                        <div className="flex justify-center gap-2">
+                            {assignment.proofImageUrls.map((url, index) => (
+                                <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                    <img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" />
+                                </a>
+                            ))}
+                        </div>
+                     ) : (
+                         <p className="text-xs text-gray-400">(Concluído automaticamente)</p>
+                     )}
+                </div>
+            );
         }
         if (hasJustification) {
             return (
@@ -339,8 +354,7 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
-            // If post is inactive or expired, only show justification button
-            if (!isPostDownloadable) {
+            if (!assignment.post.isActive || isExpired) {
                 return (
                     <div className="w-full flex flex-col sm:flex-row gap-2">
                         <button 
@@ -353,7 +367,6 @@ const PostCard: React.FC<{
                 );
             }
 
-            // Otherwise, show both buttons.
             return (
                 <div className="w-full flex flex-col sm:flex-row gap-2">
                     <button 
@@ -711,10 +724,21 @@ const PostCheck: React.FC = () => {
         }
     }, [location.search, performSearch, email]);
 
-    const handleConfirmPost = async (assignmentId: string) => {
+    const handleConfirmPost = async (assignment: PostAssignment) => {
+        if (!assignment.post) {
+            setError("Dados da publicação ausentes. Não foi possível confirmar.");
+            return;
+        }
         try {
-            await confirmAssignment(assignmentId);
-            // Refresh the list to show the updated status
+            if (assignment.post.skipProofRequirement) {
+                await updateAssignment(assignment.id, {
+                    status: 'confirmed',
+                    confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                });
+            } else {
+                await confirmAssignment(assignment.id);
+            }
             await performSearch(email);
         } catch (err: any) {
             setError(err.message || 'Falha ao confirmar.');

@@ -211,6 +211,7 @@ const CreatePost: React.FC = () => {
     const [autoAssign, setAutoAssign] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
+    const [skipProofRequirement, setSkipProofRequirement] = useState(false);
     
     // Scheduling state
     const [isScheduling, setIsScheduling] = useState(false);
@@ -299,6 +300,7 @@ const CreatePost: React.FC = () => {
                         setAutoAssign(postData.autoAssignToNewPromoters || false);
                         setAllowLateSubmissions(postData.allowLateSubmissions || false);
                         setAllowImmediateProof(postData.allowImmediateProof || false);
+                        setSkipProofRequirement(postData.skipProofRequirement || false);
                         setSelectedPromoters(new Set(assignedPromoters.map(p => p.id)));
                         
                         setIsScheduling(true);
@@ -319,6 +321,7 @@ const CreatePost: React.FC = () => {
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     setAllowImmediateProof(originalPost.allowImmediateProof || false);
+                    setSkipProofRequirement(originalPost.skipProofRequirement || false);
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
@@ -497,6 +500,7 @@ const CreatePost: React.FC = () => {
                 allowLateSubmissions: allowLateSubmissions,
                 allowImmediateProof: allowImmediateProof,
                 postFormats: postFormats,
+                skipProofRequirement: skipProofRequirement,
             };
             
             if (editingScheduledPostId) {
@@ -758,6 +762,10 @@ const CreatePost: React.FC = () => {
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, as divulgadoras poderão enviar a comprovação assim que confirmarem, sem esperar 6 horas.">
                             <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Liberar envio de comprovação imediato</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, ao clicar em 'Eu Publiquei!', a tarefa será marcada como concluída automaticamente, sem pedir o envio de print.">
+                            <input type="checkbox" checked={skipProofRequirement} onChange={(e) => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Não exigir envio de print (conclusão automática)</span>
                         </label>
                     </div>
                 </fieldset>
