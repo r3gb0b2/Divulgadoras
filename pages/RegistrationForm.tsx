@@ -435,7 +435,7 @@ const RegistrationFlowPage: React.FC = () => {
                         const decodedCampaignName = decodeURIComponent(campaignName);
                         const targetCampaign = allCampaignsForState.find(c => c.name === decodedCampaignName);
                         
-                        if (targetCampaign && targetCampaign.status === 'active') {
+                        if (targetCampaign && targetCampaign.status !== 'inactive') {
                             setIsValidCampaign(true);
                             setActiveCampaign(targetCampaign);
                         } else {
