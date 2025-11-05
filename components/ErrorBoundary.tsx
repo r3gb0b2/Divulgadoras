@@ -12,16 +12,12 @@ interface State {
 
 class ErrorBoundary extends React.Component<Props, State> {
   // FIX: Reverted to a constructor for state initialization to resolve TS errors where 'this.props' and 'this.setState' were not found.
-  public state: State;
-
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: Changed to class property initializer to ensure 'this' context is correct and simplify code.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };

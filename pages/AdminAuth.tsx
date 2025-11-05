@@ -37,6 +37,7 @@ import AdminOneTimePosts from './AdminOneTimePosts';
 import CreateOneTimePost from './CreateOneTimePost';
 import EditOneTimePost from './EditOneTimePost';
 import OneTimePostDetails from './OneTimePostDetails';
+import NewsletterPage from './NewsletterPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -234,6 +235,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
                     <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
+                    <Route path="newsletter" element={<ProtectedRoute><NewsletterPage /></ProtectedRoute>} />
                     <Route path="settings/stripe" element={<ProtectedRoute><StripeSettingsPage /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
                     <Route path="settings/email" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />

@@ -235,6 +235,15 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="mt-2 text-gray-400">Analisar e aprovar novas solicitações de cadastro de organizadores.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Analisar &rarr;</div>
                     </Link>
+                    
+                    <Link to="/admin/newsletter" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <EnvelopeIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Newsletter</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Enviar e-mails em massa para as divulgadoras de toda a plataforma.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Enviar &rarr;</div>
+                    </Link>
 
                     <Link to="/admin/states" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">

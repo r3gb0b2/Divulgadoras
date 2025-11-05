@@ -41,6 +41,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       photoUrls,
       status: 'pending' as const,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
     };
 
     await firestore.collection('promoters').add(newPromoter);

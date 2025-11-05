@@ -93,6 +93,13 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'approved') {
         dataToSave.hasJoinedGroup = false; // Clear group status if not approved
       }
+      
+      const allCampaigns = [
+        promoter.campaignName,
+        ...(dataToSave.associatedCampaigns || [])
+      ].filter((c, index, self) => c && self.indexOf(c) === index); // Filter out null/undefined and get unique
+      dataToSave.allCampaigns = allCampaigns;
+
       await onSave(promoter.id, dataToSave);
       onClose();
     } catch (error) {

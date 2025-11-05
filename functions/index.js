@@ -537,6 +537,87 @@ async function getOrgAndCampaignDetails(organizationId, stateAbbr, campaignName)
 }
 
 /**
+ * Sends a newsletter to a specified audience of promoters.
+ * This is a superadmin-only function.
+ */
+exports.sendNewsletter = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      // 1. Authentication and Authorization
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+      }
+      const isCallerSuperAdmin = await isSuperAdmin(context.auth.uid);
+      if (!isCallerSuperAdmin) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+      }
+
+      // 2. Data Validation
+      const { audience, subject, body } = data;
+      if (!audience || !audience.type || !subject || !body) {
+        throw new functions.https.HttpsError("invalid-argument", "Argumentos inválidos: público, assunto e corpo são obrigatórios.");
+      }
+      if (!brevoApiInstance) {
+        throw new functions.https.HttpsError("failed-precondition", "O serviço de e-mail não está configurado no servidor.");
+      }
+
+      // 3. Build Firestore Query
+      let query = db.collection("promoters").where("status", "==", "approved");
+      let audienceDescription = "todas as divulgadoras aprovadas";
+
+      if (audience.type === "org" && audience.orgId) {
+        query = query.where("organizationId", "==", audience.orgId);
+        const orgDoc = await db.collection("organizations").doc(audience.orgId).get();
+        audienceDescription = `divulgadoras da organização "${orgDoc.data()?.name || audience.orgId}"`;
+      } else if (audience.type === "campaign" && audience.campaignId) {
+        const campaignDoc = await db.collection("campaigns").doc(audience.campaignId).get();
+        if (!campaignDoc.exists) {
+            throw new functions.https.HttpsError("not-found", "Evento/Campanha não encontrado(a).");
+        }
+        const campaignData = campaignDoc.data();
+        // This query requires a composite index on allCampaigns.
+        query = query.where("allCampaigns", "array-contains", campaignData.name);
+        audienceDescription = `divulgadoras do evento "${campaignData.name}"`;
+      }
+
+      // 4. Fetch Promoters
+      const snapshot = await query.get();
+      if (snapshot.empty) {
+        return { success: true, message: "Nenhuma divulgadora encontrada para o público selecionado. Nenhum e-mail foi enviado." };
+      }
+      const promoters = snapshot.docs.map((doc) => doc.data());
+
+      // 5. Send Emails
+      const baseHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;color:#333;line-height:1.6;}.container{max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;border-radius:5px;}</style></head><body><div class="container">{{content}}</div></body></html>`;
+      const htmlBody = body.replace(/\n/g, "<br>");
+      
+      let successCount = 0;
+      // Using a simple loop for now as batch sending with personalization can be complex.
+      for (const promoter of promoters) {
+          const sendSmtpEmail = new Brevo.SendSmtpEmail();
+          
+          const personalizedBody = htmlBody.replace(/{{promoterName}}/g, promoter.name);
+          sendSmtpEmail.htmlContent = baseHtml.replace("{{content}}", personalizedBody);
+          sendSmtpEmail.subject = subject;
+          sendSmtpEmail.sender = { name: "Equipe Certa", email: brevoConfig.sender_email };
+          sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
+
+          try {
+            await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+            successCount++;
+          } catch (error) {
+              const detailedError = getBrevoErrorDetails(error);
+              console.error(`[Newsletter] Failed to send to ${promoter.email}. Details: ${detailedError}`);
+          }
+      }
+
+      // 6. Return Result
+      const message = `Newsletter enviada para ${successCount} de ${promoters.length} divulgadoras em "${audienceDescription}".`;
+      console.log(message);
+      return { success: true, message: message };
+    });
+
+/**
  * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
  */
 // Placeholder for sendPostReminder logic
