@@ -66,6 +66,7 @@ export interface Campaign {
   guestListAccess?: 'all' | 'specific';
   guestListAssignments?: { [promoterId: string]: string[] };
   guestListTypes?: string[];
+  pixelId?: string;
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';

@@ -9,6 +9,14 @@ import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon,
 import { stateMap } from '../constants/states';
 import { storage } from '../firebase/config';
 
+// Adicionado para suportar o Pixel do Facebook
+declare global {
+    interface Window {
+        fbq?: (...args: any[]) => void;
+    }
+}
+
+
 // Lista de nomes masculinos para o aviso de gênero
 const MALE_NAMES = [
     'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
@@ -274,6 +282,11 @@ const PromoterForm: React.FC = () => {
 
       setSubmitSuccess(true);
       
+      // Dispara o evento de conclusão de cadastro para o Pixel
+      if (window.fbq) {
+          window.fbq('track', 'CompleteRegistration');
+      }
+
       setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
       setPhotoFiles([]);
       setPhotoPreviews([]);
@@ -405,6 +418,7 @@ const PromoterForm: React.FC = () => {
 const RegistrationFlowPage: React.FC = () => {
     const { organizationId, state, campaignName } = useParams<{ organizationId: string, state: string, campaignName?: string }>();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isValidCampaign, setIsValidCampaign] = useState(false); // Tracks if the URL campaign is valid
@@ -423,15 +437,18 @@ const RegistrationFlowPage: React.FC = () => {
                         
                         if (targetCampaign && targetCampaign.status === 'active') {
                             setIsValidCampaign(true);
+                            setActiveCampaign(targetCampaign);
                         } else {
                             setError("Este evento/gênero não está mais aceitando cadastros ou não foi encontrado.");
                             setIsValidCampaign(false);
+                            setActiveCampaign(null);
                         }
                     } else {
                         // No campaign in URL, prepare list for selection
                         const activeCampaigns = allCampaignsForState.filter(c => c.status === 'active');
                         setCampaigns(activeCampaigns);
                         setIsValidCampaign(false); // Not showing form directly
+                        setActiveCampaign(null);
                     }
                 })
                 .catch(() => setError("Erro ao carregar os eventos disponíveis."))
@@ -440,6 +457,57 @@ const RegistrationFlowPage: React.FC = () => {
             setIsLoading(false);
         }
     }, [organizationId, state, campaignName]);
+
+    // Efeito para injetar o script do Pixel
+    useEffect(() => {
+        if (activeCampaign?.pixelId) {
+            const pixelId = activeCampaign.pixelId;
+            
+            if (window.fbq) {
+                window.fbq('init', pixelId);
+                window.fbq('track', 'PageView');
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.id = 'meta-pixel-script';
+            script.innerHTML = `
+                !function(f,b,e,v,n,t,s)
+                {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t,s)}(window, document,'script',
+                'https://connect.facebook.net/en_US/fbevents.js');
+            `;
+            document.head.appendChild(script);
+
+            script.onload = () => {
+                if (window.fbq) {
+                    window.fbq('init', pixelId);
+                    window.fbq('track', 'PageView');
+                }
+            };
+            
+            const noscript = document.createElement('noscript');
+            const img = document.createElement('img');
+            img.height = 1;
+            img.width = 1;
+            img.style.display = 'none';
+            img.src = `https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`;
+            noscript.appendChild(img);
+            document.body.appendChild(noscript);
+
+            // Retornar uma função de limpeza para remover o noscript se o componente for desmontado
+            return () => {
+                if (document.body.contains(noscript)) {
+                    document.body.removeChild(noscript);
+                }
+            };
+        }
+    }, [activeCampaign]);
+
 
     if (isLoading) {
         return (

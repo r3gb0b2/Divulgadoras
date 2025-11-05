@@ -21,6 +21,7 @@ const CampaignModal: React.FC<{
         whatsappLink: '', 
         rules: '', 
         status: 'active' as CampaignStatus,
+        pixelId: '',
     });
     
     useEffect(() => {
@@ -31,9 +32,10 @@ const CampaignModal: React.FC<{
                 whatsappLink: campaign.whatsappLink || '',
                 rules: campaign.rules || '',
                 status: campaign.status || 'active',
+                pixelId: campaign.pixelId || '',
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active' });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active', pixelId: '' });
         }
     }, [campaign, isOpen]);
     
@@ -52,6 +54,7 @@ const CampaignModal: React.FC<{
                 <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto space-y-4 pr-2">
                     <input type="text" placeholder="Nome do Evento/Gênero" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Descrição (opcional)" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[80px]"/>
+                    <input type="text" placeholder="ID do Pixel (Facebook, etc) - Opcional" value={formData.pixelId} onChange={e => setFormData({...formData, pixelId: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
                     <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
                     <div>
