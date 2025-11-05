@@ -121,7 +121,6 @@ const HtmlEditor: React.FC<{
                     ref={editorRef}
                     onInput={handleInput}
                     contentEditable={!disabled}
-                    dangerouslySetInnerHTML={{ __html: value }}
                     className="min-h-[24rem] p-3 bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                 />
             ) : (
