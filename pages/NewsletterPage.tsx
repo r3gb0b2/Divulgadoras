@@ -6,7 +6,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { Organization, Campaign } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon } from '../components/Icons';
+import { ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon, CameraIcon, FaceSmileIcon } from '../components/Icons';
 
 // --- Local Components for the Editor ---
 
@@ -17,11 +17,15 @@ const HtmlEditor: React.FC<{
 }> = ({ value, onChange, disabled }) => {
     const [view, setView] = useState<'visual' | 'html'>('visual');
     const editorRef = useRef<HTMLDivElement>(null);
-    const [currentValue, setCurrentValue] = useState(value);
+    const [showEmojis, setShowEmojis] = useState(false);
+    const emojis = ['😀', '😍', '👍', '🎉', '🚀', '💡', '💰', '❤️'];
 
     useEffect(() => {
-        if (value !== currentValue) {
-            setCurrentValue(value);
+        // This effect synchronizes the editor's content with the parent's state
+        // ONLY when they are different. This prevents the cursor from jumping
+        // during normal typing by avoiding unnecessary DOM re-renders from React.
+        if (editorRef.current && value !== editorRef.current.innerHTML) {
+            editorRef.current.innerHTML = value;
         }
     }, [value]);
 
@@ -29,8 +33,7 @@ const HtmlEditor: React.FC<{
         document.execCommand(command, false, valueArg);
         if (editorRef.current) {
             const newHtml = editorRef.current.innerHTML;
-            onChange(newHtml);
-            setCurrentValue(newHtml);
+            onChange(newHtml); // Notify parent of the change
             editorRef.current.focus();
         }
     };
@@ -41,17 +44,21 @@ const HtmlEditor: React.FC<{
             handleExecCommand('createLink', url);
         }
     };
+    
+    const handleInsertImage = () => {
+        const url = prompt("Insira a URL da imagem:", "https://");
+        if (url) {
+            handleExecCommand('insertImage', url);
+        }
+    };
 
     const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
         const newHtml = e.currentTarget.innerHTML;
         onChange(newHtml);
-        setCurrentValue(newHtml);
     };
     
     const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const newHtml = e.target.value;
-        onChange(newHtml);
-        setCurrentValue(newHtml);
+        onChange(e.target.value);
     };
 
     const toolbarButtons = [
@@ -61,11 +68,12 @@ const HtmlEditor: React.FC<{
         { command: 'insertOrderedList', icon: ListNumberedIcon, title: 'Lista Numerada' },
         { command: 'insertUnorderedList', icon: ListBulletIcon, title: 'Lista com Marcadores' },
         { command: 'createLink', icon: LinkIcon, title: 'Inserir Link', action: handleCreateLink },
+        { command: 'insertImage', icon: CameraIcon, title: 'Inserir Imagem', action: handleInsertImage },
     ];
 
     return (
         <div className="border border-gray-600 rounded-md">
-            <div className="flex items-center justify-between p-2 bg-gray-700/50 border-b border-gray-600">
+            <div className="flex items-center justify-between p-2 bg-gray-700/50 border-b border-gray-600 flex-wrap">
                 <div className="flex items-center gap-1">
                     {toolbarButtons.map(btn => (
                          <button
@@ -80,6 +88,24 @@ const HtmlEditor: React.FC<{
                             <btn.icon className="w-5 h-5" />
                         </button>
                     ))}
+                     <div className="relative">
+                        <button
+                            type="button"
+                            title="Inserir Emoji"
+                            onClick={() => setShowEmojis(prev => !prev)}
+                            disabled={disabled || view === 'html'}
+                            className="p-2 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <FaceSmileIcon className="w-5 h-5" />
+                        </button>
+                        {showEmojis && (
+                            <div className="absolute top-full left-0 mt-2 bg-gray-800 border border-gray-600 rounded-md shadow-lg p-2 flex gap-1 z-10">
+                                {emojis.map(emoji => (
+                                    <button key={emoji} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { handleExecCommand('insertText', emoji); setShowEmojis(false); }} className="text-2xl p-1 rounded hover:bg-gray-700">{emoji}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <button
                     type="button"
@@ -95,13 +121,12 @@ const HtmlEditor: React.FC<{
                     ref={editorRef}
                     onInput={handleInput}
                     contentEditable={!disabled}
-                    dangerouslySetInnerHTML={{ __html: currentValue }}
+                    dangerouslySetInnerHTML={{ __html: value }}
                     className="min-h-[24rem] p-3 bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-                    style={{ whiteSpace: 'pre-wrap' }}
                 />
             ) : (
                 <textarea
-                    value={currentValue}
+                    value={value}
                     onChange={handleTextareaChange}
                     disabled={disabled}
                     className="min-h-[24rem] w-full p-3 bg-gray-900 text-gray-200 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
@@ -275,7 +300,7 @@ const NewsletterPage: React.FC = () => {
                             </div>
                              <div>
                                 <label htmlFor="body" className="block text-sm font-medium text-gray-300">Corpo da Mensagem</label>
-                                <p className="text-xs text-gray-400 mb-2">Você pode usar a variável {'{{'}promoterName{'}}'} para personalizar a mensagem com o nome da divulgadora.</p>
+                                <p className="text-xs text-gray-400 mb-2">Você pode usar a variável {'{{'}promoterName{'}}'} para personalizar. Para emojis, use o atalho do seu sistema (Ex: Windows + .)</p>
                                 <HtmlEditor value={body} onChange={setBody} disabled={isSending} />
                             </div>
                         </fieldset>
