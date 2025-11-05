@@ -6,7 +6,7 @@ import { getOrganization, getOrganizations } from '../services/organizationServi
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
-import { stateMap } from '../constants/states';
+import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
 // FIX: Changed to a named import to resolve module export error.
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
@@ -708,7 +708,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     )}
                     <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                         <option value="all">Todos os Estados</option>
-                        {(isSuperAdmin ? Object.keys(stateMap) : (getStatesForScope() || [])).map(abbr => <option key={abbr} value={abbr}>{stateMap[abbr]}</option>)}
+                        {(isSuperAdmin ? states.map(s => s.abbr) : (getStatesForScope() || [])).map(abbr => <option key={abbr} value={abbr}>{stateMap[abbr]}</option>)}
                     </select>
                     <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                         <option value="all">Todos os Eventos</option>
