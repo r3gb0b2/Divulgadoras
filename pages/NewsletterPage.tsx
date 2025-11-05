@@ -142,7 +142,8 @@ const NewsletterPage: React.FC = () => {
                     </div>
                      <div>
                         <label htmlFor="body" className="block text-sm font-medium text-gray-300">Corpo da Mensagem</label>
-                        <p className="text-xs text-gray-400 mb-2">Você pode usar a variável `{{promoterName}}` para personalizar a mensagem com o nome da divulgadora.</p>
+                        {/* FIX: Escaped curly braces to prevent JSX from misinterpreting `{{promoterName}}` as a variable. */}
+                        <p className="text-xs text-gray-400 mb-2">Você pode usar a variável `{'{'}{{promoterName}}{'}'}` para personalizar a mensagem com o nome da divulgadora.</p>
                         <textarea id="body" value={body} onChange={e => setBody(e.target.value)} required rows={12} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"></textarea>
                     </div>
                 </fieldset>
