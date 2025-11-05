@@ -277,6 +277,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return allCampaigns.filter(c => c.stateAbbr === selectedState);
     }, [allCampaigns, selectedState]);
 
+    const activeCampaignNames = useMemo(() => {
+        return new Set(allCampaigns.filter(c => c.status === 'active').map(c => c.name));
+    }, [allCampaigns]);
+
+    const filteredPromotersFromSource = useMemo(() => {
+        // If a specific campaign is selected, we show all promoters from it, regardless of the campaign's status.
+        if (selectedCampaign !== 'all') {
+            return allPromoters; // The service layer already filtered by the selected campaign.
+        }
+
+        // If "All Events" is selected, filter out promoters from inactive/hidden campaigns.
+        return allPromoters.filter(promoter => {
+            // Keep promoters with no specific campaign (general)
+            if (!promoter.campaignName) {
+                return true;
+            }
+            // Keep promoters whose campaign is active
+            return activeCampaignNames.has(promoter.campaignName);
+        });
+    }, [allPromoters, selectedCampaign, activeCampaignNames]);
+
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
@@ -473,7 +494,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const promotersWithStats = useMemo(() => {
         if (allAssignments.length === 0) {
-            return allPromoters.map(p => ({ ...p, completionRate: -1 }));
+            return filteredPromotersFromSource.map(p => ({ ...p, completionRate: -1 }));
         }
 
         const statsMap = new Map<string, { assigned: number; completed: number }>();
@@ -486,14 +507,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             statsMap.set(a.promoterId, stat);
         });
 
-        return allPromoters.map(p => {
+        return filteredPromotersFromSource.map(p => {
             const stats = statsMap.get(p.id);
             const completionRate = stats && stats.assigned > 0
                 ? Math.round((stats.completed / stats.assigned) * 100)
                 : -1;
             return { ...p, completionRate };
         });
-    }, [allPromoters, allAssignments]);
+    }, [filteredPromotersFromSource, allAssignments]);
 
 
     // Memoized calculation for filtering and pagination
