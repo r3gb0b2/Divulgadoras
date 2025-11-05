@@ -316,7 +316,7 @@ const PostCard: React.FC<{
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
-    const hasProof = assignment.proofSubmittedAt;
+    const hasProof = !!assignment.proofSubmittedAt;
     const hasJustification = !!assignment.justification;
 
     const renderActions = () => {

@@ -10,16 +10,13 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: The ErrorBoundary class must extend React.Component to have access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: Replaced constructor with a class property for state initialization to resolve TS errors.
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
