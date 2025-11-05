@@ -58,6 +58,25 @@ const calculateAge = (dateString: string | undefined): string => {
     return `${age} anos`;
 };
 
+const getAgeAsNumber = (dateString: string | undefined): number | null => {
+    if (!dateString) return null;
+    try {
+        const birthDate = new Date(dateString);
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        if (isNaN(birthDate.getTime())) return null;
+
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age;
+    } catch (e) {
+        return null;
+    }
+};
+
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -106,6 +125,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [selectedState, setSelectedState] = useState('all');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
+    const [minAge, setMinAge] = useState('');
+    const [maxAge, setMaxAge] = useState('');
 
     // State for email lookup
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
@@ -247,7 +268,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Reset page number whenever filters or search query change
     useEffect(() => {
         setCurrentPage(1);
-    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery, colorFilter]);
+    }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery, colorFilter, minAge, maxAge]);
 
     const campaignsForFilter = useMemo(() => {
         if (selectedState === 'all') {
@@ -516,6 +537,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             });
         }
 
+        const min = minAge ? parseInt(minAge, 10) : null;
+        const max = maxAge ? parseInt(maxAge, 10) : null;
+
+        if (min !== null || max !== null) {
+            sorted = sorted.filter(p => {
+                const age = getAgeAsNumber(p.dateOfBirth);
+                if (age === null) return false; // Don't show promoters without a valid age if filtering
+
+                const minCondition = min !== null ? age >= min : true;
+                const maxCondition = max !== null ? age <= max : true;
+
+                return minCondition && maxCondition;
+            });
+        }
+
         // Apply pagination to the filtered results
         const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
         const paginated = sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
@@ -524,7 +560,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             displayPromoters: paginated,
             totalFilteredCount: sorted.length,
         };
-    }, [promotersWithStats, searchQuery, currentPage, colorFilter, filter]);
+    }, [promotersWithStats, searchQuery, currentPage, colorFilter, filter, minAge, maxAge]);
     
     const { displayPromoters, totalFilteredCount } = processedPromoters;
     
@@ -657,6 +693,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         <option value="all">Todos os Eventos</option>
                         {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
+                </div>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2 items-center">
+                    <label htmlFor="min-age" className="text-sm font-medium text-gray-300 flex-shrink-0">Filtrar por idade:</label>
+                    <input
+                        id="min-age"
+                        type="number"
+                        placeholder="De"
+                        value={minAge}
+                        onChange={(e) => setMinAge(e.target.value)}
+                        className="w-full sm:w-24 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-sm"
+                        min="14"
+                    />
+                    <span className="text-sm text-gray-400">até</span>
+                    <input
+                        id="max-age"
+                        type="number"
+                        placeholder="Até"
+                        value={maxAge}
+                        onChange={(e) => setMaxAge(e.target.value)}
+                        className="w-full sm:w-24 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-sm"
+                        min="14"
+                    />
                 </div>
                 {filter === 'approved' && (
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 border-t border-gray-700 pt-3">

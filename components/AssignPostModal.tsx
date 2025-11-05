@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Post, PostAssignment, Promoter } from '../types';
 import { getApprovedPromoters } from '../services/promoterService';
 import { addAssignmentsToPost } from '../services/postService';
@@ -17,11 +17,13 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [filterInGroup, setFilterInGroup] = useState(false);
 
     useEffect(() => {
         if (!isOpen || !post) {
             setAssignable([]);
             setSelected(new Set());
+            setFilterInGroup(false); // Reset filter on open/close
             return;
         }
 
@@ -54,6 +56,13 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
         fetchAssignablePromoters();
     }, [isOpen, post, existingAssignments]);
 
+    const filteredAssignable = useMemo(() => {
+        if (!filterInGroup) {
+            return assignable;
+        }
+        return assignable.filter(p => p.hasJoinedGroup === true);
+    }, [assignable, filterInGroup]);
+
     const handleToggle = (id: string) => {
         setSelected(prev => {
             const newSet = new Set(prev);
@@ -64,10 +73,15 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
     };
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const visibleIds = filteredAssignable.map(p => p.id);
         if (e.target.checked) {
-            setSelected(new Set(assignable.map(p => p.id)));
+            setSelected(prev => new Set([...prev, ...visibleIds]));
         } else {
-            setSelected(new Set());
+            setSelected(prev => {
+                const newSet = new Set(prev);
+                visibleIds.forEach(id => newSet.delete(id));
+                return newSet;
+            });
         }
     };
 
@@ -85,6 +99,18 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
             setIsSubmitting(false);
         }
     };
+    
+    const selectedCountInFilter = useMemo(() => {
+        const visibleIds = new Set(filteredAssignable.map(p => p.id));
+        let count = 0;
+        for (const id of selected) {
+            if (visibleIds.has(id)) {
+                count++;
+            }
+        }
+        return count;
+    }, [selected, filteredAssignable]);
+
 
     if (!isOpen) return null;
 
@@ -94,21 +120,38 @@ const AssignPostModal: React.FC<AssignPostModalProps> = ({ isOpen, onClose, post
                 <h2 className="text-2xl font-bold text-white mb-4">Atribuir a Novas Divulgadoras</h2>
                 <p className="text-sm text-gray-400 mb-4">Selecione as divulgadoras aprovadas para <span className="font-semibold text-primary">{post?.campaignName}</span> que ainda não receberam esta publicação.</p>
                 {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+                
+                <div className="flex justify-between items-center mb-2">
+                    <label className="flex items-center space-x-2 text-sm text-gray-300">
+                        <input 
+                            type="checkbox" 
+                            checked={filterInGroup} 
+                            onChange={(e) => setFilterInGroup(e.target.checked)} 
+                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
+                        />
+                        <span>Mostrar somente quem está no grupo</span>
+                    </label>
+                </div>
 
                 <div className="flex-grow overflow-y-auto border border-gray-700 rounded-lg p-2">
                     {isLoading ? <p>Carregando...</p> : assignable.length > 0 ? (
                         <>
-                            <label className="flex items-center space-x-2 p-2 font-semibold">
-                                <input type="checkbox" onChange={handleSelectAll} checked={selected.size === assignable.length && assignable.length > 0} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                <span>Selecionar Todas ({selected.size}/{assignable.length})</span>
+                            <label className="flex items-center space-x-2 p-2 font-semibold cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    onChange={handleSelectAll} 
+                                    checked={filteredAssignable.length > 0 && selectedCountInFilter === filteredAssignable.length}
+                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" 
+                                />
+                                <span>Selecionar Todas Visíveis ({selectedCountInFilter}/{filteredAssignable.length})</span>
                             </label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                                {assignable.map(p => (
+                                {filteredAssignable.map(p => (
                                     <label key={p.id} className="flex items-center space-x-2 p-2 rounded hover:bg-gray-700/50 cursor-pointer">
                                         <input type="checkbox" checked={selected.has(p.id)} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded flex-shrink-0" />
                                         <span 
                                             className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : ''}`}
-                                            title={`${p.name} (${p.instagram})${p.hasJoinedGroup ? ' - no grupo' : ''}`}
+                                            title={`${p.name} (${p.instagram})${p.hasJoinedGroup ? ' - no grupo' : ' - fora do grupo'}`}
                                         >
                                             {p.instagram || p.name}
                                         </span>
