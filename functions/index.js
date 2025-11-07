@@ -658,9 +658,86 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     return { success: true, postId: postRef.id };
 });
 
-// Placeholder for addAssignmentsToPost
 exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // Implementation needed
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !['admin', 'superadmin', 'poster'].includes(adminDoc.data().role)) {
+         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+
+    const { postId, promoterIds } = data;
+    if (!postId || !Array.isArray(promoterIds) || promoterIds.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e lista de divulgadoras são obrigatórios.");
+    }
+
+    // Fetch Post data
+    const postRef = db.collection("posts").doc(postId);
+    const postSnap = await postRef.get();
+    if (!postSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const postData = postSnap.data();
+
+    // Fetch Promoter data in chunks
+    const promoters = [];
+    const promoterChunks = [];
+    for (let i = 0; i < promoterIds.length; i += 30) {
+        promoterChunks.push(promoterIds.slice(i, i + 30));
+    }
+
+    for (const chunk of promoterChunks) {
+        const promotersQuery = db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", chunk);
+        const snapshot = await promotersQuery.get();
+        snapshot.forEach(doc => promoters.push({ id: doc.id, ...doc.data() }));
+    }
+
+    if (promoters.length === 0) {
+        throw new functions.https.HttpsError("not-found", "Nenhuma divulgadora válida foi encontrada para atribuição.");
+    }
+    
+    // Denormalized post data to be stored in each assignment
+    const denormalizedPost = {
+        type: postData.type,
+        mediaUrl: postData.mediaUrl || null,
+        googleDriveUrl: postData.googleDriveUrl || null,
+        textContent: postData.textContent || null,
+        instructions: postData.instructions,
+        postLink: postData.postLink || null,
+        campaignName: postData.campaignName,
+        eventName: postData.eventName || null,
+        isActive: postData.isActive,
+        expiresAt: postData.expiresAt || null,
+        createdAt: postData.createdAt,
+        allowLateSubmissions: postData.allowLateSubmissions || false,
+        allowImmediateProof: postData.allowImmediateProof || false,
+        postFormats: postData.postFormats || [],
+        skipProofRequirement: postData.skipProofRequirement || false,
+    };
+    
+    // Batch create assignments
+    const batch = db.batch();
+    const assignmentsCollectionRef = db.collection("postAssignments");
+
+    promoters.forEach(promoter => {
+        const assignmentDocRef = assignmentsCollectionRef.doc(); // Auto-generate ID
+        const newAssignment = {
+            postId: postId,
+            post: denormalizedPost,
+            organizationId: postData.organizationId,
+            promoterId: promoter.id,
+            promoterEmail: promoter.email.toLowerCase(),
+            promoterName: promoter.name,
+            status: "pending",
+            confirmedAt: null,
+        };
+        batch.set(assignmentDocRef, newAssignment);
+    });
+
+    await batch.commit();
+
+    return { success: true, count: promoters.length };
 });
 
 // Placeholder for updatePostStatus
