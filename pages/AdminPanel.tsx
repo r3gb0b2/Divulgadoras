@@ -497,20 +497,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return filteredPromotersFromSource.map(p => ({ ...p, completionRate: -1 }));
         }
 
-        const statsMap = new Map<string, { assigned: number; completed: number }>();
+        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number }>();
         allAssignments.forEach(a => {
-            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0 };
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0 };
             stat.assigned++;
             if (a.proofSubmittedAt) {
                 stat.completed++;
+            } else if (a.justificationStatus === 'accepted') {
+                stat.acceptedJustifications++;
             }
             statsMap.set(a.promoterId, stat);
         });
 
         return filteredPromotersFromSource.map(p => {
             const stats = statsMap.get(p.id);
+            const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
             const completionRate = stats && stats.assigned > 0
-                ? Math.round((stats.completed / stats.assigned) * 100)
+                ? Math.round((successfulOutcomes / stats.assigned) * 100)
                 : -1;
             return { ...p, completionRate };
         });

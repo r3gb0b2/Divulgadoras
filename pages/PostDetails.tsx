@@ -118,8 +118,11 @@ export const PostDetails: React.FC = () => {
             }
             const stats = promoterStatsMap.get(promoterId)!;
             stats.assigned++;
-            if (a.proofSubmittedAt) stats.completed++;
-            if (a.justificationStatus === 'accepted') stats.acceptedJustifications++;
+            if (a.proofSubmittedAt) {
+                stats.completed++;
+            } else if (a.justificationStatus === 'accepted') {
+                stats.acceptedJustifications++;
+            }
         });
 
         // Attach completionRate to each assignment for the current post
