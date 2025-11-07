@@ -108,24 +108,52 @@ export const PostDetails: React.FC = () => {
     }, [fetchData]);
 
     const assignmentsWithStats = useMemo(() => {
-        const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number }>();
+        const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
+        const now = new Date();
 
-        // Calculate stats for all promoters in the organization
         allOrgAssignments.forEach(a => {
+            if (!a.post) return;
             const promoterId = a.promoterId;
-            if (!promoterStatsMap.has(promoterId)) {
-                promoterStatsMap.set(promoterId, { assigned: 0, completed: 0, acceptedJustifications: 0 });
-            }
-            const stats = promoterStatsMap.get(promoterId)!;
+            const stats = promoterStatsMap.get(promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 };
+            
             stats.assigned++;
+
             if (a.proofSubmittedAt) {
                 stats.completed++;
-            } else if (a.justificationStatus === 'accepted') {
-                stats.acceptedJustifications++;
+            } else if (a.justification) {
+                if (a.justificationStatus === 'accepted') {
+                    stats.acceptedJustifications++;
+                } else if (a.justificationStatus === 'rejected') {
+                    stats.missed++;
+                } else { // 'pending'
+                    stats.pending++;
+                }
+            } else {
+                let deadlineHasPassed = false;
+                if (!a.post.allowLateSubmissions) {
+                    const confirmedAt = toDateSafe(a.confirmedAt);
+                    if (confirmedAt) {
+                        const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+                        if (now > proofDeadline) {
+                            deadlineHasPassed = true;
+                        }
+                    }
+                    if (!deadlineHasPassed) {
+                        const postExpiresAt = toDateSafe(a.post.expiresAt);
+                        if (postExpiresAt && now > postExpiresAt) {
+                            deadlineHasPassed = true;
+                        }
+                    }
+                }
+                if (deadlineHasPassed) {
+                    stats.missed++;
+                } else {
+                    stats.pending++;
+                }
             }
+            promoterStatsMap.set(promoterId, stats);
         });
 
-        // Attach completionRate to each assignment for the current post
         return assignments.map(a => {
             const stats = promoterStatsMap.get(a.promoterId);
             const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;

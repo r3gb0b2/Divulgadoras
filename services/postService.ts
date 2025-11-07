@@ -248,28 +248,24 @@ const calculatePromoterStats = (assignments: PostAssignment[]) => {
     } else { // No proof, no justification
       let deadlineHasPassed = false;
       if (!assignment.post.allowLateSubmissions) {
-        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
-          const confirmationTime = toDateSafe(assignment.confirmedAt);
-          if (confirmationTime) {
-            const proofExpireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
-            if (now > proofExpireTime) {
-              deadlineHasPassed = true;
-            }
+          const confirmedAt = toDateSafe(assignment.confirmedAt);
+          if (confirmedAt) {
+              const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+              if (now > proofDeadline) {
+                  deadlineHasPassed = true;
+              }
           }
-        }
-        if (!deadlineHasPassed) {
-          const postExpiresAt = assignment.post.expiresAt;
-          const postExpiresDate = toDateSafe(postExpiresAt);
-          if (postExpiresDate && postExpiresDate < now) {
-            deadlineHasPassed = true;
+          if (!deadlineHasPassed) {
+              const postExpiresAt = toDateSafe(assignment.post.expiresAt);
+              if (postExpiresAt && now > postExpiresAt) {
+                  deadlineHasPassed = true;
+              }
           }
-        }
       }
-      
       if (deadlineHasPassed) {
-        missed++;
+          missed++;
       } else {
-        pending++;
+          pending++;
       }
     }
   });
@@ -303,8 +299,8 @@ export const getStatsForPromoter = async (promoterId: string): Promise<StatsResu
     const assignments = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
         .filter(a => {
-            if (!a.post || !a.post.createdAt) {
-                console.warn(`[Stats] Filtering out assignment ${a.id} for promoter ${promoterId} due to missing 'post' or 'post.createdAt' field.`);
+            if (!a.post) {
+                console.warn(`[Stats] Filtering out assignment ${a.id} for promoter ${promoterId} due to missing 'post' field.`);
                 return false;
             }
             return true;
@@ -333,8 +329,8 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<StatsRe
     const assignments = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
         .filter(a => {
-            if (!a.post || !a.post.createdAt) {
-                console.warn(`[Stats] Filtering out assignment ${a.id} for email ${email} due to missing 'post' or 'post.createdAt' field.`);
+            if (!a.post) {
+                console.warn(`[Stats] Filtering out assignment ${a.id} for email ${email} due to missing 'post' field.`);
                 return false;
             }
             return true;
