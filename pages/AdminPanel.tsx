@@ -506,15 +506,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (allAssignments.length === 0) {
             return filteredPromotersFromSource.map(p => ({ ...p, completionRate: -1 }));
         }
-
-        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number }>();
+    
+        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
         const now = new Date();
-
+    
         allAssignments.forEach(a => {
-            if (!a.post) return; // Data integrity check
-            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0 };
+            if (!a.post) return;
+    
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 };
             stat.assigned++;
-            
+    
             if (a.proofSubmittedAt) {
                 stat.completed++;
             } else if (a.justification) {
@@ -522,24 +523,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     stat.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
                     stat.missed++;
+                } else { // 'pending'
+                    stat.pending++;
                 }
             } else {
-                let isMissed = false;
-                const postExpiresAt = toDateSafe(a.post.expiresAt);
-                const confirmedAt = toDateSafe(a.confirmedAt);
+                let deadlineHasPassed = false;
                 if (!a.post.allowLateSubmissions) {
-                     if (confirmedAt) {
+                    const confirmedAt = toDateSafe(a.confirmedAt);
+                    if (confirmedAt) {
                         const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
-                        if (now > proofDeadline) isMissed = true;
-                    } else if (postExpiresAt && now > postExpiresAt) {
-                        isMissed = true;
+                        if (now > proofDeadline) {
+                            deadlineHasPassed = true;
+                        }
+                    }
+                    if (!deadlineHasPassed) {
+                        const postExpiresAt = toDateSafe(a.post.expiresAt);
+                        if (postExpiresAt && now > postExpiresAt) {
+                            deadlineHasPassed = true;
+                        }
                     }
                 }
-                if (isMissed) stat.missed++;
+                if (deadlineHasPassed) {
+                    stat.missed++;
+                } else {
+                    stat.pending++;
+                }
             }
             statsMap.set(a.promoterId, stat);
         });
-
+    
         return filteredPromotersFromSource.map(p => {
             const stats = statsMap.get(p.id);
             const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
