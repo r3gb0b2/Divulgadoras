@@ -151,6 +151,23 @@ const GuestListAccessPage: React.FC = () => {
         });
     }, [promoters, postAssignments]);
     
+    const promotersByColor = useMemo(() => {
+        const categories: { green: string[], blue: string[], yellow: string[], red: string[] } = {
+            green: [],
+            blue: [],
+            yellow: [],
+            red: []
+        };
+        promotersWithStats.forEach(p => {
+            const rate = p.completionRate;
+            if (rate === 100) categories.green.push(p.id);
+            else if (rate >= 60) categories.blue.push(p.id);
+            else if (rate >= 31) categories.yellow.push(p.id);
+            else if (rate >= 0) categories.red.push(p.id);
+        });
+        return categories;
+    }, [promotersWithStats]);
+
     const filteredPromoters = useMemo(() => {
         let results = promotersWithStats;
 
