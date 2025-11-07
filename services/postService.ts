@@ -497,8 +497,6 @@ export const submitJustification = async (assignmentId: string, justification: s
             justification: justification,
             justificationStatus: 'pending',
             justificationSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            proofImageUrls: [], 
-            proofSubmittedAt: null,
             justificationImageUrls: justificationImageUrls,
         });
     } catch (error) {

@@ -98,6 +98,16 @@ const getPerformanceColor = (rate: number): string => {
     return 'text-red-400';
 };
 
+// Helper to safely convert various date formats to a Date object, needed for stats calculation
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    return null;
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
@@ -497,14 +507,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return filteredPromotersFromSource.map(p => ({ ...p, completionRate: -1 }));
         }
 
-        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number }>();
+        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number }>();
+        const now = new Date();
+
         allAssignments.forEach(a => {
-            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0 };
+            if (!a.post) return; // Data integrity check
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0 };
             stat.assigned++;
+            
             if (a.proofSubmittedAt) {
                 stat.completed++;
-            } else if (a.justificationStatus === 'accepted') {
-                stat.acceptedJustifications++;
+            } else if (a.justification) {
+                if (a.justificationStatus === 'accepted') {
+                    stat.acceptedJustifications++;
+                } else if (a.justificationStatus === 'rejected') {
+                    stat.missed++;
+                }
+            } else {
+                let isMissed = false;
+                const postExpiresAt = toDateSafe(a.post.expiresAt);
+                const confirmedAt = toDateSafe(a.confirmedAt);
+                if (!a.post.allowLateSubmissions) {
+                     if (confirmedAt) {
+                        const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+                        if (now > proofDeadline) isMissed = true;
+                    } else if (postExpiresAt && now > postExpiresAt) {
+                        isMissed = true;
+                    }
+                }
+                if (isMissed) stat.missed++;
             }
             statsMap.set(a.promoterId, stat);
         });
