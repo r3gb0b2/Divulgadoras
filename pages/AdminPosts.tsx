@@ -170,6 +170,7 @@ const AdminPosts: React.FC = () => {
                                         {post.isActive ? 'Ativo' : 'Inativo'}
                                     </span>
                                 </div>
+                                <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
                                 <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4">
                                      <button 
