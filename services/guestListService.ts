@@ -112,7 +112,7 @@ export const getConfirmationByPromoterAndList = async (promoterId: string, listI
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
- * It checks for an existing confirmation to prevent duplicates and locks it after submission.
+ * It removes any previous confirmations for the same promoter in the same campaign.
  * @param confirmationData - The data for the guest list confirmation.
  */
 export const addGuestListConfirmation = async (
@@ -121,27 +121,30 @@ export const addGuestListConfirmation = async (
   try {
     const confirmationsRef = firestore.collection('guestListConfirmations');
     
-    const q = confirmationsRef
+    // Find ALL existing confirmations for this promoter within the same campaign
+    const oldConfirmationsQuery = confirmationsRef
       .where('promoterId', '==', confirmationData.promoterId)
-      .where('guestListId', '==', confirmationData.guestListId)
-      .limit(1);
+      .where('campaignId', '==', confirmationData.campaignId);
     
-    const existingSnapshot = await q.get();
+    const oldConfirmationsSnapshot = await oldConfirmationsQuery.get();
+    
     const batch = firestore.batch();
 
+    // Delete all old confirmations for this promoter in this campaign
+    if (!oldConfirmationsSnapshot.empty) {
+        oldConfirmationsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+    }
+
+    // Create the new confirmation
+    const newDocRef = confirmationsRef.doc();
     const dataWithTimestamp = {
       ...confirmationData,
       confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
       isLocked: true, // Lock the list on submission
     };
-    
-    if (!existingSnapshot.empty) {
-      const existingDocRef = existingSnapshot.docs[0].ref;
-      batch.update(existingDocRef, dataWithTimestamp);
-    } else {
-      const newDocRef = firestore.collection('guestListConfirmations').doc();
-      batch.set(newDocRef, dataWithTimestamp);
-    }
+    batch.set(newDocRef, dataWithTimestamp);
 
     await batch.commit();
 
