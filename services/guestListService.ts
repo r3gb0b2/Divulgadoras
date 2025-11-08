@@ -112,7 +112,7 @@ export const getConfirmationByPromoterAndList = async (promoterId: string, listI
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
- * It removes any previous confirmations for the same promoter in the same campaign.
+ * It removes any previous confirmations for the same promoter in the same campaign using a transaction.
  * @param confirmationData - The data for the guest list confirmation.
  */
 export const addGuestListConfirmation = async (
@@ -120,39 +120,38 @@ export const addGuestListConfirmation = async (
 ): Promise<void> => {
   try {
     const confirmationsRef = firestore.collection('guestListConfirmations');
-    
-    // Find ALL existing confirmations for this promoter within the same campaign
-    const oldConfirmationsQuery = confirmationsRef
-      .where('promoterId', '==', confirmationData.promoterId)
-      .where('campaignId', '==', confirmationData.campaignId);
-    
-    const oldConfirmationsSnapshot = await oldConfirmationsQuery.get();
-    
-    const batch = firestore.batch();
 
-    // Delete all old confirmations for this promoter in this campaign
-    if (!oldConfirmationsSnapshot.empty) {
-        oldConfirmationsSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-    }
+    await firestore.runTransaction(async (transaction) => {
+        // 1. Find all existing confirmations for this promoter within the same campaign.
+        const oldConfirmationsQuery = confirmationsRef
+            .where('promoterId', '==', confirmationData.promoterId)
+            .where('campaignId', '==', confirmationData.campaignId);
+        
+        const oldConfirmationsSnapshot = await transaction.get(oldConfirmationsQuery);
 
-    // Create the new confirmation
-    const newDocRef = confirmationsRef.doc();
-    const dataWithTimestamp = {
-      ...confirmationData,
-      confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      isLocked: true, // Lock the list on submission
-    };
-    batch.set(newDocRef, dataWithTimestamp);
+        // 2. Delete all old confirmations found in the transaction.
+        if (!oldConfirmationsSnapshot.empty) {
+            oldConfirmationsSnapshot.forEach(doc => {
+                transaction.delete(doc.ref);
+            });
+        }
 
-    await batch.commit();
+        // 3. Create the new confirmation in the transaction.
+        const newDocRef = confirmationsRef.doc();
+        const dataWithTimestamp = {
+            ...confirmationData,
+            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            isLocked: true, // Lock the list on submission
+        };
+        transaction.set(newDocRef, dataWithTimestamp);
+    });
 
   } catch (error) {
-    console.error('Error adding guest list confirmation: ', error);
-    throw new Error('Não foi possível confirmar a presença. Tente novamente.');
+    console.error('Error in guest list confirmation transaction: ', error);
+    throw new Error('Não foi possível confirmar a presença. Por favor, tente novamente.');
   }
 };
+
 
 /**
  * Unlocks a specific guest list confirmation, allowing the promoter to edit it again.
