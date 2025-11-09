@@ -1,6 +1,6 @@
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
-import { GuestListConfirmation, GuestList, Timestamp } from '../types';
+import { GuestListConfirmation, GuestList, Timestamp, GuestListChangeRequest } from '../types';
 
 // ===================================================================
 // NEW GUEST LIST MODEL FUNCTIONS (Post-refactor)
@@ -298,4 +298,94 @@ export const checkOutPerson = async (confirmationId: string, personName: string)
     console.error("Erro na transação de check-out: ", error);
     throw new Error("Não foi possível realizar o check-out.");
   }
+};
+
+// ===================================================================
+// GUEST LIST CHANGE REQUEST FUNCTIONS
+// ===================================================================
+
+export const createGuestListChangeRequest = async (
+  confirmation: GuestListConfirmation
+): Promise<void> => {
+  try {
+    if (!confirmation || !confirmation.id) {
+      throw new Error("Dados da confirmação são inválidos.");
+    }
+    // Check for existing pending request
+    const q = firestore.collection('guestListChangeRequests')
+      .where('confirmationId', '==', confirmation.id)
+      .where('status', '==', 'pending');
+    const existing = await q.get();
+    if (!existing.empty) {
+      throw new Error("Você já tem uma solicitação de alteração pendente para esta lista.");
+    }
+
+    const requestData: Omit<GuestListChangeRequest, 'id'> = {
+      organizationId: confirmation.organizationId,
+      campaignId: confirmation.campaignId,
+      guestListId: confirmation.guestListId!,
+      confirmationId: confirmation.id,
+      promoterId: confirmation.promoterId,
+      promoterName: confirmation.promoterName,
+      promoterEmail: confirmation.promoterEmail,
+      listName: confirmation.listName,
+      campaignName: confirmation.campaignName,
+      status: 'pending',
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await firestore.collection('guestListChangeRequests').add(requestData);
+  } catch (error) {
+    console.error("Error creating guest list change request: ", error);
+    if (error instanceof Error) throw error;
+    throw new Error("Não foi possível enviar a solicitação de alteração.");
+  }
+};
+
+export const getPendingChangeRequestForConfirmation = async (
+  confirmationId: string
+): Promise<GuestListChangeRequest | null> => {
+    if (!confirmationId) return null;
+    try {
+        const q = firestore.collection('guestListChangeRequests')
+            .where('confirmationId', '==', confirmationId)
+            .where('status', '==', 'pending')
+            .limit(1);
+        const snapshot = await q.get();
+        if (snapshot.empty) {
+            return null;
+        }
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() } as GuestListChangeRequest;
+    } catch (error) {
+        console.error("Error fetching pending change request: ", error);
+        throw new Error("Não foi possível verificar solicitações pendentes.");
+    }
+};
+
+export const getGuestListChangeRequests = async (
+  organizationId: string
+): Promise<GuestListChangeRequest[]> => {
+    try {
+        const q = firestore.collection("guestListChangeRequests")
+            .where("organizationId", "==", organizationId)
+            .where("status", "==", "pending")
+            .orderBy("requestedAt", "desc");
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestListChangeRequest));
+    } catch (error) {
+        console.error("Error getting guest list change requests: ", error);
+        throw new Error("Não foi possível buscar as solicitações de alteração.");
+    }
+};
+
+export const updateGuestListChangeRequest = async (
+  requestId: string,
+  data: Partial<Omit<GuestListChangeRequest, 'id'>>
+): Promise<void> => {
+    try {
+        await firestore.collection("guestListChangeRequests").doc(requestId).update(data);
+    } catch (error) {
+        console.error("Error updating guest list change request: ", error);
+        throw new Error("Não foi possível atualizar a solicitação.");
+    }
 };

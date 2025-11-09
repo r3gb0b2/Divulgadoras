@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
@@ -11,7 +12,8 @@ import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
-import GuestListCheck from './pages/GuestListCheck';
+// FIX: Changed to a named import to resolve module export error.
+import { GuestListCheck } from './pages/GuestListCheck';
 import ProofUploadPage from './pages/ProofUploadPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import OneTimePostPage from './pages/OneTimePostPage';

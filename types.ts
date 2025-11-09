@@ -311,3 +311,20 @@ export interface GroupRemovalRequest {
   actionTakenBy?: string; // UID of admin
   actionTakenAt?: Timestamp | FieldValue;
 }
+
+export interface GuestListChangeRequest {
+  id: string;
+  organizationId: string;
+  campaignId: string;
+  guestListId: string;
+  confirmationId: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  listName: string;
+  campaignName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: Timestamp | FieldValue;
+  actionTakenAt?: Timestamp | FieldValue;
+  actionTakenBy?: string; // Admin UID
+}

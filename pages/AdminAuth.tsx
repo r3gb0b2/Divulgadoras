@@ -39,6 +39,7 @@ import EditOneTimePost from './EditOneTimePost';
 import OneTimePostDetails from './OneTimePostDetails';
 import NewsletterPage from './NewsletterPage';
 import GroupRemovalsPage from './GroupRemovalsPage';
+import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -258,6 +259,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
                     <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
+                    <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -288,6 +290,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="dashboard" element={<ProtectedRoute><PostDashboard /></ProtectedRoute>} />
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
+                    <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                 </>
             )}
 
