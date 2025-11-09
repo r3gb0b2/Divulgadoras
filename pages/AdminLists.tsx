@@ -176,15 +176,22 @@ const AdminLists: React.FC = () => {
         if (!selectedOrgId || !adminData?.email) return;
         setError('');
         try {
+            const selectedCampaign = campaigns.find(c => c.id === data.campaignId);
+            if (!selectedCampaign) throw new Error("Evento selecionado é inválido.");
+
             if (editingList) {
-                await updateGuestList(editingList.id, data);
+                const updateData: Partial<Omit<GuestList, 'id'>> = {
+                    ...data,
+                    campaignName: selectedCampaign.name,
+                    stateAbbr: selectedCampaign.stateAbbr,
+                };
+                await updateGuestList(editingList.id, updateData);
             } else {
-                const selectedCampaign = campaigns.find(c => c.id === data.campaignId);
-                if (!selectedCampaign) throw new Error("Evento selecionado é inválido.");
                 const listData: Omit<GuestList, 'id' | 'createdAt'> = {
                     ...data,
                     organizationId: selectedOrgId,
                     campaignName: selectedCampaign.name,
+                    stateAbbr: selectedCampaign.stateAbbr,
                     createdByEmail: adminData.email
                 } as Omit<GuestList, 'id' | 'createdAt'>;
                 await createGuestList(listData);

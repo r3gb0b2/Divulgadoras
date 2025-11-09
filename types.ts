@@ -193,6 +193,7 @@ export interface GuestList {
   organizationId: string;
   campaignId: string;
   campaignName: string; // denormalized for easy display
+  stateAbbr: string;
   name: string;
   description?: string;
   guestAllowance: number;

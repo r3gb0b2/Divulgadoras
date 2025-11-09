@@ -49,21 +49,25 @@ const GuestListAssignments: React.FC = () => {
         try {
             const listData = await getGuestListById(listId);
             if (!listData) throw new Error("Lista de convidados não encontrada.");
+            
+            // Add check for backwards compatibility
+            if (!listData.stateAbbr) {
+                throw new Error("Dados da lista incompletos (Falta a Região/Estado). Por favor, edite a lista na página 'Gerenciar Listas', selecione o evento novamente e salve para corrigir.");
+            }
 
             const [approvedPromoters, orgAssignments] = await Promise.all([
                 getApprovedPromoters(
                     listData.organizationId,
-                    '', // stateAbbr is not available on list, but campaignName + orgId should be enough
+                    listData.stateAbbr,
                     listData.campaignName
                 ),
                 getAssignmentsForOrganization(listData.organizationId)
             ]);
 
-            const promotersForCampaign = approvedPromoters.filter(p => p.campaignName === listData.campaignName);
-
             setList(listData);
-            promotersForCampaign.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
-            setPromoters(promotersForCampaign);
+            // Sort promoters alphabetically by name or instagram handle
+            approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
+            setPromoters(approvedPromoters);
             setPostAssignments(orgAssignments);
             setAssignments(listData.assignments || {});
             setBulkAllowance(listData.guestAllowance || 0);
