@@ -122,21 +122,23 @@ export const addGuestListConfirmation = async (
     const confirmationsRef = firestore.collection('guestListConfirmations');
 
     await firestore.runTransaction(async (transaction) => {
-        // 1. Find all existing confirmations for this promoter within the same campaign.
+        // 1. Find the existing confirmation for this promoter and this specific list.
+        // The old logic was incorrect as it would delete confirmations for other lists
+        // within the same campaign.
         const oldConfirmationsQuery = confirmationsRef
             .where('promoterId', '==', confirmationData.promoterId)
-            .where('campaignId', '==', confirmationData.campaignId);
+            .where('guestListId', '==', confirmationData.guestListId);
         
         const oldConfirmationsSnapshot = await transaction.get(oldConfirmationsQuery);
 
-        // 2. Delete all old confirmations found in the transaction.
+        // 2. Delete the old confirmation if it exists.
         if (!oldConfirmationsSnapshot.empty) {
             oldConfirmationsSnapshot.forEach(doc => {
                 transaction.delete(doc.ref);
             });
         }
 
-        // 3. Create the new confirmation in the transaction.
+        // 3. Create the new confirmation.
         const newDocRef = confirmationsRef.doc();
         const dataWithTimestamp = {
             ...confirmationData,
