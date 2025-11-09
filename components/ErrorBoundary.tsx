@@ -11,10 +11,11 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Removed `public state: State;` declaration.
-  // This explicit declaration was shadowing the inherited `state` property from React.Component,
-  // causing TypeScript to lose track of other inherited members like `setState` and `props`.
-  // State is now correctly initialized in the constructor on the inherited property.
+  public state: State;
+
+  // FIX: Reverted to a constructor-based state initialization.
+  // The previous class property initializer was causing TypeScript to not recognize
+  // inherited properties like `setState` and `props` from React.Component, leading to the errors.
   constructor(props: Props) {
     super(props);
     this.state = {
