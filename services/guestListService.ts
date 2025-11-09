@@ -90,15 +90,14 @@ export const deleteGuestList = async (listId: string): Promise<void> => {
 
 export const getConfirmationByPromoterAndList = async (promoterId: string, listId: string): Promise<GuestListConfirmation | null> => {
     try {
-        const q = firestore.collection('guestListConfirmations')
-            .where('promoterId', '==', promoterId)
-            .where('guestListId', '==', listId)
-            .limit(1);
-        const snapshot = await q.get();
-        if (snapshot.empty) {
-            return null;
+        // With the new deterministic ID, we can do a direct doc get.
+        const confirmationId = `${promoterId}_${listId}`;
+        const docRef = firestore.collection('guestListConfirmations').doc(confirmationId);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+            return { id: docSnap.id, ...docSnap.data() } as GuestListConfirmation;
         }
-        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as GuestListConfirmation;
+        return null;
     } catch (error) {
         console.error("Error getting guest list confirmation by promoter and list: ", error);
         throw new Error("Não foi possível buscar os dados de confirmação da lista.");
@@ -112,40 +111,41 @@ export const getConfirmationByPromoterAndList = async (promoterId: string, listI
 
 /**
  * Adds or updates a promoter's guest list confirmation for a specific campaign.
- * It removes any previous confirmations for the same promoter in the same campaign using a transaction.
+ * It uses a transaction with a deterministic ID to atomically replace the document.
  * @param confirmationData - The data for the guest list confirmation.
  */
 export const addGuestListConfirmation = async (
   confirmationData: Omit<GuestListConfirmation, 'id' | 'confirmedAt'>
 ): Promise<void> => {
   try {
-    const confirmationsRef = firestore.collection('guestListConfirmations');
+    if (!confirmationData.promoterId || !confirmationData.guestListId) {
+      throw new Error("ID da divulgadora e da lista são obrigatórios.");
+    }
 
+    const confirmationId = `${confirmationData.promoterId}_${confirmationData.guestListId}`;
+    const confirmationDocRef = firestore.collection('guestListConfirmations').doc(confirmationId);
+
+    // This is the most robust "upsert" pattern. We find any existing doc and replace it.
+    // A transaction is the safest way to do this to ensure atomicity.
     await firestore.runTransaction(async (transaction) => {
-        // Query for any existing confirmations for this promoter and this specific list.
-        const oldConfirmationsQuery = confirmationsRef
-            .where('promoterId', '==', confirmationData.promoterId)
-            .where('guestListId', '==', confirmationData.guestListId);
-        
-        const oldConfirmationsSnapshot = await transaction.get(oldConfirmationsQuery);
+      // First, delete any existing document. This won't fail if it doesn't exist.
+      transaction.delete(confirmationDocRef);
 
-        // Delete any existing confirmations found. This ensures we are always replacing, not updating.
-        oldConfirmationsSnapshot.forEach(doc => {
-            transaction.delete(doc.ref);
-        });
-        
-        // Create the new confirmation document.
-        const newDocRef = confirmationsRef.doc();
-        const dataWithTimestamp = {
-            ...confirmationData,
-            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            isLocked: true, // Lock the list upon submission
-        };
-        transaction.set(newDocRef, dataWithTimestamp);
+      // Then, create the new document with the fresh data.
+      // Using Timestamp.now() (client-side) instead of serverTimestamp() to avoid
+      // the "Expected type 'cf'" error which seems to be related to the compat SDK's
+      // handling of FieldValue sentinels inside transactions.
+      const dataToCreate = {
+        ...confirmationData,
+        confirmedAt: firebase.firestore.Timestamp.now(),
+        isLocked: true,
+      };
+
+      transaction.set(confirmationDocRef, dataToCreate);
     });
 
   } catch (error) {
-    console.error('Error in guest list confirmation transaction: ', error);
+    console.error('Error in transaction for guest list confirmation: ', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`Não foi possível confirmar a presença. Detalhes do erro: ${errorMessage}`);
   }
