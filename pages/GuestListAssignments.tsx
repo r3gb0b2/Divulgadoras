@@ -32,11 +32,12 @@ const GuestListAssignments: React.FC = () => {
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
-    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number } }>({});
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; } }>({});
     
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [bulkAllowance, setBulkAllowance] = useState<number>(0);
+    const [bulkInfo, setBulkInfo] = useState<string>('');
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -50,7 +51,6 @@ const GuestListAssignments: React.FC = () => {
             const listData = await getGuestListById(listId);
             if (!listData) throw new Error("Lista de convidados não encontrada.");
             
-            // Add check for backwards compatibility
             if (!listData.stateAbbr) {
                 throw new Error("Dados da lista incompletos (Falta a Região/Estado). Por favor, edite a lista na página 'Gerenciar Listas', selecione o evento novamente e salve para corrigir.");
             }
@@ -65,7 +65,6 @@ const GuestListAssignments: React.FC = () => {
             ]);
 
             setList(listData);
-            // Sort promoters alphabetically by name or instagram handle
             approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
             setPromoters(approvedPromoters);
             setPostAssignments(orgAssignments);
@@ -89,8 +88,6 @@ const GuestListAssignments: React.FC = () => {
         }
     
         const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
-        const now = new Date();
-    
         promoters.forEach(p => {
             statsMap.set(p.id, { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 });
         });
@@ -141,7 +138,7 @@ const GuestListAssignments: React.FC = () => {
             if (newAssignments[promoterId]) {
                 delete newAssignments[promoterId];
             } else {
-                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0 };
+                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, info: '' };
             }
             return newAssignments;
         });
@@ -152,7 +149,14 @@ const GuestListAssignments: React.FC = () => {
         if (isNaN(allowance) || allowance < 0) return;
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { guestAllowance: allowance }
+            [promoterId]: { ...prev[promoterId], info: prev[promoterId]?.info ?? '', guestAllowance: allowance }
+        }));
+    };
+
+    const handleInfoChange = (promoterId: string, value: string) => {
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { ...prev[promoterId], guestAllowance: prev[promoterId]?.guestAllowance ?? 0, info: value }
         }));
     };
 
@@ -164,7 +168,7 @@ const GuestListAssignments: React.FC = () => {
             if (isChecked) {
                 visibleIds.forEach(id => {
                     if (!newAssignments[id]) {
-                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0 };
+                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, info: '' };
                     }
                 });
             } else {
@@ -183,12 +187,26 @@ const GuestListAssignments: React.FC = () => {
         setAssignments(prev => {
             const newAssignments = { ...prev };
             selectedIds.forEach(id => {
-                newAssignments[id] = { guestAllowance: bulkAllowance };
+                newAssignments[id] = { ...newAssignments[id], info: newAssignments[id]?.info ?? '', guestAllowance: bulkAllowance };
             });
             return newAssignments;
         });
     };
 
+    const handleApplyBulkInfo = () => {
+        const selectedIds = Object.keys(assignments);
+        if(selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar o informativo.");
+            return;
+        }
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], guestAllowance: newAssignments[id]?.guestAllowance ?? 0, info: bulkInfo };
+            });
+            return newAssignments;
+        });
+    };
 
     const handleSave = async () => {
         if (!listId) return;
@@ -235,11 +253,17 @@ const GuestListAssignments: React.FC = () => {
                         <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
                         <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
                     </label>
-                    <div className="flex items-center gap-2">
-                        <label htmlFor="bulk-allowance" className="text-sm font-medium">Aplicar a todas selecionadas:</label>
-                        <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
-                        <span className="text-sm">convidado(s)</span>
-                        <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar</button>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="bulk-allowance" className="text-sm font-medium">Aplicar a todas selecionadas:</label>
+                            <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
+                            <span className="text-sm">convidado(s)</span>
+                            <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar</button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input id="bulk-info" type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Informativo..."/>
+                            <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Info</button>
+                        </div>
                     </div>
                 </div>
 
@@ -251,6 +275,7 @@ const GuestListAssignments: React.FC = () => {
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
@@ -261,6 +286,16 @@ const GuestListAssignments: React.FC = () => {
                                     <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
                                     <td className="p-3 whitespace-nowrap">
                                         <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input 
+                                            type="text" 
+                                            value={assignments[p.id]?.info ?? ''} 
+                                            onChange={e => handleInfoChange(p.id, e.target.value)} 
+                                            disabled={!assignments[p.id]} 
+                                            placeholder="Ex: VIP até 00h" 
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                        />
                                     </td>
                                 </tr>
                             ))}

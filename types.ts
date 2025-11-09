@@ -202,7 +202,7 @@ export interface GuestList {
   isActive: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
-  assignments?: { [promoterId: string]: { guestAllowance: number; } };
+  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; } };
 }
 
 export interface GuestListConfirmation {
