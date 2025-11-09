@@ -147,7 +147,8 @@ export const addGuestListConfirmation = async (
 
   } catch (error) {
     console.error('Error in guest list confirmation transaction: ', error);
-    throw new Error('Não foi possível confirmar a presença. Por favor, tente novamente.');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Não foi possível confirmar a presença. Detalhes do erro: ${errorMessage}`);
   }
 };
 
