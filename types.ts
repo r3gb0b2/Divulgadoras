@@ -201,7 +201,7 @@ export interface GuestList {
   isActive: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
-  assignedPromoterIds?: string[];
+  assignments?: { [promoterId: string]: { guestAllowance: number; } };
 }
 
 export interface GuestListConfirmation {

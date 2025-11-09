@@ -92,7 +92,7 @@ const ListModal: React.FC<{
                     <input type="text" name="name" placeholder="Nome da Lista (ex: Lista VIP)" value={formData.name} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
                     <textarea name="description" placeholder="Descrição (opcional)" value={formData.description} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
                     <div>
-                        <label className="block text-sm font-medium text-gray-300">Nº de Convidados Permitidos</label>
+                        <label className="block text-sm font-medium text-gray-300">Nº de Convidados Padrão</label>
                         <input type="number" name="guestAllowance" min="0" value={formData.guestAllowance} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
                     </div>
                     <div>
@@ -255,7 +255,7 @@ const AdminLists: React.FC = () => {
                                         <td className="px-4 py-3 whitespace-nowrap font-medium text-white">{list.name}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{list.campaignName}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-center">
-                                            {(list.assignedPromoterIds || []).length > 0 ? (list.assignedPromoterIds || []).length : 'Todas'}
+                                            {Object.keys(list.assignments || {}).length > 0 ? Object.keys(list.assignments || {}).length : 'Todas'}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <label className="flex items-center cursor-pointer" title={list.isActive ? 'Desativar lista' : 'Ativar lista'}>

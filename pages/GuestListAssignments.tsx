@@ -5,14 +5,13 @@ import { GuestList, Promoter, PostAssignment } from '../types';
 import { getGuestListById, updateGuestList } from '../services/guestListService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAssignmentsForOrganization } from '../services/postService';
-import { getAllCampaigns } from '../services/settingsService';
 import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
 
 const getPerformanceColor = (rate: number): string => {
     if (rate < 0) return 'text-gray-300';
     if (rate === 100) return 'text-green-400';
     if (rate >= 60) return 'text-blue-400';
-    if (rate >= 31) return 'text-yellow-400'; // Laranja
+    if (rate >= 31) return 'text-yellow-400';
     return 'text-red-400';
 };
 
@@ -28,14 +27,16 @@ const toDateSafe = (timestamp: any): Date | null => {
 const GuestListAssignments: React.FC = () => {
     const { listId } = useParams<{ listId: string }>();
     const navigate = useNavigate();
-    const { adminData, selectedOrgId } = useAdminAuth();
+    const { adminData } = useAdminAuth();
 
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
-    const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number } }>({});
+    
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
+    const [bulkAllowance, setBulkAllowance] = useState<number>(0);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -49,27 +50,23 @@ const GuestListAssignments: React.FC = () => {
             const listData = await getGuestListById(listId);
             if (!listData) throw new Error("Lista de convidados não encontrada.");
 
-            const allCampaigns = await getAllCampaigns(listData.organizationId);
-            const associatedCampaign = allCampaigns.find(c => c.id === listData.campaignId);
-            
-            if (!associatedCampaign) {
-                throw new Error(`Evento associado (ID: ${listData.campaignId}) não foi encontrado.`);
-            }
-
             const [approvedPromoters, orgAssignments] = await Promise.all([
                 getApprovedPromoters(
                     listData.organizationId,
-                    associatedCampaign.stateAbbr,
+                    '', // stateAbbr is not available on list, but campaignName + orgId should be enough
                     listData.campaignName
                 ),
                 getAssignmentsForOrganization(listData.organizationId)
             ]);
 
+            const promotersForCampaign = approvedPromoters.filter(p => p.campaignName === listData.campaignName);
+
             setList(listData);
-            approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
-            setPromoters(approvedPromoters);
+            promotersForCampaign.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
+            setPromoters(promotersForCampaign);
             setPostAssignments(orgAssignments);
-            setAssignedIds(new Set(listData.assignedPromoterIds || []));
+            setAssignments(listData.assignments || {});
+            setBulkAllowance(listData.guestAllowance || 0);
 
         } catch (err: any) {
             setError(err.message || "Falha ao carregar dados.");
@@ -98,43 +95,10 @@ const GuestListAssignments: React.FC = () => {
             if (!a.post) return;
             const stat = statsMap.get(a.promoterId);
             if (!stat) return;
-    
             stat.assigned++;
-    
-            if (a.proofSubmittedAt) {
-                stat.completed++;
-            } else if (a.justification) {
-                if (a.justificationStatus === 'accepted') {
-                    stat.acceptedJustifications++;
-                } else if (a.justificationStatus === 'rejected') {
-                    stat.missed++;
-                } else { // 'pending'
-                    stat.pending++;
-                }
-            } else {
-                let deadlineHasPassed = false;
-                if (!a.post.allowLateSubmissions) {
-                    const confirmedAt = toDateSafe(a.confirmedAt);
-                    if (confirmedAt) {
-                        const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
-                        if (now > proofDeadline) {
-                            deadlineHasPassed = true;
-                        }
-                    }
-                    if (!deadlineHasPassed) {
-                        const postExpiresAt = toDateSafe(a.post.expiresAt);
-                        if (postExpiresAt && now > postExpiresAt) {
-                            deadlineHasPassed = true;
-                        }
-                    }
-                }
-                if (deadlineHasPassed) {
-                    stat.missed++;
-                } else {
-                    stat.pending++;
-                }
-            }
-            statsMap.set(a.promoterId, stat);
+            if (a.proofSubmittedAt) stat.completed++;
+            else if (a.justification && a.justificationStatus === 'accepted') stat.acceptedJustifications++;
+            else if (a.justification && a.justificationStatus === 'rejected') stat.missed++;
         });
     
         return promoters.map(p => {
@@ -146,23 +110,6 @@ const GuestListAssignments: React.FC = () => {
             return { ...p, completionRate };
         });
     }, [promoters, postAssignments]);
-    
-    const promotersByColor = useMemo(() => {
-        const categories: { green: string[], blue: string[], yellow: string[], red: string[] } = {
-            green: [],
-            blue: [],
-            yellow: [],
-            red: []
-        };
-        promotersWithStats.forEach(p => {
-            const rate = p.completionRate;
-            if (rate === 100) categories.green.push(p.id);
-            else if (rate >= 60) categories.blue.push(p.id);
-            else if (rate >= 31) categories.yellow.push(p.id);
-            else if (rate >= 0) categories.red.push(p.id);
-        });
-        return categories;
-    }, [promotersWithStats]);
 
     const filteredPromoters = useMemo(() => {
         let results = promotersWithStats;
@@ -185,52 +132,66 @@ const GuestListAssignments: React.FC = () => {
     }, [promotersWithStats, searchQuery, colorFilter]);
 
     const handleToggle = (promoterId: string) => {
-        setAssignedIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(promoterId)) {
-                newSet.delete(promoterId);
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            if (newAssignments[promoterId]) {
+                delete newAssignments[promoterId];
             } else {
-                newSet.add(promoterId);
+                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0 };
             }
-            return newSet;
+            return newAssignments;
         });
     };
 
-    const handleToggleAll = () => {
-        const promoterIds = new Set(filteredPromoters.map(p => p.id));
-        const areAllSelected = filteredPromoters.every(p => assignedIds.has(p.id));
-
-        setAssignedIds(prev => {
-            const newSet = new Set(prev);
-            if (areAllSelected) {
-                promoterIds.forEach(id => newSet.delete(id));
-            } else {
-                promoterIds.forEach(id => newSet.add(id));
-            }
-            return newSet;
-        });
+    const handleAllowanceChange = (promoterId: string, value: string) => {
+        const allowance = parseInt(value, 10);
+        if (isNaN(allowance) || allowance < 0) return;
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { guestAllowance: allowance }
+        }));
     };
 
-    const handleAutoAssign = (color: 'green' | 'blue' | 'yellow' | 'red') => {
-        const promoterIdsToAdd = promotersByColor[color];
-        if (promoterIdsToAdd.length === 0) {
-            const colorNameMap = { green: 'verdes', blue: 'azuis', yellow: 'amarelas', red: 'vermelhas' };
-            alert(`Nenhuma divulgadora encontrada na categoria ${colorNameMap[color]}.`);
+    const handleToggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isChecked = e.target.checked;
+        const visibleIds = filteredPromoters.map(p => p.id);
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            if (isChecked) {
+                visibleIds.forEach(id => {
+                    if (!newAssignments[id]) {
+                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0 };
+                    }
+                });
+            } else {
+                visibleIds.forEach(id => delete newAssignments[id]);
+            }
+            return newAssignments;
+        });
+    };
+    
+    const handleApplyBulkAllowance = () => {
+        const selectedIds = Object.keys(assignments);
+        if(selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar a quantidade.");
             return;
         }
-        setAssignedIds(prev => {
-            const newSet = new Set(prev);
-            promoterIdsToAdd.forEach(id => newSet.add(id));
-            return newSet;
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { guestAllowance: bulkAllowance };
+            });
+            return newAssignments;
         });
     };
+
 
     const handleSave = async () => {
         if (!listId) return;
         setIsSaving(true);
         setError(null);
         try {
-            await updateGuestList(listId, { assignedPromoterIds: Array.from(assignedIds) });
+            await updateGuestList(listId, { assignments });
             alert("Atribuições salvas com sucesso!");
             navigate('/admin/lists');
         } catch (err: any) {
@@ -241,80 +202,67 @@ const GuestListAssignments: React.FC = () => {
     };
 
     const renderContent = () => {
-        if (isLoading) {
-            return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-        }
-        if (error) {
-            return <p className="text-red-400 text-center">{error}</p>;
-        }
-        return (
-            <div className="space-y-6">
-                <div className="mb-6 p-4 border border-gray-700 rounded-lg">
-                    <h2 className="text-lg font-semibold text-white mb-3">Atribuição Automática por Cor</h2>
-                    <p className="text-sm text-gray-400 mb-4">Selecione todas as divulgadoras de uma categoria de aproveitamento com um clique. A seleção será <strong className="text-gray-300">adicionada</strong> à sua seleção manual atual.</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <button type="button" onClick={() => handleAutoAssign('green')} className="p-3 bg-green-900/50 rounded-lg text-left hover:bg-green-900/80 transition-colors">
-                            <p className="font-bold text-green-300">Verdes (100%)</p>
-                            <p className="text-2xl font-bold text-white">{promotersByColor.green.length}</p>
-                        </button>
-                        <button type="button" onClick={() => handleAutoAssign('blue')} className="p-3 bg-blue-900/50 rounded-lg text-left hover:bg-blue-900/80 transition-colors">
-                            <p className="font-bold text-blue-300">Azuis (60-99%)</p>
-                            <p className="text-2xl font-bold text-white">{promotersByColor.blue.length}</p>
-                        </button>
-                        <button type="button" onClick={() => handleAutoAssign('yellow')} className="p-3 bg-yellow-900/50 rounded-lg text-left hover:bg-yellow-900/80 transition-colors">
-                            <p className="font-bold text-yellow-300">Amarelas (31-59%)</p>
-                            <p className="text-2xl font-bold text-white">{promotersByColor.yellow.length}</p>
-                        </button>
-                        <button type="button" onClick={() => handleAutoAssign('red')} className="p-3 bg-red-900/50 rounded-lg text-left hover:bg-red-900/80 transition-colors">
-                            <p className="font-bold text-red-300">Vermelhas (0-30%)</p>
-                            <p className="text-2xl font-bold text-white">{promotersByColor.red.length}</p>
-                        </button>
-                    </div>
-                </div>
+        if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+        if (error) return <p className="text-red-400 text-center">{error}</p>;
+        
+        const areAllVisibleSelected = filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id]);
 
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400">
-                        <span className="font-semibold text-gray-300">Aproveitamento:</span>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>100%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div><span>60-99%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31-59%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0-30%</span></div>
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                    <div className="relative flex-grow w-full">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                        <input type="text" placeholder="Buscar por nome ou @..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800"/>
                     </div>
-                    <div className="flex items-center gap-x-2">
+                    <div className="flex items-center gap-x-2 flex-shrink-0">
                         <span className="font-semibold text-gray-300 text-xs">Filtrar:</span>
                         <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                             {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
                                 <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
-                                    <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Amarelas', 'red': 'Vermelhas'}[f]}</span>
+                                    <span className="hidden sm:inline">{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
-                <div className="relative">
-                     <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                    <input type="text" placeholder="Buscar por nome ou @..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200"/>
+                
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                     <label className="flex items-center space-x-2 font-semibold cursor-pointer">
+                        <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                        <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="bulk-allowance" className="text-sm font-medium">Aplicar a todas selecionadas:</label>
+                        <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
+                        <span className="text-sm">convidado(s)</span>
+                        <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar</button>
+                    </div>
                 </div>
-                <div className="border border-gray-700 rounded-lg p-2 max-h-[50vh] overflow-y-auto">
-                    {filteredPromoters.length > 0 ? (
-                        <>
-                            <label className="flex items-center space-x-2 p-2 font-semibold cursor-pointer">
-                                <input type="checkbox" onChange={handleToggleAll} checked={filteredPromoters.length > 0 && filteredPromoters.every(p => assignedIds.has(p.id))} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                <span>Marcar/Desmarcar Todos Visíveis ({assignedIds.size} selecionadas)</span>
-                            </label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1">
-                                {filteredPromoters.map(p => (
-                                    <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-800/50 cursor-pointer">
-                                        <input type="checkbox" checked={assignedIds.has(p.id)} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                        <span className={`truncate text-sm font-semibold ${getPerformanceColor(p.completionRate)}`} title={p.name}>{p.instagram || p.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </>
-                    ) : (
-                        <p className="text-gray-400 text-center p-6">Nenhuma divulgadora encontrada.</p>
-                    )}
+
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase w-12"></th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {filteredPromoters.map(p => (
+                                <tr key={p.id} className="hover:bg-gray-700/40">
+                                    <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
+                                    <td className="p-3 whitespace-nowrap"><span className="font-medium text-white">{p.instagram || p.name}</span></td>
+                                    <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                     {filteredPromoters.length === 0 && <p className="text-gray-400 text-center p-6">Nenhuma divulgadora encontrada.</p>}
                 </div>
             </div>
         );
@@ -324,7 +272,7 @@ const GuestListAssignments: React.FC = () => {
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                 <div>
-                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2"><ArrowLeftIcon className="w-5 h-5" /><span>Voltar</span></button>
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark"><ArrowLeftIcon className="w-5 h-5" /><span>Voltar</span></button>
                     <h1 className="text-3xl font-bold mt-1">Atribuir Divulgadoras</h1>
                     <p className="text-primary font-semibold">{list?.name || 'Carregando...'} para {list?.campaignName}</p>
                 </div>

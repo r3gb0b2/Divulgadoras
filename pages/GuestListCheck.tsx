@@ -69,8 +69,11 @@ const useCountdown = (startDate: Date | null, endDate: Date | null) => {
 
 
 const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
+    const promoterSpecificAllowance = list.assignments?.[promoter.id]?.guestAllowance;
+    const finalAllowance = promoterSpecificAllowance !== undefined ? promoterSpecificAllowance : list.guestAllowance;
+
     const [isAttending, setIsAttending] = useState(true);
-    const [guestNames, setGuestNames] = useState<string[]>(Array(list.guestAllowance).fill(''));
+    const [guestNames, setGuestNames] = useState<string[]>(Array(finalAllowance).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -88,12 +91,14 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         if (existingConfirmation) {
             setIsAttending(existingConfirmation.isPromoterAttending);
             const filledGuests = [...existingConfirmation.guestNames];
-            while (filledGuests.length < list.guestAllowance) {
+            while (filledGuests.length < finalAllowance) {
                 filledGuests.push('');
             }
-            setGuestNames(filledGuests.slice(0, list.guestAllowance));
+            setGuestNames(filledGuests.slice(0, finalAllowance));
+        } else {
+             setGuestNames(Array(finalAllowance).fill(''));
         }
-    }, [existingConfirmation, list.guestAllowance]);
+    }, [existingConfirmation, finalAllowance]);
 
 
     const handleGuestNameChange = (index: number, value: string) => {
@@ -185,11 +190,11 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                     </label>
                 </div>
 
-                {isAttending && list.guestAllowance > 0 && (
+                {isAttending && finalAllowance > 0 && (
                     <div>
-                        <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({list.guestAllowance} permitidos)</h4>
+                        <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({finalAllowance} permitidos)</h4>
                         <div className="space-y-2">
-                            {Array.from({ length: list.guestAllowance }).map((_, index) => (
+                            {Array.from({ length: finalAllowance }).map((_, index) => (
                                 <input
                                     key={index}
                                     type="text"
@@ -311,10 +316,12 @@ const GuestListCheck: React.FC = () => {
             const activeLists = await getActiveGuestListsForCampaign(campaignId);
 
             const accessibleLists = activeLists.filter(list => {
-                if (!list.assignedPromoterIds || !Array.isArray(list.assignedPromoterIds) || list.assignedPromoterIds.length === 0) {
-                    return true;
+                const hasAssignments = list.assignments && Object.keys(list.assignments).length > 0;
+                if (!hasAssignments) {
+                    return true; // Open to all approved promoters
                 }
-                return list.assignedPromoterIds.includes(approvedProfile.id);
+                // Check if the promoter's ID is a key in the assignments object
+                return list.assignments?.[approvedProfile.id] !== undefined;
             });
 
             if (accessibleLists.length > 0) {
