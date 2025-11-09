@@ -69,8 +69,9 @@ const useCountdown = (startDate: Date | null, endDate: Date | null) => {
 
 
 const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
-    const promoterSpecificAllowance = list.assignments?.[promoter.id]?.guestAllowance;
-    const finalAllowance = promoterSpecificAllowance !== undefined ? promoterSpecificAllowance : list.guestAllowance;
+    const promoterSpecificAssignment = list.assignments?.[promoter.id];
+    const finalAllowance = promoterSpecificAssignment?.guestAllowance !== undefined ? promoterSpecificAssignment.guestAllowance : list.guestAllowance;
+    const infoText = promoterSpecificAssignment?.info;
 
     const [isAttending, setIsAttending] = useState(true);
     const [guestNames, setGuestNames] = useState<string[]>(Array(finalAllowance).fill(''));
@@ -160,6 +161,12 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     return (
         <div className="bg-dark/70 p-4 rounded-lg shadow-sm space-y-4">
             <h3 className="text-xl font-bold text-primary">{list.name}</h3>
+            {infoText && (
+                <div className="bg-yellow-900/50 border-l-4 border-yellow-500 text-yellow-300 p-3 rounded-md -mt-2 mb-4" role="alert">
+                    <p className="font-bold">Informativo:</p>
+                    <p>{infoText}</p>
+                </div>
+            )}
             {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
             {(startDate || closingDate) && (
                 <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${
