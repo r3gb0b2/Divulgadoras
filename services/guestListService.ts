@@ -122,27 +122,26 @@ export const addGuestListConfirmation = async (
     const confirmationsRef = firestore.collection('guestListConfirmations');
 
     await firestore.runTransaction(async (transaction) => {
+        // Query for any existing confirmations for this promoter and this specific list.
         const oldConfirmationsQuery = confirmationsRef
             .where('promoterId', '==', confirmationData.promoterId)
             .where('guestListId', '==', confirmationData.guestListId);
         
         const oldConfirmationsSnapshot = await transaction.get(oldConfirmationsQuery);
 
+        // Delete any existing confirmations found. This ensures we are always replacing, not updating.
+        oldConfirmationsSnapshot.forEach(doc => {
+            transaction.delete(doc.ref);
+        });
+        
+        // Create the new confirmation document.
+        const newDocRef = confirmationsRef.doc();
         const dataWithTimestamp = {
             ...confirmationData,
             confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            isLocked: true,
+            isLocked: true, // Lock the list upon submission
         };
-
-        if (!oldConfirmationsSnapshot.empty) {
-            // If an old confirmation exists (for an unlocked list), update it.
-            const docToUpdateRef = oldConfirmationsSnapshot.docs[0].ref;
-            transaction.update(docToUpdateRef, dataWithTimestamp);
-        } else {
-            // Otherwise, create a new one.
-            const newDocRef = confirmationsRef.doc();
-            transaction.set(newDocRef, dataWithTimestamp);
-        }
+        transaction.set(newDocRef, dataWithTimestamp);
     });
 
   } catch (error) {
