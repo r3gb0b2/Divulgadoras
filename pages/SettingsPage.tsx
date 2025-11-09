@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -90,6 +90,23 @@ const SettingsPage: React.FC = () => {
             </p>
             <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
               Acessar &rarr;
+            </div>
+          </Link>
+
+          {/* Group Removal Requests */}
+          <Link
+            to="/admin/group-removals"
+            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+          >
+            <div className="flex items-center">
+              <LogoutIcon className="w-8 h-8 text-yellow-400" />
+              <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Remoção</h2>
+            </div>
+            <p className="mt-2 text-gray-400">
+              Visualize e gerencie os pedidos de divulgadoras para sair dos grupos de divulgação.
+            </p>
+            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+              Analisar &rarr;
             </div>
           </Link>
           

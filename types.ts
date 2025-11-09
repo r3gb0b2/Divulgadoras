@@ -297,3 +297,16 @@ export interface OneTimePostSubmission {
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;
 }
+
+export interface GroupRemovalRequest {
+  id: string;
+  organizationId: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  campaignName: string;
+  status: 'pending' | 'completed' | 'ignored';
+  requestedAt: Timestamp | FieldValue;
+  actionTakenBy?: string; // UID of admin
+  actionTakenAt?: Timestamp | FieldValue;
+}

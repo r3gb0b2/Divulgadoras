@@ -16,6 +16,7 @@ import ProofUploadPage from './pages/ProofUploadPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import OneTimePostPage from './pages/OneTimePostPage';
 import { auth } from './firebase/config';
+import LeaveGroupPage from './pages/LeaveGroupPage';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -141,6 +142,7 @@ const App: React.FC = () => {
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
+                <Route path="/leave-group" element={<LeaveGroupPage />} />
               </Routes>
             </ErrorBoundary>
           </main>

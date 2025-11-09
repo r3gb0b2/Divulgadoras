@@ -1,6 +1,6 @@
 import firebase from 'firebase/compat/app';
 import { firestore, storage } from '../firebase/config';
-import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp } from '../types';
+import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp, GroupRemovalRequest } from '../types';
 
 type QueryDocumentSnapshot = firebase.firestore.QueryDocumentSnapshot;
 type DocumentData = firebase.firestore.DocumentData;
@@ -515,5 +515,62 @@ export const deleteRejectionReason = async (id: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting rejection reason: ", error);
         throw new Error("Não foi possível deletar o motivo de rejeição.");
+    }
+};
+
+// --- Group Removal Request Service ---
+
+export const requestGroupRemoval = async (promoterId: string, campaignName: string, orgId: string): Promise<void> => {
+    try {
+        const promoter = await getPromoterById(promoterId);
+        if (!promoter) throw new Error("Divulgadora não encontrada.");
+        
+        const q = firestore.collection("groupRemovalRequests")
+            .where("promoterId", "==", promoterId)
+            .where("campaignName", "==", campaignName)
+            .where("organizationId", "==", orgId)
+            .where("status", "==", "pending");
+        const existing = await q.get();
+        if (!existing.empty) {
+            throw new Error("Você já tem uma solicitação de remoção pendente para este grupo.");
+        }
+
+        const request: Omit<GroupRemovalRequest, 'id'> = {
+            organizationId: orgId,
+            promoterId: promoterId,
+            promoterName: promoter.name,
+            promoterEmail: promoter.email,
+            campaignName: campaignName,
+            status: 'pending',
+            requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        await firestore.collection("groupRemovalRequests").add(request);
+    } catch (error) {
+        console.error("Error creating group removal request: ", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Não foi possível enviar a solicitação.");
+    }
+};
+
+export const getGroupRemovalRequests = async (organizationId: string): Promise<GroupRemovalRequest[]> => {
+    try {
+        const q = firestore.collection("groupRemovalRequests")
+            .where("organizationId", "==", organizationId)
+            .where("status", "==", "pending")
+            .orderBy("requestedAt", "desc");
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+    } catch (error) {
+        console.error("Error getting group removal requests: ", error);
+        throw new Error("Não foi possível buscar as solicitações de remoção.");
+    }
+};
+
+export const updateGroupRemovalRequest = async (requestId: string, data: Partial<Omit<GroupRemovalRequest, 'id'>>): Promise<void> => {
+    try {
+        await firestore.collection("groupRemovalRequests").doc(requestId).update(data);
+    } catch (error) {
+        console.error("Error updating group removal request: ", error);
+        throw new Error("Não foi possível atualizar a solicitação de remoção.");
     }
 };

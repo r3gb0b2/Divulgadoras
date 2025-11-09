@@ -157,8 +157,8 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
             return;
         }
 
-        const { organizationId, promoterEmail, promoterName, post } = assignmentData;
-        if (!organizationId || !promoterEmail || !promoterName || !post) {
+        const { organizationId, promoterId, promoterEmail, promoterName, post } = assignmentData;
+        if (!organizationId || !promoterId || !promoterEmail || !promoterName || !post) {
             console.error(`Incomplete data for assignment ${context.params.assignmentId}, cannot send notification.`);
             return;
         }
@@ -168,11 +168,12 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
             const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
 
             await sendNewPostNotificationEmail(
-                { email: promoterEmail, name: promoterName },
+                { email: promoterEmail, name: promoterName, id: promoterId },
                 {
                     campaignName: post.campaignName,
                     eventName: post.eventName,
                     orgName: orgName,
+                    organizationId: organizationId,
                 }
             );
         } catch (error) {
@@ -385,6 +386,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   }
 
   const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`;
+  const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoter.id}&campaignName=${encodeURIComponent(postDetails.campaignName)}&orgId=${postDetails.organizationId}`;
   const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
   const subject = `Nova Publicação Disponível - ${eventDisplayName}`;
   const htmlContent = `
@@ -398,6 +400,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
             .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
             .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
             .content { padding: 30px; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #888; }
             .button { display: inline-block; background-color: #e83a93; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
         </style>
     </head>
@@ -411,6 +414,9 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
                     <a href="${portalLink}" class="button">Ver Publicação</a>
                 </p>
                 <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+            </div>
+            <div class="footer">
+                <p>Não quer mais fazer parte deste grupo de divulgação? <a href="${leaveGroupLink}">Solicite sua remoção</a>.</p>
             </div>
         </div>
     </body>
@@ -615,6 +621,47 @@ exports.sendNewsletter = functions
       const message = `Newsletter enviada para ${successCount} de ${promoters.length} divulgadoras em "${audienceDescription}".`;
       console.log(message);
       return { success: true, message: message };
+    });
+
+/**
+ * Removes a promoter from all their active (pending or confirmed) post assignments.
+ * This is typically used when they leave a group.
+ */
+exports.removePromoterFromAllAssignments = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      // Auth check
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+      }
+      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+      }
+
+      const { promoterId } = data;
+      if (!promoterId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
+      }
+
+      const assignmentsRef = db.collection("postAssignments");
+      const query = assignmentsRef
+          .where("promoterId", "==", promoterId)
+          .where("status", "in", ["pending", "confirmed"]);
+
+      const snapshot = await query.get();
+      if (snapshot.empty) {
+        return { success: true, message: "Nenhuma tarefa ativa encontrada para remover." };
+      }
+
+      const batch = db.batch();
+      snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      await batch.commit();
+
+      return { success: true, count: snapshot.size, message: `${snapshot.size} tarefa(s) ativa(s) foram removidas.` };
     });
 
 /**
