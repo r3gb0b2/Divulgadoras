@@ -122,29 +122,27 @@ export const addGuestListConfirmation = async (
     const confirmationsRef = firestore.collection('guestListConfirmations');
 
     await firestore.runTransaction(async (transaction) => {
-        // This query is too broad. It will delete all confirmations for
-        // a promoter in the same campaign, even for different guest lists.
         const oldConfirmationsQuery = confirmationsRef
             .where('promoterId', '==', confirmationData.promoterId)
             .where('guestListId', '==', confirmationData.guestListId);
         
         const oldConfirmationsSnapshot = await transaction.get(oldConfirmationsQuery);
 
-        // Deletes all found documents.
-        if (!oldConfirmationsSnapshot.empty) {
-            oldConfirmationsSnapshot.forEach(doc => {
-                transaction.delete(doc.ref);
-            });
-        }
-
-        // Create the new confirmation.
-        const newDocRef = confirmationsRef.doc();
         const dataWithTimestamp = {
             ...confirmationData,
             confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
             isLocked: true,
         };
-        transaction.set(newDocRef, dataWithTimestamp);
+
+        if (!oldConfirmationsSnapshot.empty) {
+            // If an old confirmation exists (for an unlocked list), update it.
+            const docToUpdateRef = oldConfirmationsSnapshot.docs[0].ref;
+            transaction.update(docToUpdateRef, dataWithTimestamp);
+        } else {
+            // Otherwise, create a new one.
+            const newDocRef = confirmationsRef.doc();
+            transaction.set(newDocRef, dataWithTimestamp);
+        }
     });
 
   } catch (error) {

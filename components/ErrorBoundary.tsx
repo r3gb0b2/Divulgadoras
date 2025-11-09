@@ -11,7 +11,8 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  public state: State = {
+  // FIX: Initialize state using a class property instead of a constructor to resolve type errors with 'this'.
+  state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -26,7 +27,6 @@ class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // This lifecycle method is also called after an error has been thrown by a descendant component.
     // It receives two parameters: the error that was thrown, and an object with a componentStack key.
-    // FIX: Property 'setState' does not exist on type 'ErrorBoundary'.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -68,7 +68,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: Property 'props' does not exist on type 'ErrorBoundary'.
     return this.props.children;
   }
 }
