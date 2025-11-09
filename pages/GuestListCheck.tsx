@@ -140,11 +140,44 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     };
 
     if (success) {
+        const submittedGuests = guestNames.filter(name => name.trim() !== '');
         return (
             <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
                     <p className="font-bold">{isEditing ? 'Lista Atualizada!' : 'Presença Confirmada!'}</p>
                     <p>Sua lista para <strong>{list.name}</strong> foi {isEditing ? 'atualizada' : 'enviada'} com sucesso.</p>
+                </div>
+                <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
+                    <h4 className="text-lg font-semibold text-white mb-2">Resumo do Envio:</h4>
+                    <ul className="space-y-1 text-gray-300">
+                        {isAttending ? (
+                            <li className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span><strong>Seu nome:</strong> {promoter.name}</span>
+                            </li>
+                        ) : (
+                             <li className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                <span>Você <strong>não</strong> confirmou sua presença.</span>
+                            </li>
+                        )}
+                        {submittedGuests.length > 0 ? (
+                            <li className="pt-2">
+                                <strong className="block mb-1">Convidados ({submittedGuests.length}):</strong>
+                                <ul className="list-disc list-inside pl-2 space-y-1">
+                                    {submittedGuests.map((name, index) => (
+                                        <li key={index}>{name}</li>
+                                    ))}
+                                </ul>
+                            </li>
+                        ) : (
+                            isAttending && <li className="pt-2 text-gray-400">Nenhum convidado adicionado.</li>
+                        )}
+                    </ul>
                 </div>
             </div>
         );
