@@ -30,23 +30,22 @@ export const createPost = async (
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    let finalMediaUrl: string | undefined = postData.googleDriveUrl; // Start with GDrive URL
+    let finalMediaUrl: string | undefined = undefined;
 
-    // 1. Upload media file to Firebase Storage if provided (it takes precedence)
+    // 1. Upload media file to Firebase Storage if provided
     if (mediaFile) {
       const fileExtension = mediaFile.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
       const storageRef = storage.ref(`posts-media/${fileName}`);
       await storageRef.put(mediaFile);
-      finalMediaUrl = await storageRef.getDownloadURL(); // Get the full URL for immediate use
+      finalMediaUrl = storageRef.fullPath;
     }
 
     // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl,
-        // The form now provides both, so let's ensure both are passed if they exist.
-        googleDriveUrl: postData.googleDriveUrl, 
+        mediaUrl: finalMediaUrl, // This will be undefined if no file was uploaded
+        // googleDriveUrl is already in postData from the form
     };
 
     // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
