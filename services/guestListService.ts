@@ -30,6 +30,9 @@ export const getActiveGuestListsForCampaign = async (campaignId: string): Promis
         return lists;
     } catch (error) {
         console.error("Error fetching active guest lists for campaign: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente para 'guestLists'). Verifique o console de logs para o link de criação.");
+        }
         throw new Error("Não foi possível buscar as listas ativas para este evento.");
     }
 };
@@ -358,6 +361,9 @@ export const getPendingChangeRequestForConfirmation = async (
         return { id: doc.id, ...doc.data() } as GuestListChangeRequest;
     } catch (error) {
         console.error("Error fetching pending change request: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente para 'guestListChangeRequests'). Verifique o console de logs para o link de criação.");
+        }
         throw new Error("Não foi possível verificar solicitações pendentes.");
     }
 };
@@ -374,6 +380,10 @@ export const getGuestListChangeRequests = async (
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestListChangeRequest));
     } catch (error) {
         console.error("Error getting guest list change requests: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            console.error("Firestore index missing for guestListChangeRequests. Please create it in your Firebase console. The error message usually contains a direct link.");
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Um índice para 'guestListChangeRequests' por 'organizationId', 'status' e 'requestedAt' é necessário. Verifique o console de logs para o link de criação.");
+        }
         throw new Error("Não foi possível buscar as solicitações de alteração.");
     }
 };
