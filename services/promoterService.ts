@@ -472,11 +472,15 @@ export const getApprovedEventsForPromoter = async (email: string): Promise<Promo
 
 export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
   try {
-    const q = firestore.collection("promoters")
+    let q: firebase.firestore.Query = firestore.collection("promoters")
       .where("organizationId", "==", organizationId)
-      .where("state", "==", state)
       .where("campaignName", "==", campaignName)
       .where("status", "==", "approved");
+
+    if (state) {
+        q = q.where("state", "==", state);
+    }
+
     const querySnapshot = await q.get();
     const promoters: Promoter[] = [];
     querySnapshot.forEach((doc) => {
