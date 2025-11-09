@@ -374,16 +374,22 @@ export const getGuestListChangeRequests = async (
     try {
         const q = firestore.collection("guestListChangeRequests")
             .where("organizationId", "==", organizationId)
-            .where("status", "==", "pending")
-            .orderBy("requestedAt", "desc");
+            .where("status", "==", "pending");
+            
         const snapshot = await q.get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestListChangeRequest));
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GuestListChangeRequest));
+
+        // Sort client-side to avoid needing a composite index
+        requests.sort((a, b) => {
+            const timeA = (a.requestedAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.requestedAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Most recent first
+        });
+        
+        return requests;
     } catch (error) {
         console.error("Error getting guest list change requests: ", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            console.error("Firestore index missing for guestListChangeRequests. Please create it in your Firebase console. The error message usually contains a direct link.");
-            throw new Error("Erro de configuração do banco de dados (índice ausente). Um índice para 'guestListChangeRequests' por 'organizationId', 'status' e 'requestedAt' é necessário. Verifique o console de logs para o link de criação.");
-        }
+        // This specific error message for index is now removed as the query was simplified.
         throw new Error("Não foi possível buscar as solicitações de alteração.");
     }
 };
