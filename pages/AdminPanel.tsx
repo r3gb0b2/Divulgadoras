@@ -647,10 +647,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const getStatusBadge = (status: PromoterStatus) => {
         const styles = {
-            pending: "bg-yellow-900/50 text-yellow-300",
-            approved: "bg-green-900/50 text-green-300",
-            rejected: "bg-red-900/50 text-red-300",
-            rejected_editable: "bg-orange-900/50 text-orange-300",
+            pending: "bg-yellow-900 bg-opacity-50 text-yellow-300",
+            approved: "bg-green-900 bg-opacity-50 text-green-300",
+            rejected: "bg-red-900 bg-opacity-50 text-red-300",
+            rejected_editable: "bg-orange-900 bg-opacity-50 text-orange-300",
             removed: "bg-gray-700 text-gray-400",
         };
         const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada", removed: "Removida" };
@@ -794,7 +794,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
                         <div className="flex items-center gap-x-2">
                             <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
-                            <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                            <div className="flex space-x-1 p-1 bg-dark bg-opacity-70 rounded-lg">
                                 {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
                                     <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                         {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
