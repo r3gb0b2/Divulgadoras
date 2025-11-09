@@ -80,8 +80,13 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     const [success, setSuccess] = useState(false);
     
     const startDate = list.startsAt ? (list.startsAt as Timestamp).toDate() : null;
-    const closingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
-    const { status, timeLeft } = useCountdown(startDate, closingDate);
+    
+    // Prioritize individual deadline over global list deadline
+    const individualClosingDate = promoterSpecificAssignment?.closesAt ? (promoterSpecificAssignment.closesAt as Timestamp).toDate() : null;
+    const globalClosingDate = list.closesAt ? (list.closesAt as Timestamp).toDate() : null;
+    const finalClosingDate = individualClosingDate || globalClosingDate;
+
+    const { status, timeLeft } = useCountdown(startDate, finalClosingDate);
     const isLocked = existingConfirmation?.isLocked ?? false;
     const isEditing = !!existingConfirmation;
 
@@ -167,14 +172,20 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                     <p>{infoText}</p>
                 </div>
             )}
+            {individualClosingDate && (
+                 <div className="bg-blue-900/50 border-l-4 border-blue-500 text-blue-300 p-3 rounded-md -mt-2 mb-4" role="alert">
+                    <p className="font-bold">Atenção:</p>
+                    <p>Seu prazo de envio para esta lista é <strong>{individualClosingDate.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</strong>.</p>
+                </div>
+            )}
             {list.description && <p className="text-sm text-gray-400 -mt-1 mb-2">{list.description}</p>}
-            {(startDate || closingDate) && (
+            {(startDate || finalClosingDate) && (
                 <div className={`text-center mb-2 p-3 rounded-md text-white font-semibold text-base ${
                     status === 'upcoming' ? 'bg-blue-900/70' :
                     status === 'open' ? 'bg-green-900/70' :
                     'bg-red-900/70'
                 }`}>
-                    { status === 'closed' && closingDate ? (
+                    { status === 'closed' && finalClosingDate ? (
                         <span>PRAZO ENCERRADO</span>
                     ) : (
                         <span>{timeLeft}</span>

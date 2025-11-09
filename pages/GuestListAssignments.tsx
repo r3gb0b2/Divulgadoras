@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { GuestList, Promoter, PostAssignment } from '../types';
+import { GuestList, Promoter, PostAssignment, Timestamp, FieldValue } from '../types';
 import { getGuestListById, updateGuestList } from '../services/guestListService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAssignmentsForOrganization } from '../services/postService';
 import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 const getPerformanceColor = (rate: number): string => {
     if (rate < 0) return 'text-gray-300';
@@ -24,6 +26,16 @@ const toDateSafe = (timestamp: any): Date | null => {
     return null;
 };
 
+const timestampToDateTimeLocal = (ts: any): string => {
+    if (!ts) return '';
+    try {
+        const date = ts.toDate ? ts.toDate() : new Date(ts.seconds * 1000);
+        if (isNaN(date.getTime())) return '';
+        const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+        return localDate.toISOString().slice(0, 16);
+    } catch (e) { return ''; }
+};
+
 const GuestListAssignments: React.FC = () => {
     const { listId } = useParams<{ listId: string }>();
     const navigate = useNavigate();
@@ -32,12 +44,13 @@ const GuestListAssignments: React.FC = () => {
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
-    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; } }>({});
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null } }>({});
     
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [bulkAllowance, setBulkAllowance] = useState<number>(0);
     const [bulkInfo, setBulkInfo] = useState<string>('');
+    const [bulkClosesAt, setBulkClosesAt] = useState<string>('');
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -138,7 +151,7 @@ const GuestListAssignments: React.FC = () => {
             if (newAssignments[promoterId]) {
                 delete newAssignments[promoterId];
             } else {
-                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, info: '' };
+                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
             }
             return newAssignments;
         });
@@ -149,7 +162,7 @@ const GuestListAssignments: React.FC = () => {
         if (isNaN(allowance) || allowance < 0) return;
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { ...prev[promoterId], info: prev[promoterId]?.info ?? '', guestAllowance: allowance }
+            [promoterId]: { ...prev[promoterId], guestAllowance: allowance }
         }));
     };
 
@@ -157,6 +170,17 @@ const GuestListAssignments: React.FC = () => {
         setAssignments(prev => ({
             ...prev,
             [promoterId]: { ...prev[promoterId], guestAllowance: prev[promoterId]?.guestAllowance ?? 0, info: value }
+        }));
+    };
+    
+    const handleDateChange = (promoterId: string, value: string) => {
+        const date = value ? firebase.firestore.Timestamp.fromDate(new Date(value)) : null;
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { 
+                ...(prev[promoterId] || { guestAllowance: 0, info: '' }), 
+                closesAt: date 
+            }
         }));
     };
 
@@ -168,7 +192,7 @@ const GuestListAssignments: React.FC = () => {
             if (isChecked) {
                 visibleIds.forEach(id => {
                     if (!newAssignments[id]) {
-                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, info: '' };
+                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
                     }
                 });
             } else {
@@ -187,7 +211,7 @@ const GuestListAssignments: React.FC = () => {
         setAssignments(prev => {
             const newAssignments = { ...prev };
             selectedIds.forEach(id => {
-                newAssignments[id] = { ...newAssignments[id], info: newAssignments[id]?.info ?? '', guestAllowance: bulkAllowance };
+                newAssignments[id] = { ...newAssignments[id], guestAllowance: bulkAllowance };
             });
             return newAssignments;
         });
@@ -202,7 +226,23 @@ const GuestListAssignments: React.FC = () => {
         setAssignments(prev => {
             const newAssignments = { ...prev };
             selectedIds.forEach(id => {
-                newAssignments[id] = { ...newAssignments[id], guestAllowance: newAssignments[id]?.guestAllowance ?? 0, info: bulkInfo };
+                newAssignments[id] = { ...newAssignments[id], info: bulkInfo };
+            });
+            return newAssignments;
+        });
+    };
+    
+    const handleApplyBulkDate = () => {
+        const selectedIds = Object.keys(assignments);
+        if (selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar a data.");
+            return;
+        }
+        const date = bulkClosesAt ? firebase.firestore.Timestamp.fromDate(new Date(bulkClosesAt)) : null;
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], closesAt: date };
             });
             return newAssignments;
         });
@@ -248,21 +288,24 @@ const GuestListAssignments: React.FC = () => {
                     </div>
                 </div>
                 
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
                      <label className="flex items-center space-x-2 font-semibold cursor-pointer">
                         <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
                         <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
                     </label>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <label htmlFor="bulk-allowance" className="text-sm font-medium">Aplicar a todas selecionadas:</label>
                             <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
-                            <span className="text-sm">convidado(s)</span>
-                            <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar</button>
+                            <label htmlFor="bulk-allowance" className="text-sm font-medium">convidado(s)</label>
+                            <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Qtde</button>
                         </div>
                         <div className="flex items-center gap-2">
                             <input id="bulk-info" type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Informativo..."/>
                             <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Info</button>
+                        </div>
+                         <div className="flex items-center gap-2">
+                            <input id="bulk-closes-at" type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
+                            <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Data</button>
                         </div>
                     </div>
                 </div>
@@ -276,6 +319,7 @@ const GuestListAssignments: React.FC = () => {
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Data Limite</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
@@ -295,6 +339,16 @@ const GuestListAssignments: React.FC = () => {
                                             disabled={!assignments[p.id]} 
                                             placeholder="Ex: VIP até 00h" 
                                             className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                        />
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input 
+                                            type="datetime-local" 
+                                            value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} 
+                                            onChange={e => handleDateChange(p.id, e.target.value)}
+                                            disabled={!assignments[p.id]}
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                            style={{colorScheme: 'dark'}}
                                         />
                                     </td>
                                 </tr>
