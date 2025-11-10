@@ -10,7 +10,7 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Extended React.Component to make this a proper React class component.
+// FIX: The ErrorBoundary class must extend React.Component to function as an error boundary.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);

@@ -556,12 +556,23 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
     try {
         const q = firestore.collection("groupRemovalRequests")
             .where("organizationId", "==", organizationId)
-            .where("status", "==", "pending")
-            .orderBy("requestedAt", "desc");
+            .where("status", "==", "pending");
         const snapshot = await q.get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+
+        // Sort client-side to avoid needing a composite index
+        requests.sort((a, b) => {
+            const timeA = (a.requestedAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.requestedAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Most recent first
+        });
+        
+        return requests;
     } catch (error) {
         console.error("Error getting group removal requests: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente para 'groupRemovalRequests'). Verifique o console de logs para o link de criação.");
+        }
         throw new Error("Não foi possível buscar as solicitações de remoção.");
     }
 };
