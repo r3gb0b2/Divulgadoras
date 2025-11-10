@@ -15,6 +15,7 @@ export interface Promoter {
   tiktok?: string;
   dateOfBirth: string;
   photoUrls: string[];
+  facePhotoUrl?: string;
   status: PromoterStatus;
   createdAt: Timestamp | FieldValue;
   state: string;
@@ -39,6 +40,7 @@ export interface PromoterApplicationData {
   tiktok: string;
   dateOfBirth: string;
   photos: File[];
+  facePhoto: File | null;
   state: string;
   campaignName?: string;
   organizationId: string;

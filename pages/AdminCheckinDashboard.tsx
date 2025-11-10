@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllCampaigns } from '../services/settingsService';
 import { Campaign } from '../types';
-import { ArrowLeftIcon, CheckCircleIcon, QrCodeIcon } from '../components/Icons'; // Adicionado QrCodeIcon
+import { ArrowLeftIcon, CheckCircleIcon, QrCodeIcon, FaceIdIcon } from '../components/Icons'; // Adicionado FaceIdIcon
 
 const AdminCheckinDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -86,7 +86,13 @@ const AdminCheckinDashboard: React.FC = () => {
                             {campaigns.map(campaign => (
                                 <div key={campaign.id} className="bg-gray-700/50 p-4 rounded-lg flex flex-col justify-between">
                                     <div>
-                                        <p className="font-bold text-lg text-primary">{campaign.name}</p>
+                                        <div className="flex justify-between items-start">
+                                            <p className="font-bold text-lg text-primary">{campaign.name}</p>
+                                            <div className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 bg-blue-900/50 text-blue-300">
+                                                <FaceIdIcon className="w-4 h-4" />
+                                                <span>Facial</span>
+                                            </div>
+                                        </div>
                                         <p className="text-sm text-gray-300">{campaign.stateAbbr}</p>
                                     </div>
                                     <Link

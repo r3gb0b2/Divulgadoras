@@ -20,6 +20,16 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       throw new Error("Você já se cadastrou para este evento/gênero.");
     }
 
+    let facePhotoUrl: string | undefined = undefined;
+    if (promoterData.facePhoto) {
+      const photo = promoterData.facePhoto;
+      const fileExtension = photo.name.split('.').pop();
+      const fileName = `face-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+      const storageRef = storage.ref(fileName);
+      await storageRef.put(photo);
+      facePhotoUrl = await storageRef.getDownloadURL();
+    }
+
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
         const fileExtension = photo.name.split('.').pop();
@@ -32,12 +42,13 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       })
     );
 
-    const { photos, ...rest } = promoterData;
+    const { photos, facePhoto, ...rest } = promoterData;
 
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
+      facePhotoUrl,
       photoUrls,
       status: 'pending' as const,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -556,23 +567,12 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
     try {
         const q = firestore.collection("groupRemovalRequests")
             .where("organizationId", "==", organizationId)
-            .where("status", "==", "pending");
+            .where("status", "==", "pending")
+            .orderBy("requestedAt", "desc");
         const snapshot = await q.get();
-        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
-
-        // Sort client-side to avoid needing a composite index
-        requests.sort((a, b) => {
-            const timeA = (a.requestedAt as Timestamp)?.toMillis() || 0;
-            const timeB = (b.requestedAt as Timestamp)?.toMillis() || 0;
-            return timeB - timeA; // Most recent first
-        });
-        
-        return requests;
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
     } catch (error) {
         console.error("Error getting group removal requests: ", error);
-        if (error instanceof Error && error.message.includes("requires an index")) {
-            throw new Error("Erro de configuração do banco de dados (índice ausente para 'groupRemovalRequests'). Verifique o console de logs para o link de criação.");
-        }
         throw new Error("Não foi possível buscar as solicitações de remoção.");
     }
 };

@@ -665,64 +665,6 @@ exports.removePromoterFromAllAssignments = functions
     });
 
 /**
- * Sets a promoter's status to 'removed' and deletes all their active post assignments.
- * This is a comprehensive removal action.
- */
-exports.setPromoterStatusToRemoved = functions
-    .region("southamerica-east1")
-    .https.onCall(async (data, context) => {
-      // 1. Auth check
-      if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-      }
-      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
-      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
-        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
-      }
-
-      // 2. Data validation
-      const { promoterId } = data;
-      if (!promoterId) {
-        throw new functions.https.HttpsError("invalid-argument", "O ID da divulgadora é obrigatório.");
-      }
-
-      // 3. Perform operations in a transaction/batch for atomicity
-      const promoterRef = db.collection("promoters").doc(promoterId);
-      const assignmentsRef = db.collection("postAssignments");
-      const assignmentsQuery = assignmentsRef
-          .where("promoterId", "==", promoterId)
-          .where("status", "in", ["pending", "confirmed"]);
-
-      try {
-        const assignmentsSnapshot = await assignmentsQuery.get();
-        
-        const batch = db.batch();
-
-        // Update promoter status
-        batch.update(promoterRef, { 
-          status: 'removed',
-          hasJoinedGroup: false, // Also mark them as not in the group
-        });
-
-        // Delete active assignments
-        if (!assignmentsSnapshot.empty) {
-          assignmentsSnapshot.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-          });
-        }
-        
-        await batch.commit();
-
-        const message = `Promoter ${promoterId} status set to removed and ${assignmentsSnapshot.size} active assignments deleted.`;
-        console.log(message);
-        return { success: true, message: message };
-      } catch (error) {
-        console.error(`Failed to remove promoter ${promoterId}:`, error);
-        throw new functions.https.HttpsError("internal", "Falha ao executar a remoção no servidor.", error);
-      }
-    });
-
-/**
  * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
  */
 // Placeholder for sendPostReminder logic
