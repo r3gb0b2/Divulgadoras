@@ -11,6 +11,7 @@ interface State {
 }
 
 // FIX: The ErrorBoundary class must extend React.Component to function as an error boundary.
+// FIX: Changed class definition to extend React.Component to resolve errors related to missing 'state', 'setState', and 'props' properties.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
