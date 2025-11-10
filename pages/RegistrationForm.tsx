@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
 // FIX: Added missing import for Icons
-import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
+import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon, FaceIdIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { storage } from '../firebase/config';
 
@@ -98,6 +98,15 @@ const PromoterForm: React.FC = () => {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
+  
+  // State for Face Verification
+  const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
+  const [facePhotoPreview, setFacePhotoPreview] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -123,10 +132,20 @@ const PromoterForm: React.FC = () => {
                 });
                 setPhotoPreviews(profile.photoUrls);
                 setOriginalPhotoUrls(profile.photoUrls);
+                if (profile.facePhotoUrl) {
+                  setFacePhotoPreview(profile.facePhotoUrl); // Show existing face photo
+                }
                 setProfileLoaded(true);
             }
         }).catch(err => setSubmitError(err.message));
     }
+    
+    // Cleanup camera on component unmount
+    return () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
+    };
   }, [location.search]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -216,35 +235,72 @@ const PromoterForm: React.FC = () => {
     }
   };
 
+  const startCamera = async () => {
+    try {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        streamRef.current = stream;
+        if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+        }
+        setIsCameraOpen(true);
+        setFacePhotoPreview(null);
+        setFacePhotoFile(null);
+    } catch (err) {
+        console.error("Error starting camera:", err);
+        setSubmitError("Não foi possível acessar a câmera. Verifique as permissões no seu navegador.");
+    }
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+        
+        canvas.toBlob((blob) => {
+            if (blob) {
+                setFacePhotoFile(new File([blob], 'face-verification.jpg', { type: 'image/jpeg' }));
+                setFacePhotoPreview(URL.createObjectURL(blob));
+            }
+        }, 'image/jpeg', 0.9);
+
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        setIsCameraOpen(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     // Age validation
     if (formData.dateOfBirth) {
         const birthDate = new Date(formData.dateOfBirth);
-        // Adjust for timezone offset to get the correct local date
         birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
-        
         const today = new Date();
         const fourteenYearsAgo = new Date(today.getFullYear() - 14, today.getMonth(), today.getDate());
-
         if (birthDate > fourteenYearsAgo) {
             setSubmitError("Você precisa ter pelo menos 14 anos para se cadastrar.");
             return;
         }
     }
-
-    if (!organizationId) {
-        setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
+    if (!organizationId || !state) {
+        setSubmitError("Dados da organização ou estado ausentes.");
         return;
     }
-    if (!state) {
-        setSubmitError("Estado não selecionado. Volte para a página inicial e selecione seu estado.");
-        return;
-    }
-
     if (photoFiles.length === 0 && originalPhotoUrls.length === 0) {
         setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
+        return;
+    }
+     if (!facePhotoFile && !facePhotoPreview) {
+        setSubmitError("A verificação facial é obrigatória. Por favor, tire uma foto do seu rosto.");
         return;
     }
     
@@ -272,35 +328,28 @@ const PromoterForm: React.FC = () => {
         await updatePromoter(editId, {
             ...formData,
             photoUrls: finalPhotoUrls,
+            facePhoto: facePhotoFile,
             status: 'pending', // Reset status to pending for re-evaluation
             rejectionReason: '', // Clear previous rejection reason
         });
       } else {
         // Create new promoter
-        await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
+        await addPromoter({ ...formData, photos: photoFiles, facePhoto: facePhotoFile, state, campaignName: decodedCampaignName, organizationId });
       }
 
       setSubmitSuccess(true);
       
-      // Dispara o evento de conclusão de cadastro para o Pixel
-      if (window.fbq) {
-          window.fbq('track', 'CompleteRegistration');
-      }
+      if (window.fbq) { window.fbq('track', 'CompleteRegistration'); }
 
       setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
-      setPhotoFiles([]);
-      setPhotoPreviews([]);
-      setOriginalPhotoUrls([]);
-      setProfileLoaded(false);
-      setShowGenderWarning(false);
-      setEditId(null);
-      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      setPhotoFiles([]); setPhotoPreviews([]); setOriginalPhotoUrls([]);
+      setFacePhotoFile(null); setFacePhotoPreview(null);
+      setProfileLoaded(false); setShowGenderWarning(false); setEditId(null);
       
       setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (error) {
       console.error("Failed to submit form", error);
-      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário.";
       setSubmitError(message);
        setTimeout(() => setSubmitError(null), 5000);
     } finally {
@@ -342,26 +391,13 @@ const PromoterForm: React.FC = () => {
             )}
             
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                    <InputWithIcon 
-                        Icon={MailIcon} 
-                        type="email" 
-                        name="email" 
-                        placeholder="Seu melhor e-mail" 
-                        value={formData.email} 
-                        onChange={handleChange} 
-                        onBlur={handleCheckEmail}
-                        disabled={!!editId}
-                        required 
-                    />
-                     {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
-                     {profileLoaded && (
-                        <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
-                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
-                        </div>
-                    )}
-                </div>
-
+                <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} onBlur={handleCheckEmail} disabled={!!editId} required />
+                 {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
+                 {profileLoaded && (
+                    <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
+                        <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
@@ -380,33 +416,46 @@ const PromoterForm: React.FC = () => {
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (obrigatório)</label>
                     <div className="mt-2 flex items-center gap-4">
-                        <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                        <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-200 hover:bg-gray-600">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
                             <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
                             <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
                         </label>
-                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                          {isProcessingPhoto ? (
-                                <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-700 flex items-center justify-center snap-start">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                </span>
-                            ) : photoPreviews.length > 0 ? (
-                                photoPreviews.map((preview, index) => (
-                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-400">Nenhuma foto selecionada.</p>
-                            )}
+                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1">
+                          {isProcessingPhoto ? <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            : photoPreviews.length > 0 ? (
+                                photoPreviews.map((preview, index) => <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />)
+                            ) : <p className="text-sm text-gray-400">Nenhuma foto selecionada.</p>}
                         </div>
                     </div>
                      {editId && photoFiles.length === 0 && <p className="text-xs text-yellow-400 mt-2">As fotos atuais serão mantidas. Para alterá-las, clique em 'Trocar fotos'.</p>}
                 </div>
 
-                <button
-                    type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
-                >
+                <div className="border-t border-gray-700 pt-6">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Verificação Facial (Obrigatório)</label>
+                    <p className="text-xs text-gray-400 mb-4">Use a câmera para tirar uma foto nítida do seu rosto. Esta foto será usada para confirmar sua identidade na entrada dos eventos.</p>
+                    <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-dark rounded-lg">
+                        <div className="w-40 h-40 rounded-lg bg-black flex items-center justify-center overflow-hidden">
+                            {isCameraOpen ? (
+                                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover transform -scale-x-100"></video>
+                            ) : facePhotoPreview ? (
+                                <img src={facePhotoPreview} alt="Prévia Facial" className="w-full h-full object-cover" />
+                            ) : (
+                                <FaceIdIcon className="w-16 h-16 text-gray-600" />
+                            )}
+                            <canvas ref={canvasRef} className="hidden"></canvas>
+                        </div>
+                        <div className="flex flex-col gap-2 w-full sm:w-auto">
+                            {isCameraOpen ? (
+                                <button type="button" onClick={capturePhoto} className="w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700">Capturar</button>
+                            ) : (
+                                <button type="button" onClick={startCamera} className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">{facePhotoPreview ? 'Tirar Outra Foto' : 'Abrir Câmera'}</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" disabled={isSubmitting || isProcessingPhoto || isCameraOpen} className="w-full py-3 px-4 bg-primary hover:bg-primary-dark text-white font-medium rounded-md shadow-sm disabled:bg-primary/50 disabled:cursor-not-allowed">
                     {getButtonText()}
                 </button>
             </form>
@@ -499,12 +548,7 @@ const RegistrationFlowPage: React.FC = () => {
             noscript.appendChild(img);
             document.body.appendChild(noscript);
 
-            // Retornar uma função de limpeza para remover o noscript se o componente for desmontado
-            return () => {
-                if (document.body.contains(noscript)) {
-                    document.body.removeChild(noscript);
-                }
-            };
+            return () => { if (document.body.contains(noscript)) { document.body.removeChild(noscript); } };
         }
     }, [activeCampaign]);
 
@@ -531,12 +575,8 @@ const RegistrationFlowPage: React.FC = () => {
         );
     }
 
-    // Case 1: Direct link to a valid, active campaign
-    if (campaignName && isValidCampaign) {
-        return <PromoterForm />;
-    }
+    if (campaignName && isValidCampaign) { return <PromoterForm />; }
     
-    // Case 2: No campaign in URL, show selection list
     if (!campaignName) {
         if (campaigns.length > 0) {
             return (
@@ -546,21 +586,13 @@ const RegistrationFlowPage: React.FC = () => {
                         <span>Voltar</span>
                     </button>
                     <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                        <h1 className="text-3xl font-bold text-gray-100 mb-2">
-                            Selecione o Evento ou Gênero
-                        </h1>
-                        <p className="text-gray-400 mb-8">
-                            Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.
-                        </p>
+                        <h1 className="text-3xl font-bold text-gray-100 mb-2">Selecione o Evento ou Gênero</h1>
+                        <p className="text-gray-400 mb-8">Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {campaigns.map(campaign => (
-                                <Link
-                                    key={campaign.id}
-                                    to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`}
-                                    className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
-                                >
+                                <Link key={campaign.id} to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`} className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105">
                                     <span className="text-xl">{campaign.name}</span>
-                                    {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white transition-all">{campaign.description}</span>}
+                                    {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white">{campaign.description}</span>}
                                 </Link>
                             ))}
                         </div>
@@ -568,7 +600,6 @@ const RegistrationFlowPage: React.FC = () => {
                 </div>
             );
         } else {
-            // No active campaigns for this state
             return (
                  <div className="max-w-4xl mx-auto text-center">
                     <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
@@ -576,9 +607,7 @@ const RegistrationFlowPage: React.FC = () => {
                         <span>Voltar</span>
                     </button>
                     <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                        <h1 className="text-2xl font-bold text-gray-100 mb-2">
-                            Nenhum Evento Disponível
-                        </h1>
+                        <h1 className="text-2xl font-bold text-gray-100 mb-2">Nenhum Evento Disponível</h1>
                         <p className="text-gray-400 mt-4">No momento, não há eventos ou gêneros aceitando cadastros nesta região. Tente novamente mais tarde.</p>
                     </div>
                 </div>
@@ -586,7 +615,7 @@ const RegistrationFlowPage: React.FC = () => {
         }
     }
 
-    return null; // Fallback, should be covered by loading/error states
+    return null; // Fallback
 };
 
 interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {

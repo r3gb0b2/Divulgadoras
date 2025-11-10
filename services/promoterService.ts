@@ -388,10 +388,21 @@ export const getPromoterStats = async (options: {
     }
 };
 
-export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
+export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>> & { facePhoto?: File | null }): Promise<void> => {
   try {
+    const { facePhoto, ...restData } = data;
+    const dataToUpdate: Partial<Omit<Promoter, 'id'>> = { ...restData };
+
+    if (facePhoto) {
+        const fileExtension = facePhoto.name.split('.').pop();
+        const fileName = `face-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+        const storageRef = storage.ref(fileName);
+        await storageRef.put(facePhoto);
+        dataToUpdate.facePhotoUrl = await storageRef.getDownloadURL();
+    }
+
     const promoterDoc = firestore.collection('promoters').doc(id);
-    await promoterDoc.update(data);
+    await promoterDoc.update(dataToUpdate);
   } catch (error) {
     console.error("Error updating promoter: ", error);
     throw new Error("Não foi possível atualizar a divulgadora.");
