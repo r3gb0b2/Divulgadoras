@@ -567,16 +567,23 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
     try {
         const q = firestore.collection("groupRemovalRequests")
             .where("organizationId", "==", organizationId)
-            .where("status", "==", "pending")
-            .orderBy("requestedAt", "desc");
+            .where("status", "==", "pending");
         const snapshot = await q.get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+        const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+
+        // Sort on the client side to avoid needing a composite index
+        requests.sort((a, b) => {
+            const timeA = (a.requestedAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.requestedAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // Most recent first
+        });
+        
+        return requests;
     } catch (error) {
         console.error("Error getting group removal requests: ", error);
         if (error instanceof Error && error.message.includes("requires an index")) {
-            // Firebase throws a detailed error message with a link to create the index.
-            // This custom message makes it clear what the developer needs to do.
-            throw new Error("Erro de configuração do banco de dados: Índice ausente. O Firestore precisa de um índice composto para esta consulta. Verifique o console de logs do navegador para o link de criação do índice ou crie manualmente um índice para 'groupRemovalRequests' em (organizationId ASC, status ASC, requestedAt DESC).");
+            // This is less likely to happen now, but good to keep as a fallback.
+            throw new Error("Erro de configuração do banco de dados: Índice ausente. O Firestore precisa de um índice composto para esta consulta. Verifique o console de logs do navegador para o link de criação do índice.");
         }
         throw new Error("Não foi possível buscar as solicitações de remoção.");
     }
