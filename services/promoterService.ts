@@ -573,6 +573,11 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
     } catch (error) {
         console.error("Error getting group removal requests: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            // Firebase throws a detailed error message with a link to create the index.
+            // This custom message makes it clear what the developer needs to do.
+            throw new Error("Erro de configuração do banco de dados: Índice ausente. O Firestore precisa de um índice composto para esta consulta. Verifique o console de logs do navegador para o link de criação do índice ou crie manualmente um índice para 'groupRemovalRequests' em (organizationId ASC, status ASC, requestedAt DESC).");
+        }
         throw new Error("Não foi possível buscar as solicitações de remoção.");
     }
 };
