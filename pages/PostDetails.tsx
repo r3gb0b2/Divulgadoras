@@ -267,6 +267,24 @@ export const PostDetails: React.FC = () => {
         }
     };
 
+    const handleSendSingleReminder = async (assignmentId: string) => {
+        if (processingAction) return;
+        if (!window.confirm("Isso enviará um e-mail de lembrete para esta divulgadora sobre esta publicação. Deseja continuar?")) {
+            return;
+        }
+        
+        setProcessingAction(`remind-${assignmentId}`);
+        setError('');
+        try {
+            const result = await sendSinglePostReminder(assignmentId);
+            showSuccessMessage(result.message || 'Lembrete enviado com sucesso!');
+        } catch (err: any) {
+            setError(err.message || 'Falha ao enviar lembrete.');
+        } finally {
+            setProcessingAction(null);
+        }
+    };
+
     const handleAcceptAllJustifications = async () => {
         if (!post || !window.confirm("Tem certeza que deseja aceitar TODAS as justificativas pendentes para esta publicação?")) {
             return;
@@ -423,6 +441,15 @@ export const PostDetails: React.FC = () => {
                                         ) : <div className="text-center text-xs text-gray-500 h-full flex items-center justify-center">Aguardando ação da divulgadora.</div>}
                                     </div>
                                     <div className="flex-shrink-0 flex gap-2 w-full md:w-auto">
+                                        {assignment.status === 'pending' && (
+                                            <button
+                                                onClick={() => handleSendSingleReminder(assignment.id)}
+                                                disabled={processingAction === `remind-${assignment.id}`}
+                                                className="flex-1 text-center text-sm py-2 px-3 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50"
+                                            >
+                                                {processingAction === `remind-${assignment.id}` ? '...' : 'Lembrar'}
+                                            </button>
+                                        )}
                                         <button onClick={() => handleOpenStatsModal(assignment.promoterId)} className="flex-1 text-center text-sm py-2 px-3 bg-gray-600 rounded-md hover:bg-gray-500">Ver Stats</button>
                                         <button onClick={() => handleOpenStatusModal(assignment)} className="flex-1 text-center text-sm py-2 px-3 bg-primary rounded-md hover:bg-primary-dark">Analisar</button>
                                     </div>

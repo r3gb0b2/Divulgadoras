@@ -444,7 +444,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
 
 /**
  * Sends a reminder email to a promoter to submit proof for a post.
- * @param {object} promoter - The promoter data object.
+ * @param {object} promoter - The promoter data object (this is an assignment object).
  * @param {object} postDetails - Object with campaignName, orgName, etc.
  */
 async function sendProofReminderEmail(promoter, postDetails) {
@@ -454,6 +454,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
   }
 
   const proofLink = `https://divulgadoras.vercel.app/#/proof/${promoter.id}`;
+  const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoter.promoterId}&campaignName=${encodeURIComponent(postDetails.campaignName)}&orgId=${promoter.organizationId}`;
   const subject = `Lembrete: Envie a comprovação do post - ${postDetails.campaignName}`;
   const htmlContent = `
     <!DOCTYPE html>
@@ -466,6 +467,7 @@ async function sendProofReminderEmail(promoter, postDetails) {
             .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
             .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
             .content { padding: 30px; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #888; }
             .button { display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
         </style>
     </head>
@@ -479,6 +481,9 @@ async function sendProofReminderEmail(promoter, postDetails) {
                     <a href="${proofLink}" class="button">Enviar Comprovação</a>
                 </p>
                 <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+            </div>
+            <div class="footer">
+                <p>Não quer mais fazer parte deste grupo de divulgação? <a href="${leaveGroupLink}">Solicite sua remoção</a>.</p>
             </div>
         </div>
     </body>
@@ -499,6 +504,74 @@ async function sendProofReminderEmail(promoter, postDetails) {
   } catch (error) {
     const detailedError = getBrevoErrorDetails(error);
     console.error(`[Brevo API Error] Failed to send proof reminder to ${promoter.promoterEmail}. Details: ${detailedError}`);
+    // Do not re-throw
+  }
+}
+
+/**
+ * Sends a reminder email to a promoter to confirm a post.
+ * @param {object} promoter - The promoter data object (this is an assignment object).
+ * @param {object} postDetails - Object with campaignName, orgName, etc.
+ * @param {string} promoterId - The promoter's document ID.
+ */
+async function sendPendingPostReminderEmail(promoter, postDetails, promoterId) {
+  if (!brevoApiInstance) {
+    console.warn(`Skipping pending post reminder email for ${promoter.promoterEmail}: Brevo API is not configured.`);
+    return;
+  }
+
+  const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.promoterEmail)}`;
+  const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoterId}&campaignName=${encodeURIComponent(postDetails.campaignName)}&orgId=${postDetails.organizationId}`;
+  const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
+  const subject = `Lembrete: Você tem uma nova postagem para confirmar - ${eventDisplayName}`;
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>${subject}</title>
+        <style>
+            body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+            .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+            .header { background-color: #1a1a2e; color: #ffffff; padding: 20px; text-align: center; }
+            .content { padding: 30px; }
+            .footer { padding: 20px; text-align: center; font-size: 12px; color: #888; }
+            .button { display: inline-block; background-color: #e83a93; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header"><h1>Olá, ${promoter.promoterName}!</h1></div>
+            <div class="content">
+                <p>Este é um lembrete de que uma nova publicação para o evento <strong>${eventDisplayName}</strong> está aguardando sua confirmação.</p>
+                <p>Acesse o portal para ver as instruções e confirmar se você irá realizar a postagem.</p>
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${portalLink}" class="button">Ver Publicação</a>
+                </p>
+                <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+            </div>
+            <div class="footer">
+                <p>Não quer mais fazer parte deste grupo de divulgação? <a href="${leaveGroupLink}">Solicite sua remoção</a>.</p>
+            </div>
+        </div>
+    </body>
+    </html>`;
+
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.to = [{ email: promoter.promoterEmail, name: promoter.promoterName }];
+  sendSmtpEmail.sender = {
+    name: postDetails.orgName || "Equipe de Eventos",
+    email: brevoConfig.sender_email,
+  };
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = htmlContent;
+
+  try {
+    await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`Pending post reminder sent to ${promoter.promoterEmail}`);
+  } catch (error) {
+    const detailedError = getBrevoErrorDetails(error);
+    console.error(`[Brevo API Error] Failed to send pending post reminder to ${promoter.promoterEmail}. Details: ${detailedError}`);
     // Do not re-throw
   }
 }
@@ -667,9 +740,127 @@ exports.removePromoterFromAllAssignments = functions
 /**
  * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
  */
-// Placeholder for sendPostReminder logic
 exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // Implementation needed
+    // 1. Auth check
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+
+    // 2. Validation
+    const { postId } = data;
+    if (!postId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
+    }
+
+    // 3. Query for assignments
+    const assignmentsRef = db.collection("postAssignments");
+    const query = assignmentsRef
+        .where("postId", "==", postId)
+        .where("status", "==", "confirmed")
+        .where("proofSubmittedAt", "==", null);
+
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+        return { success: true, count: 0, message: "Nenhuma divulgadora pendente de comprovação para este post." };
+    }
+
+    const assignmentsToSend = [];
+    snapshot.forEach((doc) => {
+        const assignment = doc.data();
+        // Filter out assignments that have a justification
+        if (!assignment.justification) {
+            assignmentsToSend.push({ id: doc.id, ...assignment });
+        }
+    });
+
+    if (assignmentsToSend.length === 0) {
+        return { success: true, count: 0, message: "Nenhuma divulgadora pendente encontrada (algumas podem ter justificativas)." };
+    }
+
+    // 4. Fetch Org Details (once)
+    const firstAssignment = assignmentsToSend[0];
+    const orgId = firstAssignment.organizationId;
+    let orgName = "Sua Organização";
+    if (orgId) {
+        const orgDoc = await db.collection("organizations").doc(orgId).get();
+        if (orgDoc.exists) {
+            orgName = orgDoc.data().name;
+        }
+    }
+
+    // 5. Iterate and Send Emails
+    const emailPromises = assignmentsToSend.map((assignment) => {
+        const postDetails = {
+            campaignName: assignment.post.campaignName,
+            orgName: orgName,
+        };
+        return sendProofReminderEmail(assignment, postDetails);
+    });
+
+    await Promise.all(emailPromises);
+
+    // 6. Return Result
+    const count = assignmentsToSend.length;
+    return { success: true, count: count, message: `${count} lembrete(s) enviado(s) com sucesso.` };
+});
+
+/**
+ * Sends a reminder email for a single post assignment.
+ */
+exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // 1. Auth check
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+
+    // 2. Validation
+    const { assignmentId } = data;
+    if (!assignmentId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da tarefa é obrigatório.");
+    }
+
+    // 3. Fetch assignment
+    const assignmentRef = db.collection("postAssignments").doc(assignmentId);
+    const assignmentSnap = await assignmentRef.get();
+    if (!assignmentSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Tarefa não encontrada.");
+    }
+    const assignment = { id: assignmentSnap.id, ...assignmentSnap.data() };
+
+    // 4. Check status
+    if (assignment.status !== 'pending') {
+        throw new functions.https.HttpsError("failed-precondition", "A tarefa não está pendente de confirmação.");
+    }
+
+    // 5. Fetch Org Details
+    let orgName = "Sua Organização";
+    if (assignment.organizationId) {
+        const orgDoc = await db.collection("organizations").doc(assignment.organizationId).get();
+        if (orgDoc.exists) {
+            orgName = orgDoc.data().name;
+        }
+    }
+
+    const postDetails = {
+        campaignName: assignment.post.campaignName,
+        eventName: assignment.post.eventName,
+        orgName: orgName,
+        organizationId: assignment.organizationId,
+    };
+
+    // 6. Send email for pending post
+    await sendPendingPostReminderEmail(assignment, postDetails, assignment.promoterId);
+
+    return { success: true, message: "Lembrete enviado com sucesso." };
 });
 
 // Placeholder for createPostAndAssignments
