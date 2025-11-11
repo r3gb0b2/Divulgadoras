@@ -810,10 +810,10 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
 });
 
 /**
- * Sends a reminder email for a single post assignment.
+ * Sends reminder emails to all promoters who have not yet confirmed a post.
  */
-exports.sendSingleProofReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // 1. Auth check
+exports.sendPendingReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // Auth check
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     }
@@ -822,46 +822,55 @@ exports.sendSingleProofReminder = functions.region("southamerica-east1").https.o
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
 
-    // 2. Validation
-    const { assignmentId } = data;
-    if (!assignmentId) {
-        throw new functions.https.HttpsError("invalid-argument", "O ID da tarefa é obrigatório.");
+    // Validation
+    const { postId } = data;
+    if (!postId) {
+        throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
     }
 
-    // 3. Fetch assignment
-    const assignmentRef = db.collection("postAssignments").doc(assignmentId);
-    const assignmentSnap = await assignmentRef.get();
-    if (!assignmentSnap.exists) {
-        throw new functions.https.HttpsError("not-found", "Tarefa não encontrada.");
-    }
-    const assignment = { id: assignmentSnap.id, ...assignmentSnap.data() };
+    // Query for assignments
+    const assignmentsRef = db.collection("postAssignments");
+    const query = assignmentsRef
+        .where("postId", "==", postId)
+        .where("status", "==", "pending");
 
-    // 4. Check status
-    if (assignment.status !== 'pending') {
-        throw new functions.https.HttpsError("failed-precondition", "A tarefa não está pendente de confirmação.");
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+        return { success: true, count: 0, message: "Nenhuma divulgadora pendente de confirmação para este post." };
     }
 
-    // 5. Fetch Org Details
+    const assignmentsToSend = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // Fetch Org Details (once)
+    const firstAssignment = assignmentsToSend[0];
+    const orgId = firstAssignment.organizationId;
     let orgName = "Sua Organização";
-    if (assignment.organizationId) {
-        const orgDoc = await db.collection("organizations").doc(assignment.organizationId).get();
+    if (orgId) {
+        const orgDoc = await db.collection("organizations").doc(orgId).get();
         if (orgDoc.exists) {
             orgName = orgDoc.data().name;
         }
     }
 
-    const postDetails = {
-        campaignName: assignment.post.campaignName,
-        eventName: assignment.post.eventName,
-        orgName: orgName,
-        organizationId: assignment.organizationId,
-    };
+    // Iterate and Send Emails
+    const emailPromises = assignmentsToSend.map((assignment) => {
+        const postDetails = {
+            campaignName: assignment.post.campaignName,
+            eventName: assignment.post.eventName,
+            orgName: orgName,
+            organizationId: orgId,
+        };
+        return sendPendingPostReminderEmail(assignment, postDetails, assignment.promoterId);
+    });
 
-    // 6. Send email for pending post
-    await sendPendingPostReminderEmail(assignment, postDetails, assignment.promoterId);
+    await Promise.all(emailPromises);
 
-    return { success: true, message: "Lembrete enviado com sucesso." };
+    // Return Result
+    const count = assignmentsToSend.length;
+    return { success: true, count: count, message: `${count} lembrete(s) para pendentes enviado(s) com sucesso.` };
 });
+
 
 // Placeholder for createPostAndAssignments
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {

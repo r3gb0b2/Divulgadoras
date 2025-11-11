@@ -44,16 +44,21 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, facePhoto, ...rest } = promoterData;
 
-    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
+    const newPromoter: Omit<Promoter, 'id' | 'createdAt' | 'facePhotoUrl'> & { facePhotoUrl?: string, createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
-      facePhotoUrl,
       photoUrls,
       status: 'pending' as const,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
     };
+    
+    // Conditionally add facePhotoUrl only if it has a value to prevent Firestore error.
+    if (facePhotoUrl) {
+      newPromoter.facePhotoUrl = facePhotoUrl;
+    }
+
 
     await firestore.collection('promoters').add(newPromoter);
   } catch (error) {

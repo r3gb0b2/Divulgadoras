@@ -11,10 +11,11 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Switched to class property syntax to initialize state.
-  // The previous constructor-based initialization was also failing with 'this' context errors.
-  // This is the modern standard and directly defines the 'state' property on the class,
-  // which resolves the TypeScript errors about 'state' not existing on the component type.
+  // FIX: Replaced the constructor with a class property for state initialization.
+  // The error messages suggest that properties on `this` (like `state`, `props`, `setState`)
+  // were not being correctly inferred, which can sometimes be related to issues in
+  // how class constructors are handled by the build toolchain. Initializing state
+  // as a class property is a common and effective alternative.
   state: State = {
     hasError: false,
     error: null,

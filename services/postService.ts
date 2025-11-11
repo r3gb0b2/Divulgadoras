@@ -415,17 +415,17 @@ export const sendPostReminder = async (postId: string): Promise<{count: number, 
     }
 };
 
-export const sendSinglePostReminder = async (assignmentId: string): Promise<{message: string}> => {
+export const sendPendingReminders = async (postId: string): Promise<{count: number, message: string}> => {
     try {
-        const func = functions.httpsCallable('sendSingleProofReminder');
-        const result = await func({ assignmentId });
-        return result.data as {message: string};
+        const func = functions.httpsCallable('sendPendingReminders');
+        const result = await func({ postId });
+        return result.data as {count: number, message: string};
     } catch (error) {
-        console.error("Error sending single post reminder:", error);
+        console.error("Error sending pending post reminders:", error);
         if (error instanceof Error) {
             throw error;
         }
-        throw new Error("Não foi possível enviar o lembrete.");
+        throw new Error("Não foi possível enviar os lembretes para pendentes.");
     }
 };
 

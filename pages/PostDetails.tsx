@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp } from '../types';
-import { getPostWithAssignments, getAssignmentsForOrganization, sendPostReminder, sendSinglePostReminder, updatePost, deletePost, acceptAllJustifications, updateAssignment } from '../services/postService';
+import { getPostWithAssignments, getAssignmentsForOrganization, sendPostReminder, sendPendingReminders, updatePost, deletePost, acceptAllJustifications, updateAssignment } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
 import { ArrowLeftIcon, MegaphoneIcon, PencilIcon, TrashIcon, UserPlusIcon, CheckCircleIcon, SearchIcon, InstagramIcon, WhatsAppIcon } from '../components/Icons';
 import EditPostModal from '../components/EditPostModal';
@@ -267,19 +267,17 @@ export const PostDetails: React.FC = () => {
         }
     };
 
-    const handleSendSingleReminder = async (assignmentId: string) => {
-        if (processingAction) return;
-        if (!window.confirm("Isso enviará um e-mail de lembrete para esta divulgadora sobre esta publicação. Deseja continuar?")) {
+    const handleSendPendingReminders = async () => {
+        if (!post || !window.confirm("Isso enviará um e-mail de lembrete para todas as divulgadoras que AINDA NÃO CONFIRMARAM esta publicação. Deseja continuar?")) {
             return;
         }
-        
-        setProcessingAction(`remind-${assignmentId}`);
+        setProcessingAction('remind_pending');
         setError('');
         try {
-            const result = await sendSinglePostReminder(assignmentId);
-            showSuccessMessage(result.message || 'Lembrete enviado com sucesso!');
+            const result = await sendPendingReminders(post.id);
+            showSuccessMessage(result.message || `${result.count} lembretes enviados.`);
         } catch (err: any) {
-            setError(err.message || 'Falha ao enviar lembrete.');
+            setError(err.message || 'Falha ao enviar lembretes.');
         } finally {
             setProcessingAction(null);
         }
@@ -369,7 +367,8 @@ export const PostDetails: React.FC = () => {
                              <h3 className="font-semibold">Ações em Massa</h3>
                              <div className="flex flex-wrap gap-2">
                                 <button onClick={() => setIsAssignModalOpen(true)} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><UserPlusIcon className="w-4 h-4"/> Atribuir Novas</button>
-                                <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Enviar Lembretes</button>
+                                <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Comprovação</button>
+                                <button onClick={handleSendPendingReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Pendentes</button>
                                 <button onClick={handleAcceptAllJustifications} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><CheckCircleIcon className="w-4 h-4"/> Aceitar Justificativas</button>
                             </div>
                         </div>
@@ -441,15 +440,6 @@ export const PostDetails: React.FC = () => {
                                         ) : <div className="text-center text-xs text-gray-500 h-full flex items-center justify-center">Aguardando ação da divulgadora.</div>}
                                     </div>
                                     <div className="flex-shrink-0 flex gap-2 w-full md:w-auto">
-                                        {assignment.status === 'pending' && (
-                                            <button
-                                                onClick={() => handleSendSingleReminder(assignment.id)}
-                                                disabled={processingAction === `remind-${assignment.id}`}
-                                                className="flex-1 text-center text-sm py-2 px-3 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50"
-                                            >
-                                                {processingAction === `remind-${assignment.id}` ? '...' : 'Lembrar'}
-                                            </button>
-                                        )}
                                         <button onClick={() => handleOpenStatsModal(assignment.promoterId)} className="flex-1 text-center text-sm py-2 px-3 bg-gray-600 rounded-md hover:bg-gray-500">Ver Stats</button>
                                         <button onClick={() => handleOpenStatusModal(assignment)} className="flex-1 text-center text-sm py-2 px-3 bg-primary rounded-md hover:bg-primary-dark">Analisar</button>
                                     </div>
