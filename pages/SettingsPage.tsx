@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -23,6 +23,7 @@ const SettingsPage: React.FC = () => {
   
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  const wasDragging = useRef(false);
 
   const ALL_SETTINGS_ITEMS: SettingItem[] = [
     {
@@ -185,7 +186,10 @@ const SettingsPage: React.FC = () => {
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     dragItem.current = index;
-    e.currentTarget.style.opacity = '0.5';
+    wasDragging.current = true;
+    if (e.currentTarget.parentElement) {
+        e.currentTarget.parentElement.style.opacity = '0.5';
+    }
   };
 
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, index: number) => {
@@ -211,10 +215,15 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-    e.currentTarget.style.opacity = '1';
-    // Clean up refs after the whole operation is finished
+    if (e.currentTarget.parentElement) {
+        e.currentTarget.parentElement.style.opacity = '1';
+    }
     dragItem.current = null;
     dragOverItem.current = null;
+    // Use timeout to ensure the click event has a chance to be cancelled
+    setTimeout(() => {
+        wasDragging.current = false;
+    }, 0);
   };
 
 
@@ -229,33 +238,51 @@ const SettingsPage: React.FC = () => {
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma. Você pode arrastar os cards para organizá-los como preferir.
+          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma. Você pode arrastar os cards pela alça (:::) para organizá-los como preferir.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {orderedItems.filter(item => item.condition()).map((item, index) => (
-             <div
+            <div
                 key={item.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
                 onDragEnter={(e) => handleDragEnter(e, index)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
                 onDragEnd={handleDragEnd}
-                className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 cursor-grab active:cursor-grabbing"
-              >
-                <Link to={item.to} className="flex flex-col h-full pointer-events-none">
-                  <div className="flex items-center">
-                    <item.Icon className="w-8 h-8 text-primary" />
-                    <h2 className="ml-4 text-xl font-semibold text-gray-100">{item.title}</h2>
-                  </div>
-                  <p className="mt-2 text-gray-400 flex-grow">
-                    {item.description}
-                  </p>
-                  <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                    Acessar &rarr;
-                  </div>
+                className="group relative bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+                <div
+                    draggable
+                    onDragStart={(e) => {
+                        e.stopPropagation();
+                        handleDragStart(e, index);
+                    }}
+                    className="absolute top-2 right-2 p-2 text-gray-500 group-hover:text-gray-300 cursor-grab active:cursor-grabbing z-10 opacity-50 hover:opacity-100 transition-opacity"
+                    title="Arraste para reordenar"
+                >
+                    <GripDotsIcon className="w-6 h-6" />
+                </div>
+                
+                <Link 
+                    to={item.to} 
+                    className="block p-6"
+                    onClick={(e) => {
+                        if (wasDragging.current) {
+                            e.preventDefault();
+                        }
+                    }}
+                >
+                    <div className="flex items-center">
+                        <item.Icon className="w-8 h-8 text-primary" />
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">{item.title}</h2>
+                    </div>
+                    <p className="mt-2 text-gray-400 flex-grow">
+                        {item.description}
+                    </p>
+                    <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                        Acessar &rarr;
+                    </div>
                 </Link>
-              </div>
+            </div>
           ))}
         </div>
       </div>
