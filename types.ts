@@ -101,6 +101,9 @@ export interface Organization {
   ownerPhone?: string;
   ownerTaxId?: string;
   emailRemindersEnabled?: boolean;
+  oneTimePostEnabled?: boolean;
+  guestListManagementEnabled?: boolean;
+  guestListCheckinEnabled?: boolean;
 }
 
 export interface StateConfig {

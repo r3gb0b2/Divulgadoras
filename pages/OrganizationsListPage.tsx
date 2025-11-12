@@ -72,6 +72,9 @@ const OrganizationsListPage: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Organização</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Lembretes Email</th>
+              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Post Único</th>
+              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Listas</th>
+              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Check-in</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Plano</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Data de Criação</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
@@ -85,8 +88,29 @@ const OrganizationsListPage: React.FC = () => {
                   <div className="text-sm text-gray-400">{org.ownerEmail}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(org.status)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-center">
                   {org.emailRemindersEnabled !== false ? (
+                    <span className="text-green-400">Ativo</span>
+                  ) : (
+                    <span className="text-red-400">Inativo</span>
+                  )}
+                </td>
+                <td className="px-2 py-4 whitespace-nowrap text-sm font-semibold text-center">
+                   {org.oneTimePostEnabled !== false ? (
+                    <span className="text-green-400">Ativo</span>
+                  ) : (
+                    <span className="text-red-400">Inativo</span>
+                  )}
+                </td>
+                 <td className="px-2 py-4 whitespace-nowrap text-sm font-semibold text-center">
+                   {org.guestListManagementEnabled !== false ? (
+                    <span className="text-green-400">Ativo</span>
+                  ) : (
+                    <span className="text-red-400">Inativo</span>
+                  )}
+                </td>
+                 <td className="px-2 py-4 whitespace-nowrap text-sm font-semibold text-center">
+                   {org.guestListCheckinEnabled !== false ? (
                     <span className="text-green-400">Ativo</span>
                   ) : (
                     <span className="text-red-400">Inativo</span>

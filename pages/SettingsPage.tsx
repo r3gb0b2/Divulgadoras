@@ -9,10 +9,12 @@ const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { adminData, selectedOrgId } = useAdminAuth();
   const [isOwner, setIsOwner] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(null);
 
   useEffect(() => {
     if (selectedOrgId) {
       getOrganization(selectedOrgId).then(orgData => {
+        setOrganization(orgData);
         if (orgData && adminData?.uid === orgData.ownerUid) {
           setIsOwner(true);
         } else {
@@ -24,6 +26,7 @@ const SettingsPage: React.FC = () => {
       });
     } else {
       setIsOwner(false);
+      setOrganization(null);
     }
   }, [adminData, selectedOrgId]);
 
@@ -145,55 +148,61 @@ const SettingsPage: React.FC = () => {
             </Link>
 
            {/* Post Único */}
-          <Link
-            to="/admin/one-time-posts"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <MegaphoneIcon className="w-8 h-8 text-purple-400" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Post Único</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Gerenciar &rarr;
-            </div>
-          </Link>
+          {organization?.oneTimePostEnabled !== false && (
+            <Link
+              to="/admin/one-time-posts"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <MegaphoneIcon className="w-8 h-8 text-purple-400" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Post Único</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Gerenciar &rarr;
+              </div>
+            </Link>
+          )}
 
           {/* Gerenciar Listas de Convidados */}
-          <Link
-            to="/admin/lists"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas de Convidados</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
+          {organization?.guestListManagementEnabled !== false && (
+            <Link
+              to="/admin/lists"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas de Convidados</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
+          )}
 
           {/* Controle de Entrada */}
-           <Link
-            to="/admin/checkin-dashboard"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <TicketIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Controle de Entrada</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
+          {organization?.guestListCheckinEnabled !== false && (
+            <Link
+              to="/admin/checkin-dashboard"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <TicketIcon className="w-8 h-8 text-primary" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Controle de Entrada</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Acessar &rarr;
+              </div>
+            </Link>
+          )}
           
            {/* Desempenho das Divulgadoras */}
           <Link
