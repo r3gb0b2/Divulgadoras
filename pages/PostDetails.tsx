@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Post, PostAssignment, Promoter, Timestamp } from '../types';
+import { Post, PostAssignment, Promoter, Timestamp, Organization } from '../types';
 import { getPostWithAssignments, getAssignmentsForOrganization, sendPostReminder, sendPendingReminders, updatePost, deletePost, acceptAllJustifications, updateAssignment } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
+import { getOrganization } from '../services/organizationService';
 import { ArrowLeftIcon, MegaphoneIcon, PencilIcon, TrashIcon, UserPlusIcon, CheckCircleIcon, SearchIcon, InstagramIcon, WhatsAppIcon } from '../components/Icons';
 import EditPostModal from '../components/EditPostModal';
 import AssignPostModal from '../components/AssignPostModal';
@@ -10,6 +11,7 @@ import ChangeAssignmentStatusModal from '../components/ChangeAssignmentStatusMod
 import StorageMedia from '../components/StorageMedia';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import { storage } from '../firebase/config';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
@@ -49,7 +51,10 @@ const getJustificationStatusBadge = (status: 'pending' | 'accepted' | 'rejected'
 export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
+    const { organizationsForAdmin } = useAdminAuth();
+
     const [post, setPost] = useState<Post | null>(null);
+    const [organization, setOrganization] = useState<Organization | null>(null);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [allOrgAssignments, setAllOrgAssignments] = useState<PostAssignment[]>([]);
     const [promotersMap, setPromotersMap] = useState<Map<string, Promoter>>(new Map());
@@ -106,6 +111,25 @@ export const PostDetails: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+    
+    useEffect(() => {
+        if (post) {
+            const orgFromContext = organizationsForAdmin.find(o => o.id === post.organizationId);
+            if (orgFromContext) {
+                setOrganization(orgFromContext);
+            } else {
+                // Fallback to fetch directly if not in context (e.g., superadmin context switch)
+                getOrganization(post.organizationId)
+                    .then(orgData => setOrganization(orgData))
+                    .catch(err => setError(err.message));
+            }
+        }
+    }, [post, organizationsForAdmin]);
+
+    const areRemindersEnabled = useMemo(() => {
+        if (!organization) return true; // Default to true while loading org data
+        return organization.emailRemindersEnabled !== false;
+    }, [organization]);
 
     const assignmentsWithStats = useMemo(() => {
         const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
@@ -367,8 +391,12 @@ export const PostDetails: React.FC = () => {
                              <h3 className="font-semibold">Ações em Massa</h3>
                              <div className="flex flex-wrap gap-2">
                                 <button onClick={() => setIsAssignModalOpen(true)} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><UserPlusIcon className="w-4 h-4"/> Atribuir Novas</button>
-                                <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Comprovação</button>
-                                <button onClick={handleSendPendingReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Pendentes</button>
+                                {areRemindersEnabled && (
+                                    <>
+                                        <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Comprovação</button>
+                                        <button onClick={handleSendPendingReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Pendentes</button>
+                                    </>
+                                )}
                                 <button onClick={handleAcceptAllJustifications} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><CheckCircleIcon className="w-4 h-4"/> Aceitar Justificativas</button>
                             </div>
                         </div>
