@@ -167,13 +167,16 @@ const SettingsPage: React.FC = () => {
     let initialItems = [...ALL_SETTINGS_ITEMS];
 
     if (savedOrder) {
-        const savedOrderIds: string[] = JSON.parse(savedOrder);
-        // Create a map for quick lookup
-        const itemsMap = new Map(initialItems.map(item => [item.id, item]));
-        // Reorder based on saved IDs, keeping any new items at the end
-        const ordered = savedOrderIds.map(id => itemsMap.get(id)).filter(Boolean) as SettingItem[];
-        const remaining = initialItems.filter(item => !savedOrderIds.includes(item.id));
-        initialItems = [...ordered, ...remaining];
+        try {
+            const savedOrderIds: string[] = JSON.parse(savedOrder);
+            const itemsMap = new Map(initialItems.map(item => [item.id, item]));
+            const ordered = savedOrderIds.map(id => itemsMap.get(id)).filter(Boolean) as SettingItem[];
+            const remaining = initialItems.filter(item => !savedOrderIds.includes(item.id));
+            initialItems = [...ordered, ...remaining];
+        } catch (e) {
+            console.error("Failed to parse settings order from localStorage", e);
+            localStorage.removeItem(storageKey); // Clear corrupted data
+        }
     }
     
     setOrderedItems(initialItems);
@@ -189,17 +192,13 @@ const SettingsPage: React.FC = () => {
     dragOverItem.current = index;
   };
 
-  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-    e.currentTarget.style.opacity = '1';
-    dragItem.current = null;
-    dragOverItem.current = null;
-  };
-
   const handleDrop = () => {
-    if (dragItem.current === null || dragOverItem.current === null) return;
+    if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+      return;
+    }
 
     const newItems = [...orderedItems];
-    const draggedItemContent = newItems.splice(dragItem.current, 1)[0];
+    const [draggedItemContent] = newItems.splice(dragItem.current, 1);
     newItems.splice(dragOverItem.current, 0, draggedItemContent);
     
     setOrderedItems(newItems);
@@ -209,6 +208,13 @@ const SettingsPage: React.FC = () => {
         const orderedIds = newItems.map(item => item.id);
         localStorage.setItem(storageKey, JSON.stringify(orderedIds));
     }
+  };
+
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    e.currentTarget.style.opacity = '1';
+    // Clean up refs after the whole operation is finished
+    dragItem.current = null;
+    dragOverItem.current = null;
   };
 
 

@@ -10,15 +10,16 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: Ensure the class extends React.Component to have access to state, props, and lifecycle methods.
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Replaced constructor with class property syntax for state initialization.
-  // This is a more modern approach and explicitly declares the `state` property on the class instance,
-  // which resolves the "Property 'state' does not exist" errors.
-  state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method is called after an error has been thrown by a descendant component.
