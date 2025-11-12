@@ -114,21 +114,23 @@ const SettingsPage: React.FC = () => {
           </Link>
           
           {/* Guest List Change Requests */}
-          <Link
-            to="/admin/guestlist-requests"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <ClipboardDocumentListIcon className="w-8 h-8 text-blue-400" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Alteração de Lista</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Aprove ou rejeite pedidos de divulgadoras para editar listas de convidados já enviadas.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Analisar &rarr;
-            </div>
-          </Link>
+          {organization?.guestListManagementEnabled !== false && (
+            <Link
+              to="/admin/guestlist-requests"
+              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
+            >
+              <div className="flex items-center">
+                <ClipboardDocumentListIcon className="w-8 h-8 text-blue-400" />
+                <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Alteração de Lista</h2>
+              </div>
+              <p className="mt-2 text-gray-400">
+                Aprove ou rejeite pedidos de divulgadoras para editar listas de convidados já enviadas.
+              </p>
+              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                Analisar &rarr;
+              </div>
+            </Link>
+          )}
 
            {/* Gerenciamento de Posts */}
            <Link
