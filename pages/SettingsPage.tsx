@@ -1,15 +1,143 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
 
+interface SettingItem {
+  id: string;
+  to: string;
+  Icon: React.ElementType;
+  title: string;
+  description: string;
+  condition: () => boolean;
+}
+
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { adminData, selectedOrgId } = useAdminAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [orderedItems, setOrderedItems] = useState<SettingItem[]>([]);
+  
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
+  const ALL_SETTINGS_ITEMS: SettingItem[] = [
+    {
+      id: 'org_data',
+      to: `/admin/organization/${selectedOrgId}`,
+      Icon: BuildingOfficeIcon,
+      title: 'Dados da Organização',
+      description: 'Edite o nome da sua organização, regiões, administradores associados e outras configurações gerais.',
+      condition: () => isOwner,
+    },
+    {
+      id: 'regions_events',
+      to: '/admin/states',
+      Icon: MapPinIcon,
+      title: 'Regiões e Eventos',
+      description: 'Visualize suas regiões ativas e crie ou edite eventos/gêneros para receber cadastros.',
+      condition: () => true,
+    },
+    {
+      id: 'manage_users',
+      to: '/admin/users',
+      Icon: UsersIcon,
+      title: 'Gerenciar Usuários',
+      description: 'Adicione, edite ou remova membros da sua equipe que podem acessar este painel.',
+      condition: () => true,
+    },
+    {
+      id: 'group_removals',
+      to: '/admin/group-removals',
+      Icon: LogoutIcon,
+      title: 'Solicitações de Remoção',
+      description: 'Visualize e gerencie os pedidos de divulgadoras para sair dos grupos de divulgação.',
+      condition: () => true,
+    },
+    {
+      id: 'guestlist_requests',
+      to: '/admin/guestlist-requests',
+      Icon: ClipboardDocumentListIcon,
+      title: 'Solicitações de Alteração de Lista',
+      description: 'Aprove ou rejeite pedidos de divulgadoras para editar listas de convidados já enviadas.',
+      condition: () => organization?.guestListManagementEnabled !== false,
+    },
+    {
+      id: 'manage_posts',
+      to: '/admin/posts',
+      Icon: MegaphoneIcon,
+      title: 'Gerenciamento de Posts',
+      description: 'Crie, edite e acompanhe o desempenho das publicações para suas divulgadoras.',
+      condition: () => true,
+    },
+    {
+      id: 'one_time_post',
+      to: '/admin/one-time-posts',
+      Icon: MegaphoneIcon,
+      title: 'Post Único',
+      description: 'Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.',
+      condition: () => organization?.oneTimePostEnabled !== false,
+    },
+    {
+      id: 'manage_guestlists',
+      to: '/admin/lists',
+      Icon: ClipboardDocumentListIcon,
+      title: 'Gerenciar Listas de Convidados',
+      description: 'Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.',
+      condition: () => organization?.guestListManagementEnabled !== false,
+    },
+    {
+      id: 'checkin',
+      to: '/admin/checkin-dashboard',
+      Icon: TicketIcon,
+      title: 'Controle de Entrada',
+      description: 'Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.',
+      condition: () => organization?.guestListCheckinEnabled !== false,
+    },
+    {
+      id: 'performance',
+      to: '/admin/dashboard',
+      Icon: ChartBarIcon,
+      title: 'Desempenho das Divulgadoras',
+      description: 'Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.',
+      condition: () => true,
+    },
+    {
+      id: 'scheduled_posts',
+      to: '/admin/scheduled-posts',
+      Icon: ClockIcon,
+      title: 'Publicações Agendadas',
+      description: 'Crie posts com antecedência e agende o envio automático para a data e hora desejada.',
+      condition: () => true,
+    },
+    {
+      id: 'change_password',
+      to: '/admin/settings/change-password',
+      Icon: KeyIcon,
+      title: 'Alterar Senha',
+      description: 'Modifique sua senha de acesso ao painel de administrador.',
+      condition: () => true,
+    },
+    {
+      id: 'subscription',
+      to: '/admin/settings/subscription',
+      Icon: CreditCardIcon,
+      title: 'Gerenciar Assinatura',
+      description: 'Visualize seu plano atual, histórico de faturas e gerencie sua forma de pagamento.',
+      condition: () => true,
+    },
+    {
+      id: 'gemini_assistant',
+      to: '/admin/gemini',
+      Icon: SparklesIcon,
+      title: 'Assistente Gemini',
+      description: 'Use a inteligência artificial do Google para gerar textos criativos, ideias para redes sociais, regras de eventos e muito mais.',
+      condition: () => true,
+    },
+  ];
 
   useEffect(() => {
     if (selectedOrgId) {
@@ -21,7 +149,7 @@ const SettingsPage: React.FC = () => {
           setIsOwner(false);
         }
       }).catch(err => {
-        console.error("Could not fetch organization data for owner check:", err);
+        console.error("Could not fetch organization data:", err);
         setIsOwner(false);
       });
     } else {
@@ -29,6 +157,60 @@ const SettingsPage: React.FC = () => {
       setOrganization(null);
     }
   }, [adminData, selectedOrgId]);
+  
+  useEffect(() => {
+    if (!adminData?.uid) return;
+
+    const storageKey = `settingsOrder_${adminData.uid}`;
+    const savedOrder = localStorage.getItem(storageKey);
+    
+    let initialItems = [...ALL_SETTINGS_ITEMS];
+
+    if (savedOrder) {
+        const savedOrderIds: string[] = JSON.parse(savedOrder);
+        // Create a map for quick lookup
+        const itemsMap = new Map(initialItems.map(item => [item.id, item]));
+        // Reorder based on saved IDs, keeping any new items at the end
+        const ordered = savedOrderIds.map(id => itemsMap.get(id)).filter(Boolean) as SettingItem[];
+        const remaining = initialItems.filter(item => !savedOrderIds.includes(item.id));
+        initialItems = [...ordered, ...remaining];
+    }
+    
+    setOrderedItems(initialItems);
+
+  }, [isOwner, organization]); // Re-run when conditions might change
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    dragItem.current = index;
+    e.currentTarget.style.opacity = '0.5';
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    e.currentTarget.style.opacity = '1';
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
+
+  const handleDrop = () => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+
+    const newItems = [...orderedItems];
+    const draggedItemContent = newItems.splice(dragItem.current, 1)[0];
+    newItems.splice(dragOverItem.current, 0, draggedItemContent);
+    
+    setOrderedItems(newItems);
+
+    if (adminData?.uid) {
+        const storageKey = `settingsOrder_${adminData.uid}`;
+        const orderedIds = newItems.map(item => item.id);
+        localStorage.setItem(storageKey, JSON.stringify(orderedIds));
+    }
+  };
+
 
   return (
     <div>
@@ -41,256 +223,34 @@ const SettingsPage: React.FC = () => {
       </div>
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma.
+          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma. Você pode arrastar os cards para organizá-los como preferir.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {isOwner && (
-            <Link
-              to={`/admin/organization/${selectedOrgId}`}
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <BuildingOfficeIcon className="w-8 h-8 text-primary" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Dados da Organização</h2>
+          {orderedItems.filter(item => item.condition()).map((item, index) => (
+             <div
+                key={item.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnter={(e) => handleDragEnter(e, index)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
+                className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 cursor-grab active:cursor-grabbing"
+              >
+                <Link to={item.to} className="flex flex-col h-full pointer-events-none">
+                  <div className="flex items-center">
+                    <item.Icon className="w-8 h-8 text-primary" />
+                    <h2 className="ml-4 text-xl font-semibold text-gray-100">{item.title}</h2>
+                  </div>
+                  <p className="mt-2 text-gray-400 flex-grow">
+                    {item.description}
+                  </p>
+                  <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                    Acessar &rarr;
+                  </div>
+                </Link>
               </div>
-              <p className="mt-2 text-gray-400">
-                Edite o nome da sua organização, regiões, administradores associados e outras configurações gerais.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Gerenciar &rarr;
-              </div>
-            </Link>
-          )}
-
-           {/* Gerenciar Regiões e Eventos */}
-          <Link
-            to="/admin/states"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <MapPinIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Regiões e Eventos</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Visualize suas regiões ativas e crie ou edite eventos/gêneros para receber cadastros.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
-
-          {/* Gerenciar Usuários */}
-          <Link
-            to="/admin/users"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <UsersIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Usuários</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Adicione, edite ou remova membros da sua equipe que podem acessar este painel.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
-
-          {/* Group Removal Requests */}
-          <Link
-            to="/admin/group-removals"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <LogoutIcon className="w-8 h-8 text-yellow-400" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Remoção</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Visualize e gerencie os pedidos de divulgadoras para sair dos grupos de divulgação.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Analisar &rarr;
-            </div>
-          </Link>
-          
-          {/* Guest List Change Requests */}
-          {organization?.guestListManagementEnabled !== false && (
-            <Link
-              to="/admin/guestlist-requests"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <ClipboardDocumentListIcon className="w-8 h-8 text-blue-400" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações de Alteração de Lista</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Aprove ou rejeite pedidos de divulgadoras para editar listas de convidados já enviadas.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Analisar &rarr;
-              </div>
-            </Link>
-          )}
-
-           {/* Gerenciamento de Posts */}
-           <Link
-              to="/admin/posts"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <MegaphoneIcon className="w-8 h-8 text-primary" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Crie, edite e acompanhe o desempenho das publicações para suas divulgadoras.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Acessar &rarr;
-              </div>
-            </Link>
-
-           {/* Post Único */}
-          {organization?.oneTimePostEnabled !== false && (
-            <Link
-              to="/admin/one-time-posts"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <MegaphoneIcon className="w-8 h-8 text-purple-400" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Post Único</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Gerenciar &rarr;
-              </div>
-            </Link>
-          )}
-
-          {/* Gerenciar Listas de Convidados */}
-          {organization?.guestListManagementEnabled !== false && (
-            <Link
-              to="/admin/lists"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Listas de Convidados</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Acessar &rarr;
-              </div>
-            </Link>
-          )}
-
-          {/* Controle de Entrada */}
-          {organization?.guestListCheckinEnabled !== false && (
-            <Link
-              to="/admin/checkin-dashboard"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <TicketIcon className="w-8 h-8 text-primary" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Controle de Entrada</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Acessar &rarr;
-              </div>
-            </Link>
-          )}
-          
-           {/* Desempenho das Divulgadoras */}
-          <Link
-            to="/admin/dashboard"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <ChartBarIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Desempenho das Divulgadoras</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Analisar &rarr;
-            </div>
-          </Link>
-          
-          {/* Publicações Agendadas */}
-          <Link
-            to="/admin/scheduled-posts"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <ClockIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Publicações Agendadas</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Crie posts com antecedência e agende o envio automático para a data e hora desejada.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Gerenciar &rarr;
-            </div>
-          </Link>
-
-
-           {/* Alterar Senha */}
-           <Link
-              to="/admin/settings/change-password"
-              className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-            >
-              <div className="flex items-center">
-                <KeyIcon className="w-8 h-8 text-primary" />
-                <h2 className="ml-4 text-xl font-semibold text-gray-100">Alterar Senha</h2>
-              </div>
-              <p className="mt-2 text-gray-400">
-                Modifique sua senha de acesso ao painel de administrador.
-              </p>
-              <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                Acessar &rarr;
-              </div>
-            </Link>
-
-          {/* Gerenciar Assinatura */}
-          <Link
-            to="/admin/settings/subscription"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <CreditCardIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciar Assinatura</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Visualize seu plano atual, histórico de faturas e gerencie sua forma de pagamento.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
-
-          {/* Assistente Gemini */}
-          <Link
-            to="/admin/gemini"
-            className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300"
-          >
-            <div className="flex items-center">
-              <SparklesIcon className="w-8 h-8 text-primary" />
-              <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
-            </div>
-            <p className="mt-2 text-gray-400">
-              Use a inteligência artificial do Google para gerar textos criativos, ideias para redes sociais, regras de eventos e muito mais.
-            </p>
-            <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-              Acessar &rarr;
-            </div>
-          </Link>
+          ))}
         </div>
       </div>
     </div>
