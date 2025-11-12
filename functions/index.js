@@ -998,7 +998,65 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
     return { success: true, count: promoters.length };
 });
 
-// Placeholder for updatePostStatus
 exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // Implementation needed
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    }
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || !["admin", "superadmin", "poster"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
+    }
+
+    const { postId, updateData } = data;
+    if (!postId || !updateData) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da publicação e dados de atualização são obrigatórios.");
+    }
+
+    const postRef = db.collection("posts").doc(postId);
+    const postSnap = await postRef.get();
+    if (!postSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const originalPostData = postSnap.data();
+
+    await postRef.update(updateData);
+    console.log(`Updated post ${postId}.`);
+
+    const assignmentsRef = db.collection("postAssignments");
+    const assignmentsQuery = assignmentsRef.where("postId", "==", postId);
+    const assignmentsSnapshot = await assignmentsQuery.get();
+
+    if (assignmentsSnapshot.empty) {
+        return { success: true, message: "Publicação atualizada com sucesso. Nenhuma tarefa para sincronizar." };
+    }
+
+    const updatedDenormalizedPostData = { ...originalPostData, ...updateData };
+    const denormalizedPostObject = {
+        type: updatedDenormalizedPostData.type,
+        mediaUrl: updatedDenormalizedPostData.mediaUrl || null,
+        googleDriveUrl: updatedDenormalizedPostData.googleDriveUrl || null,
+        textContent: updatedDenormalizedPostData.textContent || null,
+        instructions: updatedDenormalizedPostData.instructions,
+        postLink: updatedDenormalizedPostData.postLink || null,
+        campaignName: updatedDenormalizedPostData.campaignName,
+        eventName: updatedDenormalizedPostData.eventName || null,
+        isActive: updatedDenormalizedPostData.isActive,
+        expiresAt: updatedDenormalizedPostData.expiresAt || null,
+        createdAt: updatedDenormalizedPostData.createdAt,
+        allowLateSubmissions: updatedDenormalizedPostData.allowLateSubmissions || false,
+        allowImmediateProof: updatedDenormalizedPostData.allowImmediateProof || false,
+        postFormats: updatedDenormalizedPostData.postFormats || [],
+        skipProofRequirement: updatedDenormalizedPostData.skipProofRequirement || false,
+    };
+    
+    const batch = db.batch();
+    assignmentsSnapshot.docs.forEach((doc) => {
+        const assignmentRef = doc.ref;
+        batch.update(assignmentRef, { post: denormalizedPostObject });
+    });
+
+    await batch.commit();
+    console.log(`Updated ${assignmentsSnapshot.size} assignments for post ${postId}.`);
+
+    return { success: true, message: `Publicação e ${assignmentsSnapshot.size} tarefas atualizadas com sucesso.` };
 });

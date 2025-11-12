@@ -68,17 +68,18 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setPostLink(post.postLink || '');
             setPostFormats(post.postFormats || []);
             
-            // Handle legacy data: if mediaUrl is a GDrive link, move it
-            if (post.mediaUrl && post.mediaUrl.includes('drive.google.com')) {
-                setGoogleDriveUrl(post.mediaUrl);
-                setMediaUrl('');
-                setMediaPreview(post.mediaUrl);
+            if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
+                setMediaUrl(post.mediaUrl);
+                storage.ref(post.mediaUrl).getDownloadURL()
+                    .then(url => setMediaPreview(url))
+                    .catch(err => console.error("Error getting media preview URL:", err));
             } else {
-                setMediaUrl(post.mediaUrl || '');
-                setMediaPreview(post.mediaUrl || null);
-                setGoogleDriveUrl(post.googleDriveUrl || '');
+                 setMediaUrl('');
+                 setMediaPreview(post.mediaUrl || null); // For GDrive links
             }
 
+            setGoogleDriveUrl(post.googleDriveUrl || '');
+            
             // Set all options from post data
             setIsActive(post.isActive);
             setExpiresAt(timestampToInputDate(post.expiresAt));

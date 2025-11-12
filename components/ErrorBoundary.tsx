@@ -10,7 +10,8 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Ensure the class extends React.Component to have access to state, props, and lifecycle methods.
+// FIX: Extended React.Component to make ErrorBoundary a stateful React component,
+// which provides access to state, props, and lifecycle methods, resolving the errors.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);

@@ -228,22 +228,20 @@ export const PostDetails: React.FC = () => {
             const dataToSave: Partial<Post> = { ...updatedData };
             
             if (newMediaFile) {
-                // Delete old file from storage if it exists and is a firebase storage URL
-                if (post.mediaUrl && post.mediaUrl.includes('firebasestorage')) {
+                if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
                     try {
-                        const oldRef = storage.refFromURL(post.mediaUrl);
+                        const oldRef = storage.ref(post.mediaUrl);
                         await oldRef.delete();
                     } catch (deleteError: any) {
                         console.warn("Could not delete old media file:", deleteError.message);
                     }
                 }
                 
-                // Upload new file
                 const fileExtension = newMediaFile.name.split('.').pop();
                 const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                 const storageRef = storage.ref(fileName);
                 await storageRef.put(newMediaFile);
-                dataToSave.mediaUrl = await storageRef.getDownloadURL();
+                dataToSave.mediaUrl = storageRef.fullPath;
             }
             
             await updatePost(post.id, dataToSave);
