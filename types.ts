@@ -100,6 +100,7 @@ export interface Organization {
   assignedStates: string[];
   ownerPhone?: string;
   ownerTaxId?: string;
+  emailRemindersEnabled?: boolean;
 }
 
 export interface StateConfig {

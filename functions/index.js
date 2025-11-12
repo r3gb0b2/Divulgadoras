@@ -741,7 +741,6 @@ exports.removePromoterFromAllAssignments = functions
  * Sends reminder emails to all promoters who have confirmed a post but not yet submitted proof.
  */
 exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // 1. Auth check
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     }
@@ -750,13 +749,28 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
 
-    // 2. Validation
     const { postId } = data;
     if (!postId) {
         throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
     }
 
-    // 3. Query for assignments
+    const postDoc = await db.collection("posts").doc(postId).get();
+    if (!postDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const postData = postDoc.data();
+    const orgId = postData.organizationId;
+    if (!orgId) {
+        console.log(`[sendPostReminder] Aborting: Post ${postId} has no organizationId.`);
+        return { success: true, count: 0, message: "A publicação não pertence a uma organização." };
+    }
+
+    const orgDoc = await db.collection("organizations").doc(orgId).get();
+    if (orgDoc.exists && orgDoc.data().emailRemindersEnabled === false) {
+        console.log(`[sendPostReminder] Aborting: Email reminders are disabled for organization ${orgId}.`);
+        return { success: true, count: 0, message: "Lembretes por e-mail estão desabilitados para esta organização." };
+    }
+
     const assignmentsRef = db.collection("postAssignments");
     const query = assignmentsRef
         .where("postId", "==", postId)
@@ -772,7 +786,6 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
     const assignmentsToSend = [];
     snapshot.forEach((doc) => {
         const assignment = doc.data();
-        // Filter out assignments that have a justification
         if (!assignment.justification) {
             assignmentsToSend.push({ id: doc.id, ...assignment });
         }
@@ -782,18 +795,11 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
         return { success: true, count: 0, message: "Nenhuma divulgadora pendente encontrada (algumas podem ter justificativas)." };
     }
 
-    // 4. Fetch Org Details (once)
-    const firstAssignment = assignmentsToSend[0];
-    const orgId = firstAssignment.organizationId;
     let orgName = "Sua Organização";
-    if (orgId) {
-        const orgDoc = await db.collection("organizations").doc(orgId).get();
-        if (orgDoc.exists) {
-            orgName = orgDoc.data().name;
-        }
+    if (orgDoc.exists) {
+        orgName = orgDoc.data().name;
     }
 
-    // 5. Iterate and Send Emails
     const emailPromises = assignmentsToSend.map((assignment) => {
         const postDetails = {
             campaignName: assignment.post.campaignName,
@@ -804,7 +810,6 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
 
     await Promise.all(emailPromises);
 
-    // 6. Return Result
     const count = assignmentsToSend.length;
     return { success: true, count: count, message: `${count} lembrete(s) enviado(s) com sucesso.` };
 });
@@ -813,7 +818,6 @@ exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(a
  * Sends reminder emails to all promoters who have not yet confirmed a post.
  */
 exports.sendPendingReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // Auth check
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     }
@@ -822,13 +826,28 @@ exports.sendPendingReminders = functions.region("southamerica-east1").https.onCa
         throw new functions.https.HttpsError("permission-denied", "Acesso negado.");
     }
 
-    // Validation
     const { postId } = data;
     if (!postId) {
         throw new functions.https.HttpsError("invalid-argument", "O ID da publicação é obrigatório.");
     }
+    
+    const postDoc = await db.collection("posts").doc(postId).get();
+    if (!postDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Publicação não encontrada.");
+    }
+    const postData = postDoc.data();
+    const orgId = postData.organizationId;
+    if (!orgId) {
+        console.log(`[sendPendingReminders] Aborting: Post ${postId} has no organizationId.`);
+        return { success: true, count: 0, message: "A publicação não pertence a uma organização." };
+    }
 
-    // Query for assignments
+    const orgDoc = await db.collection("organizations").doc(orgId).get();
+    if (orgDoc.exists && orgDoc.data().emailRemindersEnabled === false) {
+        console.log(`[sendPendingReminders] Aborting: Email reminders are disabled for organization ${orgId}.`);
+        return { success: true, count: 0, message: "Lembretes por e-mail estão desabilitados para esta organização." };
+    }
+
     const assignmentsRef = db.collection("postAssignments");
     const query = assignmentsRef
         .where("postId", "==", postId)
@@ -842,18 +861,11 @@ exports.sendPendingReminders = functions.region("southamerica-east1").https.onCa
 
     const assignmentsToSend = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    // Fetch Org Details (once)
-    const firstAssignment = assignmentsToSend[0];
-    const orgId = firstAssignment.organizationId;
     let orgName = "Sua Organização";
-    if (orgId) {
-        const orgDoc = await db.collection("organizations").doc(orgId).get();
-        if (orgDoc.exists) {
-            orgName = orgDoc.data().name;
-        }
+    if (orgDoc.exists) {
+        orgName = orgDoc.data().name;
     }
 
-    // Iterate and Send Emails
     const emailPromises = assignmentsToSend.map((assignment) => {
         const postDetails = {
             campaignName: assignment.post.campaignName,
@@ -866,7 +878,6 @@ exports.sendPendingReminders = functions.region("southamerica-east1").https.onCa
 
     await Promise.all(emailPromises);
 
-    // Return Result
     const count = assignmentsToSend.length;
     return { success: true, count: count, message: `${count} lembrete(s) para pendentes enviado(s) com sucesso.` };
 });

@@ -295,6 +295,30 @@ const ManageOrganizationPage: React.FC = () => {
 
                 {isSuperAdmin && (
                     <div className="border-t border-gray-700 pt-6 mt-6">
+                        <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades</h2>
+                        <div className="bg-dark/50 p-4 rounded-lg">
+                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Lembretes por E-mail</span>
+                                    <p className="text-sm text-gray-400">Permite que a organização envie e-mails de lembrete de postagem (pendentes e de comprovação).</p>
+                                </div>
+                                <div className="relative">
+                                    <input 
+                                        type="checkbox" 
+                                        name="emailRemindersEnabled" 
+                                        checked={formData.emailRemindersEnabled !== false}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, emailRemindersEnabled: e.target.checked }))} 
+                                        className="sr-only peer" 
+                                    />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                )}
+
+                {isSuperAdmin && (
+                    <div className="border-t border-gray-700 pt-6 mt-6">
                         <h2 className="text-xl font-semibold mb-3">Administradores Associados</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>

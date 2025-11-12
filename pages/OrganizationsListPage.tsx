@@ -71,6 +71,7 @@ const OrganizationsListPage: React.FC = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Organização</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Lembretes Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Plano</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Data de Criação</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
@@ -84,6 +85,13 @@ const OrganizationsListPage: React.FC = () => {
                   <div className="text-sm text-gray-400">{org.ownerEmail}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(org.status)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                  {org.emailRemindersEnabled !== false ? (
+                    <span className="text-green-400">Ativo</span>
+                  ) : (
+                    <span className="text-red-400">Inativo</span>
+                  )}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 capitalize">{org.planId}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{formatDate(org.createdAt as Timestamp)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
