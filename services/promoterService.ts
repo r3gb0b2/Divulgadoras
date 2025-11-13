@@ -1,5 +1,5 @@
 import firebase from 'firebase/compat/app';
-import { firestore, storage } from '../firebase/config';
+import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp, GroupRemovalRequest } from '../types';
 
 type QueryDocumentSnapshot = firebase.firestore.QueryDocumentSnapshot;
@@ -395,10 +395,14 @@ export const getPromoterStats = async (options: {
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
-    const promoterDoc = firestore.collection('promoters').doc(id);
-    await promoterDoc.update(data);
+    const updatePromoterAndSync = functions.httpsCallable('updatePromoterAndSync');
+    await updatePromoterAndSync({ promoterId: id, data });
   } catch (error) {
-    console.error("Error updating promoter: ", error);
+    console.error("Error updating promoter via cloud function: ", error);
+    if (error instanceof Error) {
+        const details = (error as any).details?.message || error.message;
+        throw new Error(`Não foi possível atualizar a divulgadora. Detalhes: ${details}`);
+    }
     throw new Error("Não foi possível atualizar a divulgadora.");
   }
 };

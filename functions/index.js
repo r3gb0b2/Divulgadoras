@@ -882,6 +882,97 @@ exports.sendPendingReminders = functions.region("southamerica-east1").https.onCa
     return { success: true, count: count, message: `${count} lembrete(s) para pendentes enviado(s) com sucesso.` };
 });
 
+/**
+ * Updates a promoter's document and syncs the email change across related collections.
+ * Only callable by authenticated admins.
+ */
+exports.updatePromoterAndSync = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+      // 1. Authentication and Authorization
+      if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada. Faça login novamente.");
+      }
+      const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+      if (!adminDoc.exists || !["admin", "superadmin"].includes(adminDoc.data().role)) {
+        throw new functions.https.HttpsError("permission-denied", "Acesso negado. Apenas administradores podem executar esta ação.");
+      }
+
+      // 2. Data Validation
+      const { promoterId, data: updateData } = data;
+      if (!promoterId || !updateData || typeof updateData !== "object") {
+        throw new functions.https.HttpsError("invalid-argument", "Argumentos inválidos: promoterId e data são obrigatórios.");
+      }
+
+      const promoterRef = db.collection("promoters").doc(promoterId);
+
+      try {
+        const promoterSnap = await promoterRef.get();
+        if (!promoterSnap.exists) {
+          throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
+        }
+        const oldData = promoterSnap.data();
+        const newEmail = updateData.email ? updateData.email.toLowerCase().trim() : null;
+        const oldEmail = oldData.email;
+        const emailHasChanged = newEmail && newEmail !== oldEmail;
+
+        if (!emailHasChanged) {
+          // If email is not changing, just update the main doc.
+          await promoterRef.update(updateData);
+          return { success: true, message: "Divulgadora atualizada. Nenhuma sincronização de e-mail necessária." };
+        }
+
+        // Email has changed, perform sync. Use batches for large updates.
+        const collectionsToSync = [
+            "postAssignments",
+            "guestListConfirmations",
+            "groupRemovalRequests",
+            "guestListChangeRequests",
+        ];
+
+        // Start a batch to update the main doc first
+        const mainBatch = db.batch();
+        mainBatch.update(promoterRef, updateData);
+        await mainBatch.commit();
+
+        // Now sync other collections. This is not atomic with the main update
+        // but it's the practical way to handle query-based updates.
+        for (const collectionName of collectionsToSync) {
+            const query = db.collection(collectionName).where("promoterId", "==", promoterId);
+            const snapshot = await query.get();
+
+            if (snapshot.empty) continue;
+
+            // Firestore batch limit is 500. Split into multiple batches if needed.
+            const batches = [];
+            let currentBatch = db.batch();
+            let operationCount = 0;
+
+            snapshot.forEach((doc) => {
+                currentBatch.update(doc.ref, { promoterEmail: newEmail });
+                operationCount++;
+                if (operationCount === 499) {
+                    batches.push(currentBatch);
+                    currentBatch = db.batch();
+                    operationCount = 0;
+                }
+            });
+            batches.push(currentBatch);
+
+            await Promise.all(batches.map((batch) => batch.commit()));
+            console.log(`Synced ${snapshot.size} documents in ${collectionName} for promoter ${promoterId}`);
+        }
+
+        console.log(`Successfully updated promoter ${promoterId} and synced email.`);
+        return { success: true, message: `Divulgadora atualizada com sucesso. E-mail sincronizado.` };
+      } catch (error) {
+        console.error(`Error updating promoter ${promoterId}:`, error);
+        if (error instanceof functions.https.HttpsError) {
+          throw error; // Re-throw HttpsError
+        }
+        throw new functions.https.HttpsError("internal", "Ocorreu um erro interno no servidor ao atualizar a divulgadora.", error.message);
+      }
+    });
 
 // Placeholder for createPostAndAssignments
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
