@@ -11,11 +11,10 @@ interface State {
 }
 
 // FIX: To function as an Error Boundary, this must be a class component that extends React.Component.
-// This gives it access to state, props, and the necessary lifecycle methods.
+// This gives it access to state, props, and the necessary lifecycle methods, resolving the errors.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    // FIX: Initialize state in the constructor. The 'state' property does not exist on a plain class.
     this.state = {
       hasError: false,
       error: null,
@@ -23,17 +22,16 @@ class ErrorBoundary extends React.Component<Props, State> {
     };
   }
 
-  // FIX: Updated getDerivedStateFromError to return a full State object to conform to React's type definitions.
-  static getDerivedStateFromError(error: Error): State {
+  // FIX: Updated getDerivedStateFromError to return a partial State object to conform to React's type definitions.
+  static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method is called after an error has been thrown by a descendant component.
     // It should return a value to update state.
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // This lifecycle method is also called after an error has been thrown by a descendant component.
     // It receives two parameters: the error that was thrown, and an object with a componentStack key.
-    // FIX: Use 'this.setState' which is available on React.Component.
     this.setState({
       errorInfo: errorInfo,
     });
@@ -41,7 +39,6 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   render() {
-    // FIX: Access state via 'this.state' which is available on React.Component.
     if (this.state.hasError) {
       return (
         <div className="bg-red-900 bg-opacity-50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">
@@ -76,7 +73,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: Access children via 'this.props' which is available on React.Component.
     return this.props.children;
   }
 }

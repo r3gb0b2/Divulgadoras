@@ -883,7 +883,7 @@ exports.sendPendingReminders = functions.region("southamerica-east1").https.onCa
 });
 
 /**
- * Updates a promoter's document and syncs the email change across related collections.
+ * Updates a promoter's document and syncs the email/name change across related collections.
  * Only callable by authenticated admins.
  */
 exports.updatePromoterAndSync = functions
@@ -912,17 +912,29 @@ exports.updatePromoterAndSync = functions
           throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
         }
         const oldData = promoterSnap.data();
-        const newEmail = updateData.email ? updateData.email.toLowerCase().trim() : null;
-        const oldEmail = oldData.email;
-        const emailHasChanged = newEmail && newEmail !== oldEmail;
 
-        if (!emailHasChanged) {
-          // If email is not changing, just update the main doc.
+        // Check what has changed
+        const newEmail = updateData.email ? updateData.email.toLowerCase().trim() : oldData.email;
+        const newName = updateData.name ? updateData.name.trim() : oldData.name;
+
+        const emailHasChanged = newEmail !== oldData.email;
+        const nameHasChanged = newName !== oldData.name;
+
+        if (!emailHasChanged && !nameHasChanged) {
+          // If nothing to sync has changed, just update the main doc.
           await promoterRef.update(updateData);
-          return { success: true, message: "Divulgadora atualizada. Nenhuma sincronização de e-mail necessária." };
+          return { success: true, message: "Divulgadora atualizada. Nenhuma sincronização necessária." };
         }
 
-        // Email has changed, perform sync. Use batches for large updates.
+        // First, update the main promoter document. This must succeed to continue.
+        await promoterRef.update(updateData);
+
+        // Create the object of fields to sync in related documents
+        const fieldsToSync = {};
+        if (emailHasChanged) fieldsToSync.promoterEmail = newEmail;
+        if (nameHasChanged) fieldsToSync.promoterName = newName;
+
+        // Sync changes to collections with a simple structure
         const collectionsToSync = [
             "postAssignments",
             "guestListConfirmations",
@@ -930,41 +942,56 @@ exports.updatePromoterAndSync = functions
             "guestListChangeRequests",
         ];
 
-        // Start a batch to update the main doc first
-        const mainBatch = db.batch();
-        mainBatch.update(promoterRef, updateData);
-        await mainBatch.commit();
-
-        // Now sync other collections. This is not atomic with the main update
-        // but it's the practical way to handle query-based updates.
         for (const collectionName of collectionsToSync) {
             const query = db.collection(collectionName).where("promoterId", "==", promoterId);
             const snapshot = await query.get();
 
             if (snapshot.empty) continue;
 
-            // Firestore batch limit is 500. Split into multiple batches if needed.
-            const batches = [];
-            let currentBatch = db.batch();
-            let operationCount = 0;
-
+            const batch = db.batch();
             snapshot.forEach((doc) => {
-                currentBatch.update(doc.ref, { promoterEmail: newEmail });
-                operationCount++;
-                if (operationCount === 499) {
-                    batches.push(currentBatch);
-                    currentBatch = db.batch();
-                    operationCount = 0;
-                }
+                batch.update(doc.ref, fieldsToSync);
             });
-            batches.push(currentBatch);
-
-            await Promise.all(batches.map((batch) => batch.commit()));
-            console.log(`Synced ${snapshot.size} documents in ${collectionName} for promoter ${promoterId}`);
+            await batch.commit();
+            console.log(`Synced ${Object.keys(fieldsToSync).join(", ")} in ${snapshot.size} documents in ${collectionName} for promoter ${promoterId}`);
         }
 
-        console.log(`Successfully updated promoter ${promoterId} and synced email.`);
-        return { success: true, message: `Divulgadora atualizada com sucesso. E-mail sincronizado.` };
+        // Sync for `scheduledPosts` which has a different structure (array of objects)
+        const scheduledPostsQuery = db.collection("scheduledPosts")
+            .where("organizationId", "==", oldData.organizationId)
+            .where("status", "==", "pending");
+
+        const scheduledSnapshot = await scheduledPostsQuery.get();
+        if (!scheduledSnapshot.empty) {
+            const scheduledBatch = db.batch();
+            let updatedCount = 0;
+            scheduledSnapshot.forEach(doc => {
+                const post = doc.data();
+                let needsUpdate = false;
+                const newAssignedPromoters = post.assignedPromoters.map(p => {
+                    if (p.id === promoterId) {
+                        if ((emailHasChanged && p.email !== newEmail) || (nameHasChanged && p.name !== newName)) {
+                            needsUpdate = true;
+                            return { id: p.id, email: newEmail, name: newName };
+                        }
+                    }
+                    return p;
+                });
+
+                if (needsUpdate) {
+                    updatedCount++;
+                    scheduledBatch.update(doc.ref, { assignedPromoters: newAssignedPromoters });
+                }
+            });
+            if (updatedCount > 0) {
+              await scheduledBatch.commit();
+              console.log(`Synced ${updatedCount} scheduled posts for promoter ${promoterId}`);
+            }
+        }
+
+        console.log(`Successfully updated promoter ${promoterId} and synced all related data.`);
+        return { success: true, message: `Divulgadora atualizada e todos os dados foram sincronizados.` };
+
       } catch (error) {
         console.error(`Error updating promoter ${promoterId}:`, error);
         if (error instanceof functions.https.HttpsError) {
