@@ -354,7 +354,7 @@ const GuestListCheckinPage: React.FC = () => {
                     promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
-            conf.guests.filter(guest => guest.name.trim()).forEach(guest => {
+            (conf.guests || []).filter(guest => guest.name.trim()).forEach(guest => {
                  const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guest.name);
                 people.push({
                     name: guest.name,
@@ -495,7 +495,7 @@ const GuestListCheckinPage: React.FC = () => {
                 ].join(','));
             }
     
-            conf.guests.forEach(guest => {
+            (conf.guests || []).forEach(guest => {
                 if (guest.name.trim()) {
                      rows.push([
                         formatCSVCell(conf.promoterName),
