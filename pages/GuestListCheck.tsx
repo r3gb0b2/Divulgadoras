@@ -72,9 +72,12 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     const promoterSpecificAssignment = list.assignments?.[promoter.id];
     const finalAllowance = promoterSpecificAssignment?.guestAllowance !== undefined ? promoterSpecificAssignment.guestAllowance : list.guestAllowance;
     const infoText = promoterSpecificAssignment?.info;
+    const requireEmail = promoterSpecificAssignment?.requireGuestEmail ?? list.requireGuestEmail ?? false;
 
     const [isAttending, setIsAttending] = useState(true);
-    const [guestNames, setGuestNames] = useState<string[]>(Array(finalAllowance).fill(''));
+    const [guests, setGuests] = useState<{ name: string; email: string }[]>(
+        Array.from({ length: finalAllowance }, () => ({ name: '', email: '' }))
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -99,12 +102,11 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     useEffect(() => {
         if (existingConfirmation) {
             setIsAttending(existingConfirmation.isPromoterAttending);
-            // FIX: The type `GuestListConfirmation` has `guests` (an array of objects), not `guestNames`.
-            const filledGuests = [...existingConfirmation.guests.map(g => g.name)];
+            const filledGuests = existingConfirmation.guests.map(g => ({ name: g.name, email: g.email || '' }));
             while (filledGuests.length < finalAllowance) {
-                filledGuests.push('');
+                filledGuests.push({ name: '', email: '' });
             }
-            setGuestNames(filledGuests.slice(0, finalAllowance));
+            setGuests(filledGuests.slice(0, finalAllowance));
             
             if (isLocked) {
                 setIsCheckingRequest(true);
@@ -114,15 +116,15 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                     .finally(() => setIsCheckingRequest(false));
             }
         } else {
-             setGuestNames(Array(finalAllowance).fill(''));
+             setGuests(Array.from({ length: finalAllowance }, () => ({ name: '', email: '' })));
         }
     }, [existingConfirmation, finalAllowance, isLocked]);
 
 
-    const handleGuestNameChange = (index: number, value: string) => {
-        const newGuestNames = [...guestNames];
-        newGuestNames[index] = value;
-        setGuestNames(newGuestNames);
+    const handleGuestChange = (index: number, field: 'name' | 'email', value: string) => {
+        const newGuests = [...guests];
+        newGuests[index] = { ...newGuests[index], [field]: value };
+        setGuests(newGuests);
     };
 
     const handleRequestChange = async () => {
@@ -145,7 +147,22 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         setIsSubmitting(true);
         setError('');
         setSuccess(false);
+
         try {
+            const guestsToSubmit = isAttending
+                ? guests.filter(g => g.name.trim() !== '')
+                : [];
+            
+            if (requireEmail) {
+                for (const guest of guestsToSubmit) {
+                    if (!guest.email || !guest.email.trim() || !/^\S+@\S+\.\S+$/.test(guest.email.trim())) {
+                        setError(`Por favor, preencha um e-mail válido para o convidado "${guest.name}".`);
+                        setIsSubmitting(false);
+                        return;
+                    }
+                }
+            }
+
             await addGuestListConfirmation({
                 organizationId: list.organizationId,
                 campaignId: list.campaignId,
@@ -156,8 +173,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 promoterEmail: promoter.email,
                 listName: list.name,
                 isPromoterAttending: isAttending,
-                // FIX: Corrected property from `guestNames` to `guests` and mapped the string array to an array of objects to match the type definition.
-                guests: isAttending ? guestNames.filter(name => name.trim() !== '').map(name => ({ name })) : [],
+                guests: guestsToSubmit,
             });
             setSuccess(true);
         } catch (err: any) {
@@ -168,7 +184,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     };
 
     if (success) {
-        const submittedGuests = guestNames.filter(name => name.trim() !== '');
+        const submittedGuests = guests.filter(g => g.name.trim() !== '');
         return (
             <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -197,8 +213,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                             <li className="pt-2">
                                 <strong className="block mb-1">Convidados ({submittedGuests.length}):</strong>
                                 <ul className="list-disc list-inside pl-2 space-y-1">
-                                    {submittedGuests.map((name, index) => (
-                                        <li key={index}>{name}</li>
+                                    {submittedGuests.map((guest, index) => (
+                                        <li key={index}>{guest.name} {guest.email ? `(${guest.email})` : ''}</li>
                                     ))}
                                 </ul>
                             </li>
@@ -212,8 +228,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     }
     
     if (isLocked && existingConfirmation) {
-        // FIX: The type `GuestListConfirmation` has `guests` (an array of objects), not `guestNames`.
-        const submittedGuests = existingConfirmation.guests.map(g => g.name).filter(name => name.trim() !== '');
+        const submittedGuests = existingConfirmation.guests.filter(g => g.name.trim() !== '');
         return (
              <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -237,7 +252,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                         {submittedGuests.length > 0 && (
                             <li className="pt-2"><strong className="block mb-1">Convidados ({submittedGuests.length}):</strong>
                                 <ul className="list-disc list-inside pl-2 space-y-1">
-                                    {submittedGuests.map((name, index) => <li key={index}>{name}</li>)}
+                                    {submittedGuests.map((guest, index) => <li key={index}>{guest.name} {guest.email ? `(${guest.email})` : ''}</li>)}
                                 </ul>
                             </li>
                         )}
@@ -311,17 +326,29 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 {isAttending && finalAllowance > 0 && (
                     <div>
                         <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({finalAllowance} permitidos)</h4>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {Array.from({ length: finalAllowance }).map((_, index) => (
-                                <input
-                                    key={index}
-                                    type="text"
-                                    value={guestNames[index]}
-                                    onChange={(e) => handleGuestNameChange(index, e.target.value)}
-                                    placeholder={`Nome completo do Convidado ${index + 1}`}
-                                    disabled={isFormDisabled}
-                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
-                                />
+                                <div key={index} className="space-y-2 p-3 border border-gray-700 rounded-md bg-gray-900/30">
+                                    <input
+                                        type="text"
+                                        value={guests[index]?.name || ''}
+                                        onChange={(e) => handleGuestChange(index, 'name', e.target.value)}
+                                        placeholder={`Nome completo do Convidado ${index + 1}`}
+                                        disabled={isFormDisabled}
+                                        className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                    />
+                                    {requireEmail && (
+                                        <input
+                                            type="email"
+                                            value={guests[index]?.email || ''}
+                                            onChange={(e) => handleGuestChange(index, 'email', e.target.value)}
+                                            placeholder={`E-mail do Convidado ${index + 1}`}
+                                            disabled={isFormDisabled}
+                                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                            required={!!guests[index]?.name.trim()}
+                                        />
+                                    )}
+                                </div>
                             ))}
                         </div>
                     </div>
