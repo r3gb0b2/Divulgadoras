@@ -341,7 +341,8 @@ const GuestListCheckinPage: React.FC = () => {
 
     const allPeople = useMemo(() => {
         const people: Person[] = [];
-        allConfirmations.forEach(conf => {
+        // FIX: Add a null check for allConfirmations to prevent the 'filter' of undefined error.
+        (allConfirmations || []).forEach(conf => {
             if (conf.isPromoterAttending) {
                 people.push({
                     name: conf.promoterName,
@@ -354,6 +355,7 @@ const GuestListCheckinPage: React.FC = () => {
                     promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
+            // FIX: Add a null check for conf.guests to prevent the 'filter' of undefined error.
             (conf.guests || []).filter(guest => guest.name.trim()).forEach(guest => {
                  const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guest.name);
                 people.push({
@@ -486,23 +488,28 @@ const GuestListCheckinPage: React.FC = () => {
         const rows: string[] = [];
     
         allConfirmations.forEach(conf => {
+            let promoterInfoShown = false;
+
             if (conf.isPromoterAttending) {
                 rows.push([
                     formatCSVCell(conf.promoterName),
                     formatCSVCell(conf.promoterEmail),
-                    formatCSVCell(""), // No guest name for promoter's own entry
-                    formatCSVCell("")  // No guest email for promoter's own entry
+                    formatCSVCell(""), // It's the promoter themself
+                    formatCSVCell("")
                 ].join(','));
+                promoterInfoShown = true;
             }
     
+            // FIX: Add a null check for conf.guests to prevent the 'filter' of undefined error.
             (conf.guests || []).forEach(guest => {
                 if (guest.name.trim()) {
                      rows.push([
                         formatCSVCell(conf.promoterName),
-                        formatCSVCell(conf.promoterEmail),
+                        formatCSVCell(promoterInfoShown ? "" : conf.promoterEmail),
                         formatCSVCell(guest.name),
                         formatCSVCell(guest.email || "")
                     ].join(','));
+                    promoterInfoShown = true;
                 }
             });
         });
