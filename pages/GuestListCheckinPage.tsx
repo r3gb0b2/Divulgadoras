@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, DownloadIcon } from '../components/Icons';
 import { getAllCampaigns } from '../services/settingsService';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
@@ -354,10 +354,10 @@ const GuestListCheckinPage: React.FC = () => {
                     promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
-            conf.guestNames.filter(name => name.trim()).forEach(guestName => {
-                 const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guestName);
+            conf.guests.filter(guest => guest.name.trim()).forEach(guest => {
+                 const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guest.name);
                 people.push({
-                    name: guestName,
+                    name: guest.name,
                     isPromoter: false,
                     confirmationId: conf.id,
                     checkedInAt: guestCheckinData?.checkedInAt,
@@ -477,6 +477,52 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
+    const handleDownload = () => {
+        if (allConfirmations.length === 0) return;
+    
+        const formatCSVCell = (text: string) => `"${text.replace(/"/g, '""')}"`;
+        
+        const headers = ["Divulgadora", "Email Divulgadora", "Convidado", "Email Convidado"];
+        const rows: string[] = [];
+    
+        allConfirmations.forEach(conf => {
+            if (conf.isPromoterAttending) {
+                rows.push([
+                    formatCSVCell(conf.promoterName),
+                    formatCSVCell(conf.promoterEmail),
+                    formatCSVCell(""), // No guest name for promoter's own entry
+                    formatCSVCell("")  // No guest email for promoter's own entry
+                ].join(','));
+            }
+    
+            conf.guests.forEach(guest => {
+                if (guest.name.trim()) {
+                     rows.push([
+                        formatCSVCell(conf.promoterName),
+                        formatCSVCell(conf.promoterEmail),
+                        formatCSVCell(guest.name),
+                        formatCSVCell(guest.email || "")
+                    ].join(','));
+                }
+            });
+        });
+    
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const campaignNameSlug = campaignName.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'evento';
+        link.setAttribute("href", url);
+        link.setAttribute("download", `checkin_${campaignNameSlug}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
 
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -544,6 +590,14 @@ const GuestListCheckinPage: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <button
+                                    onClick={handleDownload}
+                                    disabled={allConfirmations.length === 0}
+                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Baixar Listagem (CSV)</span>
+                                </button>
                             </div>
                         </div>
                         {error && <p className="text-red-400 text-center mb-4">{error}</p>}

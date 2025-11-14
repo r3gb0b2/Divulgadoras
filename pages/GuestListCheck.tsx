@@ -99,7 +99,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     useEffect(() => {
         if (existingConfirmation) {
             setIsAttending(existingConfirmation.isPromoterAttending);
-            const filledGuests = [...existingConfirmation.guestNames];
+            // FIX: The type `GuestListConfirmation` has `guests` (an array of objects), not `guestNames`.
+            const filledGuests = [...existingConfirmation.guests.map(g => g.name)];
             while (filledGuests.length < finalAllowance) {
                 filledGuests.push('');
             }
@@ -155,7 +156,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 promoterEmail: promoter.email,
                 listName: list.name,
                 isPromoterAttending: isAttending,
-                guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
+                // FIX: Corrected property from `guestNames` to `guests` and mapped the string array to an array of objects to match the type definition.
+                guests: isAttending ? guestNames.filter(name => name.trim() !== '').map(name => ({ name })) : [],
             });
             setSuccess(true);
         } catch (err: any) {
@@ -210,7 +212,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     }
     
     if (isLocked && existingConfirmation) {
-        const submittedGuests = existingConfirmation.guestNames.filter(name => name.trim() !== '');
+        // FIX: The type `GuestListConfirmation` has `guests` (an array of objects), not `guestNames`.
+        const submittedGuests = existingConfirmation.guests.map(g => g.name).filter(name => name.trim() !== '');
         return (
              <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">

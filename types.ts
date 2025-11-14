@@ -203,12 +203,13 @@ export interface GuestList {
   name: string;
   description?: string;
   guestAllowance: number;
+  requireGuestEmail?: boolean;
   startsAt: Timestamp | FieldValue | null;
   closesAt: Timestamp | FieldValue | null;
   isActive: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
-  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; } };
+  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; requireGuestEmail?: boolean; } };
 }
 
 export interface GuestListConfirmation {
@@ -222,7 +223,7 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guestNames: string[];
+    guests: { name: string; email?: string }[];
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;

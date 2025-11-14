@@ -44,13 +44,14 @@ const GuestListAssignments: React.FC = () => {
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
-    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null } }>({});
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; requireGuestEmail?: boolean; } }>({});
     
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [bulkAllowance, setBulkAllowance] = useState<number>(0);
     const [bulkInfo, setBulkInfo] = useState<string>('');
     const [bulkClosesAt, setBulkClosesAt] = useState<string>('');
+    const [bulkRequireEmail, setBulkRequireEmail] = useState<boolean>(false);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -83,6 +84,7 @@ const GuestListAssignments: React.FC = () => {
             setPostAssignments(orgAssignments);
             setAssignments(listData.assignments || {});
             setBulkAllowance(listData.guestAllowance || 0);
+            setBulkRequireEmail(listData.requireGuestEmail || false);
 
         } catch (err: any) {
             setError(err.message || "Falha ao carregar dados.");
@@ -151,7 +153,7 @@ const GuestListAssignments: React.FC = () => {
             if (newAssignments[promoterId]) {
                 delete newAssignments[promoterId];
             } else {
-                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
+                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, requireGuestEmail: list?.requireGuestEmail || false, info: '', closesAt: null };
             }
             return newAssignments;
         });
@@ -162,14 +164,14 @@ const GuestListAssignments: React.FC = () => {
         if (isNaN(allowance) || allowance < 0) return;
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { ...prev[promoterId], guestAllowance: allowance }
+            [promoterId]: { ...(prev[promoterId] || { guestAllowance: 0, requireGuestEmail: false }), guestAllowance: allowance }
         }));
     };
 
     const handleInfoChange = (promoterId: string, value: string) => {
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { ...prev[promoterId], guestAllowance: prev[promoterId]?.guestAllowance ?? 0, info: value }
+            [promoterId]: { ...(prev[promoterId] || { guestAllowance: 0, requireGuestEmail: false }), info: value }
         }));
     };
     
@@ -178,9 +180,16 @@ const GuestListAssignments: React.FC = () => {
         setAssignments(prev => ({
             ...prev,
             [promoterId]: { 
-                ...(prev[promoterId] || { guestAllowance: 0, info: '' }), 
+                ...(prev[promoterId] || { guestAllowance: 0, info: '', requireGuestEmail: false }), 
                 closesAt: date 
             }
+        }));
+    };
+    
+    const handleEmailRequirementChange = (promoterId: string, value: boolean) => {
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { ...(prev[promoterId] || { guestAllowance: 0, info: '' }), requireGuestEmail: value }
         }));
     };
 
@@ -192,7 +201,7 @@ const GuestListAssignments: React.FC = () => {
             if (isChecked) {
                 visibleIds.forEach(id => {
                     if (!newAssignments[id]) {
-                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
+                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, requireGuestEmail: list?.requireGuestEmail || false, info: '', closesAt: null };
                     }
                 });
             } else {
@@ -243,6 +252,21 @@ const GuestListAssignments: React.FC = () => {
             const newAssignments = { ...prev };
             selectedIds.forEach(id => {
                 newAssignments[id] = { ...newAssignments[id], closesAt: date };
+            });
+            return newAssignments;
+        });
+    };
+
+    const handleApplyBulkEmail = () => {
+        const selectedIds = Object.keys(assignments);
+        if (selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar a exigência de email.");
+            return;
+        }
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], requireGuestEmail: bulkRequireEmail };
             });
             return newAssignments;
         });
@@ -307,6 +331,11 @@ const GuestListAssignments: React.FC = () => {
                             <input id="bulk-closes-at" type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
                             <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Data</button>
                         </div>
+                         <div className="flex items-center gap-2">
+                            <input id="bulk-require-email" type="checkbox" checked={bulkRequireEmail} onChange={e => setBulkRequireEmail(e.target.checked)} className="h-4 w-4 text-primary bg-gray-800 border-gray-600 rounded"/>
+                            <label htmlFor="bulk-require-email" className="text-sm font-medium">Exigir Email</label>
+                            <button type="button" onClick={handleApplyBulkEmail} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar</button>
+                        </div>
                     </div>
                 </div>
 
@@ -318,6 +347,7 @@ const GuestListAssignments: React.FC = () => {
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
+                                <th className="p-3 text-center text-xs font-medium text-gray-300 uppercase">Exigir Email</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
                                 <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Data Limite</th>
                             </tr>
@@ -330,6 +360,15 @@ const GuestListAssignments: React.FC = () => {
                                     <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
                                     <td className="p-3 whitespace-nowrap">
                                         <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={assignments[p.id]?.requireGuestEmail ?? list?.requireGuestEmail ?? false} 
+                                            onChange={e => handleEmailRequirementChange(p.id, e.target.checked)} 
+                                            disabled={!assignments[p.id]} 
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded disabled:bg-gray-900"
+                                        />
                                     </td>
                                     <td className="p-3 whitespace-nowrap">
                                         <input 
