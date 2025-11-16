@@ -325,8 +325,13 @@ const CreatePost: React.FC = () => {
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
-                        const storageRef = storage.ref(originalPost.mediaUrl);
-                        storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                        const path = originalPost.mediaUrl;
+                        if (path.startsWith('http')) {
+                            setMediaPreview(path);
+                        } else {
+                            const storageRef = storage.ref(path);
+                            storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                        }
                     }
                 }
 

@@ -68,14 +68,16 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setPostLink(post.postLink || '');
             setPostFormats(post.postFormats || []);
             
-            if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
-                setMediaUrl(post.mediaUrl);
-                storage.ref(post.mediaUrl).getDownloadURL()
-                    .then(url => setMediaPreview(url))
-                    .catch(err => console.error("Error getting media preview URL:", err));
-            } else {
-                 setMediaUrl('');
-                 setMediaPreview(post.mediaUrl || null); // For GDrive links
+            setMediaPreview(null);
+            if (post.mediaUrl) {
+                const path = post.mediaUrl;
+                if (path.startsWith('http')) {
+                    setMediaPreview(path);
+                } else {
+                    storage.ref(path).getDownloadURL()
+                        .then(url => setMediaPreview(url))
+                        .catch(err => console.error("Error getting media preview URL:", err));
+                }
             }
 
             setGoogleDriveUrl(post.googleDriveUrl || '');
