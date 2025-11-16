@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PostAssignment } from '../types';
-import { serverTimestamp } from 'firebase/firestore';
+import firebase from 'firebase/compat/app';
 import PhotoViewerModal from './PhotoViewerModal';
+import { renewAssignmentDeadline } from '../services/postService';
 
 interface ChangeAssignmentStatusModalProps {
     isOpen: boolean;
@@ -53,7 +54,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             if (selectedStatus === 'completed_manual') {
                 dataToSave = {
                     status: 'confirmed', // A completed post is also a confirmed one
-                    proofSubmittedAt: serverTimestamp(),
+                    proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     proofImageUrls: ['manual'], // Special value to indicate manual completion
                     justification: undefined, // Clear any previous justification
                     justificationStatus: undefined,
@@ -78,6 +79,23 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             onClose();
         } catch (err: any) {
             setError(err.message || 'Falha ao salvar o status.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleRenewDeadline = async () => {
+        if (!assignment) return;
+        if (!window.confirm(`Tem certeza que deseja renovar o prazo de entrega por mais 24 horas para ${assignment.promoterName}? O tempo começará a contar a partir de agora.`)) {
+            return;
+        }
+        setIsSaving(true);
+        setError('');
+        try {
+            await renewAssignmentDeadline(assignment.id);
+            onClose(); // Close modal on success
+        } catch (err: any) {
+            setError(err.message || 'Falha ao renovar o prazo.');
         } finally {
             setIsSaving(false);
         }
@@ -191,6 +209,22 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                 </label>
                  <p className="text-xs text-gray-400 pl-6">Use 'Concluído (Manual)' para registrar uma comprovação que foi recebida fora da plataforma. Esta ação não pode ser desfeita.</p>
             </div>
+
+            {assignment.status === 'confirmed' && !assignment.proofSubmittedAt && (
+                <div className="mt-6 border-t border-gray-600 pt-4">
+                    <button
+                        type="button"
+                        onClick={handleRenewDeadline}
+                        disabled={isSaving}
+                        className="w-full text-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold disabled:opacity-50"
+                    >
+                        Renovar Prazo de Entrega (+24h)
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2 text-center">
+                        Isso reinicia a contagem de 24 horas para o envio da comprovação a partir de agora.
+                    </p>
+                </div>
+            )}
         </div>
     );
 
