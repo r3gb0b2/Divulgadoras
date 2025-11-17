@@ -211,24 +211,22 @@ const GuestListAccessPage: React.FC = () => {
         });
     };
 
-    const handleToggleAllForList = (listName: string) => {
+    const handleToggleAllForList = (listName: string, isChecked: boolean) => {
         const promoterIds = filteredPromoters.map(p => p.id);
-        const areAllSelected = promoterIds.every(id => assignments[id]?.includes(listName));
-
         setAssignments(prev => {
             const newAssignments = { ...prev };
             promoterIds.forEach(id => {
                 const currentLists = newAssignments[id] || [];
-                if (areAllSelected) {
+                if (isChecked) {
+                    // Select all: add the listName if not present
+                    if (!currentLists.includes(listName)) {
+                        newAssignments[id] = [...currentLists, listName];
+                    }
+                } else {
                     // Unselect all: remove the listName
                     newAssignments[id] = currentLists.filter(l => l !== listName);
                     if (newAssignments[id].length === 0) {
                         delete newAssignments[id];
-                    }
-                } else {
-                    // Select all: add the listName if not present
-                    if (!currentLists.includes(listName)) {
-                        newAssignments[id] = [...currentLists, listName];
                     }
                 }
             });
@@ -309,7 +307,7 @@ const GuestListAccessPage: React.FC = () => {
                                         <span className="font-semibold text-gray-300 text-xs">Filtrar por Cor:</span>
                                         <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
                                             {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                                <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                                <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
                                                     {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
                                                     <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
                                                 </button>
@@ -332,6 +330,7 @@ const GuestListAccessPage: React.FC = () => {
                                 <div className="space-y-4">
                                     {(campaign?.guestListTypes || []).map(listName => {
                                         const selectedCount = filteredPromoters.filter(p => (assignments[p.id] || []).includes(listName)).length;
+                                        const areAllSelectedForList = filteredPromoters.length > 0 && selectedCount === filteredPromoters.length;
                                         return (
                                             <div key={listName} className="border border-gray-700 rounded-lg p-4">
                                                 <div className="flex justify-between items-center mb-2">
@@ -339,8 +338,8 @@ const GuestListAccessPage: React.FC = () => {
                                                     <label className="flex items-center space-x-2 cursor-pointer text-sm font-medium">
                                                         <input 
                                                             type="checkbox"
-                                                            onChange={() => handleToggleAllForList(listName)}
-                                                            checked={filteredPromoters.length > 0 && selectedCount === filteredPromoters.length}
+                                                            onChange={(e) => handleToggleAllForList(listName, e.target.checked)}
+                                                            checked={areAllSelectedForList}
                                                             className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
                                                         />
                                                         <span>

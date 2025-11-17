@@ -10,8 +10,10 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: To function as an Error Boundary, this must be a class component that extends React.Component.
-// This gives it access to state, props, and the necessary lifecycle methods, resolving the errors.
+// FIX: Converted the component to a class component that extends React.Component.
+// React Error Boundaries must be class components to use the `getDerivedStateFromError`
+// and `componentDidCatch` lifecycle methods. This change also provides access
+// to `this.state`, `this.setState`, and `this.props`, resolving the errors.
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -22,7 +24,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     };
   }
 
-  // FIX: Updated getDerivedStateFromError to return a partial State object to conform to React's type definitions.
+  // FIX: Implemented `getDerivedStateFromError` to update state when a descendant component throws an error.
   static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method is called after an error has been thrown by a descendant component.
     // It should return a value to update state.
