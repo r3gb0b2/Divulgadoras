@@ -20,8 +20,9 @@ const toDateSafe = (timestamp: any): Date | null => {
         return timestamp.toDate();
     }
     // Serialized Timestamp object
-    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
-        return new Date(timestamp.seconds * 1000);
+    if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
+        const seconds = timestamp.seconds || timestamp._seconds;
+        return new Date(seconds * 1000);
     }
     // ISO string or number (milliseconds)
     const date = new Date(timestamp);
@@ -185,10 +186,10 @@ const ProofSection: React.FC<{
             {isExpired ? (
                 <>
                      {justificationDeadline && (
-                        <p className={`text-xs font-medium mb-2 ${isJustificationExpired ? 'text-red-400' : 'text-yellow-300'}`}>
+                        <p className={`text-xs font-bold mb-2 ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
                             {isJustificationExpired 
-                                ? `Prazo de justificativa encerrado em ${justificationDeadline.toLocaleDateString('pt-BR')}` 
-                                : `Você tem até ${justificationDeadline.toLocaleDateString('pt-BR')} para justificar.`
+                                ? `PRAZO DE JUSTIFICATIVA ENCERRADO EM ${justificationDeadline.toLocaleDateString('pt-BR')}` 
+                                : `VOCÊ TEM ATÉ ${justificationDeadline.toLocaleDateString('pt-BR')} PARA JUSTIFICAR.`
                             }
                         </p>
                     )}
@@ -374,14 +375,14 @@ const PostCard: React.FC<{
         if (assignment.status === 'pending') {
             // Display date message if available
             const deadlineMessage = justificationDeadline 
-                ? (isJustificationExpired ? `Prazo de justificativa encerrado em ${justificationDeadline.toLocaleDateString('pt-BR')}` : `Você tem até ${justificationDeadline.toLocaleDateString('pt-BR')} para justificar.`)
+                ? (isJustificationExpired ? `PRAZO DE JUSTIFICATIVA ENCERRADO EM ${justificationDeadline.toLocaleDateString('pt-BR')}` : `VOCÊ TEM ATÉ ${justificationDeadline.toLocaleDateString('pt-BR')} PARA JUSTIFICAR.`)
                 : null;
 
             if (!assignment.post.isActive || isExpired) {
                 return (
                     <div className="w-full flex flex-col gap-2 items-center">
                         {deadlineMessage && (
-                            <p className={`text-xs font-medium ${isJustificationExpired ? 'text-red-400' : 'text-yellow-300'}`}>
+                            <p className={`text-xs font-bold ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
                                 {deadlineMessage}
                             </p>
                         )}
@@ -399,7 +400,7 @@ const PostCard: React.FC<{
             return (
                 <div className="w-full flex flex-col gap-2">
                      {deadlineMessage && (
-                        <p className={`text-xs font-medium text-center ${isJustificationExpired ? 'text-red-400' : 'text-yellow-300'}`}>
+                        <p className={`text-xs font-bold text-center ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
                             {deadlineMessage}
                         </p>
                     )}
