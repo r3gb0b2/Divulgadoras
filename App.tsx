@@ -19,6 +19,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import OneTimePostPage from './pages/OneTimePostPage';
 import { auth } from './firebase/config';
 import LeaveGroupPage from './pages/LeaveGroupPage';
+import FollowLoopPage from './pages/FollowLoopPage';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -139,6 +140,7 @@ const App: React.FC = () => {
                 <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/status" element={<StatusCheck />} />
                 <Route path="/posts" element={<PostCheck />} />
+                <Route path="/connect" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />

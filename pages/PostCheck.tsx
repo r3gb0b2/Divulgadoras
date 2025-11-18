@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
@@ -20,9 +19,8 @@ const toDateSafe = (timestamp: any): Date | null => {
         return timestamp.toDate();
     }
     // Serialized Timestamp object
-    if (typeof timestamp === 'object' && (timestamp.seconds || timestamp._seconds)) {
-        const seconds = timestamp.seconds || timestamp._seconds;
-        return new Date(seconds * 1000);
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
+        return new Date(timestamp.seconds * 1000);
     }
     // ISO string or number (milliseconds)
     const date = new Date(timestamp);
@@ -177,30 +175,16 @@ const ProofSection: React.FC<{
     }
     
     const isExpired = timeLeft === 'Tempo esgotado';
-    
-    const justificationDeadline = toDateSafe(assignment.post.justificationDeadline);
-    const isJustificationExpired = justificationDeadline && new Date() > justificationDeadline;
 
     return (
         <div className="mt-4 text-center">
             {isExpired ? (
-                <>
-                     {justificationDeadline && (
-                        <p className={`text-xs font-bold mb-2 ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
-                            {isJustificationExpired 
-                                ? `PRAZO DE JUSTIFICATIVA ENCERRADO EM ${justificationDeadline.toLocaleDateString('pt-BR')}` 
-                                : `VOCÊ TEM ATÉ ${justificationDeadline.toLocaleDateString('pt-BR')} PARA JUSTIFICAR.`
-                            }
-                        </p>
-                    )}
-                    <button
-                        onClick={() => onJustify(assignment)}
-                        disabled={!!isJustificationExpired}
-                        className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Justificar Ausência
-                    </button>
-                </>
+                <button
+                    onClick={() => onJustify(assignment)}
+                    className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                >
+                    Justificar Ausência
+                </button>
             ) : (
                 <button
                     onClick={() => navigate(`/proof/${assignment.id}`)}
@@ -334,9 +318,6 @@ const PostCard: React.FC<{
 
     const hasProof = !!assignment.proofSubmittedAt;
     const hasJustification = !!assignment.justification;
-    
-    const justificationDeadline = toDateSafe(assignment.post.justificationDeadline);
-    const isJustificationExpired = justificationDeadline && now > justificationDeadline;
 
     const renderActions = () => {
         if (hasProof) {
@@ -373,23 +354,12 @@ const PostCard: React.FC<{
             );
         }
         if (assignment.status === 'pending') {
-            // Display date message if available
-            const deadlineMessage = justificationDeadline 
-                ? (isJustificationExpired ? `PRAZO DE JUSTIFICATIVA ENCERRADO EM ${justificationDeadline.toLocaleDateString('pt-BR')}` : `VOCÊ TEM ATÉ ${justificationDeadline.toLocaleDateString('pt-BR')} PARA JUSTIFICAR.`)
-                : null;
-
             if (!assignment.post.isActive || isExpired) {
                 return (
-                    <div className="w-full flex flex-col gap-2 items-center">
-                        {deadlineMessage && (
-                            <p className={`text-xs font-bold ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
-                                {deadlineMessage}
-                            </p>
-                        )}
+                    <div className="w-full flex flex-col sm:flex-row gap-2">
                         <button 
                             onClick={() => onJustify(assignment)}
-                            disabled={!!isJustificationExpired}
-                            className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
                         >
                             Justificar Ausência
                         </button>
@@ -398,28 +368,20 @@ const PostCard: React.FC<{
             }
 
             return (
-                <div className="w-full flex flex-col gap-2">
-                     {deadlineMessage && (
-                        <p className={`text-xs font-bold text-center ${isJustificationExpired ? 'text-red-500' : 'text-yellow-300'}`}>
-                            {deadlineMessage}
-                        </p>
-                    )}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                        <button 
-                            onClick={() => onJustify(assignment)}
-                             disabled={!!isJustificationExpired}
-                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Justificar Ausência
-                        </button>
-                        <button 
-                            onClick={handleConfirm}
-                            disabled={isConfirming}
-                            className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                        >
-                            {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
-                        </button>
-                    </div>
+                <div className="w-full flex flex-col sm:flex-row gap-2">
+                    <button 
+                        onClick={() => onJustify(assignment)}
+                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                    <button 
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
+                        className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                        {isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}
+                    </button>
                 </div>
             );
         }

@@ -37,7 +37,6 @@ const ListModal: React.FC<{
                 campaignId: list?.campaignId || '',
                 description: list?.description || '',
                 guestAllowance: list?.guestAllowance || 0,
-                requireGuestEmail: list?.requireGuestEmail || false,
                 startsAt: list?.startsAt || null,
                 closesAt: list?.closesAt || null,
                 isActive: list?.isActive !== undefined ? list.isActive : true,
@@ -96,10 +95,6 @@ const ListModal: React.FC<{
                         <label className="block text-sm font-medium text-gray-300">Nº de Convidados Padrão</label>
                         <input type="number" name="guestAllowance" min="0" value={formData.guestAllowance} onChange={handleChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" />
                     </div>
-                    <label className="flex items-center space-x-2 text-white">
-                        <input type="checkbox" name="requireGuestEmail" checked={formData.requireGuestEmail} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                        <span>Exigir e-mail dos convidados por padrão</span>
-                    </label>
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Início da Lista (opcional)</label>
                         <input type="datetime-local" name="startsAt" value={formData.startsAt ? timestampToDateTimeLocal(formData.startsAt) : ''} onChange={handleDateChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" style={{colorScheme: 'dark'}} />

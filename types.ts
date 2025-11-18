@@ -151,7 +151,6 @@ export interface Post {
   createdByEmail: string;
   isActive: boolean;
   expiresAt: Timestamp | FieldValue | null;
-  justificationDeadline?: Timestamp | FieldValue | null; // New field
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
@@ -173,7 +172,6 @@ export interface PostAssignment {
     eventName?: string;
     isActive: boolean;
     expiresAt: Timestamp | FieldValue | null;
-    justificationDeadline?: Timestamp | FieldValue | null; // New field
     createdAt: Timestamp | FieldValue;
     allowLateSubmissions?: boolean;
     autoAssignToNewPromoters?: boolean;
@@ -206,13 +204,12 @@ export interface GuestList {
   name: string;
   description?: string;
   guestAllowance: number;
-  requireGuestEmail?: boolean;
   startsAt: Timestamp | FieldValue | null;
   closesAt: Timestamp | FieldValue | null;
   isActive: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
-  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; requireGuestEmail?: boolean; } };
+  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; } };
 }
 
 export interface GuestListConfirmation {
@@ -226,7 +223,7 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guests: { name: string; email?: string }[];
+    guestNames: string[];
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;
@@ -254,7 +251,6 @@ export interface ScheduledPostData {
   postLink?: string;
   isActive: boolean;
   expiresAt: Timestamp | FieldValue | null;
-  justificationDeadline?: Timestamp | FieldValue | null; // New field
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
@@ -338,4 +334,33 @@ export interface GuestListChangeRequest {
   requestedAt: Timestamp | FieldValue;
   actionTakenAt?: Timestamp | FieldValue;
   actionTakenBy?: string; // Admin UID
+}
+
+// --- Follow Loop Types ---
+
+export interface FollowLoopParticipant {
+  id: string;
+  promoterId: string;
+  promoterName: string;
+  instagram: string;
+  photoUrl: string;
+  organizationId: string;
+  isActive: boolean;
+  joinedAt: Timestamp | FieldValue;
+  lastActiveAt: Timestamp | FieldValue;
+  followersCount: number;
+  followingCount: number;
+}
+
+export interface FollowInteraction {
+  id: string;
+  followerId: string; // Promoter ID who clicked follow
+  followedId: string; // Promoter ID who was followed
+  organizationId: string;
+  status: 'pending_validation' | 'validated' | 'rejected';
+  createdAt: Timestamp | FieldValue;
+  validatedAt?: Timestamp | FieldValue | null;
+  followerName: string;
+  followerInstagram: string;
+  followedName: string;
 }

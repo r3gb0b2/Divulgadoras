@@ -141,7 +141,7 @@ const PromoterDiagnosticsPage: React.FC = () => {
                                         {results.guestLists.map((g, index) => (
                                             <div key={g.id} className="bg-dark/70 p-3 rounded-lg">
                                                 <p>Lista <strong>{g.listName}</strong> para <strong>{g.campaignName}</strong></p>
-                                                <p className="text-sm text-gray-400">Convidados: {(g.guests || []).length} | Confirmado em: {(g.confirmedAt as Timestamp)?.toDate().toLocaleString('pt-BR')}</p>
+                                                <p className="text-sm text-gray-400">Convidados: {g.guestNames.length} | Confirmado em: {(g.confirmedAt as Timestamp)?.toDate().toLocaleString('pt-BR')}</p>
                                                  <button onClick={() => toggleJson(`guestlist-${index}`)} className="text-xs text-blue-400 hover:underline mt-2">
                                                     {expandedJson[`guestlist-${index}`] ? 'Ocultar' : 'Ver'} Dados Brutos (JSON)
                                                 </button>

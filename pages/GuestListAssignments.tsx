@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { GuestList, Promoter, PostAssignment, Timestamp, FieldValue, Campaign } from '../types';
+import { GuestList, Promoter, PostAssignment, Timestamp, FieldValue } from '../types';
 import { getGuestListById, updateGuestList } from '../services/guestListService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAssignmentsForOrganization } from '../services/postService';
 import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
-import { getAllCampaigns } from '../services/settingsService';
 
 const getPerformanceColor = (rate: number): string => {
     if (rate < 0) return 'text-gray-300';
@@ -45,14 +44,13 @@ const GuestListAssignments: React.FC = () => {
     const [list, setList] = useState<GuestList | null>(null);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [postAssignments, setPostAssignments] = useState<PostAssignment[]>([]);
-    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; requireGuestEmail?: boolean; } }>({});
+    const [assignments, setAssignments] = useState<{ [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null } }>({});
     
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [bulkAllowance, setBulkAllowance] = useState<number>(0);
     const [bulkInfo, setBulkInfo] = useState<string>('');
     const [bulkClosesAt, setBulkClosesAt] = useState<string>('');
-    const [bulkRequireEmail, setBulkRequireEmail] = useState<boolean>(false);
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -78,14 +76,13 @@ const GuestListAssignments: React.FC = () => {
                 ),
                 getAssignmentsForOrganization(listData.organizationId)
             ]);
-            
+
             setList(listData);
             approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
             setPromoters(approvedPromoters);
             setPostAssignments(orgAssignments);
             setAssignments(listData.assignments || {});
             setBulkAllowance(listData.guestAllowance || 0);
-            setBulkRequireEmail(listData.requireGuestEmail || false);
 
         } catch (err: any) {
             setError(err.message || "Falha ao carregar dados.");
@@ -148,32 +145,45 @@ const GuestListAssignments: React.FC = () => {
         return results;
     }, [promotersWithStats, searchQuery, colorFilter]);
 
-    const handleAssignmentChange = (promoterId: string) => {
+    const handleToggle = (promoterId: string) => {
         setAssignments(prev => {
             const newAssignments = { ...prev };
             if (newAssignments[promoterId]) {
                 delete newAssignments[promoterId];
             } else {
-                newAssignments[promoterId] = {
-                    guestAllowance: list?.guestAllowance ?? 0,
-                    info: '',
-                    closesAt: null,
-                    requireGuestEmail: list?.requireGuestEmail ?? false,
-                };
+                newAssignments[promoterId] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
             }
             return newAssignments;
         });
     };
-    
-    const handleSettingChange = (promoterId: string, field: string, value: any) => {
-        setAssignments(prev => {
-            if (!prev[promoterId]) return prev;
-            const newAssignments = { ...prev };
-            newAssignments[promoterId] = { ...newAssignments[promoterId], [field]: value };
-            return newAssignments;
-        });
+
+    const handleAllowanceChange = (promoterId: string, value: string) => {
+        const allowance = parseInt(value, 10);
+        if (isNaN(allowance) || allowance < 0) return;
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { ...prev[promoterId], guestAllowance: allowance }
+        }));
+    };
+
+    const handleInfoChange = (promoterId: string, value: string) => {
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { ...prev[promoterId], guestAllowance: prev[promoterId]?.guestAllowance ?? 0, info: value }
+        }));
     };
     
+    const handleDateChange = (promoterId: string, value: string) => {
+        const date = value ? firebase.firestore.Timestamp.fromDate(new Date(value)) : null;
+        setAssignments(prev => ({
+            ...prev,
+            [promoterId]: { 
+                ...(prev[promoterId] || { guestAllowance: 0, info: '' }), 
+                closesAt: date 
+            }
+        }));
+    };
+
     const handleToggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
         const visibleIds = filteredPromoters.map(p => p.id);
@@ -182,48 +192,60 @@ const GuestListAssignments: React.FC = () => {
             if (isChecked) {
                 visibleIds.forEach(id => {
                     if (!newAssignments[id]) {
-                        newAssignments[id] = { 
-                            guestAllowance: list?.guestAllowance || 0, 
-                            requireGuestEmail: list?.requireGuestEmail || false, 
-                            info: '', 
-                            closesAt: null 
-                        };
+                        newAssignments[id] = { guestAllowance: list?.guestAllowance || 0, info: '', closesAt: null };
                     }
                 });
             } else {
-                visibleIds.forEach(id => {
-                    delete newAssignments[id];
-                });
+                visibleIds.forEach(id => delete newAssignments[id]);
             }
             return newAssignments;
         });
     };
-
-    const handleApplyBulk = (field: 'guestAllowance' | 'info' | 'closesAt' | 'requireGuestEmail') => {
-        const visibleIds = filteredPromoters.map(p => p.id);
-        const selectedVisibleIds = visibleIds.filter(id => assignments[id]);
-        
-        if (selectedVisibleIds.length === 0) {
-            alert("Nenhuma divulgadora selecionada na lista visível para aplicar a ação.");
+    
+    const handleApplyBulkAllowance = () => {
+        const selectedIds = Object.keys(assignments);
+        if(selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar a quantidade.");
             return;
         }
-
-        let valueToApply: any;
-        switch (field) {
-            case 'guestAllowance': valueToApply = bulkAllowance; break;
-            case 'info': valueToApply = bulkInfo; break;
-            case 'closesAt': valueToApply = bulkClosesAt ? firebase.firestore.Timestamp.fromDate(new Date(bulkClosesAt)) : null; break;
-            case 'requireGuestEmail': valueToApply = bulkRequireEmail; break;
-        }
-
         setAssignments(prev => {
             const newAssignments = { ...prev };
-            selectedVisibleIds.forEach(id => {
-                newAssignments[id] = { ...newAssignments[id], [field]: valueToApply };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], guestAllowance: bulkAllowance };
             });
             return newAssignments;
         });
-        alert(`Ação em massa aplicada para ${selectedVisibleIds.length} divulgadoras.`);
+    };
+
+    const handleApplyBulkInfo = () => {
+        const selectedIds = Object.keys(assignments);
+        if(selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar o informativo.");
+            return;
+        }
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], info: bulkInfo };
+            });
+            return newAssignments;
+        });
+    };
+    
+    const handleApplyBulkDate = () => {
+        const selectedIds = Object.keys(assignments);
+        if (selectedIds.length === 0) {
+            alert("Nenhuma divulgadora selecionada para aplicar a data.");
+            return;
+        }
+        const date = bulkClosesAt ? firebase.firestore.Timestamp.fromDate(new Date(bulkClosesAt)) : null;
+        setAssignments(prev => {
+            const newAssignments = { ...prev };
+            selectedIds.forEach(id => {
+                newAssignments[id] = { ...newAssignments[id], closesAt: date };
+            });
+            return newAssignments;
+        });
     };
 
     const handleSave = async () => {
@@ -241,10 +263,103 @@ const GuestListAssignments: React.FC = () => {
         }
     };
 
-    const allVisibleSelected = useMemo(() => {
-        if (filteredPromoters.length === 0) return false;
-        return filteredPromoters.every(p => assignments[p.id]);
-    }, [filteredPromoters, assignments]);
+    const renderContent = () => {
+        if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+        if (error) return <p className="text-red-400 text-center">{error}</p>;
+        
+        const areAllVisibleSelected = filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id]);
+
+        return (
+            <div className="space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                    <div className="relative flex-grow w-full">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                        <input type="text" placeholder="Buscar por nome ou @..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800"/>
+                    </div>
+                    <div className="flex items-center gap-x-2 flex-shrink-0">
+                        <span className="font-semibold text-gray-300 text-xs">Filtrar:</span>
+                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                            {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
+                                <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
+                                    <span className="hidden sm:inline">{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
+                     <label className="flex items-center space-x-2 font-semibold cursor-pointer">
+                        <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                        <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
+                    </label>
+                    <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
+                            <label htmlFor="bulk-allowance" className="text-sm font-medium">convidado(s)</label>
+                            <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Qtde</button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input id="bulk-info" type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Informativo..."/>
+                            <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Info</button>
+                        </div>
+                         <div className="flex items-center gap-2">
+                            <input id="bulk-closes-at" type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
+                            <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Data</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase w-12"></th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
+                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Data Limite</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700">
+                            {filteredPromoters.map(p => (
+                                <tr key={p.id} className="hover:bg-gray-700/40">
+                                    <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
+                                    <td className="p-3 whitespace-nowrap"><span className="font-medium text-white">{p.instagram || p.name}</span></td>
+                                    <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input 
+                                            type="text" 
+                                            value={assignments[p.id]?.info ?? ''} 
+                                            onChange={e => handleInfoChange(p.id, e.target.value)} 
+                                            disabled={!assignments[p.id]} 
+                                            placeholder="Ex: VIP até 00h" 
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                        />
+                                    </td>
+                                    <td className="p-3 whitespace-nowrap">
+                                        <input 
+                                            type="datetime-local" 
+                                            value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} 
+                                            onChange={e => handleDateChange(p.id, e.target.value)}
+                                            disabled={!assignments[p.id]}
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
+                                            style={{colorScheme: 'dark'}}
+                                        />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                     {filteredPromoters.length === 0 && <p className="text-gray-400 text-center p-6">Nenhuma divulgadora encontrada.</p>}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div>
@@ -256,84 +371,7 @@ const GuestListAssignments: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                {isLoading ? (
-                    <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>
-                ) : error ? (
-                    <p className="text-red-400 text-center">{error}</p>
-                ) : (
-                    <>
-                        {/* Filters and Search */}
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 my-4">
-                            <div className="relative flex-grow">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                                <input type="text" placeholder="Buscar por nome ou @..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200" />
-                            </div>
-                            <div className="flex items-center gap-x-2">
-                                <span className="font-semibold text-gray-300 text-xs">Filtrar por Cor:</span>
-                                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                                    {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                        <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                            {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
-                                            <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Bulk Actions */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border border-gray-700 rounded-lg mb-4">
-                            <div className="flex flex-col gap-2">
-                                <input type="number" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10))} className="w-full px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600"/>
-                                <button onClick={() => handleApplyBulk('guestAllowance')} className="w-full text-xs py-1 px-2 bg-gray-600 rounded">Aplicar Qtde</button>
-                            </div>
-                             <div className="flex flex-col gap-2">
-                                <input type="text" placeholder="Informativo" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600"/>
-                                <button onClick={() => handleApplyBulk('info')} className="w-full text-xs py-1 px-2 bg-gray-600 rounded">Aplicar Info</button>
-                            </div>
-                             <div className="flex flex-col gap-2">
-                                <input type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600" style={{colorScheme: 'dark'}}/>
-                                <button onClick={() => handleApplyBulk('closesAt')} className="w-full text-xs py-1 px-2 bg-gray-600 rounded">Aplicar Data Limite</button>
-                            </div>
-                             <div className="flex flex-col gap-2 justify-center">
-                                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={bulkRequireEmail} onChange={e => setBulkRequireEmail(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Exigir E-mail</span></label>
-                                <button onClick={() => handleApplyBulk('requireGuestEmail')} className="w-full text-xs py-1 px-2 bg-gray-600 rounded">Aplicar E-mail</button>
-                            </div>
-                        </div>
-
-                        {/* Assignments Table */}
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-700">
-                                <thead className="bg-gray-700/50">
-                                    <tr>
-                                        <th className="px-4 py-3"><input type="checkbox" onChange={handleToggleAll} checked={allVisibleSelected} /></th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Qtde Convidados</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Exigir E-mail</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo Individual</th>
-                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data Limite Individual</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-700">
-                                    {filteredPromoters.map(p => {
-                                        const isAssigned = !!assignments[p.id];
-                                        const assignment = assignments[p.id];
-                                        return (
-                                            <tr key={p.id} className={`hover:bg-gray-700/40 ${isAssigned ? '' : 'opacity-50'}`}>
-                                                <td className="px-4 py-2"><input type="checkbox" checked={isAssigned} onChange={() => handleAssignmentChange(p.id)} /></td>
-                                                <td className="px-4 py-2"><span className={`font-semibold ${getPerformanceColor(p.completionRate)}`}>{p.instagram || p.name}</span></td>
-                                                <td className="px-4 py-2"><input type="number" min="0" value={assignment?.guestAllowance ?? ''} onChange={e => handleSettingChange(p.id, 'guestAllowance', parseInt(e.target.value, 10))} disabled={!isAssigned} className="w-20 px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600 disabled:bg-gray-900" /></td>
-                                                <td className="px-4 py-2"><input type="checkbox" checked={assignment?.requireGuestEmail ?? false} onChange={e => handleSettingChange(p.id, 'requireGuestEmail', e.target.checked)} disabled={!isAssigned} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded disabled:bg-gray-900" /></td>
-                                                <td className="px-4 py-2"><input type="text" value={assignment?.info ?? ''} onChange={e => handleSettingChange(p.id, 'info', e.target.value)} disabled={!isAssigned} placeholder="Opcional" className="w-full px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600 disabled:bg-gray-900" /></td>
-                                                <td className="px-4 py-2"><input type="datetime-local" value={assignment?.closesAt ? timestampToDateTimeLocal(assignment.closesAt) : ''} onChange={e => handleSettingChange(p.id, 'closesAt', e.target.value ? firebase.firestore.Timestamp.fromDate(new Date(e.target.value)) : null)} disabled={!isAssigned} className="w-full px-2 py-1 text-sm bg-gray-800 rounded border border-gray-600 disabled:bg-gray-900" style={{colorScheme: 'dark'}} /></td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
-                )}
+                {renderContent()}
                 <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end">
                     <button onClick={handleSave} disabled={isSaving || isLoading} className="px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                         {isSaving ? 'Salvando...' : 'Salvar Atribuições'}

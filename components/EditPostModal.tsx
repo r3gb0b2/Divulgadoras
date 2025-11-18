@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Post, Timestamp } from '../types';
 import { LinkIcon } from './Icons';
@@ -56,7 +55,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     // All post options
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
-    const [justificationDeadline, setJustificationDeadline] = useState('');
     const [autoAssignToNewPromoters, setAutoAssignToNewPromoters] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
@@ -70,16 +68,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setPostLink(post.postLink || '');
             setPostFormats(post.postFormats || []);
             
-            setMediaPreview(null);
-            if (post.mediaUrl) {
-                const path = post.mediaUrl;
-                if (path.startsWith('http')) {
-                    setMediaPreview(path);
-                } else {
-                    storage.ref(path).getDownloadURL()
-                        .then(url => setMediaPreview(url))
-                        .catch(err => console.error("Error getting media preview URL:", err));
-                }
+            if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
+                setMediaUrl(post.mediaUrl);
+                storage.ref(post.mediaUrl).getDownloadURL()
+                    .then(url => setMediaPreview(url))
+                    .catch(err => console.error("Error getting media preview URL:", err));
+            } else {
+                 setMediaUrl('');
+                 setMediaPreview(post.mediaUrl || null); // For GDrive links
             }
 
             setGoogleDriveUrl(post.googleDriveUrl || '');
@@ -87,7 +83,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             // Set all options from post data
             setIsActive(post.isActive);
             setExpiresAt(timestampToInputDate(post.expiresAt));
-            setJustificationDeadline(timestampToInputDate(post.justificationDeadline));
             setAutoAssignToNewPromoters(post.autoAssignToNewPromoters || false);
             setAllowLateSubmissions(post.allowLateSubmissions || false);
             setAllowImmediateProof(post.allowImmediateProof || false);
@@ -127,19 +122,12 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59);
         }
 
-        let justificationDeadlineTimestamp: Date | null = null;
-        if (justificationDeadline) {
-            const [year, month, day] = justificationDeadline.split('-').map(Number);
-            justificationDeadlineTimestamp = new Date(year, month - 1, day, 23, 59, 59);
-        }
-
         const updatedData: Partial<Post> = {
             eventName: eventName.trim() || undefined,
             instructions,
             postLink,
             isActive,
             expiresAt: expiryTimestamp,
-            justificationDeadline: justificationDeadlineTimestamp,
             autoAssignToNewPromoters,
             allowLateSubmissions,
             allowImmediateProof,
@@ -221,10 +209,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                             <div>
                                 <label className="block text-sm font-medium text-gray-400">Data Limite</label>
                                 <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400">Prazo limite para justificativa</label>
-                                <input type="date" value={justificationDeadline} onChange={(e) => setJustificationDeadline(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                             </div>
                         </div>
                         <label className="flex items-center space-x-2 cursor-pointer text-sm">

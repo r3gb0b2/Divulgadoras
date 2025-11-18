@@ -72,12 +72,9 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     const promoterSpecificAssignment = list.assignments?.[promoter.id];
     const finalAllowance = promoterSpecificAssignment?.guestAllowance !== undefined ? promoterSpecificAssignment.guestAllowance : list.guestAllowance;
     const infoText = promoterSpecificAssignment?.info;
-    const requireEmail = promoterSpecificAssignment?.requireGuestEmail ?? list.requireGuestEmail ?? false;
 
     const [isAttending, setIsAttending] = useState(true);
-    const [guests, setGuests] = useState<{ name: string; email: string }[]>(
-        Array.from({ length: finalAllowance }, () => ({ name: '', email: '' }))
-    );
+    const [guestNames, setGuestNames] = useState<string[]>(Array(finalAllowance).fill(''));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -102,11 +99,11 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     useEffect(() => {
         if (existingConfirmation) {
             setIsAttending(existingConfirmation.isPromoterAttending);
-            const filledGuests = existingConfirmation.guests.map(g => ({ name: g.name, email: g.email || '' }));
+            const filledGuests = [...existingConfirmation.guestNames];
             while (filledGuests.length < finalAllowance) {
-                filledGuests.push({ name: '', email: '' });
+                filledGuests.push('');
             }
-            setGuests(filledGuests.slice(0, finalAllowance));
+            setGuestNames(filledGuests.slice(0, finalAllowance));
             
             if (isLocked) {
                 setIsCheckingRequest(true);
@@ -116,15 +113,15 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                     .finally(() => setIsCheckingRequest(false));
             }
         } else {
-             setGuests(Array.from({ length: finalAllowance }, () => ({ name: '', email: '' })));
+             setGuestNames(Array(finalAllowance).fill(''));
         }
     }, [existingConfirmation, finalAllowance, isLocked]);
 
 
-    const handleGuestChange = (index: number, field: 'name' | 'email', value: string) => {
-        const newGuests = [...guests];
-        newGuests[index] = { ...newGuests[index], [field]: value };
-        setGuests(newGuests);
+    const handleGuestNameChange = (index: number, value: string) => {
+        const newGuestNames = [...guestNames];
+        newGuestNames[index] = value;
+        setGuestNames(newGuestNames);
     };
 
     const handleRequestChange = async () => {
@@ -147,22 +144,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         setIsSubmitting(true);
         setError('');
         setSuccess(false);
-
         try {
-            const guestsToSubmit = isAttending
-                ? guests.filter(g => g.name.trim() !== '')
-                : [];
-            
-            if (requireEmail) {
-                for (const guest of guestsToSubmit) {
-                    if (!guest.email || !guest.email.trim() || !/^\S+@\S+\.\S+$/.test(guest.email.trim())) {
-                        setError(`Por favor, preencha um e-mail válido para o convidado "${guest.name}".`);
-                        setIsSubmitting(false);
-                        return;
-                    }
-                }
-            }
-
             await addGuestListConfirmation({
                 organizationId: list.organizationId,
                 campaignId: list.campaignId,
@@ -173,7 +155,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 promoterEmail: promoter.email,
                 listName: list.name,
                 isPromoterAttending: isAttending,
-                guests: guestsToSubmit,
+                guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
             });
             setSuccess(true);
         } catch (err: any) {
@@ -184,7 +166,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     };
 
     if (success) {
-        const submittedGuests = guests.filter(g => g.name.trim() !== '');
+        const submittedGuests = guestNames.filter(name => name.trim() !== '');
         return (
             <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -199,10 +181,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                 </svg>
-                                <div>
-                                    <span><strong>Seu nome:</strong> {promoter.name}</span>
-                                    <span className="block text-xs text-gray-400">E-mail: {promoter.email}</span>
-                                </div>
+                                <span><strong>Seu nome:</strong> {promoter.name}</span>
                             </li>
                         ) : (
                              <li className="flex items-center gap-2">
@@ -216,8 +195,8 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                             <li className="pt-2">
                                 <strong className="block mb-1">Convidados ({submittedGuests.length}):</strong>
                                 <ul className="list-disc list-inside pl-2 space-y-1">
-                                    {submittedGuests.map((guest, index) => (
-                                        <li key={index}>{guest.name} {guest.email ? `(${guest.email})` : ''}</li>
+                                    {submittedGuests.map((name, index) => (
+                                        <li key={index}>{name}</li>
                                     ))}
                                 </ul>
                             </li>
@@ -231,7 +210,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     }
     
     if (isLocked && existingConfirmation) {
-        const submittedGuests = existingConfirmation.guests.filter(g => g.name.trim() !== '');
+        const submittedGuests = existingConfirmation.guestNames.filter(name => name.trim() !== '');
         return (
              <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -244,10 +223,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                         {existingConfirmation.isPromoterAttending ? (
                              <li className="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                                <div>
-                                    <span><strong>Seu nome:</strong> {promoter.name}</span>
-                                    <span className="block text-xs text-gray-400">E-mail: {promoter.email}</span>
-                                </div>
+                                <span><strong>Seu nome:</strong> {promoter.name}</span>
                             </li>
                         ) : (
                              <li className="flex items-center gap-2">
@@ -258,7 +234,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                         {submittedGuests.length > 0 && (
                             <li className="pt-2"><strong className="block mb-1">Convidados ({submittedGuests.length}):</strong>
                                 <ul className="list-disc list-inside pl-2 space-y-1">
-                                    {submittedGuests.map((guest, index) => <li key={index}>{guest.name} {guest.email ? `(${guest.email})` : ''}</li>)}
+                                    {submittedGuests.map((name, index) => <li key={index}>{name}</li>)}
                                 </ul>
                             </li>
                         )}
@@ -332,29 +308,17 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 {isAttending && finalAllowance > 0 && (
                     <div>
                         <h4 className="font-semibold text-gray-200 mb-2">Adicionar Convidados ({finalAllowance} permitidos)</h4>
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             {Array.from({ length: finalAllowance }).map((_, index) => (
-                                <div key={index} className="space-y-2 p-3 border border-gray-700 rounded-md bg-gray-900/30">
-                                    <input
-                                        type="text"
-                                        value={guests[index]?.name || ''}
-                                        onChange={(e) => handleGuestChange(index, 'name', e.target.value)}
-                                        placeholder={`Nome completo do Convidado ${index + 1}`}
-                                        disabled={isFormDisabled}
-                                        className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
-                                    />
-                                    {requireEmail && (
-                                        <input
-                                            type="email"
-                                            value={guests[index]?.email || ''}
-                                            onChange={(e) => handleGuestChange(index, 'email', e.target.value)}
-                                            placeholder={`E-mail do Convidado ${index + 1}`}
-                                            disabled={isFormDisabled}
-                                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
-                                            required={!!guests[index]?.name.trim()}
-                                        />
-                                    )}
-                                </div>
+                                <input
+                                    key={index}
+                                    type="text"
+                                    value={guestNames[index]}
+                                    onChange={(e) => handleGuestNameChange(index, e.target.value)}
+                                    placeholder={`Nome completo do Convidado ${index + 1}`}
+                                    disabled={isFormDisabled}
+                                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                />
                             ))}
                         </div>
                     </div>

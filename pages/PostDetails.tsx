@@ -228,8 +228,7 @@ export const PostDetails: React.FC = () => {
             const dataToSave: Partial<Post> = { ...updatedData };
             
             if (newMediaFile) {
-                // Only attempt deletion if post.mediaUrl exists and is a relative path.
-                if (post.mediaUrl && !post.mediaUrl.startsWith('http')) {
+                if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
                     try {
                         const oldRef = storage.ref(post.mediaUrl);
                         await oldRef.delete();
