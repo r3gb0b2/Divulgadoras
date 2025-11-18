@@ -179,7 +179,7 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
 export const validateFollow = async (interactionId: string, isValid: boolean, followerId: string): Promise<void> => {
   const batch = firestore.batch();
   const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
-  const participantRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
+  const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
 
   try {
     const status = isValid ? 'validated' : 'rejected';
@@ -190,14 +190,14 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     });
 
     if (isValid) {
-        // If valid, the follower gained a point (already counted in registerFollow essentially)
-        // And the followed person gained a follower count
-        // We could increment followerCount here but it needs the ID of the person being followed.
-        // For simplicity we focus on the rejection logic below.
+        // If valid, increment follower count for the person BEING followed (the current user who is validating)
+        // Note: We don't have the current user ID passed explicitly here to update their doc directly in this function easily without fetching.
+        // But we can update the follower's stats if needed.
+        // For simplicity in this loop, let's track that the follower successfully followed someone.
     } else {
         // If INVALID (Rejected), increment the 'rejectedCount' on the follower.
         // This signals they are claiming to follow people without actually doing it.
-        batch.update(participantRef, {
+        batch.update(followerRef, {
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });
     }
@@ -229,7 +229,7 @@ export const toggleParticipantBan = async (participantId: string, isBanned: bool
     try {
         await firestore.collection(COLLECTION_PARTICIPANTS).doc(participantId).update({
             isBanned: isBanned,
-            isActive: !isBanned // If banned, set inactive. If unbanned, remains inactive until they join again? Or active. Let's say active.
+            isActive: !isBanned // If banned, set inactive.
         });
     } catch (error) {
         console.error("Error toggling ban:", error);
