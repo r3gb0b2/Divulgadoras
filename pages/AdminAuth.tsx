@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 // FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
@@ -40,6 +41,7 @@ import OneTimePostDetails from './OneTimePostDetails';
 import NewsletterPage from './NewsletterPage';
 import GroupRemovalsPage from './GroupRemovalsPage';
 import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
+import AdminFollowLoopPage from './AdminFollowLoopPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -260,6 +262,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
+                    <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -291,6 +294,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="scheduled-posts" element={<ProtectedRoute><AdminSchedulePage /></ProtectedRoute>} />
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
+                    <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
                 </>
             )}
 

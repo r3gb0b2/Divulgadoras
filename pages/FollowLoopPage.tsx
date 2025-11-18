@@ -51,6 +51,8 @@ const FollowLoopPage: React.FC = () => {
       setParticipant(partStatus);
       
       if (partStatus) {
+        // Initial load
+        if (partStatus.isBanned) return; // Don't load data if banned
         loadNextTarget(approved.id, approved.organizationId);
         loadValidations(approved.id);
       }
@@ -181,9 +183,24 @@ const FollowLoopPage: React.FC = () => {
             <button onClick={handleJoin} disabled={isLoading} className="w-full py-4 bg-green-600 text-white font-bold rounded-lg text-lg shadow-lg hover:bg-green-700 transition-colors">
                 {isLoading ? 'Entrando...' : 'Quero Participar! 🚀'}
             </button>
+            {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
          </div>
       </div>
     );
+  }
+
+  if (participant.isBanned) {
+      return (
+        <div className="max-w-md mx-auto px-4 py-8 text-center">
+            <div className="bg-red-900/50 border border-red-500 shadow-2xl rounded-lg p-8">
+                <h2 className="text-2xl font-bold text-red-300 mb-4">Acesso Bloqueado</h2>
+                <p className="text-gray-300">
+                    Você foi removida desta dinâmica devido a um alto número de relatos negativos (não seguiu de volta) ou por não cumprir as regras da equipe.
+                </p>
+                <p className="text-gray-400 text-sm mt-4">Entre em contato com o suporte se achar que isso é um erro.</p>
+            </div>
+        </div>
+      );
   }
 
   return (
@@ -293,7 +310,9 @@ const FollowLoopPage: React.FC = () => {
                        </div>
                    ))
                )}
-               <p className="text-xs text-gray-500 text-center mt-4">Verifique no seu Instagram se a pessoa realmente te seguiu antes de confirmar. Seja honesta!</p>
+               <p className="text-xs text-gray-500 text-center mt-4 bg-blue-900/20 p-2 rounded">
+                   <strong>Atenção:</strong> Ao marcar "Não Seguiu", você gera uma notificação negativa para a outra divulgadora. Seja honesta e verifique seu Instagram antes!
+               </p>
            </div>
        )}
     </div>

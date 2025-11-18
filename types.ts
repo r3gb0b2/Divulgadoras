@@ -186,7 +186,7 @@ export interface PostAssignment {
   status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
-  proofSubmittedAt?: Timestamp | FieldValue | null;
+  proofSubmittedAt: Timestamp | FieldValue | null;
   justification?: string;
   justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
   justificationSubmittedAt?: Timestamp | FieldValue | null;
@@ -346,10 +346,12 @@ export interface FollowLoopParticipant {
   photoUrl: string;
   organizationId: string;
   isActive: boolean;
+  isBanned?: boolean; // New field for admin control
   joinedAt: Timestamp | FieldValue;
   lastActiveAt: Timestamp | FieldValue;
   followersCount: number;
   followingCount: number;
+  rejectedCount?: number; // New field to track negative feedback (people saying she didn't follow back)
 }
 
 export interface FollowInteraction {

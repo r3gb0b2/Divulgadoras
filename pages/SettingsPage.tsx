@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -112,6 +113,14 @@ const SettingsPage: React.FC = () => {
       Icon: ClockIcon,
       title: 'Publicações Agendadas',
       description: 'Crie posts com antecedência e agende o envio automático para a data e hora desejada.',
+      condition: () => true,
+    },
+    {
+      id: 'follow_loop',
+      to: '/admin/connect',
+      Icon: HeartIcon,
+      title: 'Conexão Divulgadoras',
+      description: 'Gerencie a dinâmica de troca de seguidores, veja quem está participando e monitore negativas.',
       condition: () => true,
     },
     {

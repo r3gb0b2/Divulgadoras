@@ -18,6 +18,12 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
     const docSnap = await participantRef.get();
 
     if (docSnap.exists) {
+      // Prevent re-joining if banned
+      const data = docSnap.data();
+      if (data?.isBanned) {
+          throw new Error("Você foi removida desta dinâmica. Entre em contato com a administração.");
+      }
+
       await participantRef.update({
         isActive: true,
         lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -31,15 +37,18 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
         photoUrl: promoter.photoUrls[0] || '',
         organizationId: promoter.organizationId,
         isActive: true,
+        isBanned: false,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
         followersCount: 0,
         followingCount: 0,
+        rejectedCount: 0,
       };
       await participantRef.set(newParticipant);
     }
   } catch (error) {
     console.error('Error joining follow loop:', error);
+    if (error instanceof Error) throw error;
     throw new Error('Não foi possível entrar na dinâmica.');
   }
 };
@@ -72,11 +81,12 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
       followedIds.add(doc.data().followedId);
     });
 
-    // 2. Get potential targets (active participants in same org)
+    // 2. Get potential targets (active, not banned, same org)
     // Optimization: Order by lastActiveAt desc to show active users first
     const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .where('isActive', '==', true)
+      .where('isBanned', '==', false)
       .orderBy('lastActiveAt', 'desc')
       .limit(50); // Fetch a batch
 
@@ -147,45 +157,82 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
   try {
     const q = firestore.collection(COLLECTION_INTERACTIONS)
       .where('followedId', '==', promoterId)
-      .where('status', '==', 'pending_validation')
-      .orderBy('createdAt', 'desc');
+      .where('status', '==', 'pending_validation');
     
+    // Client side sort to avoid needing many composite indexes during development
     const snap = await q.get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    const validations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    
+    validations.sort((a, b) => {
+        const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+        const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+        return timeB - timeA;
+    });
+    
+    return validations;
   } catch (error) {
     console.error('Error getting pending validations:', error);
-    // Fallback if index missing
-    if ((error as any).code === 'failed-precondition') {
-         const simpleQ = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followedId', '==', promoterId)
-            .where('status', '==', 'pending_validation');
-         const snap = await simpleQ.get();
-         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-    }
     throw new Error('Erro ao buscar validações.');
   }
 };
 
 export const validateFollow = async (interactionId: string, isValid: boolean, followerId: string): Promise<void> => {
+  const batch = firestore.batch();
+  const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+  const participantRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
+
   try {
     const status = isValid ? 'validated' : 'rejected';
-    await firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId).update({
+    
+    batch.update(interactionRef, {
       status,
       validatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
     if (isValid) {
-       // Increment follower count for the person being followed
-       // Note: We need the ID of the person being followed (current user), which isn't passed here directly
-       // Ideally this is done via Cloud Function trigger for security/consistency.
-       // For now, we focus on the interaction status update.
+        // If valid, the follower gained a point (already counted in registerFollow essentially)
+        // And the followed person gained a follower count
+        // We could increment followerCount here but it needs the ID of the person being followed.
+        // For simplicity we focus on the rejection logic below.
+    } else {
+        // If INVALID (Rejected), increment the 'rejectedCount' on the follower.
+        // This signals they are claiming to follow people without actually doing it.
+        batch.update(participantRef, {
+            rejectedCount: firebase.firestore.FieldValue.increment(1)
+        });
     }
-
-    // If valid and reciprocal, check if we should create a reverse interaction automatically?
-    // No, let's keep it manual for now to encourage engagement.
+    
+    await batch.commit();
 
   } catch (error) {
     console.error('Error validating follow:', error);
     throw new Error('Não foi possível validar.');
   }
 };
+
+// --- Admin Functions ---
+
+export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_PARTICIPANTS)
+            .where('organizationId', '==', organizationId);
+        
+        const snap = await q.get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowLoopParticipant));
+    } catch (error) {
+        console.error("Error fetching participants for admin:", error);
+        throw new Error("Falha ao buscar participantes.");
+    }
+}
+
+export const toggleParticipantBan = async (participantId: string, isBanned: boolean): Promise<void> => {
+    try {
+        await firestore.collection(COLLECTION_PARTICIPANTS).doc(participantId).update({
+            isBanned: isBanned,
+            isActive: !isBanned // If banned, set inactive. If unbanned, remains inactive until they join again? Or active. Let's say active.
+        });
+    } catch (error) {
+        console.error("Error toggling ban:", error);
+        throw new Error("Falha ao atualizar status.");
+    }
+}
