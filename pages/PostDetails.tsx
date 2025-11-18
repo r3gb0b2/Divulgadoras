@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp, Organization } from '../types';
@@ -371,7 +372,12 @@ export const PostDetails: React.FC = () => {
             <div className="bg-secondary p-4 rounded-lg shadow-lg mb-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-1">
-                        <StorageMedia path={post.mediaUrl || post.googleDriveUrl || ''} type={post.type} className="w-full h-auto object-contain rounded-md bg-dark" />
+                        <StorageMedia 
+                            path={post.mediaUrl || post.googleDriveUrl || ''} 
+                            // FIX: Cast post.type to ensure it's valid for StorageMedia prop type
+                            type={post.type as 'image' | 'video'} 
+                            className="w-full h-auto object-contain rounded-md bg-dark" 
+                        />
                     </div>
                     <div className="md:col-span-2 space-y-4">
                         <div className="flex justify-between items-start">

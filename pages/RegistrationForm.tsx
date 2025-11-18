@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
@@ -277,7 +278,15 @@ const PromoterForm: React.FC = () => {
         });
       } else {
         // Create new promoter
-        await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
+        // FIX: Added facePhoto: null to satisfy type requirement
+        await addPromoter({ 
+            ...formData, 
+            photos: photoFiles, 
+            state, 
+            campaignName: decodedCampaignName, 
+            organizationId,
+            facePhoto: null
+        });
       }
 
       setSubmitSuccess(true);

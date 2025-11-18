@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -6,6 +7,7 @@ import { GroupRemovalRequest, Timestamp } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import firebase from 'firebase/compat/app';
 
 const GroupRemovalsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -58,7 +60,8 @@ const GroupRemovalsPage: React.FC = () => {
             await updateGroupRemovalRequest(request.id, {
                 status: 'completed',
                 actionTakenBy: adminData.uid,
-                actionTakenAt: new Date(),
+                // FIX: Use Firestore Timestamp for consistency
+                actionTakenAt: firebase.firestore.Timestamp.now(),
             });
 
             await fetchData();
@@ -77,7 +80,8 @@ const GroupRemovalsPage: React.FC = () => {
              await updateGroupRemovalRequest(request.id, {
                 status: 'ignored',
                 actionTakenBy: adminData.uid,
-                actionTakenAt: new Date(),
+                // FIX: Use Firestore Timestamp for consistency
+                actionTakenAt: firebase.firestore.Timestamp.now(),
             });
             await fetchData();
         } catch (err: any) {

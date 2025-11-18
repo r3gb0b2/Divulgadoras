@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getGuestListChangeRequests, updateGuestListChangeRequest, unlockGuestListConfirmation } from '../services/guestListService';
 import { GuestListChangeRequest, Timestamp } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
+import firebase from 'firebase/compat/app';
 
 const GuestListChangeRequestsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -48,7 +50,8 @@ const GuestListChangeRequestsPage: React.FC = () => {
             await updateGuestListChangeRequest(request.id, {
                 status: 'approved',
                 actionTakenBy: adminData.uid,
-                actionTakenAt: new Date(),
+                // FIX: Use Firestore Timestamp
+                actionTakenAt: firebase.firestore.Timestamp.now(),
             });
             
             await fetchData();
@@ -69,7 +72,8 @@ const GuestListChangeRequestsPage: React.FC = () => {
              await updateGuestListChangeRequest(request.id, {
                 status: 'rejected',
                 actionTakenBy: adminData.uid,
-                actionTakenAt: new Date(),
+                // FIX: Use Firestore Timestamp
+                actionTakenAt: firebase.firestore.Timestamp.now(),
             });
             await fetchData();
         } catch (err: any) {

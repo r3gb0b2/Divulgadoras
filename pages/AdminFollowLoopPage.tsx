@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction } from '../services/followLoopService';
 import { getStatsForPromoter } from '../services/postService';
+import { getOrganization, updateOrganization } from '../services/organizationService';
 import { FollowLoopParticipant } from '../types';
-import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon } from '../components/Icons';
 
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
@@ -22,6 +23,10 @@ const AdminFollowLoopPage: React.FC = () => {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'active' | 'banned' | 'high_rejection'>('all');
 
+    // Threshold State
+    const [threshold, setThreshold] = useState<number>(0);
+    const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+
     // Manual Assignment Modal State
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [manualFollower, setManualFollower] = useState('');
@@ -34,13 +39,18 @@ const AdminFollowLoopPage: React.FC = () => {
             setIsLoading(true);
             setError('');
             try {
+                // 1. Fetch Organization Settings
+                const orgData = await getOrganization(selectedOrgId);
+                if (orgData) {
+                    setThreshold(orgData.followLoopThreshold || 0);
+                }
+
+                // 2. Fetch Participants
                 const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
                 
-                // Parallel fetch for task stats to enrich the data
+                // 3. Enrich with stats
                 const enriched = await Promise.all(loopParticipants.map(async (p) => {
                     try {
-                        // We need promoter stats. Using the existing service.
-                        // Ideally we would have this in the loop participant doc, but fetching is safer for accuracy.
                         const { stats } = await getStatsForPromoter(p.promoterId);
                         const successful = stats.completed + stats.acceptedJustifications;
                         const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
@@ -59,6 +69,19 @@ const AdminFollowLoopPage: React.FC = () => {
         };
         fetchData();
     }, [selectedOrgId]);
+
+    const handleSaveThreshold = async () => {
+        if (!selectedOrgId) return;
+        setIsSavingThreshold(true);
+        try {
+            await updateOrganization(selectedOrgId, { followLoopThreshold: threshold });
+            alert('Critério de elegibilidade atualizado com sucesso!');
+        } catch (err: any) {
+            alert('Erro ao salvar: ' + err.message);
+        } finally {
+            setIsSavingThreshold(false);
+        }
+    };
 
     const handleToggleBan = async (p: ParticipantWithStats) => {
         const action = p.isBanned ? 'remover o banimento de' : 'banir';
@@ -94,8 +117,6 @@ const AdminFollowLoopPage: React.FC = () => {
             setIsManualModalOpen(false);
             setManualFollower('');
             setManualFollowed('');
-            // Reload data ideally, but simple state update for counters is tricky. 
-            // For admin simple view, page reload or just close modal is fine.
         } catch (err: any) {
             alert(err.message);
         } finally {
@@ -145,10 +166,43 @@ const AdminFollowLoopPage: React.FC = () => {
                 </button>
             </div>
 
+            {/* Configuration Panel */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <CogIcon className="w-6 h-6 text-primary" />
+                    Configurar Elegibilidade
+                </h2>
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <div className="flex-grow">
+                        <p className="text-gray-300 text-sm mb-2">
+                            Defina a taxa mínima de aproveitamento em tarefas (posts) que uma divulgadora precisa ter para participar desta dinâmica.
+                        </p>
+                        <div className="flex items-center gap-4">
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                value={threshold} 
+                                onChange={(e) => setThreshold(Number(e.target.value))}
+                                className="flex-grow h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary"
+                            />
+                            <span className="text-2xl font-bold text-primary w-16 text-right">{threshold}%</span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={handleSaveThreshold} 
+                        disabled={isSavingThreshold}
+                        className="px-6 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
+                    >
+                        {isSavingThreshold ? 'Salvando...' : 'Salvar Regra'}
+                    </button>
+                </div>
+            </div>
+
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
                     <p className="text-gray-400 flex-grow">
-                        Monitore a dinâmica de seguidores. Identifique e remova participantes que não estão seguindo de volta (muitas negativas) ou que possuem baixo desempenho nas tarefas.
+                        Monitore a dinâmica de seguidores. Identifique participantes com muitas negativas ou baixo desempenho.
                     </p>
                     <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0">
                         <UserPlusIcon className="w-5 h-5" />

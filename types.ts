@@ -105,6 +105,7 @@ export interface Organization {
   oneTimePostEnabled?: boolean;
   guestListManagementEnabled?: boolean;
   guestListCheckinEnabled?: boolean;
+  followLoopThreshold?: number; // Percentage (0-100) required to join the loop
 }
 
 export interface StateConfig {

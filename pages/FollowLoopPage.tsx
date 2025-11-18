@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
+import { getOrganization } from '../services/organizationService';
+import { getStatsForPromoter } from '../services/postService';
 import { 
   joinFollowLoop, 
   getParticipantStatus, 
@@ -12,7 +14,7 @@ import {
   getConfirmedFollowers 
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +22,7 @@ const FollowLoopPage: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [promoter, setPromoter] = useState<Promoter | null>(null);
   const [participant, setParticipant] = useState<FollowLoopParticipant | null>(null);
+  const [ineligibleData, setIneligibleData] = useState<{ current: number, required: number } | null>(null);
   
   const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers'>('follow');
   const [targetProfile, setTargetProfile] = useState<FollowLoopParticipant | null>(null);
@@ -36,6 +39,8 @@ const FollowLoopPage: React.FC = () => {
     if (!email.trim()) return;
     setIsLoading(true);
     setError(null);
+    setIneligibleData(null);
+
     try {
       const profiles = await findPromotersByEmail(email);
       // Find an approved profile. Prefer one already in a group.
@@ -43,6 +48,24 @@ const FollowLoopPage: React.FC = () => {
       
       if (!approved) {
         throw new Error('Nenhum cadastro aprovado encontrado para este e-mail.');
+      }
+      
+      // --- Eligibility Check ---
+      const org = await getOrganization(approved.organizationId);
+      const requiredThreshold = org?.followLoopThreshold || 0;
+
+      if (requiredThreshold > 0) {
+          const { stats } = await getStatsForPromoter(approved.id);
+          const successful = stats.completed + stats.acceptedJustifications;
+          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join, 
+          // OR treat as 0 to enforce first task. Let's be lenient: new promoters (assigned=0) can join.
+          const currentRate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : 100;
+          
+          if (currentRate < requiredThreshold) {
+              setIneligibleData({ current: currentRate, required: requiredThreshold });
+              setIsLoading(false);
+              return;
+          }
       }
       
       setPromoter(approved);
@@ -157,6 +180,33 @@ const FollowLoopPage: React.FC = () => {
 
   // --- Renders ---
 
+  if (ineligibleData) {
+      return (
+        <div className="max-w-md mx-auto px-4 py-8">
+            <button onClick={() => setIneligibleData(null)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                <ArrowLeftIcon className="w-5 h-5" />
+                <span>Tentar outro e-mail</span>
+            </button>
+            <div className="bg-secondary shadow-2xl rounded-lg p-8 text-center">
+                <div className="w-16 h-16 bg-yellow-900/50 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-400">
+                    <ChartBarIcon className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Desempenho Insuficiente</h2>
+                <p className="text-gray-400 mb-6">
+                    Para participar desta dinâmica, a organização exige que você tenha uma taxa de cumprimento de tarefas de no mínimo <strong className="text-white">{ineligibleData.required}%</strong>.
+                </p>
+                <div className="bg-gray-800 p-4 rounded-lg mb-6">
+                    <p className="text-sm text-gray-400">Sua taxa atual</p>
+                    <p className={`text-3xl font-bold ${ineligibleData.current < 30 ? 'text-red-500' : 'text-yellow-500'}`}>{ineligibleData.current}%</p>
+                </div>
+                <p className="text-sm text-gray-400">
+                    Realize as postagens pendentes e melhore seu desempenho para desbloquear o acesso.
+                </p>
+            </div>
+        </div>
+      );
+  }
+
   if (!isLoggedIn) {
     return (
       <div className="max-w-md mx-auto px-4 py-8">
@@ -178,7 +228,7 @@ const FollowLoopPage: React.FC = () => {
             />
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <button type="submit" disabled={isLoading} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50">
-              {isLoading ? 'Entrando...' : 'Acessar'}
+              {isLoading ? 'Verificando...' : 'Acessar'}
             </button>
           </form>
         </div>

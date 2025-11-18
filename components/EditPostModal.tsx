@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Post, Timestamp } from '../types';
 import { LinkIcon } from './Icons';
 import { storage } from '../firebase/config';
 import StorageMedia from './StorageMedia';
+import firebase from 'firebase/compat/app';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
     if (!ts) return '';
@@ -127,7 +129,8 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             instructions,
             postLink,
             isActive,
-            expiresAt: expiryTimestamp,
+            // FIX: Convert Date to Firestore Timestamp or null
+            expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
             autoAssignToNewPromoters,
             allowLateSubmissions,
             allowImmediateProof,
