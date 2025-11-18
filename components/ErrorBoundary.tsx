@@ -1,4 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -10,30 +11,18 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Converted the component to a class component that extends Component.
-// React Error Boundaries must be class components to use the `getDerivedStateFromError`
-// and `componentDidCatch` lifecycle methods. This change also provides access
-// to `this.state`, `this.setState`, and `this.props`, resolving the errors.
-class ErrorBoundary extends Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+class ErrorBoundary extends React.Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
-  // FIX: Implemented `getDerivedStateFromError` to update state when a descendant component throws an error.
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // This lifecycle method is called after an error has been thrown by a descendant component.
-    // It should return a value to update state.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // This lifecycle method is also called after an error has been thrown by a descendant component.
-    // It receives two parameters: the error that was thrown, and an object with a componentStack key.
     this.setState({
       errorInfo: errorInfo,
     });
