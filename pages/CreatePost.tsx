@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -208,6 +209,7 @@ const CreatePost: React.FC = () => {
     const [postLink, setPostLink] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
+    const [justificationDeadline, setJustificationDeadline] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
@@ -297,6 +299,7 @@ const CreatePost: React.FC = () => {
                         setPostLink(postData.postLink || '');
                         setIsActive(postData.isActive);
                         setExpiresAt(timestampToInputDate(postData.expiresAt));
+                        setJustificationDeadline(timestampToInputDate(postData.justificationDeadline));
                         setAutoAssign(postData.autoAssignToNewPromoters || false);
                         setAllowLateSubmissions(postData.allowLateSubmissions || false);
                         setAllowImmediateProof(postData.allowImmediateProof || false);
@@ -318,6 +321,7 @@ const CreatePost: React.FC = () => {
                     setEventName(originalPost.eventName || '');
                     setIsActive(originalPost.isActive);
                     setExpiresAt(timestampToInputDate(originalPost.expiresAt));
+                    setJustificationDeadline(timestampToInputDate(originalPost.justificationDeadline));
                     setAutoAssign(originalPost.autoAssignToNewPromoters || false);
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     setAllowImmediateProof(originalPost.allowImmediateProof || false);
@@ -490,6 +494,12 @@ const CreatePost: React.FC = () => {
                 expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59);
             }
 
+            let justificationDeadlineTimestamp: Date | null = null;
+            if (justificationDeadline) {
+                const [year, month, day] = justificationDeadline.split('-').map(Number);
+                justificationDeadlineTimestamp = new Date(year, month - 1, day, 23, 59, 59);
+            }
+
             const basePostData: Omit<ScheduledPostData, 'mediaUrl'> = {
                 campaignName: campaignDetails.name,
                 eventName: eventName.trim() || undefined,
@@ -501,6 +511,7 @@ const CreatePost: React.FC = () => {
                 postLink,
                 isActive,
                 expiresAt: expiryTimestamp,
+                justificationDeadline: justificationDeadlineTimestamp,
                 autoAssignToNewPromoters: autoAssign,
                 allowLateSubmissions: allowLateSubmissions,
                 allowImmediateProof: allowImmediateProof,
@@ -764,8 +775,12 @@ const CreatePost: React.FC = () => {
                                 <span>Ativo (visível para divulgadoras)</span>
                             </label>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
+                                <label className="block text-sm font-medium text-gray-400">Data Limite do Post (opcional)</label>
                                 <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400">Prazo limite para justificativa (opcional)</label>
+                                <input type="date" value={justificationDeadline} onChange={(e) => setJustificationDeadline(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                             </div>
                         </div>
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, este post será automaticamente enviado para todas as novas divulgadoras que forem aprovadas para este evento no futuro.">

@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -150,6 +151,7 @@ export interface Post {
   createdByEmail: string;
   isActive: boolean;
   expiresAt: Timestamp | FieldValue | null;
+  justificationDeadline?: Timestamp | FieldValue | null; // New field
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;
@@ -171,6 +173,7 @@ export interface PostAssignment {
     eventName?: string;
     isActive: boolean;
     expiresAt: Timestamp | FieldValue | null;
+    justificationDeadline?: Timestamp | FieldValue | null; // New field
     createdAt: Timestamp | FieldValue;
     allowLateSubmissions?: boolean;
     autoAssignToNewPromoters?: boolean;
@@ -251,6 +254,7 @@ export interface ScheduledPostData {
   postLink?: string;
   isActive: boolean;
   expiresAt: Timestamp | FieldValue | null;
+  justificationDeadline?: Timestamp | FieldValue | null; // New field
   autoAssignToNewPromoters?: boolean;
   allowLateSubmissions?: boolean;
   allowImmediateProof?: boolean;

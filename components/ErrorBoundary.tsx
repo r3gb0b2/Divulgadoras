@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -10,11 +10,11 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Converted the component to a class component that extends React.Component.
+// FIX: Converted the component to a class component that extends Component.
 // React Error Boundaries must be class components to use the `getDerivedStateFromError`
 // and `componentDidCatch` lifecycle methods. This change also provides access
 // to `this.state`, `this.setState`, and `this.props`, resolving the errors.
-class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
