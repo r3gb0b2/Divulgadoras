@@ -82,12 +82,13 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
     });
 
     // 2. Get potential targets (active, not banned, same org)
-    // REMOVED orderBy to fix index issue. Fetching a larger batch to randomize client-side.
+    // Optimization: Order by lastActiveAt desc to show active users first
     const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .where('isActive', '==', true)
       .where('isBanned', '==', false)
-      .limit(100); 
+      .orderBy('lastActiveAt', 'desc')
+      .limit(50); // Fetch a batch
 
     const potentialSnap = await potentialQuery.get();
     
@@ -107,8 +108,7 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
   } catch (error) {
     console.error('Error getting next profile:', error);
-    // Re-throw with a more user-friendly message if possible, or let the caller handle it.
-    throw error; 
+    throw new Error('Não foi possível carregar o próximo perfil.');
   }
 };
 
@@ -190,9 +190,13 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     });
 
     if (isValid) {
-        // Optional: Increment follower count for current user (followedId) if needed
+        // If valid, increment follower count for the person BEING followed (the current user who is validating)
+        // Note: We don't have the current user ID passed explicitly here to update their doc directly in this function easily without fetching.
+        // But we can update the follower's stats if needed.
+        // For simplicity in this loop, let's track that the follower successfully followed someone.
     } else {
         // If INVALID (Rejected), increment the 'rejectedCount' on the follower.
+        // This signals they are claiming to follow people without actually doing it.
         batch.update(followerRef, {
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });
