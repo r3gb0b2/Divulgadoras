@@ -1,7 +1,7 @@
 
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
-import { FollowLoopParticipant, FollowInteraction, Promoter, Timestamp } from '../types';
+import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
 import { getPromoterById } from './promoterService';
 
 const COLLECTION_PARTICIPANTS = 'followLoopParticipants';
@@ -82,17 +82,17 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
     });
 
     // 2. Get potential targets (active, not banned, same org)
-    // Optimization: Order by lastActiveAt desc to show active users first
+    // REMOVED orderBy('lastActiveAt') to avoid missing index errors.
+    // Increased limit to 300 to cast a wider net since we can't rely on sorting by activity yet.
     const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .where('isActive', '==', true)
       .where('isBanned', '==', false)
-      .orderBy('lastActiveAt', 'desc')
-      .limit(50); // Fetch a batch
+      .limit(300);
 
     const potentialSnap = await potentialQuery.get();
     
-    // 3. Filter in memory (Firestore doesn't support "not in array" for large sets efficiently)
+    // 3. Filter in memory
     const candidates: FollowLoopParticipant[] = [];
     potentialSnap.forEach(doc => {
       if (!followedIds.has(doc.id)) {
@@ -102,7 +102,7 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
     if (candidates.length === 0) return null;
 
-    // 4. Return a random candidate from the pool to reduce collisions
+    // 4. Return a random candidate from the pool
     const randomIndex = Math.floor(Math.random() * candidates.length);
     return candidates[randomIndex];
 
@@ -190,13 +190,9 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     });
 
     if (isValid) {
-        // If valid, increment follower count for the person BEING followed (the current user who is validating)
-        // Note: We don't have the current user ID passed explicitly here to update their doc directly in this function easily without fetching.
-        // But we can update the follower's stats if needed.
-        // For simplicity in this loop, let's track that the follower successfully followed someone.
+         // Logic for valid follow (e.g. increment follower count for current user) could go here
     } else {
         // If INVALID (Rejected), increment the 'rejectedCount' on the follower.
-        // This signals they are claiming to follow people without actually doing it.
         batch.update(followerRef, {
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });

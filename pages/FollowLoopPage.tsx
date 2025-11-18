@@ -84,11 +84,15 @@ const FollowLoopPage: React.FC = () => {
   const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
+    // Don't clear error here immediately to allow showing transient errors if needed, 
+    // but usually we want to clear it on new attempt.
+    setError(null); 
     try {
       const next = await getNextProfileToFollow(pid, orgId);
       setTargetProfile(next);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setError("Erro ao carregar perfis: " + (err.message || "Tente novamente."));
     }
   }, []);
 
@@ -270,10 +274,21 @@ const FollowLoopPage: React.FC = () => {
                    </div>
                ) : (
                    <div className="text-center py-10 text-gray-400">
-                       <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no momento.</p>
-                       <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
-                           <RefreshIcon className="w-4 h-4" /> Verificar Novamente
-                       </button>
+                       {!error ? (
+                           <>
+                                <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no momento.</p>
+                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
+                                    <RefreshIcon className="w-4 h-4" /> Verificar Novamente
+                                </button>
+                           </>
+                       ) : (
+                           <div className="text-red-400">
+                               <p className="mb-2">{error}</p>
+                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
+                                    <RefreshIcon className="w-4 h-4" /> Tentar Novamente
+                                </button>
+                           </div>
+                       )}
                    </div>
                )}
            </div>
