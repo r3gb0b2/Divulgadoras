@@ -84,11 +84,13 @@ const FollowLoopPage: React.FC = () => {
   const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
+    setError(null);
     try {
       const next = await getNextProfileToFollow(pid, orgId);
       setTargetProfile(next);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Load target error:", err);
+      setError("Ocorreu um erro ao carregar o próximo perfil. Tente atualizar a página.");
     }
   }, []);
 
@@ -227,6 +229,8 @@ const FollowLoopPage: React.FC = () => {
                Validar ({validations.length})
            </button>
        </div>
+
+       {error && <p className="text-red-400 text-center mb-4 bg-red-900/20 p-2 rounded">{error}</p>}
 
        {activeTab === 'follow' && (
            <div className="flex flex-col items-center">
