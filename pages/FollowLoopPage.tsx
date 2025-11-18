@@ -8,10 +8,11 @@ import {
   getNextProfileToFollow, 
   registerFollow, 
   getPendingValidations, 
-  validateFollow 
+  validateFollow,
+  getConfirmedFollowers 
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -20,9 +21,10 @@ const FollowLoopPage: React.FC = () => {
   const [promoter, setPromoter] = useState<Promoter | null>(null);
   const [participant, setParticipant] = useState<FollowLoopParticipant | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'follow' | 'validate'>('follow');
+  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers'>('follow');
   const [targetProfile, setTargetProfile] = useState<FollowLoopParticipant | null>(null);
   const [validations, setValidations] = useState<FollowInteraction[]>([]);
+  const [followersList, setFollowersList] = useState<FollowInteraction[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +86,6 @@ const FollowLoopPage: React.FC = () => {
   const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
-    // Don't clear error here immediately to allow showing transient errors if needed, 
-    // but usually we want to clear it on new attempt.
     setError(null); 
     try {
       const next = await getNextProfileToFollow(pid, orgId);
@@ -102,6 +102,15 @@ const FollowLoopPage: React.FC = () => {
       setValidations(list);
     } catch (err) {
       console.error(err);
+    }
+  }, []);
+
+  const loadFollowers = useCallback(async (pid: string) => {
+    try {
+        const list = await getConfirmedFollowers(pid);
+        setFollowersList(list);
+    } catch (err) {
+        console.error(err);
     }
   }, []);
 
@@ -139,6 +148,8 @@ const FollowLoopPage: React.FC = () => {
       try {
           await validateFollow(interactionId, isValid, followerId);
           setValidations(prev => prev.filter(v => v.id !== interactionId));
+          // If validated, update followers list immediately for better UX if they switch tabs
+          if (isValid) loadFollowers(promoter.id);
       } catch (err: any) {
           alert(err.message);
       }
@@ -217,18 +228,24 @@ const FollowLoopPage: React.FC = () => {
        </div>
 
        {/* Tabs */}
-       <div className="flex mb-6 bg-gray-800 rounded-lg p-1">
+       <div className="flex mb-6 bg-gray-800 rounded-lg p-1 overflow-x-auto">
            <button 
              onClick={() => setActiveTab('follow')} 
-             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'follow' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'follow' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
            >
-               Seguir Colegas
+               Seguir
            </button>
            <button 
              onClick={() => { setActiveTab('validate'); if(promoter) loadValidations(promoter.id); }} 
-             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'validate' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'validate' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
            >
                Validar ({validations.length})
+           </button>
+           <button 
+             onClick={() => { setActiveTab('followers'); if(promoter) loadFollowers(promoter.id); }} 
+             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'followers' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+           >
+               Seguidores
            </button>
        </div>
 
@@ -328,6 +345,39 @@ const FollowLoopPage: React.FC = () => {
                <p className="text-xs text-gray-500 text-center mt-4 bg-blue-900/20 p-2 rounded">
                    <strong>Atenção:</strong> Ao marcar "Não Seguiu", você gera uma notificação negativa para a outra divulgadora. Seja honesta e verifique seu Instagram antes!
                </p>
+           </div>
+       )}
+
+       {activeTab === 'followers' && (
+           <div className="space-y-4">
+               {followersList.length === 0 ? (
+                   <p className="text-center text-gray-400 py-8">Você ainda não tem seguidores confirmados nesta dinâmica.</p>
+               ) : (
+                   <>
+                     <p className="text-center text-gray-400 text-sm mb-2">{followersList.length} seguidora(s) confirmada(s).</p>
+                     {followersList.map(f => (
+                        <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
+                            <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
+                                <UsersIcon className="w-5 h-5" />
+                            </div>
+                            <div className="flex-grow overflow-hidden">
+                                <p className="font-bold text-white truncate">{f.followerName}</p>
+                                <a 
+                                    href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-sm text-pink-400 hover:underline truncate block"
+                                >
+                                    {f.followerInstagram}
+                                </a>
+                            </div>
+                            <div className="flex-shrink-0 text-green-400">
+                                <CheckCircleIcon className="w-5 h-5" />
+                            </div>
+                        </div>
+                     ))}
+                   </>
+               )}
            </div>
        )}
     </div>

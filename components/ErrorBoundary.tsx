@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -10,16 +10,13 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: To function as an Error Boundary, this must be a class component that extends React.Component.
-// This gives it access to state, props, and the necessary lifecycle methods, resolving the errors.
-class ErrorBoundary extends React.Component<Props, State> {
+class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
 
-  // FIX: Updated getDerivedStateFromError to return a partial State object to conform to React's type definitions.
   static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method is called after an error has been thrown by a descendant component.
     // It should return a value to update state.

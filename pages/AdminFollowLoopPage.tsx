@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAllParticipantsForAdmin, toggleParticipantBan } from '../services/followLoopService';
+import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction } from '../services/followLoopService';
 import { getStatsForPromoter } from '../services/postService';
 import { FollowLoopParticipant } from '../types';
-import { ArrowLeftIcon, SearchIcon, InstagramIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon } from '../components/Icons';
 
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
@@ -21,6 +21,12 @@ const AdminFollowLoopPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'active' | 'banned' | 'high_rejection'>('all');
+
+    // Manual Assignment Modal State
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+    const [manualFollower, setManualFollower] = useState('');
+    const [manualFollowed, setManualFollowed] = useState('');
+    const [isManualProcessing, setIsManualProcessing] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -71,6 +77,32 @@ const AdminFollowLoopPage: React.FC = () => {
         }
     };
 
+    const handleManualAssignment = async () => {
+        if (!manualFollower || !manualFollowed) {
+            alert("Selecione as duas divulgadoras.");
+            return;
+        }
+        if (manualFollower === manualFollowed) {
+            alert("Não pode ser a mesma pessoa.");
+            return;
+        }
+
+        setIsManualProcessing(true);
+        try {
+            await adminCreateFollowInteraction(manualFollower, manualFollowed);
+            alert("Conexão criada com sucesso! Contadores atualizados.");
+            setIsManualModalOpen(false);
+            setManualFollower('');
+            setManualFollowed('');
+            // Reload data ideally, but simple state update for counters is tricky. 
+            // For admin simple view, page reload or just close modal is fine.
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsManualProcessing(false);
+        }
+    };
+
     const filteredParticipants = useMemo(() => {
         let result = participants;
 
@@ -99,6 +131,10 @@ const AdminFollowLoopPage: React.FC = () => {
         return 'text-red-400';
     };
 
+    const activeParticipantsForSelect = useMemo(() => {
+        return participants.filter(p => !p.isBanned).sort((a, b) => a.promoterName.localeCompare(b.promoterName));
+    }, [participants]);
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -110,9 +146,15 @@ const AdminFollowLoopPage: React.FC = () => {
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <p className="text-gray-400 mb-6">
-                    Monitore a dinâmica de seguidores. Identifique e remova participantes que não estão seguindo de volta (muitas negativas) ou que possuem baixo desempenho nas tarefas.
-                </p>
+                <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+                    <p className="text-gray-400 flex-grow">
+                        Monitore a dinâmica de seguidores. Identifique e remova participantes que não estão seguindo de volta (muitas negativas) ou que possuem baixo desempenho nas tarefas.
+                    </p>
+                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0">
+                        <UserPlusIcon className="w-5 h-5" />
+                        Atribuir Conexão Manual
+                    </button>
+                </div>
 
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                     <div className="relative flex-grow">
@@ -185,6 +227,68 @@ const AdminFollowLoopPage: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Manual Assignment Modal */}
+            {isManualModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
+                    <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md">
+                        <h2 className="text-xl font-bold text-white mb-4">Atribuir Conexão Manual</h2>
+                        <p className="text-gray-400 text-sm mb-4">
+                            Isso criará um registro de que <strong>Pessoa A</strong> seguiu <strong>Pessoa B</strong> e já foi validada. Os contadores serão atualizados.
+                        </p>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-gray-300 mb-1">Quem Seguiu (Seguidora)</label>
+                                <select 
+                                    value={manualFollower} 
+                                    onChange={e => setManualFollower(e.target.value)} 
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {activeParticipantsForSelect.map(p => (
+                                        <option key={p.id} value={p.id}>{p.promoterName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            <div className="flex justify-center">
+                                <ArrowLeftIcon className="w-6 h-6 text-gray-500 transform -rotate-90" />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-gray-300 mb-1">Quem foi Seguida (Alvo)</label>
+                                <select 
+                                    value={manualFollowed} 
+                                    onChange={e => setManualFollowed(e.target.value)} 
+                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {activeParticipantsForSelect.map(p => (
+                                        <option key={p.id} value={p.id}>{p.promoterName}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button 
+                                onClick={() => setIsManualModalOpen(false)} 
+                                className="px-4 py-2 bg-gray-600 rounded-md text-white hover:bg-gray-500"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleManualAssignment} 
+                                disabled={isManualProcessing}
+                                className="px-4 py-2 bg-green-600 rounded-md text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                                {isManualProcessing ? 'Salvando...' : 'Confirmar Conexão'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

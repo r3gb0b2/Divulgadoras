@@ -139,9 +139,8 @@ export const registerFollow = async (followerId: string, followedId: string): Pr
 
     await interactionRef.set(interaction);
 
-    // Update counts (Optimistic)
+    // Update counts (Optimistic - creates generic "following" activity)
     await firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId).update({
-      followingCount: firebase.firestore.FieldValue.increment(1),
       lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -159,10 +158,10 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
       .where('followedId', '==', promoterId)
       .where('status', '==', 'pending_validation');
     
-    // Client side sort to avoid needing many composite indexes during development
     const snap = await q.get();
     const validations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
     
+    // Client sort
     validations.sort((a, b) => {
         const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
         const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
@@ -176,12 +175,47 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
   }
 };
 
+export const getConfirmedFollowers = async (promoterId: string): Promise<FollowInteraction[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('followedId', '==', promoterId)
+            .where('status', '==', 'validated')
+            .limit(50); // Limit to recent 50 for performance
+
+        const snap = await q.get();
+        const followers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+        
+        // Sort by validatedAt descending
+        followers.sort((a, b) => {
+             const timeA = (a.validatedAt as Timestamp)?.toMillis() || 0;
+             const timeB = (b.validatedAt as Timestamp)?.toMillis() || 0;
+             return timeB - timeA;
+        });
+
+        return followers;
+    } catch (error) {
+        console.error('Error fetching confirmed followers:', error);
+        return [];
+    }
+};
+
 export const validateFollow = async (interactionId: string, isValid: boolean, followerId: string): Promise<void> => {
   const batch = firestore.batch();
   const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
   const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
-
+  
+  // Note: In a real scenario, we would also update the 'followed' participant's followerCount,
+  // but since we don't have the followedId passed easily here without fetching, we skip it for now
+  // or fetch the interaction doc first. For admin/display correctness, fetching is better.
+  
   try {
+    const interactionSnap = await interactionRef.get();
+    if (!interactionSnap.exists) throw new Error("Interação não encontrada.");
+    
+    const interactionData = interactionSnap.data() as FollowInteraction;
+    const followedId = interactionData.followedId;
+    const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followedId);
+
     const status = isValid ? 'validated' : 'rejected';
     
     batch.update(interactionRef, {
@@ -190,9 +224,18 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     });
 
     if (isValid) {
-         // Logic for valid follow (e.g. increment follower count for current user) could go here
+         // Valid Follow:
+         // 1. Increment 'followingCount' for the follower
+         batch.update(followerRef, {
+             followingCount: firebase.firestore.FieldValue.increment(1)
+         });
+         // 2. Increment 'followersCount' for the followed person
+         batch.update(followedRef, {
+             followersCount: firebase.firestore.FieldValue.increment(1)
+         });
     } else {
-        // If INVALID (Rejected), increment the 'rejectedCount' on the follower.
+        // Invalid Follow:
+        // Increment 'rejectedCount' on the follower (bad behavior)
         batch.update(followerRef, {
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });
@@ -230,5 +273,55 @@ export const toggleParticipantBan = async (participantId: string, isBanned: bool
     } catch (error) {
         console.error("Error toggling ban:", error);
         throw new Error("Falha ao atualizar status.");
+    }
+}
+
+export const adminCreateFollowInteraction = async (followerId: string, followedId: string): Promise<void> => {
+    try {
+        if (followerId === followedId) throw new Error("Uma divulgadora não pode seguir a si mesma.");
+
+        const follower = await getParticipantStatus(followerId);
+        const followed = await getParticipantStatus(followedId);
+
+        if (!follower || !followed) throw new Error("Participantes inválidos.");
+
+        const interactionId = `${followerId}_${followedId}`;
+        const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+        
+        // Check if already exists to avoid double counting
+        const exists = (await interactionRef.get()).exists;
+        if (exists) throw new Error("Esta conexão já existe.");
+
+        const batch = firestore.batch();
+
+        const interaction: FollowInteraction = {
+            id: interactionId,
+            followerId,
+            followedId,
+            organizationId: follower.organizationId,
+            status: 'validated', // Admin creates as validated immediately
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            validatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            followerName: follower.promoterName,
+            followerInstagram: follower.instagram,
+            followedName: followed.promoterName,
+        };
+
+        batch.set(interactionRef, interaction);
+
+        // Update counts
+        batch.update(firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId), {
+            followingCount: firebase.firestore.FieldValue.increment(1)
+        });
+        batch.update(firestore.collection(COLLECTION_PARTICIPANTS).doc(followedId), {
+            followersCount: firebase.firestore.FieldValue.increment(1)
+        });
+
+        await batch.commit();
+
+    } catch (error) {
+        console.error("Error admin creating follow:", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Falha ao criar conexão manual.");
     }
 }
