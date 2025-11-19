@@ -1,4 +1,5 @@
 
+
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
 import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
