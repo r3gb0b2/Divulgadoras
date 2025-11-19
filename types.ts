@@ -348,6 +348,7 @@ export interface FollowLoopParticipant {
   organizationId: string;
   isActive: boolean;
   isBanned?: boolean; // New field for admin control
+  state?: string; // State for filtering
   joinedAt: Timestamp | FieldValue;
   lastActiveAt: Timestamp | FieldValue;
   followersCount: number;

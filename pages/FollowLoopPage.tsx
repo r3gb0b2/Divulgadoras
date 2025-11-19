@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -59,8 +58,7 @@ const FollowLoopPage: React.FC = () => {
       if (requiredThreshold > 0) {
           const { stats } = await getStatsForPromoter(approved.id);
           const successful = stats.completed + stats.acceptedJustifications;
-          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join, 
-          // OR treat as 0 to enforce first task. Let's be lenient: new promoters (assigned=0) can join.
+          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join
           const currentRate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : 100;
           
           if (currentRate < requiredThreshold) {
@@ -74,13 +72,20 @@ const FollowLoopPage: React.FC = () => {
       setIsLoggedIn(true);
       
       // Check if already participating
-      const partStatus = await getParticipantStatus(approved.id);
+      let partStatus = await getParticipantStatus(approved.id);
+      
+      // Migration/Sync logic: If participant exists but has no state or data is stale, sync it.
+      if (partStatus && (!partStatus.state || partStatus.photoUrl !== approved.photoUrls[0])) {
+         await joinFollowLoop(approved.id);
+         partStatus = await getParticipantStatus(approved.id);
+      }
+
       setParticipant(partStatus);
       
       if (partStatus) {
         // Initial load
         if (partStatus.isBanned) return; // Don't load data if banned
-        loadNextTarget(approved.id, approved.organizationId);
+        loadNextTarget(approved.id, approved.organizationId, approved.state);
         loadValidations(approved.id);
       }
 
@@ -98,7 +103,7 @@ const FollowLoopPage: React.FC = () => {
       await joinFollowLoop(promoter.id);
       const status = await getParticipantStatus(promoter.id);
       setParticipant(status);
-      loadNextTarget(promoter.id, promoter.organizationId);
+      loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -108,12 +113,12 @@ const FollowLoopPage: React.FC = () => {
 
   // --- Core Logic ---
 
-  const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
+  const loadNextTarget = useCallback(async (pid: string, orgId: string, state: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
     setError(null); 
     try {
-      const next = await getNextProfileToFollow(pid, orgId);
+      const next = await getNextProfileToFollow(pid, orgId, state);
       setTargetProfile(next);
     } catch (err: any) {
       console.error(err);
@@ -154,7 +159,7 @@ const FollowLoopPage: React.FC = () => {
     try {
       await registerFollow(promoter.id, targetProfile.id);
       // Load next
-      await loadNextTarget(promoter.id, promoter.organizationId);
+      await loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -164,7 +169,7 @@ const FollowLoopPage: React.FC = () => {
 
   const handleSkip = () => {
       if (promoter) {
-        loadNextTarget(promoter.id, promoter.organizationId);
+        loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
       }
   };
 
@@ -182,11 +187,12 @@ const FollowLoopPage: React.FC = () => {
 
   const handleReportUnfollow = async (interaction: FollowInteraction) => {
       if (!promoter) return;
-      if (window.confirm(`Tem certeza que deseja reportar que ${interaction.followerName} parou de te seguir? Isso irá gerar uma negativa para o perfil dela.`)) {
+      if (window.confirm(`Tem certeza que deseja reportar que ${interaction.followerName} parou de te seguir? Isso irá gerar uma negativa para o perfil dela e ela perderá pontos.`)) {
           try {
               await reportUnfollow(interaction.id, interaction.followerId, promoter.id);
               // Optimistically remove from UI
               setFollowersList(prev => prev.filter(f => f.id !== interaction.id));
+              alert("Reporte enviado com sucesso.");
           } catch (err: any) {
               alert(err.message);
           }
@@ -258,7 +264,7 @@ const FollowLoopPage: React.FC = () => {
             <h2 className="text-2xl font-bold text-white mb-4">Olá, {promoter?.name}!</h2>
             <p className="text-gray-300 mb-6">
                 Ao participar da dinâmica <strong>Conexão Divulgadoras</strong>, seu perfil ficará visível para outras meninas da equipe seguirem você.
-                Em troca, você também deve seguir as colegas. Vamos crescer juntas?
+                Em troca, você também deve seguir as colegas do seu estado. Vamos crescer juntas?
             </p>
             <button onClick={handleJoin} disabled={isLoading} className="w-full py-4 bg-green-600 text-white font-bold rounded-lg text-lg shadow-lg hover:bg-green-700 transition-colors">
                 {isLoading ? 'Entrando...' : 'Quero Participar! 🚀'}
@@ -358,15 +364,15 @@ const FollowLoopPage: React.FC = () => {
                    <div className="text-center py-10 text-gray-400">
                        {!error ? (
                            <>
-                                <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no momento.</p>
-                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
+                                <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no seu estado.</p>
+                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
                                     <RefreshIcon className="w-4 h-4" /> Verificar Novamente
                                 </button>
                            </>
                        ) : (
                            <div className="text-red-400">
                                <p className="mb-2">{error}</p>
-                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
+                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
                                     <RefreshIcon className="w-4 h-4" /> Tentar Novamente
                                 </button>
                            </div>

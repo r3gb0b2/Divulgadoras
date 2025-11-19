@@ -1,5 +1,4 @@
 
-
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
 import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
@@ -25,9 +24,14 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
           throw new Error("Você foi removida desta dinâmica. Entre em contato com a administração.");
       }
 
+      // Update existing record with latest details
       await participantRef.update({
         isActive: true,
-        lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
+        lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+        state: promoter.state,
+        promoterName: promoter.name,
+        instagram: promoter.instagram,
+        photoUrl: promoter.photoUrls[0] || '',
       });
     } else {
       const newParticipant: FollowLoopParticipant = {
@@ -39,6 +43,7 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
         organizationId: promoter.organizationId,
         isActive: true,
         isBanned: false,
+        state: promoter.state,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
         followersCount: 0,
@@ -69,7 +74,7 @@ export const getParticipantStatus = async (promoterId: string): Promise<FollowLo
 
 // --- Core Logic: Get Next Profile ---
 
-export const getNextProfileToFollow = async (currentPromoterId: string, organizationId: string): Promise<FollowLoopParticipant | null> => {
+export const getNextProfileToFollow = async (currentPromoterId: string, organizationId: string, stateFilter?: string): Promise<FollowLoopParticipant | null> => {
   try {
     // 1. Get IDs already followed by current user
     const interactionsQuery = firestore.collection(COLLECTION_INTERACTIONS)
@@ -82,14 +87,18 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
       followedIds.add(doc.data().followedId);
     });
 
-    // 2. Get potential targets (active, not banned, same org)
-    // REMOVED orderBy('lastActiveAt') to avoid missing index errors.
-    // Increased limit to 300 to cast a wider net since we can't rely on sorting by activity yet.
-    const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
+    // 2. Get potential targets (active, not banned, same org, SAME STATE)
+    let potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .where('isActive', '==', true)
-      .where('isBanned', '==', false)
-      .limit(300);
+      .where('isBanned', '==', false);
+    
+    if (stateFilter) {
+        potentialQuery = potentialQuery.where('state', '==', stateFilter);
+    }
+      
+    // Limit to a reasonable number to randomly pick from
+    potentialQuery = potentialQuery.limit(300);
 
     const potentialSnap = await potentialQuery.get();
     
