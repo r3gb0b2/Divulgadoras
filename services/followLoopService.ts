@@ -97,8 +97,9 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
         potentialQuery = potentialQuery.where('state', '==', stateFilter);
     }
       
-    // Limit to a reasonable number to randomly pick from
-    potentialQuery = potentialQuery.limit(300);
+    // Limit increased to 2000 to ensure we retrieve the full pool of candidates
+    // even if the user has already followed the first 300.
+    potentialQuery = potentialQuery.limit(2000);
 
     const potentialSnap = await potentialQuery.get();
     
@@ -112,9 +113,13 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
     if (candidates.length === 0) return null;
 
-    // 4. Return a random candidate from the pool
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    return candidates[randomIndex];
+    // 4. Random Shuffle (Fisher-Yates) to ensure fair visibility
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    return candidates[0];
 
   } catch (error) {
     console.error('Error getting next profile:', error);
