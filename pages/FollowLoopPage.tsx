@@ -78,9 +78,14 @@ const FollowLoopPage: React.FC = () => {
       const partStatus = await getParticipantStatus(approved.id);
       setParticipant(partStatus);
       
+      // Sync state if missing in participant record
+      if (partStatus && !partStatus.state && approved.state) {
+          await joinFollowLoop(approved.id);
+      }
+      
       if (partStatus) {
         if (partStatus.isBanned) return;
-        loadAllData(approved.id, approved.organizationId);
+        loadAllData(approved.id, approved.organizationId, approved.state);
       }
 
     } catch (err: any) {
@@ -90,8 +95,8 @@ const FollowLoopPage: React.FC = () => {
     }
   };
 
-  const loadAllData = async (pid: string, orgId: string) => {
-      loadNextTarget(pid, orgId);
+  const loadAllData = async (pid: string, orgId: string, state: string) => {
+      loadNextTarget(pid, orgId, state);
       loadValidations(pid);
       loadAlerts(pid);
   };
@@ -103,7 +108,7 @@ const FollowLoopPage: React.FC = () => {
       await joinFollowLoop(promoter.id);
       const status = await getParticipantStatus(promoter.id);
       setParticipant(status);
-      loadAllData(promoter.id, promoter.organizationId);
+      loadAllData(promoter.id, promoter.organizationId, promoter.state);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -113,12 +118,12 @@ const FollowLoopPage: React.FC = () => {
 
   // --- Core Logic ---
 
-  const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
+  const loadNextTarget = useCallback(async (pid: string, orgId: string, state: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
     setError(null); 
     try {
-      const next = await getNextProfileToFollow(pid, orgId);
+      const next = await getNextProfileToFollow(pid, orgId, state);
       setTargetProfile(next);
     } catch (err: any) {
       console.error(err);
@@ -178,7 +183,7 @@ const FollowLoopPage: React.FC = () => {
     setIsLoading(true);
     try {
       await registerFollow(promoter.id, targetProfile.id);
-      await loadNextTarget(promoter.id, promoter.organizationId);
+      await loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -188,7 +193,7 @@ const FollowLoopPage: React.FC = () => {
 
   const handleSkip = () => {
       if (promoter) {
-        loadNextTarget(promoter.id, promoter.organizationId);
+        loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
       }
   };
 
@@ -369,6 +374,7 @@ const FollowLoopPage: React.FC = () => {
                            />
                            <h3 className="text-2xl font-bold text-white mt-3">{targetProfile.promoterName}</h3>
                            <p className="text-pink-400 font-medium text-lg mb-6">{targetProfile.instagram}</p>
+                           <p className="text-gray-500 text-xs mb-4">{targetProfile.state}</p>
                            
                            <div className="space-y-3">
                                {!hasClickedLink ? (
@@ -401,14 +407,14 @@ const FollowLoopPage: React.FC = () => {
                        {!error ? (
                            <>
                                 <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no momento.</p>
-                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
+                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
                                     <RefreshIcon className="w-4 h-4" /> Verificar Novamente
                                 </button>
                            </>
                        ) : (
                            <div className="text-red-400">
                                <p className="mb-2">{error}</p>
-                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
+                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
                                     <RefreshIcon className="w-4 h-4" /> Tentar Novamente
                                 </button>
                            </div>
