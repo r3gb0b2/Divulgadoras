@@ -11,10 +11,13 @@ import {
   registerFollow, 
   getPendingValidations, 
   validateFollow,
-  getConfirmedFollowers 
+  getConfirmedFollowers,
+  getRejectedFollowsReceived,
+  getRejectedFollowsGiven,
+  undoRejection
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,10 +27,13 @@ const FollowLoopPage: React.FC = () => {
   const [participant, setParticipant] = useState<FollowLoopParticipant | null>(null);
   const [ineligibleData, setIneligibleData] = useState<{ current: number, required: number } | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers'>('follow');
+  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers' | 'alerts'>('follow');
   const [targetProfile, setTargetProfile] = useState<FollowLoopParticipant | null>(null);
   const [validations, setValidations] = useState<FollowInteraction[]>([]);
   const [followersList, setFollowersList] = useState<FollowInteraction[]>([]);
+  const [alerts, setAlerts] = useState<FollowInteraction[]>([]);
+  const [rejectedByMe, setRejectedByMe] = useState<FollowInteraction[]>([]);
+  const [validationView, setValidationView] = useState<'pending' | 'rejected'>('pending');
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +49,6 @@ const FollowLoopPage: React.FC = () => {
 
     try {
       const profiles = await findPromotersByEmail(email);
-      // Find an approved profile. Prefer one already in a group.
       const approved = profiles.find(p => p.status === 'approved');
       
       if (!approved) {
@@ -57,8 +62,6 @@ const FollowLoopPage: React.FC = () => {
       if (requiredThreshold > 0) {
           const { stats } = await getStatsForPromoter(approved.id);
           const successful = stats.completed + stats.acceptedJustifications;
-          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join, 
-          // OR treat as 0 to enforce first task. Let's be lenient: new promoters (assigned=0) can join.
           const currentRate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : 100;
           
           if (currentRate < requiredThreshold) {
@@ -71,15 +74,12 @@ const FollowLoopPage: React.FC = () => {
       setPromoter(approved);
       setIsLoggedIn(true);
       
-      // Check if already participating
       const partStatus = await getParticipantStatus(approved.id);
       setParticipant(partStatus);
       
       if (partStatus) {
-        // Initial load
-        if (partStatus.isBanned) return; // Don't load data if banned
-        loadNextTarget(approved.id, approved.organizationId);
-        loadValidations(approved.id);
+        if (partStatus.isBanned) return;
+        loadAllData(approved.id, approved.organizationId);
       }
 
     } catch (err: any) {
@@ -89,6 +89,12 @@ const FollowLoopPage: React.FC = () => {
     }
   };
 
+  const loadAllData = async (pid: string, orgId: string) => {
+      loadNextTarget(pid, orgId);
+      loadValidations(pid);
+      loadAlerts(pid);
+  };
+
   const handleJoin = async () => {
     if (!promoter) return;
     setIsLoading(true);
@@ -96,7 +102,7 @@ const FollowLoopPage: React.FC = () => {
       await joinFollowLoop(promoter.id);
       const status = await getParticipantStatus(promoter.id);
       setParticipant(status);
-      loadNextTarget(promoter.id, promoter.organizationId);
+      loadAllData(promoter.id, promoter.organizationId);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -121,8 +127,11 @@ const FollowLoopPage: React.FC = () => {
 
   const loadValidations = useCallback(async (pid: string) => {
     try {
-      const list = await getPendingValidations(pid);
-      setValidations(list);
+      const pendingList = await getPendingValidations(pid);
+      setValidations(pendingList);
+      // Also load rejected list for "undo" feature
+      const rejectedList = await getRejectedFollowsGiven(pid);
+      setRejectedByMe(rejectedList);
     } catch (err) {
       console.error(err);
     }
@@ -136,22 +145,34 @@ const FollowLoopPage: React.FC = () => {
         console.error(err);
     }
   }, []);
+  
+  const loadAlerts = useCallback(async (pid: string) => {
+      try {
+          const list = await getRejectedFollowsReceived(pid);
+          setAlerts(list);
+      } catch (err) {
+          console.error(err);
+      }
+  }, []);
 
   const handleInstagramClick = () => {
     setHasClickedLink(true);
-    // Open Instagram
     if (targetProfile) {
         const handle = targetProfile.instagram.replace('@', '').replace('/', '');
         window.open(`https://instagram.com/${handle}`, '_blank');
     }
   };
+  
+  const handleOpenAlertProfile = (instagram: string) => {
+      const handle = instagram.replace('@', '').replace('/', '');
+      window.open(`https://instagram.com/${handle}`, '_blank');
+  }
 
   const handleConfirmFollow = async () => {
     if (!promoter || !targetProfile) return;
     setIsLoading(true);
     try {
       await registerFollow(promoter.id, targetProfile.id);
-      // Load next
       await loadNextTarget(promoter.id, promoter.organizationId);
     } catch (err: any) {
       setError(err.message);
@@ -170,9 +191,21 @@ const FollowLoopPage: React.FC = () => {
       if (!promoter) return;
       try {
           await validateFollow(interactionId, isValid, followerId);
-          setValidations(prev => prev.filter(v => v.id !== interactionId));
-          // If validated, update followers list immediately for better UX if they switch tabs
+          // Refresh lists
+          loadValidations(promoter.id);
           if (isValid) loadFollowers(promoter.id);
+      } catch (err: any) {
+          alert(err.message);
+      }
+  };
+
+  const handleUndoRejection = async (interactionId: string) => {
+      if (!promoter) return;
+      if (!window.confirm("Confirmar que ela seguiu agora? Isso removerá o ponto negativo dela.")) return;
+      try {
+          await undoRejection(interactionId);
+          loadValidations(promoter.id); // Refresh lists
+          alert("Rejeição revertida com sucesso!");
       } catch (err: any) {
           alert(err.message);
       }
@@ -297,6 +330,13 @@ const FollowLoopPage: React.FC = () => {
            >
                Seguidores
            </button>
+           <button 
+             onClick={() => { setActiveTab('alerts'); if(promoter) loadAlerts(promoter.id); }} 
+             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all flex items-center justify-center gap-1 ${activeTab === 'alerts' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+           >
+               Alertas
+               {alerts.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{alerts.length}</span>}
+           </button>
        </div>
 
        {activeTab === 'follow' && (
@@ -363,54 +403,127 @@ const FollowLoopPage: React.FC = () => {
 
        {activeTab === 'validate' && (
            <div className="space-y-4">
-               {validations.length === 0 ? (
-                   <p className="text-center text-gray-400 py-8">Nenhuma validação pendente. Divulgue seu perfil!</p>
-               ) : (
-                   validations.map(val => (
-                       <div key={val.id} className="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-sm">
-                           <div className="flex justify-between items-start mb-3">
-                               <div>
-                                   <p className="font-bold text-white text-lg">{val.followerName}</p>
-                                   <p className="text-sm text-gray-400">@{val.followerInstagram.replace('@', '')}</p>
+               <div className="flex space-x-1 bg-gray-800 p-1 rounded-lg mb-4 w-fit mx-auto">
+                   <button 
+                       onClick={() => setValidationView('pending')} 
+                       className={`px-4 py-1.5 text-xs font-medium rounded-md ${validationView === 'pending' ? 'bg-primary text-white' : 'text-gray-400'}`}
+                   >
+                       Pendentes
+                   </button>
+                   <button 
+                       onClick={() => setValidationView('rejected')} 
+                       className={`px-4 py-1.5 text-xs font-medium rounded-md ${validationView === 'rejected' ? 'bg-primary text-white' : 'text-gray-400'}`}
+                   >
+                       Recusados
+                   </button>
+               </div>
+
+               {validationView === 'pending' ? (
+                   <>
+                       {validations.length === 0 ? (
+                           <p className="text-center text-gray-400 py-8">Nenhuma validação pendente.</p>
+                       ) : (
+                           validations.map(val => (
+                               <div key={val.id} className="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-sm">
+                                   <div className="flex justify-between items-start mb-3">
+                                       <div>
+                                           <p className="font-bold text-white text-lg">{val.followerName}</p>
+                                           <p className="text-sm text-gray-400">@{val.followerInstagram.replace('@', '')}</p>
+                                       </div>
+                                       <a
+                                           href={`https://instagram.com/${val.followerInstagram.replace('@', '')}`}
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           className="px-3 py-1.5 bg-gradient-to-r from-purple-900 to-pink-900 text-white text-xs font-bold rounded-full border border-pink-700/50 hover:opacity-90 flex items-center gap-1 transition-all"
+                                       >
+                                           <InstagramIcon className="w-3 h-3" />
+                                           Ver / Seguir
+                                       </a>
+                                   </div>
+                                   <p className="text-xs text-gray-500 mb-4 flex items-center gap-1">
+                                       <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                                       Aguardando sua confirmação
+                                   </p>
+                                   <div className="flex gap-3">
+                                       <button 
+                                         onClick={() => handleValidationAction(val.id, false, val.followerId)}
+                                         className="flex-1 py-2.5 bg-red-900/20 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/40 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
+                                       >
+                                           <XIcon className="w-4 h-4" />
+                                           Não Seguiu
+                                       </button>
+                                       <button 
+                                         onClick={() => handleValidationAction(val.id, true, val.followerId)}
+                                         className="flex-1 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-md"
+                                       >
+                                           <CheckCircleIcon className="w-4 h-4" />
+                                           Confirmar
+                                       </button>
+                                   </div>
                                </div>
-                               <a
-                                   href={`https://instagram.com/${val.followerInstagram.replace('@', '')}`}
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   className="px-3 py-1.5 bg-gradient-to-r from-purple-900 to-pink-900 text-white text-xs font-bold rounded-full border border-pink-700/50 hover:opacity-90 flex items-center gap-1 transition-all"
+                           ))
+                       )}
+                       <p className="text-xs text-gray-500 text-center mt-4 bg-blue-900/20 p-2 rounded">
+                           <strong>Atenção:</strong> Ao marcar "Não Seguiu", você gera uma notificação negativa para a outra divulgadora.
+                       </p>
+                   </>
+               ) : (
+                   // Rejected View (Undo)
+                   <>
+                       {rejectedByMe.length === 0 ? (
+                           <p className="text-center text-gray-400 py-8">Você não rejeitou ninguém recentemente.</p>
+                       ) : (
+                           rejectedByMe.map(val => (
+                               <div key={val.id} className="bg-gray-800 p-3 rounded-lg border border-red-900/30 flex items-center justify-between">
+                                   <div>
+                                       <p className="font-bold text-gray-300 line-through">{val.followerName}</p>
+                                       <p className="text-xs text-red-400">Marcado como "Não Seguiu"</p>
+                                   </div>
+                                   <button
+                                       onClick={() => handleUndoRejection(val.id)}
+                                       className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded flex items-center gap-1"
+                                   >
+                                       <UndoIcon className="w-3 h-3" />
+                                       Reverter
+                                   </button>
+                               </div>
+                           ))
+                       )}
+                   </>
+               )}
+           </div>
+       )}
+
+       {activeTab === 'alerts' && (
+           <div className="space-y-4">
+               {alerts.length === 0 ? (
+                   <div className="text-center py-10">
+                       <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-50" />
+                       <p className="text-gray-300 font-semibold">Tudo certo!</p>
+                       <p className="text-gray-500 text-sm">Nenhuma pendência ou alerta no momento.</p>
+                   </div>
+               ) : (
+                   <>
+                       <p className="text-sm text-red-300 bg-red-900/20 p-3 rounded border border-red-900/50 mb-4">
+                           Estas divulgadoras informaram que você <strong>não seguiu</strong> de volta. Por favor, verifique e siga para regularizar.
+                       </p>
+                       {alerts.map(alert => (
+                           <div key={alert.id} className="bg-gray-800 p-4 rounded-lg border-l-4 border-red-500 flex justify-between items-center">
+                               <div>
+                                   <p className="font-bold text-white">{alert.followedName}</p>
+                                   <p className="text-xs text-gray-400">Informou que você não seguiu.</p>
+                               </div>
+                               <button 
+                                   onClick={() => handleOpenAlertProfile(alert.followedName)} // Name is not ideal for link, relying on logic or need to store handle
+                                   className="px-3 py-2 bg-white text-black font-bold rounded text-xs flex items-center gap-1 hover:bg-gray-200"
                                >
                                    <InstagramIcon className="w-3 h-3" />
-                                   Ver / Seguir
-                               </a>
-                           </div>
-
-                           <p className="text-xs text-gray-500 mb-4 flex items-center gap-1">
-                               <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-                               Aguardando sua confirmação
-                           </p>
-
-                           <div className="flex gap-3">
-                               <button 
-                                 onClick={() => handleValidationAction(val.id, false, val.followerId)}
-                                 className="flex-1 py-2.5 bg-red-900/20 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/40 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
-                               >
-                                   <XIcon className="w-4 h-4" />
-                                   Não Seguiu
-                               </button>
-                               <button 
-                                 onClick={() => handleValidationAction(val.id, true, val.followerId)}
-                                 className="flex-1 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-md"
-                               >
-                                   <CheckCircleIcon className="w-4 h-4" />
-                                   Confirmar
+                                   Corrigir Agora
                                </button>
                            </div>
-                       </div>
-                   ))
+                       ))}
+                   </>
                )}
-               <p className="text-xs text-gray-500 text-center mt-4 bg-blue-900/20 p-2 rounded">
-                   <strong>Atenção:</strong> Ao marcar "Não Seguiu", você gera uma notificação negativa para a outra divulgadora. Seja honesta e verifique seu Instagram antes!
-               </p>
            </div>
        )}
 

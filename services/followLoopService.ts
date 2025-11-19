@@ -199,14 +199,40 @@ export const getConfirmedFollowers = async (promoterId: string): Promise<FollowI
     }
 };
 
+// NEW: Get rejected interactions where current user was the FOLLOWER (to see rejection alerts)
+export const getRejectedFollowsReceived = async (promoterId: string): Promise<FollowInteraction[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('followerId', '==', promoterId)
+            .where('status', '==', 'rejected');
+        
+        const snap = await q.get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    } catch (error) {
+        console.error("Error getting rejected follows received:", error);
+        return [];
+    }
+};
+
+// NEW: Get rejected interactions where current user was the FOLLOWED (to undo rejections)
+export const getRejectedFollowsGiven = async (promoterId: string): Promise<FollowInteraction[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('followedId', '==', promoterId)
+            .where('status', '==', 'rejected');
+        
+        const snap = await q.get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    } catch (error) {
+        console.error("Error getting rejected follows given:", error);
+        return [];
+    }
+};
+
 export const validateFollow = async (interactionId: string, isValid: boolean, followerId: string): Promise<void> => {
   const batch = firestore.batch();
   const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
   const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
-  
-  // Note: In a real scenario, we would also update the 'followed' participant's followerCount,
-  // but since we don't have the followedId passed easily here without fetching, we skip it for now
-  // or fetch the interaction doc first. For admin/display correctness, fetching is better.
   
   try {
     const interactionSnap = await interactionRef.get();
@@ -235,7 +261,7 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
          });
     } else {
         // Invalid Follow:
-        // Increment 'rejectedCount' on the follower (bad behavior)
+        // Increment 'rejectedCount' on the follower
         batch.update(followerRef, {
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });
@@ -247,6 +273,49 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     console.error('Error validating follow:', error);
     throw new Error('Não foi possível validar.');
   }
+};
+
+// NEW: Undo a rejection (turn it into a validation)
+export const undoRejection = async (interactionId: string): Promise<void> => {
+    const batch = firestore.batch();
+    const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+    
+    try {
+        const interactionSnap = await interactionRef.get();
+        if (!interactionSnap.exists) throw new Error("Interação não encontrada.");
+        const data = interactionSnap.data() as FollowInteraction;
+        
+        if (data.status !== 'rejected') {
+            throw new Error("Esta interação não está rejeitada.");
+        }
+
+        const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followerId);
+        const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followedId);
+
+        // 1. Update interaction status
+        batch.update(interactionRef, {
+            status: 'validated',
+            validatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 2. Remove the rejection penalty from follower
+        // AND Add the 'following' count (since it's now valid)
+        batch.update(followerRef, {
+            rejectedCount: firebase.firestore.FieldValue.increment(-1),
+            followingCount: firebase.firestore.FieldValue.increment(1)
+        });
+
+        // 3. Add 'follower' count to followed
+        batch.update(followedRef, {
+            followersCount: firebase.firestore.FieldValue.increment(1)
+        });
+
+        await batch.commit();
+
+    } catch (error) {
+        console.error("Error undoing rejection:", error);
+        throw new Error("Erro ao reverter rejeição.");
+    }
 };
 
 // --- Admin Functions ---
