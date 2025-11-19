@@ -10,6 +10,17 @@ import StorageMedia from '../components/StorageMedia';
 type PageStep = 'view_post' | 'submit_name' | 'complete';
 type CountdownStatus = 'upcoming' | 'open' | 'closed';
 
+// Lista de nomes masculinos para validação
+const MALE_NAMES = [
+    'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
+    'marcos', 'paulo', 'rodrigo', 'fernando', 'daniel', 'diego', 'thiago', 'tiago', 'andré', 
+    'antonio', 'francisco', 'josé', 'luiz', 'ricardo', 'vinicius', 'guilherme', 'gustavo', 
+    'leonardo', 'eduardo', 'marcelo', 'juliano', 'cesar', 'renato', 'adriano', 'leandro', 
+    'alexandre', 'fábio', 'sérgio', 'claudio', 'mauricio', 'cristiano', 'heitor', 'davi', 
+    'arthur', 'bernardo', 'miguel', 'enzo', 'nicolas', 'lorenzo', 'samuel', 'benjamin', 
+    'joaquim', 'augusto', 'caio', 'breno', 'vitor', 'igor', 'yuri', 'henrique', 'otávio'
+].map(name => name.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+
 const useCountdown = (endDate: Date | null) => {
     const [status, setStatus] = useState<CountdownStatus>('closed');
     const [timeLeft, setTimeLeft] = useState('');
@@ -184,6 +195,15 @@ const OneTimePostPage: React.FC = () => {
             setError("Por favor, informe seu nome completo (Nome e Sobrenome).");
             return;
         }
+
+        // Male Name Validation Logic
+        if (post.femaleOnly) {
+            const firstName = trimmedName.split(' ')[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (MALE_NAMES.includes(firstName)) {
+                setError("Esta lista é exclusiva para o público feminino.");
+                return;
+            }
+        }
         
         setIsSubmitting(true);
         setError(null);
@@ -330,6 +350,13 @@ const OneTimePostPage: React.FC = () => {
                  return (
                     <form onSubmit={handleNameSubmit} className="space-y-6">
                         <h3 className="text-xl font-bold text-center">Ótimo! Agora, seus dados para a lista:</h3>
+                        
+                        {post.femaleOnly && (
+                            <div className="bg-pink-900/50 text-pink-200 p-3 rounded-md text-center font-semibold mb-4 border border-pink-500">
+                                👩 Lista Exclusivamente Feminina
+                            </div>
+                        )}
+
                         {error && <p className="text-red-400 text-sm p-3 bg-red-900/30 rounded-md">{error}</p>}
                         <div>
                              <p className="text-sm text-gray-400 mb-2">Comprovação enviada:</p>

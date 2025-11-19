@@ -49,6 +49,7 @@ const EditOneTimePost: React.FC = () => {
         isActive: true,
         expiresAt: '',
         successMessage: '',
+        femaleOnly: false,
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -85,6 +86,7 @@ const EditOneTimePost: React.FC = () => {
                         isActive: postData.isActive,
                         expiresAt: timestampToDateTimeLocal(postData.expiresAt),
                         successMessage: postData.successMessage || '',
+                        femaleOnly: postData.femaleOnly || false,
                     });
                     
                     if (postData.submissionLimit && postData.submissionLimit > 0) {
@@ -210,8 +212,8 @@ const EditOneTimePost: React.FC = () => {
                             <input type="datetime-local" name="expiresAt" value={formData.expiresAt} onChange={handleChange} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
                         </div>
                         <div className="flex-1">
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Limitação</label>
-                            <div className="flex items-center gap-3 mt-2">
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Restrições</label>
+                            <div className="flex flex-col gap-2 mt-2">
                                 <label className="flex items-center space-x-2 cursor-pointer">
                                     <input 
                                         type="checkbox" 
@@ -231,6 +233,16 @@ const EditOneTimePost: React.FC = () => {
                                         className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200 text-sm"
                                     />
                                 )}
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        name="femaleOnly"
+                                        checked={formData.femaleOnly} 
+                                        onChange={handleChange}
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                    />
+                                    <span className="text-sm text-gray-200">Permitir apenas nomes femininos?</span>
+                                </label>
                             </div>
                         </div>
                     </div>
