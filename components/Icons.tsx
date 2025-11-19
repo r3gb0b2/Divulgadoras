@@ -157,7 +157,7 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 export const SparklesIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-  <path fillRule="evenodd" clipRule="evenodd" d="M10.822 1.566a1.94 1.94 0 0 1 2.356 0l1.178 1.178a1.94 1.94 0 0 0 1.372.569h1.66c1.21 0 1.766.963 1.258 2.05l-.646 1.393a1.94 1.94 0 0 0 .57 2.29l1.178 1.178c.963 1.088.406 2.55-.802 2.55h-1.66a1.94 1.94 0 0 0-1.372.569l-1.178 1.178a1.94 1.94 0 0 1-2.356 0l-1.178-1.178a1.94 1.94 0 0 0-1.372-.569h-1.66c-1.21 0-1.766-.963-1.258-2.05l.646-1.393a1.94 1.94 0 0 0-.57-2.29l-1.178-1.178c-.963-1.088-.406-2.55.802-2.55h1.66c.504 0 .98-.198 1.372-.569l1.178-1.178zM12 8.25a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 .75-.75zM8.25 12a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75z" />
+  <path fillRule="evenodd" clipRule="evenodd" d="M10.822 1.566a1.94 1.94 0 0 1 2.356 0l1.178 1.178a1.94 1.94 0 0 0 1.372.569h1.66c1.21 0 1.766.963 1.258 2.05l-.646 1.393a1.94 1.94 0 0 0 .57 2.29l1.178 1.178c.963 1.088.406 2.55-.802 2.55h-1.66a1.94 1.94 0 0 0-1.372.569l-1.178 1.178a1.94 1.94 0 0 1-2.356 0l-1.178-1.178a1.94 1.94 0 0 0-1.372-.569h-1.66c-1.21 0-1.766-.963-1.258-2.05l.646-1.393a1.94 1.94 0 0 0-.57-2.29l-1.178-1.178c-.963-1.088-.406-2.55.802-2.55h1.66c.504 0 .98-.198 1.372-.569l1.178-1.178zM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0v-3.75a.75.75 0 0 1 .75-.75zM8.25 12a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75z" />
 );
 
 export const LinkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -324,4 +324,8 @@ export const AlertTriangleIcon: React.FC<React.SVGProps<SVGSVGElement>> = create
 
 export const UndoIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
   <path fillRule="evenodd" d="M9.53 2.47a.75.75 0 010 1.06L4.81 8.25H15a6.75 6.75 0 010 13.5h-3a.75.75 0 010-1.5h3a5.25 5.25 0 100-10.5H4.81l4.72 4.72a.75.75 0 11-1.06 1.06l-6-6a.75.75 0 010-1.06l6-6a.75.75 0 011.06 0z" clipRule="evenodd" />
+);
+
+export const UserMinusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
+  <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
 );

@@ -14,10 +14,11 @@ import {
   getConfirmedFollowers,
   getRejectedFollowsReceived,
   getRejectedFollowsGiven,
-  undoRejection
+  undoRejection,
+  reportUnfollow
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon, UserMinusIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -206,6 +207,18 @@ const FollowLoopPage: React.FC = () => {
           await undoRejection(interactionId);
           loadValidations(promoter.id); // Refresh lists
           alert("Rejeição revertida com sucesso!");
+      } catch (err: any) {
+          alert(err.message);
+      }
+  };
+  
+  const handleReportUnfollow = async (interactionId: string) => {
+      if (!promoter) return;
+      if (!window.confirm("Tem certeza que deseja reportar que ela parou de seguir? Isso removerá a validação e adicionará um ponto negativo para ela.")) return;
+      try {
+          await reportUnfollow(interactionId);
+          loadFollowers(promoter.id); // Refresh list
+          alert("Reportado com sucesso.");
       } catch (err: any) {
           alert(err.message);
       }
@@ -514,7 +527,7 @@ const FollowLoopPage: React.FC = () => {
                                    <p className="text-xs text-gray-400">Informou que você não seguiu.</p>
                                </div>
                                <button 
-                                   onClick={() => handleOpenAlertProfile(alert.followedName)} // Name is not ideal for link, relying on logic or need to store handle
+                                   onClick={() => handleOpenAlertProfile(alert.followedName)} 
                                    className="px-3 py-2 bg-white text-black font-bold rounded text-xs flex items-center gap-1 hover:bg-gray-200"
                                >
                                    <InstagramIcon className="w-3 h-3" />
@@ -550,8 +563,17 @@ const FollowLoopPage: React.FC = () => {
                                     {f.followerInstagram}
                                 </a>
                             </div>
-                            <div className="flex-shrink-0 text-green-400">
-                                <CheckCircleIcon className="w-5 h-5" />
+                            <div className="flex-shrink-0 flex items-center gap-2">
+                                <div className="text-green-400" title="Confirmado">
+                                    <CheckCircleIcon className="w-5 h-5" />
+                                </div>
+                                <button 
+                                    onClick={() => handleReportUnfollow(f.id)}
+                                    className="p-2 text-gray-400 hover:text-red-400 bg-gray-700/50 rounded-full hover:bg-gray-700 transition-colors"
+                                    title="Parou de Seguir"
+                                >
+                                    <UserMinusIcon className="w-5 h-5" />
+                                </button>
                             </div>
                         </div>
                      ))}

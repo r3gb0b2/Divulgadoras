@@ -318,6 +318,49 @@ export const undoRejection = async (interactionId: string): Promise<void> => {
     }
 };
 
+// NEW: Report Unfollow (Reverse a validation and apply penalty)
+export const reportUnfollow = async (interactionId: string): Promise<void> => {
+    const batch = firestore.batch();
+    const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+
+    try {
+        const interactionSnap = await interactionRef.get();
+        if (!interactionSnap.exists) throw new Error("Interação não encontrada.");
+        const data = interactionSnap.data() as FollowInteraction;
+
+        if (data.status !== 'validated') {
+            throw new Error("Esta interação não está validada, não é possível reportar unfollow.");
+        }
+
+        const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followerId);
+        const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followedId);
+
+        // 1. Update interaction status to rejected
+        batch.update(interactionRef, {
+            status: 'rejected',
+            validatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp of rejection
+        });
+
+        // 2. Penalize follower (the one who unfollowed)
+        // Decrement 'followingCount', Increment 'rejectedCount'
+        batch.update(followerRef, {
+            followingCount: firebase.firestore.FieldValue.increment(-1),
+            rejectedCount: firebase.firestore.FieldValue.increment(1)
+        });
+
+        // 3. Remove follower count from followed (me)
+        batch.update(followedRef, {
+            followersCount: firebase.firestore.FieldValue.increment(-1)
+        });
+
+        await batch.commit();
+
+    } catch (error) {
+        console.error("Error reporting unfollow:", error);
+        throw new Error("Erro ao reportar que parou de seguir.");
+    }
+};
+
 // --- Admin Functions ---
 
 export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
