@@ -87,33 +87,77 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
       followedIds.add(doc.data().followedId);
     });
 
-    // 2. Get potential targets (active, not banned, same org, SAME STATE)
+    // 2. Get potential targets
+    // NOTE: We REMOVED the '.where("state", "==", stateFilter)' from the database query.
+    // This ensures we fetch "legacy" records that might be missing the 'state' field.
+    // We will filter and "heal" (update) them in memory.
     let potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .where('isActive', '==', true)
-      .where('isBanned', '==', false);
-    
-    if (stateFilter) {
-        potentialQuery = potentialQuery.where('state', '==', stateFilter);
-    }
-      
-    // Limit increased to 2000 to ensure we retrieve the full pool of candidates
-    // even if the user has already followed the first 300.
-    potentialQuery = potentialQuery.limit(2000);
+      .where('isBanned', '==', false)
+      .limit(3000); // Increased limit to fetch a broad pool
 
     const potentialSnap = await potentialQuery.get();
     
-    // 3. Filter in memory
     const candidates: FollowLoopParticipant[] = [];
+    const needsRepair: FollowLoopParticipant[] = [];
+
+    // 3. In-memory processing and filtering
     potentialSnap.forEach(doc => {
-      if (!followedIds.has(doc.id)) {
-        candidates.push({ id: doc.id, ...doc.data() } as FollowLoopParticipant);
+      if (followedIds.has(doc.id)) return;
+
+      const data = doc.data() as FollowLoopParticipant;
+      const p = { id: doc.id, ...data };
+
+      if (p.state) {
+        // If state exists, strictly check against filter
+        if (!stateFilter || p.state === stateFilter) {
+          candidates.push(p);
+        }
+      } else {
+        // If state is MISSING, this is a legacy record. We need to check it.
+        // We add it to a repair queue.
+        needsRepair.push(p);
       }
     });
 
+    // 4. Self-Healing: Process items with missing state
+    // We limit this to a small batch to prevent performance issues, 
+    // but enough to eventually heal the dataset as users browse.
+    const MAX_REPAIR_BATCH = 5;
+    if (needsRepair.length > 0) {
+        const batchToRepair = needsRepair.slice(0, MAX_REPAIR_BATCH);
+        
+        await Promise.all(batchToRepair.map(async (p) => {
+            try {
+                const promoterData = await getPromoterById(p.promoterId);
+                if (promoterData) {
+                    // Fix the record in Firestore
+                    await firestore.collection(COLLECTION_PARTICIPANTS).doc(p.id).update({
+                        state: promoterData.state,
+                        promoterName: promoterData.name, // Sync other fields too
+                        photoUrl: promoterData.photoUrls[0] || ''
+                    });
+
+                    // Check if it matches our filter now
+                    if (!stateFilter || promoterData.state === stateFilter) {
+                        candidates.push({
+                            ...p,
+                            state: promoterData.state,
+                            promoterName: promoterData.name,
+                            photoUrl: promoterData.photoUrls[0] || ''
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to repair participant ${p.id}`, e);
+            }
+        }));
+    }
+
     if (candidates.length === 0) return null;
 
-    // 4. Random Shuffle (Fisher-Yates) to ensure fair visibility
+    // 5. Random Shuffle (Fisher-Yates)
     for (let i = candidates.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
