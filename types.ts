@@ -303,6 +303,7 @@ export interface OneTimePostSubmission {
     organizationId: string;
     campaignId: string;
     guestName: string;
+    email: string; // Added email
     instagram: string;
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;

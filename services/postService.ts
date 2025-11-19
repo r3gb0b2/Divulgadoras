@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission } from '../types';
@@ -689,15 +690,28 @@ export const getOneTimePostById = async (postId: string): Promise<OneTimePost | 
 
 export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmission, 'id' | 'submittedAt'>): Promise<string> => {
     try {
+        const email = data.email.toLowerCase().trim();
+        
+        // Check for duplicate email submission for this specific post
+        const q = firestore.collection('oneTimePostSubmissions')
+            .where('oneTimePostId', '==', data.oneTimePostId)
+            .where('email', '==', email);
+        
+        const snapshot = await q.get();
+        if (!snapshot.empty) {
+            throw new Error("Este e-mail já foi utilizado para enviar uma comprovação nesta lista.");
+        }
+
         const docRef = await firestore.collection('oneTimePostSubmissions').add({
             ...data,
+            email: email,
             submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         return docRef.id;
     } catch (error) {
         console.error("Error creating one-time post submission: ", error);
         if (error instanceof Error) {
-            throw new Error(`Não foi possível enviar sua comprovação e nome. Detalhes: ${error.message}`);
+            throw error;
         }
         throw new Error("Não foi possível enviar sua comprovação e nome. Ocorreu um erro desconhecido.");
     }

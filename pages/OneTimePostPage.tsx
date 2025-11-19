@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getOneTimePostById, submitOneTimePostSubmission, getOneTimePostSubmissions } from '../services/postService';
 import { OneTimePost, Timestamp } from '../types';
 import { storage } from '../firebase/config';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, InstagramIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, InstagramIcon, MailIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 
 type PageStep = 'view_post' | 'submit_name' | 'complete';
@@ -84,6 +84,7 @@ const OneTimePostPage: React.FC = () => {
     // Step 2 state
     const [uploadedProofUrls, setUploadedProofUrls] = useState<string[]>([]);
     const [guestName, setGuestName] = useState('');
+    const [email, setEmail] = useState('');
     const [instagram, setInstagram] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -171,9 +172,16 @@ const OneTimePostPage: React.FC = () => {
         
         // Sanitize instagram handle
         const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
+        const trimmedName = guestName.trim();
+        const trimmedEmail = email.trim();
 
-        if (!guestName.trim() || !sanitizedInstagram) {
-            setError("Por favor, insira seu nome completo e seu usuário do Instagram.");
+        if (!trimmedName || !sanitizedInstagram || !trimmedEmail) {
+            setError("Por favor, preencha todos os campos (Nome, Email e Instagram).");
+            return;
+        }
+
+        if (trimmedName.split(/\s+/).length < 2) {
+            setError("Por favor, informe seu nome completo (Nome e Sobrenome).");
             return;
         }
         
@@ -185,7 +193,8 @@ const OneTimePostPage: React.FC = () => {
                 oneTimePostId: post.id,
                 organizationId: post.organizationId,
                 campaignId: post.campaignId,
-                guestName: guestName.trim(),
+                guestName: trimmedName,
+                email: trimmedEmail,
                 instagram: sanitizedInstagram,
                 proofImageUrls: uploadedProofUrls,
             });
@@ -320,14 +329,29 @@ const OneTimePostPage: React.FC = () => {
             case 'submit_name':
                  return (
                     <form onSubmit={handleNameSubmit} className="space-y-6">
-                        <h3 className="text-xl font-bold text-center">Ótimo! Agora, seu nome para a lista:</h3>
+                        <h3 className="text-xl font-bold text-center">Ótimo! Agora, seus dados para a lista:</h3>
                         {error && <p className="text-red-400 text-sm p-3 bg-red-900/30 rounded-md">{error}</p>}
                         <div>
                              <p className="text-sm text-gray-400 mb-2">Comprovação enviada:</p>
                              <div className="flex gap-2">{uploadedProofUrls.map((url, i) => <img key={i} src={url} className="h-16 w-16 rounded-lg object-cover" alt={`Comprovação ${i+1}`} />)}</div>
                         </div>
-                        <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Seu nome completo" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                         
+                        <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Nome completo (Nome e Sobrenome)" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                        
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                <MailIcon className="h-5 w-5 text-gray-400" />
+                            </span>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder="Seu E-mail"
+                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                                required
+                            />
+                        </div>
+
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
                                 <InstagramIcon className="h-5 w-5 text-gray-400" />
@@ -336,7 +360,7 @@ const OneTimePostPage: React.FC = () => {
                                 type="text"
                                 value={instagram}
                                 onChange={e => setInstagram(e.target.value)}
-                                placeholder="Seu usuário do Instagram (obrigatório)"
+                                placeholder="Seu usuário do Instagram"
                                 className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
                                 required
                             />

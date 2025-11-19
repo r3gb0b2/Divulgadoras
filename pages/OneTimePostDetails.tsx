@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { OneTimePost, OneTimePostSubmission, Timestamp } from '../types';
@@ -48,8 +49,8 @@ const OneTimePostDetails: React.FC = () => {
     
     const handleDownloadCSV = () => {
         if (submissions.length === 0 || !post) return;
-        const headers = ["Nome na Lista", "Instagram", "Data de Envio"];
-        const rows = submissions.map(sub => `"${sub.guestName}","${sub.instagram || ''}","${formatDate(sub.submittedAt)}"`);
+        const headers = ["Nome na Lista", "Email", "Instagram", "Data de Envio"];
+        const rows = submissions.map(sub => `"${sub.guestName}","${sub.email || ''}","${sub.instagram || ''}","${formatDate(sub.submittedAt)}"`);
         const csvContent = [headers.join(','), ...rows].join('\n');
         
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
