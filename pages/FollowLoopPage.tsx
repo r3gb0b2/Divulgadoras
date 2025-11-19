@@ -165,6 +165,10 @@ const FollowLoopPage: React.FC = () => {
   };
   
   const handleOpenAlertProfile = (instagram: string) => {
+      if (!instagram) {
+          alert("Instagram não encontrado para este perfil.");
+          return;
+      }
       const handle = instagram.replace('@', '').replace('/', '');
       window.open(`https://instagram.com/${handle}`, '_blank');
   }
@@ -527,7 +531,7 @@ const FollowLoopPage: React.FC = () => {
                                    <p className="text-xs text-gray-400">Informou que você não seguiu.</p>
                                </div>
                                <button 
-                                   onClick={() => handleOpenAlertProfile(alert.followedName)} 
+                                   onClick={() => handleOpenAlertProfile(alert.followedInstagram || '')} 
                                    className="px-3 py-2 bg-white text-black font-bold rounded text-xs flex items-center gap-1 hover:bg-gray-200"
                                >
                                    <InstagramIcon className="w-3 h-3" />

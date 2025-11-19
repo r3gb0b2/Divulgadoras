@@ -135,6 +135,7 @@ export const registerFollow = async (followerId: string, followedId: string): Pr
       followerName: follower.promoterName,
       followerInstagram: follower.instagram,
       followedName: followed.promoterName,
+      followedInstagram: followed.instagram, // Ensure this is saved
     };
 
     await interactionRef.set(interaction);
@@ -417,6 +418,7 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
             followerName: follower.promoterName,
             followerInstagram: follower.instagram,
             followedName: followed.promoterName,
+            followedInstagram: followed.instagram, // Ensure this is saved
         };
 
         batch.set(interactionRef, interaction);

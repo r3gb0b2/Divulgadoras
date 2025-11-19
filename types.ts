@@ -366,4 +366,5 @@ export interface FollowInteraction {
   followerName: string;
   followerInstagram: string;
   followedName: string;
+  followedInstagram?: string; // New field to ensure correct linking in alerts
 }
