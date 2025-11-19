@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -70,7 +71,7 @@ const useCountdown = (startDate: Date | null, endDate: Date | null) => {
 
 const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter, existingConfirmation?: GuestListConfirmation }> = ({ list, promoter, existingConfirmation }) => {
     const promoterSpecificAssignment = list.assignments?.[promoter.id];
-    const finalAllowance = promoterSpecificAssignment?.guestAllowance !== undefined ? promoterSpecificAssignment.guestAllowance : list.guestAllowance;
+    const finalAllowance = promoterSpecificAssignment?.guestAllowance !== undefined ? promoterSpecificAssignment.guestAllowance : (list.guestAllowance || 0);
     const infoText = promoterSpecificAssignment?.info;
 
     const [isAttending, setIsAttending] = useState(true);
@@ -99,7 +100,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     useEffect(() => {
         if (existingConfirmation) {
             setIsAttending(existingConfirmation.isPromoterAttending);
-            const filledGuests = [...existingConfirmation.guestNames];
+            const filledGuests = [...(existingConfirmation.guestNames || [])];
             while (filledGuests.length < finalAllowance) {
                 filledGuests.push('');
             }
@@ -155,7 +156,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 promoterEmail: promoter.email,
                 listName: list.name,
                 isPromoterAttending: isAttending,
-                guestNames: isAttending ? guestNames.filter(name => name.trim() !== '') : [],
+                guestNames: isAttending ? (guestNames || []).filter(name => name.trim() !== '') : [],
             });
             setSuccess(true);
         } catch (err: any) {
@@ -166,7 +167,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     };
 
     if (success) {
-        const submittedGuests = guestNames.filter(name => name.trim() !== '');
+        const submittedGuests = (guestNames || []).filter(name => name.trim() !== '');
         return (
             <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -210,7 +211,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
     }
     
     if (isLocked && existingConfirmation) {
-        const submittedGuests = existingConfirmation.guestNames.filter(name => name.trim() !== '');
+        const submittedGuests = (existingConfirmation.guestNames || []).filter(name => name.trim() !== '');
         return (
              <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
@@ -489,8 +490,6 @@ export const GuestListCheck: React.FC = () => {
         );
     }
     
-    // FIX: The file was corrupted here. The component was incomplete and had extraneous code from another file.
-    // I have fixed the incomplete JSX and added the missing main return statement for the component.
     if (error && !campaign) {
         return (
             <div className="max-w-2xl mx-auto text-center">
@@ -537,3 +536,5 @@ export const GuestListCheck: React.FC = () => {
         </div>
     );
 };
+
+export default GuestListCheck;

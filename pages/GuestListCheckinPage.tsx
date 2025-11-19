@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
@@ -354,7 +355,7 @@ const GuestListCheckinPage: React.FC = () => {
                     promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
-            conf.guestNames.filter(name => name.trim()).forEach(guestName => {
+            (conf.guestNames || []).filter(name => name.trim()).forEach(guestName => {
                  const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guestName);
                 people.push({
                     name: guestName,
