@@ -294,6 +294,7 @@ export interface OneTimePost {
   isActive: boolean;
   expiresAt?: Timestamp | FieldValue | null;
   submissionCount?: number;
+  submissionLimit?: number; // Optional limit for number of submissions
 }
 
 export interface OneTimePostSubmission {

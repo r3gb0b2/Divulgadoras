@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -40,6 +41,10 @@ const CreateOneTimePost: React.FC = () => {
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+
+    // Limit feature state
+    const [hasLimit, setHasLimit] = useState(false);
+    const [submissionLimit, setSubmissionLimit] = useState<string>('');
 
     useEffect(() => {
         const loadCampaigns = async () => {
@@ -101,6 +106,11 @@ const CreateOneTimePost: React.FC = () => {
             return;
         }
 
+        if (hasLimit && (!submissionLimit || parseInt(submissionLimit) <= 0)) {
+            setError("Por favor, informe um número válido para o limite.");
+            return;
+        }
+
         setIsSubmitting(true);
         setError('');
         try {
@@ -126,6 +136,7 @@ const CreateOneTimePost: React.FC = () => {
                 isActive: formData.isActive,
                 createdByEmail: adminData.email,
                 expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
+                submissionLimit: hasLimit ? parseInt(submissionLimit) : undefined,
                 ...(formData.eventName.trim() && { eventName: formData.eventName.trim() }),
                 ...(formData.type === 'text' && { textContent: formData.textContent }),
                 ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
@@ -162,9 +173,35 @@ const CreateOneTimePost: React.FC = () => {
                     </select>
                     <input type="text" name="eventName" placeholder="Nome do Evento Específico (Opcional)" value={formData.eventName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                     <input type="text" name="guestListName" placeholder="Nome da Lista de Convidados (ex: VIP Post)" value={formData.guestListName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                    <div>
-                        <label className="block text-sm font-medium text-gray-400">Data Final para a Lista (opcional)</label>
-                        <input type="datetime-local" name="expiresAt" value={formData.expiresAt} onChange={handleChange} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex-1">
+                             <label className="block text-sm font-medium text-gray-400">Data Final para a Lista (opcional)</label>
+                             <input type="datetime-local" name="expiresAt" value={formData.expiresAt} onChange={handleChange} className="mt-1 w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Limitação</label>
+                            <div className="flex items-center gap-3 mt-2">
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={hasLimit} 
+                                        onChange={(e) => setHasLimit(e.target.checked)} 
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                    />
+                                    <span className="text-sm text-gray-200">Limitar quantidade?</span>
+                                </label>
+                                {hasLimit && (
+                                    <input 
+                                        type="number" 
+                                        placeholder="Máx" 
+                                        value={submissionLimit} 
+                                        onChange={(e) => setSubmissionLimit(e.target.value)}
+                                        min="1"
+                                        className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200 text-sm"
+                                    />
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </fieldset>
 

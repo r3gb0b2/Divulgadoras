@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getOneTimePostById, submitOneTimePostSubmission } from '../services/postService';
+import { getOneTimePostById, submitOneTimePostSubmission, getOneTimePostSubmissions } from '../services/postService';
 import { OneTimePost, Timestamp } from '../types';
 import { storage } from '../firebase/config';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, InstagramIcon } from '../components/Icons';
@@ -72,6 +73,7 @@ const OneTimePostPage: React.FC = () => {
     const navigate = useNavigate();
 
     const [post, setPost] = useState<OneTimePost | null>(null);
+    const [currentSubmissionsCount, setCurrentSubmissionsCount] = useState<number>(0);
     const [step, setStep] = useState<PageStep>('view_post');
     
     // Step 1 state
@@ -92,6 +94,8 @@ const OneTimePostPage: React.FC = () => {
 
     const closingDate = post?.expiresAt ? (post.expiresAt as Timestamp).toDate() : null;
     const { status: countdownStatus, timeLeft } = useCountdown(closingDate);
+    
+    const isLimitReached = post?.submissionLimit ? currentSubmissionsCount >= post.submissionLimit : false;
 
 
     useEffect(() => {
@@ -102,11 +106,18 @@ const OneTimePostPage: React.FC = () => {
         }
         const fetchPost = async () => {
             try {
-                const data = await getOneTimePostById(postId);
-                if (!data || !data.isActive) {
+                // Fetch post details and current submissions in parallel
+                const [postData, submissions] = await Promise.all([
+                    getOneTimePostById(postId),
+                    getOneTimePostSubmissions(postId)
+                ]);
+                
+                if (!postData || !postData.isActive) {
                     throw new Error("Este post não está mais ativo ou não foi encontrado.");
                 }
-                setPost(data);
+                setPost(postData);
+                setCurrentSubmissionsCount(submissions.length);
+
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -245,6 +256,17 @@ const OneTimePostPage: React.FC = () => {
     }
 
     const renderStep = () => {
+        if (isLimitReached) {
+            return (
+                <div className="text-center py-10">
+                    <h2 className="text-2xl font-bold text-red-400 mb-4">Lista Esgotada!</h2>
+                    <p className="text-gray-300">
+                        O limite de envios para esta lista foi atingido. Fique atento(a) aos próximos posts!
+                    </p>
+                </div>
+            );
+        }
+
         switch (step) {
             case 'view_post':
                 return (
@@ -348,6 +370,12 @@ const OneTimePostPage: React.FC = () => {
                 }`}>
                     {timeLeft}
                 </div>
+
+                {post.submissionLimit && post.submissionLimit > 0 && !isLimitReached && (
+                     <div className="text-center mb-4 text-sm text-yellow-400 font-medium border border-yellow-600/50 rounded-full px-3 py-1 inline-block mx-auto w-full sm:w-auto">
+                        Vagas: {currentSubmissionsCount} / {post.submissionLimit}
+                    </div>
+                )}
                 
                 {renderStep()}
             </div>
