@@ -11,11 +11,10 @@ import {
   registerFollow, 
   getPendingValidations, 
   validateFollow,
-  getConfirmedFollowers,
-  reportUnfollow
+  getConfirmedFollowers 
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, UserMinusIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -58,7 +57,8 @@ const FollowLoopPage: React.FC = () => {
       if (requiredThreshold > 0) {
           const { stats } = await getStatsForPromoter(approved.id);
           const successful = stats.completed + stats.acceptedJustifications;
-          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join
+          // If no tasks assigned yet, treat rate as 100 to allow new promoters to join, 
+          // OR treat as 0 to enforce first task. Let's be lenient: new promoters (assigned=0) can join.
           const currentRate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : 100;
           
           if (currentRate < requiredThreshold) {
@@ -72,20 +72,13 @@ const FollowLoopPage: React.FC = () => {
       setIsLoggedIn(true);
       
       // Check if already participating
-      let partStatus = await getParticipantStatus(approved.id);
-      
-      // Migration/Sync logic: If participant exists but has no state or data is stale, sync it.
-      if (partStatus && (!partStatus.state || partStatus.photoUrl !== approved.photoUrls[0])) {
-         await joinFollowLoop(approved.id);
-         partStatus = await getParticipantStatus(approved.id);
-      }
-
+      const partStatus = await getParticipantStatus(approved.id);
       setParticipant(partStatus);
       
       if (partStatus) {
         // Initial load
         if (partStatus.isBanned) return; // Don't load data if banned
-        loadNextTarget(approved.id, approved.organizationId, approved.state);
+        loadNextTarget(approved.id, approved.organizationId);
         loadValidations(approved.id);
       }
 
@@ -103,7 +96,7 @@ const FollowLoopPage: React.FC = () => {
       await joinFollowLoop(promoter.id);
       const status = await getParticipantStatus(promoter.id);
       setParticipant(status);
-      loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
+      loadNextTarget(promoter.id, promoter.organizationId);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -113,12 +106,12 @@ const FollowLoopPage: React.FC = () => {
 
   // --- Core Logic ---
 
-  const loadNextTarget = useCallback(async (pid: string, orgId: string, state: string) => {
+  const loadNextTarget = useCallback(async (pid: string, orgId: string) => {
     setTargetProfile(null);
     setHasClickedLink(false);
     setError(null); 
     try {
-      const next = await getNextProfileToFollow(pid, orgId, state);
+      const next = await getNextProfileToFollow(pid, orgId);
       setTargetProfile(next);
     } catch (err: any) {
       console.error(err);
@@ -159,7 +152,7 @@ const FollowLoopPage: React.FC = () => {
     try {
       await registerFollow(promoter.id, targetProfile.id);
       // Load next
-      await loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
+      await loadNextTarget(promoter.id, promoter.organizationId);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -169,7 +162,7 @@ const FollowLoopPage: React.FC = () => {
 
   const handleSkip = () => {
       if (promoter) {
-        loadNextTarget(promoter.id, promoter.organizationId, promoter.state);
+        loadNextTarget(promoter.id, promoter.organizationId);
       }
   };
 
@@ -182,20 +175,6 @@ const FollowLoopPage: React.FC = () => {
           if (isValid) loadFollowers(promoter.id);
       } catch (err: any) {
           alert(err.message);
-      }
-  };
-
-  const handleReportUnfollow = async (interaction: FollowInteraction) => {
-      if (!promoter) return;
-      if (window.confirm(`Tem certeza que deseja reportar que ${interaction.followerName} parou de te seguir? Isso irá gerar uma negativa para o perfil dela e ela perderá pontos.`)) {
-          try {
-              await reportUnfollow(interaction.id, interaction.followerId, promoter.id);
-              // Optimistically remove from UI
-              setFollowersList(prev => prev.filter(f => f.id !== interaction.id));
-              alert("Reporte enviado com sucesso.");
-          } catch (err: any) {
-              alert(err.message);
-          }
       }
   };
 
@@ -264,7 +243,7 @@ const FollowLoopPage: React.FC = () => {
             <h2 className="text-2xl font-bold text-white mb-4">Olá, {promoter?.name}!</h2>
             <p className="text-gray-300 mb-6">
                 Ao participar da dinâmica <strong>Conexão Divulgadoras</strong>, seu perfil ficará visível para outras meninas da equipe seguirem você.
-                Em troca, você também deve seguir as colegas do seu estado. Vamos crescer juntas?
+                Em troca, você também deve seguir as colegas. Vamos crescer juntas?
             </p>
             <button onClick={handleJoin} disabled={isLoading} className="w-full py-4 bg-green-600 text-white font-bold rounded-lg text-lg shadow-lg hover:bg-green-700 transition-colors">
                 {isLoading ? 'Entrando...' : 'Quero Participar! 🚀'}
@@ -364,15 +343,15 @@ const FollowLoopPage: React.FC = () => {
                    <div className="text-center py-10 text-gray-400">
                        {!error ? (
                            <>
-                                <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no seu estado.</p>
-                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
+                                <p className="text-lg mb-4">Oba! Você já viu todos os perfis disponíveis no momento.</p>
+                                <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-full hover:bg-gray-600 text-white">
                                     <RefreshIcon className="w-4 h-4" /> Verificar Novamente
                                 </button>
                            </>
                        ) : (
                            <div className="text-red-400">
                                <p className="mb-2">{error}</p>
-                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId, promoter.state)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
+                               <button onClick={() => promoter && loadNextTarget(promoter.id, promoter.organizationId)} className="inline-flex items-center gap-2 px-4 py-2 bg-red-900/30 rounded-full hover:bg-red-900/50 text-white border border-red-500">
                                     <RefreshIcon className="w-4 h-4" /> Tentar Novamente
                                 </button>
                            </div>
@@ -388,26 +367,42 @@ const FollowLoopPage: React.FC = () => {
                    <p className="text-center text-gray-400 py-8">Nenhuma validação pendente. Divulgue seu perfil!</p>
                ) : (
                    validations.map(val => (
-                       <div key={val.id} className="bg-gray-800 p-4 rounded-lg flex items-center justify-between">
-                           <div>
-                               <p className="font-bold text-white">{val.followerName}</p>
-                               <p className="text-sm text-pink-400">{val.followerInstagram}</p>
-                               <p className="text-xs text-gray-500">Diz que te seguiu.</p>
+                       <div key={val.id} className="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-sm">
+                           <div className="flex justify-between items-start mb-3">
+                               <div>
+                                   <p className="font-bold text-white text-lg">{val.followerName}</p>
+                                   <p className="text-sm text-gray-400">@{val.followerInstagram.replace('@', '')}</p>
+                               </div>
+                               <a
+                                   href={`https://instagram.com/${val.followerInstagram.replace('@', '')}`}
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   className="px-3 py-1.5 bg-gradient-to-r from-purple-900 to-pink-900 text-white text-xs font-bold rounded-full border border-pink-700/50 hover:opacity-90 flex items-center gap-1 transition-all"
+                               >
+                                   <InstagramIcon className="w-3 h-3" />
+                                   Ver / Seguir
+                               </a>
                            </div>
-                           <div className="flex gap-2">
+
+                           <p className="text-xs text-gray-500 mb-4 flex items-center gap-1">
+                               <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                               Aguardando sua confirmação
+                           </p>
+
+                           <div className="flex gap-3">
                                <button 
                                  onClick={() => handleValidationAction(val.id, false, val.followerId)}
-                                 className="p-2 bg-red-900/30 text-red-400 rounded-full hover:bg-red-900/50"
-                                 title="Não Seguiu"
+                                 className="flex-1 py-2.5 bg-red-900/20 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/40 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
                                >
-                                   <XIcon className="w-6 h-6" />
+                                   <XIcon className="w-4 h-4" />
+                                   Não Seguiu
                                </button>
                                <button 
                                  onClick={() => handleValidationAction(val.id, true, val.followerId)}
-                                 className="p-2 bg-green-900/30 text-green-400 rounded-full hover:bg-green-900/50"
-                                 title="Confirmar (Já Segui de Volta)"
+                                 className="flex-1 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-semibold transition-colors shadow-md"
                                >
-                                   <CheckCircleIcon className="w-6 h-6" />
+                                   <CheckCircleIcon className="w-4 h-4" />
+                                   Confirmar
                                </button>
                            </div>
                        </div>
@@ -427,36 +422,23 @@ const FollowLoopPage: React.FC = () => {
                    <>
                      <p className="text-center text-gray-400 text-sm mb-2">{followersList.length} seguidora(s) confirmada(s).</p>
                      {followersList.map(f => (
-                        <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center justify-between border border-gray-700">
-                            <div className="flex items-center gap-4 overflow-hidden">
-                                <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
-                                    <UsersIcon className="w-5 h-5" />
-                                </div>
-                                <div className="flex-grow overflow-hidden">
-                                    <p className="font-bold text-white truncate">{f.followerName}</p>
-                                    <a 
-                                        href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="text-sm text-pink-400 hover:underline truncate block"
-                                    >
-                                        {f.followerInstagram}
-                                    </a>
-                                </div>
+                        <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
+                            <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
+                                <UsersIcon className="w-5 h-5" />
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                                <div className="flex items-center gap-1 text-green-400 text-xs">
-                                    <CheckCircleIcon className="w-4 h-4" />
-                                    <span>Confirmado</span>
-                                </div>
-                                <button 
-                                    onClick={() => handleReportUnfollow(f)}
-                                    className="flex items-center gap-1 px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded hover:bg-red-900/50 transition-colors"
-                                    title="Reportar que parou de seguir"
+                            <div className="flex-grow overflow-hidden">
+                                <p className="font-bold text-white truncate">{f.followerName}</p>
+                                <a 
+                                    href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-sm text-pink-400 hover:underline truncate block"
                                 >
-                                    <UserMinusIcon className="w-3 h-3" />
-                                    <span>Parou de Seguir</span>
-                                </button>
+                                    {f.followerInstagram}
+                                </a>
+                            </div>
+                            <div className="flex-shrink-0 text-green-400">
+                                <CheckCircleIcon className="w-5 h-5" />
                             </div>
                         </div>
                      ))}

@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -17,13 +18,13 @@ class ErrorBoundary extends Component<Props, State> {
     errorInfo: null,
   };
 
-  public static getDerivedStateFromError(error: Error): Partial<State> {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method is called after an error has been thrown by a descendant component.
     // It should return a value to update state.
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // This lifecycle method is also called after an error has been thrown by a descendant component.
     // It receives two parameters: the error that was thrown, and an object with a componentStack key.
     this.setState({
@@ -32,7 +33,7 @@ class ErrorBoundary extends Component<Props, State> {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
         <div className="bg-red-900 bg-opacity-50 border-l-4 border-red-500 text-red-200 p-6 rounded-md shadow-lg" role="alert">

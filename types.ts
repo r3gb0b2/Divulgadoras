@@ -348,7 +348,6 @@ export interface FollowLoopParticipant {
   organizationId: string;
   isActive: boolean;
   isBanned?: boolean; // New field for admin control
-  state?: string; // State for filtering
   joinedAt: Timestamp | FieldValue;
   lastActiveAt: Timestamp | FieldValue;
   followersCount: number;
@@ -361,7 +360,7 @@ export interface FollowInteraction {
   followerId: string; // Promoter ID who clicked follow
   followedId: string; // Promoter ID who was followed
   organizationId: string;
-  status: 'pending_validation' | 'validated' | 'rejected' | 'unfollowed';
+  status: 'pending_validation' | 'validated' | 'rejected';
   createdAt: Timestamp | FieldValue;
   validatedAt?: Timestamp | FieldValue | null;
   followerName: string;
