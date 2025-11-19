@@ -38,6 +38,7 @@ const CreateOneTimePost: React.FC = () => {
         instructions: '',
         isActive: true,
         expiresAt: '',
+        successMessage: '',
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -137,6 +138,7 @@ const CreateOneTimePost: React.FC = () => {
                 createdByEmail: adminData.email,
                 expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
                 submissionLimit: hasLimit ? parseInt(submissionLimit) : undefined,
+                successMessage: formData.successMessage.trim() || undefined,
                 ...(formData.eventName.trim() && { eventName: formData.eventName.trim() }),
                 ...(formData.type === 'text' && { textContent: formData.textContent }),
                 ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
@@ -237,6 +239,19 @@ const CreateOneTimePost: React.FC = () => {
                      )}
                      
                      <textarea name="instructions" value={formData.instructions} onChange={handleChange} placeholder="Instruções para a publicação" rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                     
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Mensagem de Sucesso Personalizada (Opcional)</label>
+                        <textarea 
+                            name="successMessage" 
+                            value={formData.successMessage} 
+                            onChange={handleChange} 
+                            placeholder="Ex: Obrigado! Entre agora no grupo do WhatsApp para confirmar sua presença: https://chat.whatsapp.com/..." 
+                            rows={3} 
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" 
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Esta mensagem aparecerá para a pessoa logo após ela enviar a comprovação.</p>
+                     </div>
                 </fieldset>
 
                 <div className="flex justify-end">

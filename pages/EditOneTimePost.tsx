@@ -48,6 +48,7 @@ const EditOneTimePost: React.FC = () => {
         instructions: '',
         isActive: true,
         expiresAt: '',
+        successMessage: '',
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -83,6 +84,7 @@ const EditOneTimePost: React.FC = () => {
                         instructions: postData.instructions,
                         isActive: postData.isActive,
                         expiresAt: timestampToDateTimeLocal(postData.expiresAt),
+                        successMessage: postData.successMessage || '',
                     });
                     
                     if (postData.submissionLimit && postData.submissionLimit > 0) {
@@ -157,6 +159,7 @@ const EditOneTimePost: React.FC = () => {
                 mediaUrl: finalMediaUrl || undefined,
                 expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
                 submissionLimit: hasLimit ? parseInt(submissionLimit) : null as any, // using 'as any' to pass null which Firestore interprets as delete or null value depending on merge
+                successMessage: formData.successMessage.trim() || undefined,
             };
             
             // If hasLimit is false, ensure we clear the limit in DB or set to null
@@ -255,6 +258,19 @@ const EditOneTimePost: React.FC = () => {
                      )}
                      {formData.type === 'video' && <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} required />}
                      <textarea name="instructions" value={formData.instructions} onChange={handleChange} placeholder="Instruções para a publicação" rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                     
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Mensagem de Sucesso Personalizada (Opcional)</label>
+                        <textarea 
+                            name="successMessage" 
+                            value={formData.successMessage} 
+                            onChange={handleChange} 
+                            placeholder="Ex: Obrigado! Entre agora no grupo do WhatsApp para confirmar sua presença: https://chat.whatsapp.com/..." 
+                            rows={3} 
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" 
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Esta mensagem aparecerá para a pessoa logo após ela enviar a comprovação.</p>
+                     </div>
                 </fieldset>
 
                 <div className="flex justify-end">

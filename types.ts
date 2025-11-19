@@ -295,6 +295,7 @@ export interface OneTimePost {
   expiresAt?: Timestamp | FieldValue | null;
   submissionCount?: number;
   submissionLimit?: number; // Optional limit for number of submissions
+  successMessage?: string; // New field for custom success message
 }
 
 export interface OneTimePostSubmission {
