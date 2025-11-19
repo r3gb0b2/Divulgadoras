@@ -2,21 +2,34 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction } from '../services/followLoopService';
+import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction, getAllFollowInteractions } from '../services/followLoopService';
 import { getStatsForPromoter } from '../services/postService';
 import { getOrganization, updateOrganization } from '../services/organizationService';
-import { FollowLoopParticipant } from '../types';
-import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon } from '../components/Icons';
+import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
+import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon, ListBulletIcon, UsersIcon } from '../components/Icons';
 
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
 }
 
+const formatDate = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Data inválida';
+    return date.toLocaleString('pt-BR');
+};
+
 const AdminFollowLoopPage: React.FC = () => {
     const navigate = useNavigate();
     const { selectedOrgId } = useAdminAuth();
     
+    // View Mode: 'participants' or 'interactions'
+    const [viewMode, setViewMode] = useState<'participants' | 'interactions'>('participants');
+
+    // Data
     const [participants, setParticipants] = useState<ParticipantWithStats[]>([]);
+    const [interactions, setInteractions] = useState<FollowInteraction[]>([]);
+    
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -39,28 +52,34 @@ const AdminFollowLoopPage: React.FC = () => {
             setIsLoading(true);
             setError('');
             try {
-                // 1. Fetch Organization Settings
-                const orgData = await getOrganization(selectedOrgId);
-                if (orgData) {
-                    setThreshold(orgData.followLoopThreshold || 0);
+                if (viewMode === 'participants') {
+                    // 1. Fetch Organization Settings
+                    const orgData = await getOrganization(selectedOrgId);
+                    if (orgData) {
+                        setThreshold(orgData.followLoopThreshold || 0);
+                    }
+
+                    // 2. Fetch Participants
+                    const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
+                    
+                    // 3. Enrich with stats
+                    const enriched = await Promise.all(loopParticipants.map(async (p) => {
+                        try {
+                            const { stats } = await getStatsForPromoter(p.promoterId);
+                            const successful = stats.completed + stats.acceptedJustifications;
+                            const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
+                            return { ...p, taskCompletionRate: rate };
+                        } catch (e) {
+                            return { ...p, taskCompletionRate: -1 };
+                        }
+                    }));
+                    setParticipants(enriched);
+                } else {
+                    // Fetch detailed interactions
+                    const history = await getAllFollowInteractions(selectedOrgId);
+                    setInteractions(history);
                 }
 
-                // 2. Fetch Participants
-                const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
-                
-                // 3. Enrich with stats
-                const enriched = await Promise.all(loopParticipants.map(async (p) => {
-                    try {
-                        const { stats } = await getStatsForPromoter(p.promoterId);
-                        const successful = stats.completed + stats.acceptedJustifications;
-                        const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
-                        return { ...p, taskCompletionRate: rate };
-                    } catch (e) {
-                        return { ...p, taskCompletionRate: -1 };
-                    }
-                }));
-
-                setParticipants(enriched);
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -68,7 +87,7 @@ const AdminFollowLoopPage: React.FC = () => {
             }
         };
         fetchData();
-    }, [selectedOrgId]);
+    }, [selectedOrgId, viewMode]);
 
     const handleSaveThreshold = async () => {
         if (!selectedOrgId) return;
@@ -145,12 +164,31 @@ const AdminFollowLoopPage: React.FC = () => {
         return result;
     }, [participants, searchQuery, filterType]);
 
+    const filteredInteractions = useMemo(() => {
+        if (!searchQuery) return interactions;
+        const q = searchQuery.toLowerCase();
+        return interactions.filter(i => 
+            i.followerName.toLowerCase().includes(q) || 
+            i.followedName.toLowerCase().includes(q)
+        );
+    }, [interactions, searchQuery]);
+
     const getPerformanceColor = (rate: number) => {
         if (rate < 0) return 'text-gray-400';
         if (rate === 100) return 'text-green-400';
         if (rate >= 60) return 'text-blue-400';
         return 'text-red-400';
     };
+    
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'validated': return <span className="px-2 py-1 text-xs font-bold text-green-300 bg-green-900/50 rounded">Confirmado</span>;
+            case 'pending_validation': return <span className="px-2 py-1 text-xs font-bold text-yellow-300 bg-yellow-900/50 rounded">Pendente</span>;
+            case 'rejected': return <span className="px-2 py-1 text-xs font-bold text-orange-300 bg-orange-900/50 rounded">Não Seguiu</span>;
+            case 'unfollowed': return <span className="px-2 py-1 text-xs font-bold text-red-300 bg-red-900/50 rounded">Deixou de Seguir</span>;
+            default: return <span className="text-gray-400">{status}</span>;
+        }
+    }
 
     const activeParticipantsForSelect = useMemo(() => {
         return participants.filter(p => !p.isBanned).sort((a, b) => a.promoterName.localeCompare(b.promoterName));
@@ -166,121 +204,195 @@ const AdminFollowLoopPage: React.FC = () => {
                 </button>
             </div>
 
-            {/* Configuration Panel */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <CogIcon className="w-6 h-6 text-primary" />
-                    Configurar Elegibilidade
-                </h2>
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                    <div className="flex-grow">
-                        <p className="text-gray-300 text-sm mb-2">
-                            Defina a taxa mínima de aproveitamento em tarefas (posts) que uma divulgadora precisa ter para participar desta dinâmica.
-                        </p>
-                        <div className="flex items-center gap-4">
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max="100" 
-                                value={threshold} 
-                                onChange={(e) => setThreshold(Number(e.target.value))}
-                                className="flex-grow h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary"
-                            />
-                            <span className="text-2xl font-bold text-primary w-16 text-right">{threshold}%</span>
+            {/* Tabs */}
+            <div className="flex space-x-4 mb-6 border-b border-gray-700 pb-1">
+                <button 
+                    onClick={() => { setViewMode('participants'); setSearchQuery(''); }}
+                    className={`flex items-center gap-2 px-4 py-2 font-medium border-b-2 transition-colors ${viewMode === 'participants' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+                >
+                    <UsersIcon className="w-5 h-5" />
+                    Visão Geral
+                </button>
+                <button 
+                    onClick={() => { setViewMode('interactions'); setSearchQuery(''); }}
+                    className={`flex items-center gap-2 px-4 py-2 font-medium border-b-2 transition-colors ${viewMode === 'interactions' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+                >
+                    <ListBulletIcon className="w-5 h-5" />
+                    Histórico de Conexões
+                </button>
+            </div>
+
+            {viewMode === 'participants' && (
+                <>
+                     {/* Configuration Panel */}
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <CogIcon className="w-6 h-6 text-primary" />
+                            Configurar Elegibilidade
+                        </h2>
+                        <div className="flex flex-col sm:flex-row items-center gap-6">
+                            <div className="flex-grow">
+                                <p className="text-gray-300 text-sm mb-2">
+                                    Defina a taxa mínima de aproveitamento em tarefas (posts) que uma divulgadora precisa ter para participar desta dinâmica.
+                                </p>
+                                <div className="flex items-center gap-4">
+                                    <input 
+                                        type="range" 
+                                        min="0" 
+                                        max="100" 
+                                        value={threshold} 
+                                        onChange={(e) => setThreshold(Number(e.target.value))}
+                                        className="flex-grow h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary"
+                                    />
+                                    <span className="text-2xl font-bold text-primary w-16 text-right">{threshold}%</span>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleSaveThreshold} 
+                                disabled={isSavingThreshold}
+                                className="px-6 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
+                            >
+                                {isSavingThreshold ? 'Salvando...' : 'Salvar Regra'}
+                            </button>
                         </div>
                     </div>
-                    <button 
-                        onClick={handleSaveThreshold} 
-                        disabled={isSavingThreshold}
-                        className="px-6 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
-                    >
-                        {isSavingThreshold ? 'Salvando...' : 'Salvar Regra'}
-                    </button>
-                </div>
-            </div>
 
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                    <p className="text-gray-400 flex-grow">
-                        Monitore a dinâmica de seguidores. Identifique participantes com muitas negativas ou baixo desempenho.
-                    </p>
-                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0">
-                        <UserPlusIcon className="w-5 h-5" />
-                        Atribuir Conexão Manual
-                    </button>
-                </div>
+                    <div className="bg-secondary shadow-lg rounded-lg p-6">
+                        <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+                            <p className="text-gray-400 flex-grow">
+                                Monitore a dinâmica de seguidores. Identifique participantes com muitas negativas ou baixo desempenho.
+                            </p>
+                            <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0">
+                                <UserPlusIcon className="w-5 h-5" />
+                                Atribuir Conexão Manual
+                            </button>
+                        </div>
 
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                    <div className="relative flex-grow">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar nome ou instagram..." 
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                        />
+                        <div className="flex flex-col md:flex-row gap-4 mb-6">
+                            <div className="relative flex-grow">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar nome ou instagram..." 
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                                />
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                                <button onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'all' ? 'bg-primary' : 'bg-gray-700'}`}>Todos</button>
+                                <button onClick={() => setFilterType('active')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'active' ? 'bg-primary' : 'bg-gray-700'}`}>Ativos</button>
+                                <button onClick={() => setFilterType('high_rejection')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'high_rejection' ? 'bg-primary' : 'bg-gray-700'}`}>Alerta de Negativas</button>
+                                <button onClick={() => setFilterType('banned')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'banned' ? 'bg-primary' : 'bg-gray-700'}`}>Banidos</button>
+                            </div>
+                        </div>
+
+                        {isLoading ? <p className="text-center py-8">Carregando...</p> : (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-700">
+                                    <thead className="bg-gray-700/50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Participante</th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Seguiu (Diz)</th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ganhou</th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-red-400 uppercase" title="Vezes que alguém disse que ela NÃO seguiu">Negativas</th>
+                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Taxa Tarefas</th>
+                                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-700">
+                                        {filteredParticipants.map(p => (
+                                            <tr key={p.id} className={`hover:bg-gray-700/40 ${p.isBanned ? 'opacity-50' : ''}`}>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <div className="flex items-center">
+                                                        <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
+                                                        <div>
+                                                            <div className="font-medium text-white">{p.promoterName}</div>
+                                                            <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followingCount}</td>
+                                                <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followersCount}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {(p.rejectedCount || 0) > 0 ? (
+                                                        <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span>
+                                                    ) : <span className="text-gray-500">-</span>}
+                                                </td>
+                                                <td className="px-4 py-3 text-center font-bold text-sm">
+                                                    <span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <button 
+                                                        onClick={() => handleToggleBan(p)}
+                                                        disabled={processingId === p.id}
+                                                        className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
+                                                    >
+                                                        {processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {filteredParticipants.length === 0 && <p className="text-center text-gray-400 py-8">Nenhum participante encontrado.</p>}
+                            </div>
+                        )}
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        <button onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'all' ? 'bg-primary' : 'bg-gray-700'}`}>Todos</button>
-                        <button onClick={() => setFilterType('active')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'active' ? 'bg-primary' : 'bg-gray-700'}`}>Ativos</button>
-                        <button onClick={() => setFilterType('high_rejection')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'high_rejection' ? 'bg-primary' : 'bg-gray-700'}`}>Alerta de Negativas</button>
-                        <button onClick={() => setFilterType('banned')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'banned' ? 'bg-primary' : 'bg-gray-700'}`}>Banidos</button>
-                    </div>
-                </div>
+                </>
+            )}
 
-                {isLoading ? <p className="text-center py-8">Carregando...</p> : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-700/50">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Participante</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Seguiu (Diz)</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ganhou</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-red-400 uppercase" title="Vezes que alguém disse que ela NÃO seguiu">Negativas</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Taxa Tarefas</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {filteredParticipants.map(p => (
-                                    <tr key={p.id} className={`hover:bg-gray-700/40 ${p.isBanned ? 'opacity-50' : ''}`}>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
-                                                <div>
-                                                    <div className="font-medium text-white">{p.promoterName}</div>
-                                                    <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followingCount}</td>
-                                        <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followersCount}</td>
-                                        <td className="px-4 py-3 text-center">
-                                            {(p.rejectedCount || 0) > 0 ? (
-                                                <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span>
-                                            ) : <span className="text-gray-500">-</span>}
-                                        </td>
-                                        <td className="px-4 py-3 text-center font-bold text-sm">
-                                            <span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button 
-                                                onClick={() => handleToggleBan(p)}
-                                                disabled={processingId === p.id}
-                                                className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
-                                            >
-                                                {processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}
-                                            </button>
-                                        </td>
+            {viewMode === 'interactions' && (
+                <div className="bg-secondary shadow-lg rounded-lg p-6">
+                    <div className="flex flex-col md:flex-row gap-4 mb-6">
+                        <div className="relative flex-grow">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar nome de seguidora ou alvo..." 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            />
+                        </div>
+                    </div>
+
+                    {isLoading ? <p className="text-center py-8">Carregando histórico...</p> : (
+                        <div className="overflow-x-auto">
+                             <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-gray-700/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Seguidora (Quem fez)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Alvo (Quem recebeu)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {filteredParticipants.length === 0 && <p className="text-center text-gray-400 py-8">Nenhum participante encontrado.</p>}
-                    </div>
-                )}
-            </div>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {filteredInteractions.map(interaction => (
+                                        <tr key={interaction.id} className="hover:bg-gray-700/40">
+                                            <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
+                                                {formatDate(interaction.createdAt)}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="text-sm text-white font-medium">{interaction.followerName}</div>
+                                                <div className="text-xs text-pink-400">{interaction.followerInstagram}</div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                 <div className="text-sm text-white">{interaction.followedName}</div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {getStatusBadge(interaction.status)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {filteredInteractions.length === 0 && <p className="text-center text-gray-400 py-8">Nenhuma interação encontrada.</p>}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Manual Assignment Modal */}
             {isManualModalOpen && (

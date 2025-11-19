@@ -291,6 +291,25 @@ export const getAllParticipantsForAdmin = async (organizationId: string): Promis
     }
 }
 
+export const getAllFollowInteractions = async (organizationId: string): Promise<FollowInteraction[]> => {
+    try {
+        // Note: This requires a composite index on organizationId + createdAt DESC
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('organizationId', '==', organizationId)
+            .orderBy('createdAt', 'desc')
+            .limit(500); // Limit to latest 500 to prevent overloading
+        
+        const snap = await q.get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    } catch (error) {
+        console.error("Error fetching interactions history:", error);
+         if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Índice do banco de dados ausente. Verifique o console para criar.");
+        }
+        throw new Error("Falha ao buscar histórico de conexões.");
+    }
+}
+
 export const toggleParticipantBan = async (participantId: string, isBanned: boolean): Promise<void> => {
     try {
         await firestore.collection(COLLECTION_PARTICIPANTS).doc(participantId).update({
