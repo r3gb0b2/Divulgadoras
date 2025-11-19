@@ -26,7 +26,12 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
 
       await participantRef.update({
         isActive: true,
-        lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
+        lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+        // Update profile details in case they changed
+        promoterName: promoter.name,
+        instagram: promoter.instagram,
+        photoUrl: promoter.photoUrls[0] || '',
+        state: promoter.state || '',
       });
     } else {
       const newParticipant: FollowLoopParticipant = {
@@ -43,6 +48,7 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
         followersCount: 0,
         followingCount: 0,
         rejectedCount: 0,
+        state: promoter.state || '',
       };
       await participantRef.set(newParticipant);
     }
@@ -68,7 +74,7 @@ export const getParticipantStatus = async (promoterId: string): Promise<FollowLo
 
 // --- Core Logic: Get Next Profile ---
 
-export const getNextProfileToFollow = async (currentPromoterId: string, organizationId: string): Promise<FollowLoopParticipant | null> => {
+export const getNextProfileToFollow = async (currentPromoterId: string, organizationId: string, stateFilter?: string): Promise<FollowLoopParticipant | null> => {
   try {
     // 1. Get IDs already followed by current user
     const interactionsQuery = firestore.collection(COLLECTION_INTERACTIONS)
@@ -81,13 +87,17 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
       followedIds.add(doc.data().followedId);
     });
 
-    // 2. Get potential targets (active, not banned, same org)
-    // REMOVED orderBy('lastActiveAt') to avoid missing index errors.
-    // Increased limit to 2000 to cast a wider net since we can't rely on sorting by activity yet.
-    // And perform shuffling client-side.
-    const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
+    // 2. Get potential targets (broad query)
+    let potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
       .limit(2000); 
+
+    if (stateFilter) {
+        // Attempt to filter by state if the field exists in the index
+        // Note: If older records don't have 'state', this might exclude them,
+        // but the 'joinFollowLoop' updates 'state', so active users will have it.
+        potentialQuery = potentialQuery.where('state', '==', stateFilter);
+    }
 
     const potentialSnap = await potentialQuery.get();
     
@@ -95,32 +105,46 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
     const candidates: FollowLoopParticipant[] = [];
     potentialSnap.forEach(doc => {
       const data = doc.data();
-      // Filter manually for state/banned/active to ensure we catch everyone even if index is partial
-      // Note: We removed 'isActive' filter from query to allow finding them even if legacy data is weird,
-      // but we apply it here.
-      // Self-healing: If a record exists but missing 'state' or other fields, we might want to include it 
-      // if we can infer, but for now let's stick to strict filtering.
+      
+      // Self-healing: If we see a record without 'state', and we know the current context,
+      // we could technically assume, but for now we rely on 'isActive'.
+      
       if (
           !followedIds.has(doc.id) && 
           data.isActive === true && 
           data.isBanned === false
       ) {
-         // State filtering: If the 'state' field exists on participant, filter by it.
-         // Since we don't have state passed here easily without changing signature everywhere,
-         // we rely on the fact that 'organizationId' is usually the main partition.
-         // If strict state filtering is needed, it should be passed to this function.
-         // Assuming 'organizationId' creates enough separation for now.
          candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
       }
     });
 
+    if (candidates.length === 0) {
+        // Fallback: If no candidates found with state filter, try without it (for legacy records)
+        // only if we applied a filter initially.
+        if (stateFilter) {
+             const broadQuery = firestore.collection(COLLECTION_PARTICIPANTS)
+                .where('organizationId', '==', organizationId)
+                .limit(500);
+             const broadSnap = await broadQuery.get();
+             broadSnap.forEach(doc => {
+                 const data = doc.data();
+                 // Include if active, not banned, not followed, AND state is missing/undefined (legacy)
+                 if (!followedIds.has(doc.id) && data.isActive === true && data.isBanned === false && !data.state) {
+                     candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
+                 }
+             });
+        }
+    }
+    
     if (candidates.length === 0) return null;
 
-    // 4. Return a random candidate from the pool (Fisher-Yates shuffle equivalent for single pick)
-    // Or better: shuffle the whole array and pick first, or just pick random index.
-    // Random index is O(1).
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    return candidates[randomIndex];
+    // 4. Fisher-Yates Shuffle for randomness
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    return candidates[0];
 
   } catch (error: any) {
     console.error('Error getting next profile:', error);
@@ -230,7 +254,7 @@ export const getRejectedFollowsReceived = async (promoterId: string): Promise<Fo
         // This fixes the "Instagram not found" error for older interactions
         const missingInfo = interactions.filter(i => !i.followedInstagram);
         if (missingInfo.length > 0) {
-            const idsToFetch = [...new Set(missingInfo.map(i => i.followedId))];
+            const idsToFetch: string[] = [...new Set(missingInfo.map(i => i.followedId))];
             const profiles = await Promise.all(idsToFetch.map(id => getParticipantStatus(id)));
             const profileMap = new Map<string, FollowLoopParticipant>();
             profiles.forEach(p => { if (p) profileMap.set(p.id, p); });
@@ -356,9 +380,11 @@ export const undoRejection = async (interactionId: string): Promise<void> => {
 };
 
 // NEW: Report Unfollow (Reverse a validation and apply penalty)
-export const reportUnfollow = async (interactionId: string): Promise<void> => {
+export const reportUnfollow = async (interactionId: string, offenderId: string, reporterId: string): Promise<void> => {
     const batch = firestore.batch();
     const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+    const offenderRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(offenderId);
+    const reporterRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(reporterId);
 
     try {
         const interactionSnap = await interactionRef.get();
@@ -369,24 +395,22 @@ export const reportUnfollow = async (interactionId: string): Promise<void> => {
             throw new Error("Esta interação não está validada, não é possível reportar unfollow.");
         }
 
-        const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followerId);
-        const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(data.followedId);
-
-        // 1. Update interaction status to rejected
+        // 1. Update interaction status to 'unfollowed' (distinct from 'rejected' which implies never followed)
         batch.update(interactionRef, {
-            status: 'rejected',
-            validatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp of rejection
+            status: 'unfollowed',
+            validatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp of status change
         });
 
-        // 2. Penalize follower (the one who unfollowed)
-        // Decrement 'followingCount', Increment 'rejectedCount'
-        batch.update(followerRef, {
+        // 2. Penalize offender (the one who unfollowed)
+        // Decrement 'followingCount' (since they aren't following anymore)
+        // Increment 'rejectedCount' (as a penalty/strike)
+        batch.update(offenderRef, {
             followingCount: firebase.firestore.FieldValue.increment(-1),
             rejectedCount: firebase.firestore.FieldValue.increment(1)
         });
 
-        // 3. Remove follower count from followed (me)
-        batch.update(followedRef, {
+        // 3. Remove follower count from reporter (me)
+        batch.update(reporterRef, {
             followersCount: firebase.firestore.FieldValue.increment(-1)
         });
 
@@ -419,7 +443,7 @@ export const getAllFollowInteractions = async (organizationId: string): Promise<
         const q = firestore.collection(COLLECTION_INTERACTIONS)
             .where('organizationId', '==', organizationId)
             .orderBy('createdAt', 'desc')
-            .limit(500); // Reasonable limit for history view
+            .limit(1000); // Increased limit for better history view
         
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));

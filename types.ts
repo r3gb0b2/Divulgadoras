@@ -353,6 +353,7 @@ export interface FollowLoopParticipant {
   followersCount: number;
   followingCount: number;
   rejectedCount?: number; // New field to track negative feedback (people saying she didn't follow back)
+  state?: string;
 }
 
 export interface FollowInteraction {
@@ -360,7 +361,7 @@ export interface FollowInteraction {
   followerId: string; // Promoter ID who clicked follow
   followedId: string; // Promoter ID who was followed
   organizationId: string;
-  status: 'pending_validation' | 'validated' | 'rejected';
+  status: 'pending_validation' | 'validated' | 'rejected' | 'unfollowed';
   createdAt: Timestamp | FieldValue;
   validatedAt?: Timestamp | FieldValue | null;
   followerName: string;

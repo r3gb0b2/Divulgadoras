@@ -2,21 +2,31 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction } from '../services/followLoopService';
+import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction, getAllFollowInteractions } from '../services/followLoopService';
 import { getStatsForPromoter } from '../services/postService';
 import { getOrganization, updateOrganization } from '../services/organizationService';
-import { FollowLoopParticipant } from '../types';
-import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon } from '../components/Icons';
+import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
+import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon, RefreshIcon } from '../components/Icons';
 
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
 }
 
+const formatDate = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
 const AdminFollowLoopPage: React.FC = () => {
     const navigate = useNavigate();
     const { selectedOrgId } = useAdminAuth();
     
+    const [activeTab, setActiveTab] = useState<'participants' | 'history'>('participants');
+    
     const [participants, setParticipants] = useState<ParticipantWithStats[]>([]);
+    const [interactions, setInteractions] = useState<FollowInteraction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -34,41 +44,47 @@ const AdminFollowLoopPage: React.FC = () => {
     const [isManualProcessing, setIsManualProcessing] = useState(false);
 
     useEffect(() => {
-        const fetchData = async () => {
-            if (!selectedOrgId) return;
-            setIsLoading(true);
-            setError('');
-            try {
-                // 1. Fetch Organization Settings
-                const orgData = await getOrganization(selectedOrgId);
-                if (orgData) {
-                    setThreshold(orgData.followLoopThreshold || 0);
-                }
-
-                // 2. Fetch Participants
-                const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
-                
-                // 3. Enrich with stats
-                const enriched = await Promise.all(loopParticipants.map(async (p) => {
-                    try {
-                        const { stats } = await getStatsForPromoter(p.promoterId);
-                        const successful = stats.completed + stats.acceptedJustifications;
-                        const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
-                        return { ...p, taskCompletionRate: rate };
-                    } catch (e) {
-                        return { ...p, taskCompletionRate: -1 };
-                    }
-                }));
-
-                setParticipants(enriched);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
         fetchData();
     }, [selectedOrgId]);
+
+    const fetchData = async () => {
+        if (!selectedOrgId) return;
+        setIsLoading(true);
+        setError('');
+        try {
+            // 1. Fetch Organization Settings
+            const orgData = await getOrganization(selectedOrgId);
+            if (orgData) {
+                setThreshold(orgData.followLoopThreshold || 0);
+            }
+
+            // 2. Fetch Participants
+            const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
+            
+            // 3. Enrich with stats
+            const enriched = await Promise.all(loopParticipants.map(async (p) => {
+                try {
+                    const { stats } = await getStatsForPromoter(p.promoterId);
+                    const successful = stats.completed + stats.acceptedJustifications;
+                    const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
+                    return { ...p, taskCompletionRate: rate };
+                } catch (e) {
+                    return { ...p, taskCompletionRate: -1 };
+                }
+            }));
+
+            setParticipants(enriched);
+            
+            // 4. Fetch Interactions History
+            const history = await getAllFollowInteractions(selectedOrgId);
+            setInteractions(history);
+
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleSaveThreshold = async () => {
         if (!selectedOrgId) return;
@@ -117,6 +133,7 @@ const AdminFollowLoopPage: React.FC = () => {
             setIsManualModalOpen(false);
             setManualFollower('');
             setManualFollowed('');
+            fetchData(); // Refresh history
         } catch (err: any) {
             alert(err.message);
         } finally {
@@ -144,12 +161,42 @@ const AdminFollowLoopPage: React.FC = () => {
 
         return result;
     }, [participants, searchQuery, filterType]);
+    
+    const filteredHistory = useMemo(() => {
+        let result = interactions;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(i => 
+                i.followerName.toLowerCase().includes(q) ||
+                i.followedName.toLowerCase().includes(q)
+            );
+        }
+        return result;
+    }, [interactions, searchQuery]);
 
     const getPerformanceColor = (rate: number) => {
         if (rate < 0) return 'text-gray-400';
         if (rate === 100) return 'text-green-400';
         if (rate >= 60) return 'text-blue-400';
         return 'text-red-400';
+    };
+    
+    const getInteractionStatusBadge = (status: FollowInteraction['status']) => {
+        const styles = {
+            validated: "bg-green-900/50 text-green-300",
+            pending_validation: "bg-yellow-900/50 text-yellow-300",
+            rejected: "bg-red-900/50 text-red-300",
+            unfollowed: "bg-gray-700 text-gray-300 border border-red-500/50",
+        };
+        const labels = {
+            validated: "Confirmado",
+            pending_validation: "Pendente",
+            rejected: "Não Seguiu",
+            unfollowed: "Deixou de Seguir",
+        };
+        // Cast to string in case of legacy data types
+        const s = status as keyof typeof styles;
+        return <span className={`px-2 py-1 rounded text-xs font-bold whitespace-nowrap ${styles[s] || styles.pending_validation}`}>{labels[s] || status}</span>;
     };
 
     const activeParticipantsForSelect = useMemo(() => {
@@ -200,84 +247,137 @@ const AdminFollowLoopPage: React.FC = () => {
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                    <p className="text-gray-400 flex-grow">
-                        Monitore a dinâmica de seguidores. Identifique participantes com muitas negativas ou baixo desempenho.
-                    </p>
-                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0">
-                        <UserPlusIcon className="w-5 h-5" />
-                        Atribuir Conexão Manual
+                
+                {/* Tabs */}
+                <div className="flex border-b border-gray-700 mb-6">
+                    <button
+                        className={`py-2 px-4 font-medium ${activeTab === 'participants' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+                        onClick={() => setActiveTab('participants')}
+                    >
+                        Visão Geral (Participantes)
+                    </button>
+                    <button
+                        className={`py-2 px-4 font-medium ${activeTab === 'history' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
+                        onClick={() => setActiveTab('history')}
+                    >
+                        Histórico de Interações
                     </button>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                    <div className="relative flex-grow">
+                <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+                    <div className="relative flex-grow w-full md:w-auto">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
                         <input 
                             type="text" 
-                            placeholder="Buscar nome ou instagram..." 
+                            placeholder={activeTab === 'participants' ? "Buscar participante..." : "Buscar na histórico..."}
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                         />
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        <button onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'all' ? 'bg-primary' : 'bg-gray-700'}`}>Todos</button>
-                        <button onClick={() => setFilterType('active')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'active' ? 'bg-primary' : 'bg-gray-700'}`}>Ativos</button>
-                        <button onClick={() => setFilterType('high_rejection')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'high_rejection' ? 'bg-primary' : 'bg-gray-700'}`}>Alerta de Negativas</button>
-                        <button onClick={() => setFilterType('banned')} className={`px-4 py-2 rounded-md whitespace-nowrap ${filterType === 'banned' ? 'bg-primary' : 'bg-gray-700'}`}>Banidos</button>
-                    </div>
+                    
+                    {activeTab === 'participants' && (
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            <button onClick={() => setFilterType('all')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'all' ? 'bg-primary' : 'bg-gray-700'}`}>Todos</button>
+                            <button onClick={() => setFilterType('active')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'active' ? 'bg-primary' : 'bg-gray-700'}`}>Ativos</button>
+                            <button onClick={() => setFilterType('high_rejection')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'high_rejection' ? 'bg-primary' : 'bg-gray-700'}`}>Alertas</button>
+                            <button onClick={() => setFilterType('banned')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'banned' ? 'bg-primary' : 'bg-gray-700'}`}>Banidos</button>
+                        </div>
+                    )}
+                    
+                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0 text-sm">
+                        <UserPlusIcon className="w-4 h-4" />
+                        Criar Conexão
+                    </button>
+                     <button onClick={fetchData} className="p-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex-shrink-0" title="Atualizar">
+                        <RefreshIcon className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {isLoading ? <p className="text-center py-8">Carregando...</p> : (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-700/50">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Participante</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Seguiu (Diz)</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ganhou</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-red-400 uppercase" title="Vezes que alguém disse que ela NÃO seguiu">Negativas</th>
-                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Taxa Tarefas</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {filteredParticipants.map(p => (
-                                    <tr key={p.id} className={`hover:bg-gray-700/40 ${p.isBanned ? 'opacity-50' : ''}`}>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
-                                                <div>
-                                                    <div className="font-medium text-white">{p.promoterName}</div>
-                                                    <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followingCount}</td>
-                                        <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followersCount}</td>
-                                        <td className="px-4 py-3 text-center">
-                                            {(p.rejectedCount || 0) > 0 ? (
-                                                <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span>
-                                            ) : <span className="text-gray-500">-</span>}
-                                        </td>
-                                        <td className="px-4 py-3 text-center font-bold text-sm">
-                                            <span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button 
-                                                onClick={() => handleToggleBan(p)}
-                                                disabled={processingId === p.id}
-                                                className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
-                                            >
-                                                {processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}
-                                            </button>
-                                        </td>
+                        {activeTab === 'participants' ? (
+                            <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-gray-700/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Participante</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Seguiu (Diz)</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Ganhou</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-red-400 uppercase" title="Vezes que alguém disse que ela NÃO seguiu">Negativas</th>
+                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-300 uppercase">Taxa Tarefas</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {filteredParticipants.length === 0 && <p className="text-center text-gray-400 py-8">Nenhum participante encontrado.</p>}
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {filteredParticipants.map(p => (
+                                        <tr key={p.id} className={`hover:bg-gray-700/40 ${p.isBanned ? 'opacity-50' : ''}`}>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
+                                                    <div>
+                                                        <div className="font-medium text-white">{p.promoterName}</div>
+                                                        <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followingCount}</td>
+                                            <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followersCount}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                {(p.rejectedCount || 0) > 0 ? (
+                                                    <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span>
+                                                ) : <span className="text-gray-500">-</span>}
+                                            </td>
+                                            <td className="px-4 py-3 text-center font-bold text-sm">
+                                                <span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button 
+                                                    onClick={() => handleToggleBan(p)}
+                                                    disabled={processingId === p.id}
+                                                    className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
+                                                >
+                                                    {processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredParticipants.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-gray-400">Nenhum participante encontrado.</td></tr>}
+                                </tbody>
+                            </table>
+                        ) : (
+                            /* HISTORY TABLE */
+                            <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-gray-700/50">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Seguidora (Quem fez)</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Alvo (Quem recebeu)</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {filteredHistory.map(interaction => (
+                                        <tr key={interaction.id} className="hover:bg-gray-700/40">
+                                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-400">
+                                                {formatDate(interaction.createdAt)}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                 <div className="font-medium text-white text-sm">{interaction.followerName}</div>
+                                                 <div className="text-xs text-gray-500">{interaction.followerInstagram}</div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                 <div className="font-medium text-white text-sm">{interaction.followedName}</div>
+                                                 <div className="text-xs text-gray-500">{interaction.followedInstagram}</div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                {getInteractionStatusBadge(interaction.status)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredHistory.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhum registro encontrado.</td></tr>}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 )}
             </div>

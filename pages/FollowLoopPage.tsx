@@ -216,11 +216,11 @@ const FollowLoopPage: React.FC = () => {
       }
   };
   
-  const handleReportUnfollow = async (interactionId: string) => {
+  const handleReportUnfollow = async (interactionId: string, offenderId: string) => {
       if (!promoter) return;
       if (!window.confirm("Tem certeza que deseja reportar que ela parou de seguir? Isso removerá a validação e adicionará um ponto negativo para ela.")) return;
       try {
-          await reportUnfollow(interactionId);
+          await reportUnfollow(interactionId, offenderId, promoter.id);
           loadFollowers(promoter.id); // Refresh list
           alert("Reportado com sucesso.");
       } catch (err: any) {
@@ -572,7 +572,7 @@ const FollowLoopPage: React.FC = () => {
                                     <CheckCircleIcon className="w-5 h-5" />
                                 </div>
                                 <button 
-                                    onClick={() => handleReportUnfollow(f.id)}
+                                    onClick={() => handleReportUnfollow(f.id, f.followerId)}
                                     className="p-2 text-gray-400 hover:text-red-400 bg-gray-700/50 rounded-full hover:bg-gray-700 transition-colors"
                                     title="Parou de Seguir"
                                 >
