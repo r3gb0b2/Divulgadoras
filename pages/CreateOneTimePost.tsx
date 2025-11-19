@@ -90,9 +90,9 @@ const CreateOneTimePost: React.FC = () => {
             setError("Dados do administrador inválidos.");
             return;
         }
-        const { campaignId, guestListName, type, textContent, googleDriveUrl } = formData;
-        if (!campaignId || !guestListName.trim()) {
-            setError("Evento e Nome da Lista são obrigatórios.");
+        const { campaignId, eventName, guestListName, type, textContent, googleDriveUrl } = formData;
+        if (!campaignId || !guestListName.trim() || !eventName.trim()) {
+            setError("Categoria, Nome do Evento e Nome da Lista são obrigatórios.");
             return;
         }
          if (type === 'image' && !mediaFile && !googleDriveUrl) {
@@ -117,7 +117,7 @@ const CreateOneTimePost: React.FC = () => {
         setError('');
         try {
             const selectedCampaign = campaigns.find(c => c.id === campaignId);
-            if (!selectedCampaign) throw new Error("Evento inválido.");
+            if (!selectedCampaign) throw new Error("Categoria inválida.");
 
             let finalMediaUrl: string | undefined = undefined;
             if (mediaFile) {
@@ -132,6 +132,7 @@ const CreateOneTimePost: React.FC = () => {
                 organizationId: selectedOrgId,
                 campaignId: selectedCampaign.id,
                 campaignName: selectedCampaign.name,
+                eventName: formData.eventName.trim(),
                 guestListName: formData.guestListName.trim(),
                 type: formData.type,
                 instructions: formData.instructions,
@@ -141,7 +142,6 @@ const CreateOneTimePost: React.FC = () => {
                 submissionLimit: hasLimit ? parseInt(submissionLimit) : undefined,
                 successMessage: formData.successMessage.trim() || undefined,
                 femaleOnly: formData.femaleOnly,
-                ...(formData.eventName.trim() && { eventName: formData.eventName.trim() }),
                 ...(formData.type === 'text' && { textContent: formData.textContent }),
                 ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
                 ...(formData.googleDriveUrl.trim() && { googleDriveUrl: formData.googleDriveUrl.trim() }),
@@ -171,12 +171,21 @@ const CreateOneTimePost: React.FC = () => {
 
                 <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
                     <legend className="px-2 font-semibold text-primary">Informações Básicas</legend>
-                    <select name="campaignId" value={formData.campaignId} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
-                        <option value="" disabled>Selecione um Evento</option>
-                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
-                    </select>
-                    <input type="text" name="eventName" placeholder="Nome do Evento Específico (Opcional)" value={formData.eventName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                    <input type="text" name="guestListName" placeholder="Nome da Lista de Convidados (ex: VIP Post)" value={formData.guestListName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria / Grupo (Interno)</label>
+                        <select name="campaignId" value={formData.campaignId} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="" disabled>Selecione a Categoria</option>
+                            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
+                        </select>
+                    </div>
+                    <div>
+                         <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Evento (Público)</label>
+                         <input type="text" name="eventName" placeholder="Nome do Evento que aparecerá no site" value={formData.eventName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Nome da Lista</label>
+                        <input type="text" name="guestListName" placeholder="Ex: Lista VIP, Lista Trans, Lista Amiga" value={formData.guestListName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <div className="flex-1">
                              <label className="block text-sm font-medium text-gray-400">Data Final para a Lista (opcional)</label>

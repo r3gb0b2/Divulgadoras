@@ -420,8 +420,7 @@ const OneTimePostPage: React.FC = () => {
     return (
         <div className="max-w-2xl mx-auto">
             <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{post.campaignName}</h1>
-                {post.eventName && <p className="text-center text-primary font-semibold">{post.eventName}</p>}
+                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{post.eventName || post.campaignName}</h1>
                 
                 <div className={`text-center my-4 p-3 rounded-md text-white font-semibold text-base ${
                     countdownStatus === 'open' ? 'bg-green-900/70' :

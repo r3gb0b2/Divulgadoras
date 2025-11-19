@@ -140,6 +140,11 @@ const EditOneTimePost: React.FC = () => {
             setError("Por favor, informe um número válido para o limite.");
             return;
         }
+        
+        if (!formData.eventName.trim()) {
+            setError("O nome do evento é obrigatório.");
+            return;
+        }
 
         setIsSubmitting(true);
         setError('');
@@ -158,6 +163,7 @@ const EditOneTimePost: React.FC = () => {
             const postData: Partial<OneTimePost> = {
                 ...formData,
                 campaignName: selectedCampaign?.name,
+                eventName: formData.eventName.trim(),
                 mediaUrl: finalMediaUrl || undefined,
                 expiresAt: formData.expiresAt ? firebase.firestore.Timestamp.fromDate(new Date(formData.expiresAt)) : null,
                 submissionLimit: hasLimit ? parseInt(submissionLimit) : null as any, // using 'as any' to pass null which Firestore interprets as delete or null value depending on merge
@@ -200,12 +206,21 @@ const EditOneTimePost: React.FC = () => {
 
                 <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
                     <legend className="px-2 font-semibold text-primary">Informações Básicas</legend>
-                    <select name="campaignId" value={formData.campaignId} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
-                        <option value="" disabled>Selecione um Evento</option>
-                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
-                    </select>
-                    <input type="text" name="eventName" placeholder="Nome do Evento Específico (Opcional)" value={formData.eventName} onChange={handleChange} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
-                    <input type="text" name="guestListName" placeholder="Nome da Lista de Convidados (ex: VIP Post)" value={formData.guestListName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Categoria / Grupo (Interno)</label>
+                        <select name="campaignId" value={formData.campaignId} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="" disabled>Selecione a Categoria</option>
+                            {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
+                        </select>
+                    </div>
+                    <div>
+                         <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Evento (Público)</label>
+                         <input type="text" name="eventName" placeholder="Nome do Evento que aparecerá no site" value={formData.eventName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                    </div>
+                    <div>
+                         <label className="block text-sm font-medium text-gray-300 mb-1">Nome da Lista</label>
+                         <input type="text" name="guestListName" placeholder="Nome da Lista de Convidados (ex: VIP Post)" value={formData.guestListName} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <div className="flex-1">
                             <label className="block text-sm font-medium text-gray-400">Data Final para a Lista (opcional)</label>

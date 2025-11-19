@@ -203,10 +203,10 @@ const OneTimePostDetails: React.FC = () => {
                 {isLoading ? <p className="text-center">Carregando...</p> : error ? <p className="text-red-400">{error}</p> : post && (
                     <>
                         <div className="mb-6 pb-4 border-b border-gray-700">
-                             <h2 className="text-2xl font-bold">{post.campaignName}</h2>
-                             {post.eventName && <p className="text-lg text-primary">{post.eventName}</p>}
-                             <p className="text-sm text-gray-400">Nome da Lista: <span className="font-semibold">{post.guestListName}</span></p>
-                             {post.expiresAt && <p className="text-sm text-yellow-400">Expira em: <span className="font-semibold">{formatDate(post.expiresAt)}</span></p>}
+                             <h2 className="text-2xl font-bold text-white">{post.eventName}</h2>
+                             <p className="text-gray-400 mt-1">Categoria: <span className="text-primary">{post.campaignName}</span></p>
+                             <p className="text-sm text-gray-400 mt-1">Nome da Lista: <span className="font-semibold">{post.guestListName}</span></p>
+                             {post.expiresAt && <p className="text-sm text-yellow-400 mt-1">Expira em: <span className="font-semibold">{formatDate(post.expiresAt)}</span></p>}
                         </div>
                         
                         <div className="flex justify-between items-center mb-4">

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -91,7 +92,7 @@ const AdminOneTimePosts: React.FC = () => {
                     <table className="min-w-full divide-y divide-gray-700">
                         <thead className="bg-gray-700/50">
                             <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Evento</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Evento (Público)</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Nome da Lista</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
@@ -106,8 +107,8 @@ const AdminOneTimePosts: React.FC = () => {
                                 posts.map(post => (
                                     <tr key={post.id} className="hover:bg-gray-700/40">
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                            <p className="font-medium text-white">{post.campaignName}</p>
-                                            <p className="text-sm text-gray-400">{post.eventName}</p>
+                                            <p className="font-medium text-white">{post.eventName}</p>
+                                            <p className="text-sm text-gray-400">{post.campaignName}</p>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">{post.guestListName}</td>
                                         <td className="px-4 py-3 whitespace-nowrap">
