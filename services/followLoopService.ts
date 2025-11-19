@@ -204,10 +204,6 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
   const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
   const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
   
-  // Note: In a real scenario, we would also update the 'followed' participant's followerCount,
-  // but since we don't have the followedId passed easily here without fetching, we skip it for now
-  // or fetch the interaction doc first. For admin/display correctness, fetching is better.
-  
   try {
     const interactionSnap = await interactionRef.get();
     if (!interactionSnap.exists) throw new Error("Interação não encontrada.");
@@ -247,6 +243,37 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     console.error('Error validating follow:', error);
     throw new Error('Não foi possível validar.');
   }
+};
+
+export const reportUnfollow = async (interactionId: string, offenderId: string, reporterId: string): Promise<void> => {
+    const batch = firestore.batch();
+    const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
+    const offenderRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(offenderId);
+    const reporterRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(reporterId);
+
+    try {
+        // 1. Mark interaction as 'unfollowed'
+        batch.update(interactionRef, {
+            status: 'unfollowed',
+            validatedAt: firebase.firestore.FieldValue.serverTimestamp() // Update timestamp to track when it happened
+        });
+
+        // 2. Penalize Offender (unfollower)
+        batch.update(offenderRef, {
+            followingCount: firebase.firestore.FieldValue.increment(-1),
+            rejectedCount: firebase.firestore.FieldValue.increment(1) // Increment penalty count
+        });
+
+        // 3. Update Reporter (victim) stats
+        batch.update(reporterRef, {
+            followersCount: firebase.firestore.FieldValue.increment(-1)
+        });
+
+        await batch.commit();
+    } catch (error) {
+        console.error('Error reporting unfollow:', error);
+        throw new Error('Não foi possível reportar.');
+    }
 };
 
 // --- Admin Functions ---

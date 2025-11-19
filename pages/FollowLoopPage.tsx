@@ -11,10 +11,11 @@ import {
   registerFollow, 
   getPendingValidations, 
   validateFollow,
-  getConfirmedFollowers 
+  getConfirmedFollowers,
+  reportUnfollow
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, UserMinusIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -175,6 +176,19 @@ const FollowLoopPage: React.FC = () => {
           if (isValid) loadFollowers(promoter.id);
       } catch (err: any) {
           alert(err.message);
+      }
+  };
+
+  const handleReportUnfollow = async (interaction: FollowInteraction) => {
+      if (!promoter) return;
+      if (window.confirm(`Tem certeza que deseja reportar que ${interaction.followerName} parou de te seguir? Isso irá gerar uma negativa para o perfil dela.`)) {
+          try {
+              await reportUnfollow(interaction.id, interaction.followerId, promoter.id);
+              // Optimistically remove from UI
+              setFollowersList(prev => prev.filter(f => f.id !== interaction.id));
+          } catch (err: any) {
+              alert(err.message);
+          }
       }
   };
 
@@ -406,23 +420,36 @@ const FollowLoopPage: React.FC = () => {
                    <>
                      <p className="text-center text-gray-400 text-sm mb-2">{followersList.length} seguidora(s) confirmada(s).</p>
                      {followersList.map(f => (
-                        <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
-                            <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
-                                <UsersIcon className="w-5 h-5" />
+                        <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center justify-between border border-gray-700">
+                            <div className="flex items-center gap-4 overflow-hidden">
+                                <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
+                                    <UsersIcon className="w-5 h-5" />
+                                </div>
+                                <div className="flex-grow overflow-hidden">
+                                    <p className="font-bold text-white truncate">{f.followerName}</p>
+                                    <a 
+                                        href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="text-sm text-pink-400 hover:underline truncate block"
+                                    >
+                                        {f.followerInstagram}
+                                    </a>
+                                </div>
                             </div>
-                            <div className="flex-grow overflow-hidden">
-                                <p className="font-bold text-white truncate">{f.followerName}</p>
-                                <a 
-                                    href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    className="text-sm text-pink-400 hover:underline truncate block"
+                            <div className="flex flex-col items-end gap-1">
+                                <div className="flex items-center gap-1 text-green-400 text-xs">
+                                    <CheckCircleIcon className="w-4 h-4" />
+                                    <span>Confirmado</span>
+                                </div>
+                                <button 
+                                    onClick={() => handleReportUnfollow(f)}
+                                    className="flex items-center gap-1 px-2 py-1 bg-red-900/30 text-red-400 text-xs rounded hover:bg-red-900/50 transition-colors"
+                                    title="Reportar que parou de seguir"
                                 >
-                                    {f.followerInstagram}
-                                </a>
-                            </div>
-                            <div className="flex-shrink-0 text-green-400">
-                                <CheckCircleIcon className="w-5 h-5" />
+                                    <UserMinusIcon className="w-3 h-3" />
+                                    <span>Parou de Seguir</span>
+                                </button>
                             </div>
                         </div>
                      ))}
