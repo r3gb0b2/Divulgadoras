@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGuestListForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
@@ -124,7 +125,8 @@ const GuestListPage: React.FC = () => {
             const listName = formatCSVCell(conf.listName);
             const promoterName = formatCSVCell(conf.promoterName);
             const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
-            const guests = formatCSVCell(conf.guestNames.filter(name => name.trim() !== '').join('\n'));
+            // FIX: Add fallback for guestNames in case it is missing
+            const guests = formatCSVCell((conf.guestNames || []).filter(name => name.trim() !== '').join('\n'));
             return [listName, promoterName, promoterStatus, guests].join(',');
         });
 
@@ -149,7 +151,8 @@ const GuestListPage: React.FC = () => {
     const totalConfirmed = filteredConfirmations.reduce((acc, curr) => {
         let count = 0;
         if (curr.isPromoterAttending) count++;
-        count += curr.guestNames.filter(name => name.trim() !== '').length;
+        // FIX: Add fallback for guestNames
+        count += (curr.guestNames || []).filter(name => name.trim() !== '').length;
         return acc + count;
     }, 0);
     
@@ -160,7 +163,8 @@ const GuestListPage: React.FC = () => {
         return groupedConfirmations[listName].reduce((acc, curr) => {
             let count = 0;
             if (curr.isPromoterAttending) count++;
-            count += curr.guestNames.filter(name => name.trim() !== '').length;
+            // FIX: Add fallback for guestNames
+            count += (curr.guestNames || []).filter(name => name.trim() !== '').length;
             return acc + count;
         }, 0);
     };
@@ -228,7 +232,8 @@ const GuestListPage: React.FC = () => {
                                         <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
-                                        {conf.guestNames.filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                        {/* FIX: Add fallback for guestNames */}
+                                        {(conf.guestNames || []).filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button

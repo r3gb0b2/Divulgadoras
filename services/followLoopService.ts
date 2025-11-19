@@ -254,7 +254,7 @@ export const getRejectedFollowsReceived = async (promoterId: string): Promise<Fo
         // This fixes the "Instagram not found" error for older interactions
         const missingInfo = interactions.filter(i => !i.followedInstagram);
         if (missingInfo.length > 0) {
-            const idsToFetch: string[] = [...new Set(missingInfo.map(i => i.followedId))];
+            const idsToFetch = Array.from(new Set(missingInfo.map(i => i.followedId))) as string[];
             const profiles = await Promise.all(idsToFetch.map(id => getParticipantStatus(id)));
             const profileMap = new Map<string, FollowLoopParticipant>();
             profiles.forEach(p => { if (p) profileMap.set(p.id, p); });
