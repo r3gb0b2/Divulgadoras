@@ -2,8 +2,104 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { OneTimePost, OneTimePostSubmission, Timestamp } from '../types';
-import { getOneTimePostById, getOneTimePostSubmissions } from '../services/postService';
-import { ArrowLeftIcon, DownloadIcon, InstagramIcon } from '../components/Icons';
+import { getOneTimePostById, getOneTimePostSubmissions, updateOneTimePostSubmission, deleteOneTimePostSubmission } from '../services/postService';
+import { ArrowLeftIcon, DownloadIcon, InstagramIcon, PencilIcon, TrashIcon } from '../components/Icons';
+
+interface EditSubmissionModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    submission: OneTimePostSubmission | null;
+    onSave: (id: string, data: Partial<OneTimePostSubmission>) => Promise<void>;
+}
+
+const EditSubmissionModal: React.FC<EditSubmissionModalProps> = ({ isOpen, onClose, submission, onSave }) => {
+    const [formData, setFormData] = useState({
+        guestName: '',
+        email: '',
+        instagram: '',
+    });
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (submission) {
+            setFormData({
+                guestName: submission.guestName,
+                email: submission.email || '',
+                instagram: submission.instagram,
+            });
+        }
+    }, [submission]);
+
+    if (!isOpen || !submission) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        try {
+            await onSave(submission.id, formData);
+            onClose();
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao salvar alterações.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold text-white mb-4">Editar Cadastro</h2>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Nome na Lista</label>
+                        <input
+                            type="text"
+                            name="guestName"
+                            value={formData.guestName}
+                            onChange={handleChange}
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Email</label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300">Instagram</label>
+                        <input
+                            type="text"
+                            name="instagram"
+                            value={formData.instagram}
+                            onChange={handleChange}
+                            className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
+                            required
+                        />
+                    </div>
+                    <div className="flex justify-end gap-3 mt-6">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
+                        <button type="submit" disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
+                            {isSaving ? 'Salvando...' : 'Salvar'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
 
 const OneTimePostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
@@ -13,6 +109,10 @@ const OneTimePostDetails: React.FC = () => {
     const [submissions, setSubmissions] = useState<OneTimePostSubmission[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    
+    // Edit/Delete State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingSubmission, setEditingSubmission] = useState<OneTimePostSubmission | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!postId) {
@@ -67,6 +167,30 @@ const OneTimePostDetails: React.FC = () => {
         document.body.removeChild(link);
     };
 
+    const handleDeleteSubmission = async (subId: string) => {
+        if (!window.confirm("Tem certeza que deseja excluir este cadastro?")) return;
+        try {
+            await deleteOneTimePostSubmission(subId);
+            // Refresh data
+            const submissionsData = await getOneTimePostSubmissions(postId!);
+            setSubmissions(submissionsData);
+        } catch (err: any) {
+            alert("Erro ao excluir: " + err.message);
+        }
+    };
+
+    const handleEditClick = (sub: OneTimePostSubmission) => {
+        setEditingSubmission(sub);
+        setIsEditModalOpen(true);
+    };
+
+    const handleSaveEdit = async (id: string, data: Partial<OneTimePostSubmission>) => {
+        await updateOneTimePostSubmission(id, data);
+        // Refresh data
+        const submissionsData = await getOneTimePostSubmissions(postId!);
+        setSubmissions(submissionsData);
+    };
+
     return (
         <div>
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
@@ -101,11 +225,12 @@ const OneTimePostDetails: React.FC = () => {
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Instagram</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Data de Envio</th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Comprovação</th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700">
                                     {submissions.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhuma submissão recebida.</td></tr>
+                                        <tr><td colSpan={5} className="text-center py-8 text-gray-400">Nenhuma submissão recebida.</td></tr>
                                     ) : (
                                         submissions.map(sub => (
                                             <tr key={sub.id} className="hover:bg-gray-700/40">
@@ -126,6 +251,16 @@ const OneTimePostDetails: React.FC = () => {
                                                         ))}
                                                     </div>
                                                 </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-right">
+                                                    <div className="flex justify-end gap-3">
+                                                        <button onClick={() => handleEditClick(sub)} className="text-blue-400 hover:text-blue-300" title="Editar">
+                                                            <PencilIcon className="w-5 h-5" />
+                                                        </button>
+                                                        <button onClick={() => handleDeleteSubmission(sub.id)} className="text-red-400 hover:text-red-300" title="Excluir">
+                                                            <TrashIcon className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))
                                     )}
@@ -135,6 +270,12 @@ const OneTimePostDetails: React.FC = () => {
                     </>
                 )}
             </div>
+            <EditSubmissionModal 
+                isOpen={isEditModalOpen} 
+                onClose={() => setIsEditModalOpen(false)} 
+                submission={editingSubmission} 
+                onSave={handleSaveEdit} 
+            />
         </div>
     );
 };

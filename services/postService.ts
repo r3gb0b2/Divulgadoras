@@ -735,6 +735,26 @@ export const getOneTimePostSubmissions = async (postId: string): Promise<OneTime
     }
 };
 
+export const updateOneTimePostSubmission = async (submissionId: string, data: Partial<OneTimePostSubmission>): Promise<void> => {
+    try {
+        const docRef = firestore.collection('oneTimePostSubmissions').doc(submissionId);
+        await docRef.update(data);
+    } catch (error) {
+        console.error("Error updating one-time post submission: ", error);
+        throw new Error("Não foi possível atualizar a submissão.");
+    }
+};
+
+export const deleteOneTimePostSubmission = async (submissionId: string): Promise<void> => {
+    try {
+        const docRef = firestore.collection('oneTimePostSubmissions').doc(submissionId);
+        await docRef.delete();
+    } catch (error) {
+        console.error("Error deleting one-time post submission: ", error);
+        throw new Error("Não foi possível deletar a submissão.");
+    }
+};
+
 export const deleteOneTimePost = async (postId: string): Promise<void> => {
   const batch = firestore.batch();
   try {
