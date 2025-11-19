@@ -46,7 +46,7 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
       };
       await participantRef.set(newParticipant);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error joining follow loop:', error);
     if (error instanceof Error) throw error;
     throw new Error('Não foi possível entrar na dinâmica.');
@@ -60,7 +60,7 @@ export const getParticipantStatus = async (promoterId: string): Promise<FollowLo
       return { id: doc.id, ...doc.data() } as FollowLoopParticipant;
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching participant status:', error);
     return null;
   }
@@ -83,30 +83,46 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
     // 2. Get potential targets (active, not banned, same org)
     // REMOVED orderBy('lastActiveAt') to avoid missing index errors.
-    // Increased limit to 300 to cast a wider net since we can't rely on sorting by activity yet.
+    // Increased limit to 2000 to cast a wider net since we can't rely on sorting by activity yet.
+    // And perform shuffling client-side.
     const potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
       .where('organizationId', '==', organizationId)
-      .where('isActive', '==', true)
-      .where('isBanned', '==', false)
-      .limit(300);
+      .limit(2000); 
 
     const potentialSnap = await potentialQuery.get();
     
     // 3. Filter in memory
     const candidates: FollowLoopParticipant[] = [];
     potentialSnap.forEach(doc => {
-      if (!followedIds.has(doc.id)) {
-        candidates.push({ id: doc.id, ...doc.data() } as FollowLoopParticipant);
+      const data = doc.data();
+      // Filter manually for state/banned/active to ensure we catch everyone even if index is partial
+      // Note: We removed 'isActive' filter from query to allow finding them even if legacy data is weird,
+      // but we apply it here.
+      // Self-healing: If a record exists but missing 'state' or other fields, we might want to include it 
+      // if we can infer, but for now let's stick to strict filtering.
+      if (
+          !followedIds.has(doc.id) && 
+          data.isActive === true && 
+          data.isBanned === false
+      ) {
+         // State filtering: If the 'state' field exists on participant, filter by it.
+         // Since we don't have state passed here easily without changing signature everywhere,
+         // we rely on the fact that 'organizationId' is usually the main partition.
+         // If strict state filtering is needed, it should be passed to this function.
+         // Assuming 'organizationId' creates enough separation for now.
+         candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
       }
     });
 
     if (candidates.length === 0) return null;
 
-    // 4. Return a random candidate from the pool
+    // 4. Return a random candidate from the pool (Fisher-Yates shuffle equivalent for single pick)
+    // Or better: shuffle the whole array and pick first, or just pick random index.
+    // Random index is O(1).
     const randomIndex = Math.floor(Math.random() * candidates.length);
     return candidates[randomIndex];
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting next profile:', error);
     throw new Error('Não foi possível carregar o próximo perfil.');
   }
@@ -145,7 +161,7 @@ export const registerFollow = async (followerId: string, followedId: string): Pr
       lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error registering follow:', error);
     throw new Error('Não foi possível registrar a ação.');
   }
@@ -170,7 +186,7 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
     });
     
     return validations;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting pending validations:', error);
     throw new Error('Erro ao buscar validações.');
   }
@@ -194,7 +210,7 @@ export const getConfirmedFollowers = async (promoterId: string): Promise<FollowI
         });
 
         return followers;
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching confirmed followers:', error);
         return [];
     }
@@ -208,8 +224,28 @@ export const getRejectedFollowsReceived = async (promoterId: string): Promise<Fo
             .where('status', '==', 'rejected');
         
         const snap = await q.get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-    } catch (error) {
+        const interactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+
+        // Enrichment for legacy data: if followedInstagram is missing, fetch it from participant profile
+        // This fixes the "Instagram not found" error for older interactions
+        const missingInfo = interactions.filter(i => !i.followedInstagram);
+        if (missingInfo.length > 0) {
+            const idsToFetch = [...new Set(missingInfo.map(i => i.followedId))];
+            const profiles = await Promise.all(idsToFetch.map(id => getParticipantStatus(id)));
+            const profileMap = new Map<string, FollowLoopParticipant>();
+            profiles.forEach(p => { if (p) profileMap.set(p.id, p); });
+
+            interactions.forEach(i => {
+                if (!i.followedInstagram && profileMap.has(i.followedId)) {
+                    const p = profileMap.get(i.followedId)!;
+                    i.followedInstagram = p.instagram;
+                    i.followedName = p.promoterName; // Ensure name is current too
+                }
+            });
+        }
+
+        return interactions;
+    } catch (error: any) {
         console.error("Error getting rejected follows received:", error);
         return [];
     }
@@ -224,7 +260,7 @@ export const getRejectedFollowsGiven = async (promoterId: string): Promise<Follo
         
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error getting rejected follows given:", error);
         return [];
     }
@@ -270,7 +306,7 @@ export const validateFollow = async (interactionId: string, isValid: boolean, fo
     
     await batch.commit();
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error validating follow:', error);
     throw new Error('Não foi possível validar.');
   }
@@ -313,7 +349,7 @@ export const undoRejection = async (interactionId: string): Promise<void> => {
 
         await batch.commit();
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error undoing rejection:", error);
         throw new Error("Erro ao reverter rejeição.");
     }
@@ -356,7 +392,7 @@ export const reportUnfollow = async (interactionId: string): Promise<void> => {
 
         await batch.commit();
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error reporting unfollow:", error);
         throw new Error("Erro ao reportar que parou de seguir.");
     }
@@ -366,14 +402,46 @@ export const reportUnfollow = async (interactionId: string): Promise<void> => {
 
 export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
     try {
+        // New function to fetch detailed history
         const q = firestore.collection(COLLECTION_PARTICIPANTS)
             .where('organizationId', '==', organizationId);
         
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowLoopParticipant));
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error fetching participants for admin:", error);
         throw new Error("Falha ao buscar participantes.");
+    }
+}
+
+export const getAllFollowInteractions = async (organizationId: string): Promise<FollowInteraction[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('organizationId', '==', organizationId)
+            .orderBy('createdAt', 'desc')
+            .limit(500); // Reasonable limit for history view
+        
+        const snap = await q.get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+    } catch (error: any) {
+        console.error("Error fetching interactions history:", error);
+        // Fallback without sort if index is missing
+         try {
+            const q2 = firestore.collection(COLLECTION_INTERACTIONS)
+                .where('organizationId', '==', organizationId)
+                .limit(500);
+            const snap2 = await q2.get();
+            const results = snap2.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+            // manual sort
+            results.sort((a, b) => {
+                const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+                const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+                return timeB - timeA;
+            });
+            return results;
+        } catch (e) {
+            throw new Error("Falha ao buscar histórico de interações.");
+        }
     }
 }
 
@@ -383,7 +451,7 @@ export const toggleParticipantBan = async (participantId: string, isBanned: bool
             isBanned: isBanned,
             isActive: !isBanned // If banned, set inactive.
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error toggling ban:", error);
         throw new Error("Falha ao atualizar status.");
     }
@@ -433,7 +501,7 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
 
         await batch.commit();
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error admin creating follow:", error);
         if (error instanceof Error) throw error;
         throw new Error("Falha ao criar conexão manual.");
