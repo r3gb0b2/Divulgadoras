@@ -12,13 +12,14 @@ import {
   getPendingValidations, 
   validateFollow,
   getConfirmedFollowers,
+  getPeopleIFollow,
   getRejectedFollowsReceived,
   getRejectedFollowsGiven,
   undoRejection,
   reportUnfollow
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon, UserMinusIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon, UserMinusIcon, ExternalLinkIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -28,10 +29,11 @@ const FollowLoopPage: React.FC = () => {
   const [participant, setParticipant] = useState<FollowLoopParticipant | null>(null);
   const [ineligibleData, setIneligibleData] = useState<{ current: number, required: number } | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers' | 'alerts'>('follow');
+  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers' | 'following' | 'alerts'>('follow');
   const [targetProfile, setTargetProfile] = useState<FollowLoopParticipant | null>(null);
   const [validations, setValidations] = useState<FollowInteraction[]>([]);
   const [followersList, setFollowersList] = useState<FollowInteraction[]>([]);
+  const [followingList, setFollowingList] = useState<FollowInteraction[]>([]);
   const [alerts, setAlerts] = useState<FollowInteraction[]>([]);
   const [rejectedByMe, setRejectedByMe] = useState<FollowInteraction[]>([]);
   const [validationView, setValidationView] = useState<'pending' | 'rejected'>('pending');
@@ -151,6 +153,19 @@ const FollowLoopPage: React.FC = () => {
         console.error(err);
     }
   }, []);
+
+  const loadFollowing = useCallback(async (pid: string) => {
+    try {
+        // We also need the followers list to check for mutual following
+        if (followersList.length === 0) {
+            await loadFollowers(pid);
+        }
+        const list = await getPeopleIFollow(pid);
+        setFollowingList(list);
+    } catch (err) {
+        console.error(err);
+    }
+  }, [followersList, loadFollowers]);
   
   const loadAlerts = useCallback(async (pid: string) => {
       try {
@@ -231,6 +246,10 @@ const FollowLoopPage: React.FC = () => {
       } catch (err: any) {
           alert(err.message);
       }
+  };
+
+  const isMutualFollow = (personId: string) => {
+      return followersList.some(f => f.followerId === personId);
   };
 
   // --- Renders ---
@@ -351,6 +370,12 @@ const FollowLoopPage: React.FC = () => {
              className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'followers' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
            >
                Seguidores
+           </button>
+           <button 
+             onClick={() => { setActiveTab('following'); if(promoter) loadFollowing(promoter.id); }} 
+             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'following' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
+           >
+               Seguindo
            </button>
            <button 
              onClick={() => { setActiveTab('alerts'); if(promoter) loadAlerts(promoter.id); }} 
@@ -587,6 +612,59 @@ const FollowLoopPage: React.FC = () => {
                             </div>
                         </div>
                      ))}
+                   </>
+               )}
+           </div>
+       )}
+
+       {activeTab === 'following' && (
+           <div className="space-y-4">
+               {followingList.length === 0 ? (
+                   <p className="text-center text-gray-400 py-8">Você ainda não seguiu ninguém nesta dinâmica.</p>
+               ) : (
+                   <>
+                     <p className="text-center text-gray-400 text-sm mb-2">Você está seguindo {followingList.length} pessoa(s).</p>
+                     {followingList.map(f => {
+                        const isMutual = isMutualFollow(f.followedId);
+                        return (
+                            <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
+                                <div className="w-10 h-10 bg-indigo-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
+                                    <UsersIcon className="w-5 h-5" />
+                                </div>
+                                <div className="flex-grow overflow-hidden">
+                                    <p className="font-bold text-white truncate">{f.followedName}</p>
+                                    <a 
+                                        href={`https://instagram.com/${f.followedInstagram?.replace('@', '')}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="text-sm text-pink-400 hover:underline truncate block"
+                                    >
+                                        {f.followedInstagram}
+                                    </a>
+                                </div>
+                                <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                                    <a 
+                                        href={`https://instagram.com/${f.followedInstagram?.replace('@', '')}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full"
+                                        title="Abrir Instagram"
+                                    >
+                                        <ExternalLinkIcon className="w-4 h-4" />
+                                    </a>
+                                    {isMutual ? (
+                                        <span className="text-[10px] font-bold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full border border-green-900">
+                                            Segue você
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-yellow-400 bg-yellow-900/30 px-2 py-0.5 rounded-full border border-yellow-900">
+                                            Não te segue
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                     })}
                    </>
                )}
            </div>

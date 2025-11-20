@@ -242,6 +242,31 @@ export const getConfirmedFollowers = async (promoterId: string): Promise<FollowI
     }
 };
 
+// NEW: Get list of people I follow (validated)
+export const getPeopleIFollow = async (promoterId: string): Promise<FollowInteraction[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('followerId', '==', promoterId)
+            .where('status', '==', 'validated')
+            .limit(100);
+
+        const snap = await q.get();
+        const following = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+        
+        // Sort by validatedAt descending
+        following.sort((a, b) => {
+             const timeA = (a.validatedAt as Timestamp)?.toMillis() || 0;
+             const timeB = (b.validatedAt as Timestamp)?.toMillis() || 0;
+             return timeB - timeA;
+        });
+
+        return following;
+    } catch (error: any) {
+        console.error('Error fetching following list:', error);
+        return [];
+    }
+};
+
 // NEW: Get rejected interactions where current user was the FOLLOWER (to see rejection alerts)
 export const getRejectedFollowsReceived = async (promoterId: string): Promise<FollowInteraction[]> => {
     try {
