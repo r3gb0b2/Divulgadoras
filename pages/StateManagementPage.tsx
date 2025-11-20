@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
@@ -23,7 +22,6 @@ const CampaignModal: React.FC<{
         rules: '', 
         status: 'active' as CampaignStatus,
         pixelId: '',
-        preventDuplicateApprovals: false,
     });
     
     useEffect(() => {
@@ -35,10 +33,9 @@ const CampaignModal: React.FC<{
                 rules: campaign.rules || '',
                 status: campaign.status || 'active',
                 pixelId: campaign.pixelId || '',
-                preventDuplicateApprovals: campaign.preventDuplicateApprovals || false,
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active', pixelId: '', preventDuplicateApprovals: false });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active', pixelId: '' });
         }
     }, [campaign, isOpen]);
     
@@ -71,20 +68,6 @@ const CampaignModal: React.FC<{
                             <option value="inactive">Inativo (não permite novos cadastros)</option>
                             <option value="hidden">Oculto (não aparece na lista de eventos)</option>
                         </select>
-                    </div>
-                    <div className="pt-2">
-                        <label className="flex items-start space-x-3 cursor-pointer p-2 bg-gray-700/30 rounded-md border border-gray-600">
-                            <input 
-                                type="checkbox" 
-                                checked={formData.preventDuplicateApprovals} 
-                                onChange={e => setFormData({...formData, preventDuplicateApprovals: e.target.checked})} 
-                                className="mt-1 h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                            />
-                            <div>
-                                <span className="block text-sm font-medium text-white">Bloquear cadastro se já aprovada em outro evento?</span>
-                                <p className="text-xs text-gray-400 mt-1">Se marcado, uma divulgadora que já tenha status 'Aprovado' em qualquer outro evento desta organização não poderá se cadastrar neste.</p>
-                            </div>
-                        </label>
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
@@ -271,14 +254,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                         {campaigns.map(c => (
                             <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                                 <div>
-                                    <p className="font-semibold text-white flex items-center gap-2">
-                                        {c.name} {getStatusBadge(c.status)}
-                                        {c.preventDuplicateApprovals && (
-                                            <span className="text-[10px] bg-yellow-900/50 text-yellow-200 px-1.5 py-0.5 rounded border border-yellow-700" title="Bloqueia duplicidade">
-                                                Restrito
-                                            </span>
-                                        )}
-                                    </p>
+                                    <p className="font-semibold text-white flex items-center">{c.name} {getStatusBadge(c.status)}</p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
                                 </div>
                                 {adminData.role !== 'viewer' && (

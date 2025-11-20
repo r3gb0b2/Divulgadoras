@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp, GroupRemovalRequest } from '../types';
@@ -9,8 +8,7 @@ type DocumentData = firebase.firestore.DocumentData;
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
-    
-    // 1. Check for exact existing registration for the same email, state, campaign and organization
+    // Check for existing registration for the same email, state, campaign and organization
     const q = firestore.collection("promoters")
       .where("email", "==", normalizedEmail)
       .where("state", "==", promoterData.state)
@@ -20,33 +18,6 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     const querySnapshot = await q.get();
     if (!querySnapshot.empty) {
       throw new Error("Você já se cadastrou para este evento/gênero.");
-    }
-
-    // 2. Check for duplicate approvals logic if campaign requires it
-    if (promoterData.campaignName) {
-        const campaignQuery = firestore.collection('campaigns')
-            .where('organizationId', '==', promoterData.organizationId)
-            .where('stateAbbr', '==', promoterData.state)
-            .where('name', '==', promoterData.campaignName)
-            .limit(1);
-        
-        const campaignSnap = await campaignQuery.get();
-        if (!campaignSnap.empty) {
-            const campaignData = campaignSnap.docs[0].data();
-            if (campaignData.preventDuplicateApprovals) {
-                // Check if this email has ANY approved status in this organization
-                const approvedQuery = firestore.collection('promoters')
-                    .where('organizationId', '==', promoterData.organizationId)
-                    .where('email', '==', normalizedEmail)
-                    .where('status', '==', 'approved')
-                    .limit(1);
-                
-                const approvedSnap = await approvedQuery.get();
-                if (!approvedSnap.empty) {
-                    throw new Error("Você já faz parte da equipe em outro evento desta organização e este cadastro não permite participações múltiplas.");
-                }
-            }
-        }
     }
 
     let facePhotoUrl: string | undefined = undefined;

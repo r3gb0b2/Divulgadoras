@@ -573,16 +573,16 @@ const FollowLoopPage: React.FC = () => {
                                     {f.followerInstagram}
                                 </a>
                             </div>
-                            <div className="flex-shrink-0 flex items-center gap-2">
-                                <div className="text-green-400" title="Confirmado">
-                                    <CheckCircleIcon className="w-5 h-5" />
+                            <div className="flex-shrink-0 flex flex-col items-end gap-2">
+                                <div className="text-green-400 flex items-center gap-1" title="Confirmado">
+                                    <CheckCircleIcon className="w-4 h-4" />
+                                    <span className="text-xs font-medium">Confirmada</span>
                                 </div>
                                 <button 
                                     onClick={() => handleReportUnfollow(f.id, f.followerId)}
-                                    className="p-2 text-gray-400 hover:text-red-400 bg-gray-700/50 rounded-full hover:bg-gray-700 transition-colors"
-                                    title="Parou de Seguir"
+                                    className="text-xs px-2 py-1 bg-gray-700 hover:bg-red-900/40 text-gray-300 hover:text-red-300 border border-gray-600 hover:border-red-500 rounded transition-colors"
                                 >
-                                    <UserMinusIcon className="w-5 h-5" />
+                                    Parou de seguir
                                 </button>
                             </div>
                         </div>

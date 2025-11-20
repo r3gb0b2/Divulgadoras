@@ -424,17 +424,6 @@ export const reportUnfollow = async (interactionId: string, offenderId: string, 
     }
 };
 
-export const updateParticipantInstagram = async (promoterId: string, newInstagram: string): Promise<void> => {
-  try {
-    await firestore.collection(COLLECTION_PARTICIPANTS).doc(promoterId).update({
-      instagram: newInstagram.trim()
-    });
-  } catch (error: any) {
-    console.error("Error updating instagram:", error);
-    throw new Error("Falha ao atualizar Instagram.");
-  }
-};
-
 // --- Admin Functions ---
 
 export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
