@@ -33,6 +33,16 @@ export interface Promoter {
   lastManualNotificationAt?: Timestamp | FieldValue | null;
 }
 
+export interface PromoterStats extends Promoter {
+    assigned: number;
+    completed: number;
+    missed: number;
+    justifications: number;
+    acceptedJustifications: number;
+    pending: number;
+    completionRate: number;
+}
+
 export interface PromoterApplicationData {
   name: string;
   whatsapp: string;
@@ -70,6 +80,7 @@ export interface Campaign {
   guestListAssignments?: { [promoterId: string]: string[] };
   guestListTypes?: string[];
   pixelId?: string;
+  preventDuplicateApprovals?: boolean; // New field
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';
@@ -79,33 +90,12 @@ export interface AdminUserData {
   email: string;
   role: AdminRole;
   assignedStates: string[];
-  organizationIds?: string[];
   assignedCampaigns?: { [stateAbbr: string]: string[] };
+  organizationIds?: string[]; 
 }
 
-export type OrganizationStatus = 'active' | 'trial' | 'hidden' | 'deactivated';
-
-export type PlanId = 'basic' | 'professional';
-
-export interface Organization {
-  id: string;
-  name: string;
-  ownerName?: string;
-  ownerEmail: string;
-  ownerUid: string;
-  status: OrganizationStatus;
-  planId: PlanId;
-  planExpiresAt?: Timestamp;
-  createdAt?: Timestamp | FieldValue;
-  public: boolean;
-  assignedStates: string[];
-  ownerPhone?: string;
-  ownerTaxId?: string;
-  emailRemindersEnabled?: boolean;
-  oneTimePostEnabled?: boolean;
-  guestListManagementEnabled?: boolean;
-  guestListCheckinEnabled?: boolean;
-  followLoopThreshold?: number; // Percentage (0-100) required to join the loop
+export interface StatesConfig {
+  [abbr: string]: StateConfig;
 }
 
 export interface StateConfig {
@@ -113,190 +103,108 @@ export interface StateConfig {
   rules: string;
 }
 
-export interface StatesConfig {
-  [stateAbbr: string]: StateConfig;
-}
-
-export interface AdminApplication {
+export interface Organization {
   id: string;
   name: string;
-  email: string;
-  phone: string;
-  message?: string;
-  createdAt?: Timestamp;
+  ownerUid: string;
+  ownerEmail: string;
+  ownerName?: string; // Added field
+  ownerPhone?: string;
+  ownerTaxId?: string; // CPF/CNPJ
+  planId: PlanId;
+  status: OrganizationStatus;
+  createdAt: Timestamp | FieldValue;
+  planExpiresAt: Timestamp | FieldValue; // Timestamp
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  assignedStates?: string[]; // Limits which states this org operates in
+  public?: boolean; // If true, shows on public home page
+  emailRemindersEnabled?: boolean;
+  oneTimePostEnabled?: boolean;
+  guestListManagementEnabled?: boolean;
+  guestListCheckinEnabled?: boolean;
+  followLoopThreshold?: number;
 }
 
-export interface Plan {
-  id: string;
-  name: string;
-  price: number;
-  priceFormatted: string;
-  description: string;
-  features: string[];
-  isPopular: boolean;
-}
+export type OrganizationStatus = 'active' | 'trial' | 'deactivated' | 'hidden';
+export type PlanId = 'basic' | 'professional' | 'enterprise';
 
 export interface Post {
-  id: string;
-  organizationId: string;
-  campaignName: string;
-  eventName?: string;
-  stateAbbr: string;
-  type: 'image' | 'text' | 'video';
-  mediaUrl?: string;
-  googleDriveUrl?: string;
-  textContent?: string;
-  instructions: string;
-  postLink?: string;
-  createdAt: Timestamp | FieldValue;
-  createdByEmail: string;
-  isActive: boolean;
-  expiresAt: Timestamp | FieldValue | null;
-  autoAssignToNewPromoters?: boolean;
-  allowLateSubmissions?: boolean;
-  allowImmediateProof?: boolean;
-  postFormats?: ('story' | 'reels')[];
-  skipProofRequirement?: boolean;
-}
-
-export interface PostAssignment {
-  id: string; // Firestore document ID
-  postId: string;
-  post: { // Denormalized post data
-    type: 'image' | 'text' | 'video';
-    mediaUrl?: string;
+    id: string;
+    organizationId: string;
+    campaignName: string;
+    eventName?: string;
+    stateAbbr: string;
+    type: 'text' | 'image' | 'video';
+    mediaUrl?: string; // Firebase Storage path
     googleDriveUrl?: string;
     textContent?: string;
     instructions: string;
-    postLink?: string;
-    campaignName: string;
-    eventName?: string;
+    postLink?: string; // Link to the post/audio to use
     isActive: boolean;
-    expiresAt: Timestamp | FieldValue | null;
     createdAt: Timestamp | FieldValue;
-    allowLateSubmissions?: boolean;
+    expiresAt?: Timestamp | FieldValue | null;
+    createdByEmail?: string;
     autoAssignToNewPromoters?: boolean;
+    allowLateSubmissions?: boolean;
     allowImmediateProof?: boolean;
     postFormats?: ('story' | 'reels')[];
-    skipProofRequirement?: boolean;
-  };
-  organizationId: string;
-  promoterId: string;
-  promoterEmail: string; // lowercase
-  promoterName: string;
-  status: 'pending' | 'confirmed';
-  confirmedAt: Timestamp | FieldValue | null;
-  proofImageUrls?: string[];
-  proofSubmittedAt: Timestamp | FieldValue | null;
-  justification?: string;
-  justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
-  justificationSubmittedAt?: Timestamp | FieldValue | null;
-  justificationImageUrls?: string[];
-  justificationResponse?: string;
+    skipProofRequirement?: boolean; // New field: if true, promoter clicks "I posted" and it auto-confirms without upload
 }
 
-// New model for individual guest lists
-export interface GuestList {
-  id: string;
-  organizationId: string;
-  campaignId: string;
-  campaignName: string; // denormalized for easy display
-  stateAbbr: string;
-  name: string;
-  description?: string;
-  guestAllowance: number;
-  startsAt: Timestamp | FieldValue | null;
-  closesAt: Timestamp | FieldValue | null;
-  isActive: boolean;
-  createdAt: Timestamp | FieldValue;
-  createdByEmail: string;
-  assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; } };
+export interface ScheduledPost {
+    id: string;
+    organizationId: string;
+    status: 'pending' | 'sent' | 'error';
+    scheduledAt: Timestamp | FieldValue;
+    createdByEmail: string;
+    error?: string;
+    postData: ScheduledPostData;
+    assignedPromoters: { id: string, email: string, name: string }[];
 }
 
-export interface GuestListConfirmation {
+export type ScheduledPostData = Omit<Post, 'id' | 'createdAt' | 'organizationId' | 'createdByEmail'>;
+
+
+export interface PostAssignment {
+    id: string;
+    postId: string;
+    post: Post; // Denormalized post data snapshot
+    organizationId: string;
+    promoterId: string;
+    promoterEmail: string;
+    promoterName: string;
+    status: 'pending' | 'confirmed'; // 'confirmed' means they said they will post
+    confirmedAt?: Timestamp | FieldValue | null;
+    proofSubmittedAt?: Timestamp | FieldValue | null;
+    proofImageUrls?: string[];
+    justification?: string;
+    justificationStatus?: 'pending' | 'accepted' | 'rejected';
+    justificationSubmittedAt?: Timestamp | FieldValue | null;
+    justificationResponse?: string;
+    justificationImageUrls?: string[];
+}
+
+export interface OneTimePost {
     id: string;
     organizationId: string;
     campaignId: string;
     campaignName: string;
-    guestListId?: string; // Link to the new GuestList model
-    promoterId: string;
-    promoterName: string;
-    promoterEmail: string;
-    listName: string;
-    isPromoterAttending: boolean;
-    guestNames: string[];
-    confirmedAt: Timestamp | FieldValue;
-    promoterCheckedInAt?: Timestamp | FieldValue | null;
-    promoterCheckedOutAt?: Timestamp | FieldValue | null;
-    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; checkedOutAt?: Timestamp | FieldValue | null; }[];
-    isLocked?: boolean;
-}
-
-export interface PromoterStats extends Promoter {
-  assigned: number;
-  completed: number;
-  justifications: number;
-  missed: number;
-  completionRate: number;
-}
-
-export interface ScheduledPostData {
-  campaignName: string;
-  eventName?: string;
-  stateAbbr: string;
-  type: 'image' | 'text' | 'video';
-  mediaUrl?: string | null;
-  googleDriveUrl?: string;
-  textContent?: string;
-  instructions: string;
-  postLink?: string;
-  isActive: boolean;
-  expiresAt: Timestamp | FieldValue | null;
-  autoAssignToNewPromoters?: boolean;
-  allowLateSubmissions?: boolean;
-  allowImmediateProof?: boolean;
-  postFormats?: ('story' | 'reels')[];
-  skipProofRequirement?: boolean;
-}
-
-export interface ScheduledPost {
-  id: string;
-  organizationId: string;
-  postData: ScheduledPostData;
-  assignedPromoters: { id: string, email: string, name:string }[];
-  scheduledAt: Timestamp | FieldValue;
-  status: 'pending' | 'sent' | 'error';
-  createdByEmail: string;
-  error?: string;
-}
-
-export interface InstructionTemplate {
-  id: string;
-  text: string;
-  organizationId: string;
-  createdAt?: Timestamp | FieldValue;
-}
-
-export interface OneTimePost {
-  id: string;
-  organizationId: string;
-  campaignId: string;
-  campaignName: string;
-  eventName?: string;
-  guestListName: string;
-  type: 'image' | 'text' | 'video';
-  mediaUrl?: string; // Can be Firebase Storage path or GDrive URL for video
-  googleDriveUrl?: string;
-  textContent?: string;
-  instructions: string;
-  createdAt: Timestamp | FieldValue;
-  createdByEmail: string;
-  isActive: boolean;
-  expiresAt?: Timestamp | FieldValue | null;
-  submissionCount?: number;
-  submissionLimit?: number;
-  successMessage?: string;
-  femaleOnly?: boolean; // New field
+    eventName: string; // Required for OneTimePost
+    guestListName: string;
+    type: 'text' | 'image' | 'video';
+    mediaUrl?: string;
+    googleDriveUrl?: string;
+    textContent?: string;
+    instructions: string;
+    isActive: boolean;
+    createdAt: Timestamp | FieldValue;
+    createdByEmail: string;
+    expiresAt?: Timestamp | FieldValue | null;
+    submissionCount?: number;
+    submissionLimit?: number | null;
+    successMessage?: string;
+    femaleOnly?: boolean;
 }
 
 export interface OneTimePostSubmission {
@@ -305,71 +213,122 @@ export interface OneTimePostSubmission {
     organizationId: string;
     campaignId: string;
     guestName: string;
-    email: string; // Added email
+    email: string;
     instagram: string;
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;
 }
 
+export interface AdminApplication {
+    id: string; // Same as the user's UID
+    name: string;
+    email: string;
+    phone: string;
+    message: string;
+    createdAt: Timestamp | FieldValue;
+}
+
+export interface InstructionTemplate {
+    id: string;
+    text: string;
+    organizationId: string;
+    createdAt?: Timestamp | FieldValue;
+}
+
+export interface GuestList {
+    id: string;
+    organizationId: string;
+    campaignId: string;
+    campaignName: string;
+    stateAbbr: string;
+    name: string;
+    description?: string;
+    guestAllowance?: number; // Default allowance
+    startsAt?: Timestamp | FieldValue | null;
+    closesAt?: Timestamp | FieldValue | null;
+    isActive: boolean;
+    createdAt: Timestamp | FieldValue;
+    createdByEmail?: string;
+    assignments?: { [promoterId: string]: { guestAllowance: number, info?: string, closesAt?: Timestamp | FieldValue | null } };
+}
+
+export interface GuestListConfirmation {
+    id: string;
+    organizationId: string;
+    campaignId: string;
+    campaignName: string;
+    guestListId: string; // ID of the GuestList definition
+    listName: string;
+    promoterId: string;
+    promoterName: string;
+    promoterEmail: string;
+    isPromoterAttending: boolean;
+    guestNames: string[];
+    confirmedAt: Timestamp | FieldValue;
+    isLocked?: boolean; // If true, promoter cannot edit
+    promoterCheckedInAt?: Timestamp | FieldValue | null;
+    promoterCheckedOutAt?: Timestamp | FieldValue | null;
+    guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; checkedOutAt?: Timestamp | FieldValue | null }[];
+}
+
 export interface GroupRemovalRequest {
-  id: string;
-  organizationId: string;
-  promoterId: string;
-  promoterName: string;
-  promoterEmail: string;
-  campaignName: string;
-  status: 'pending' | 'completed' | 'ignored';
-  requestedAt: Timestamp | FieldValue;
-  actionTakenBy?: string; // UID of admin
-  actionTakenAt?: Timestamp | FieldValue;
+    id: string;
+    organizationId: string;
+    promoterId: string;
+    promoterName: string;
+    promoterEmail: string;
+    campaignName: string;
+    status: 'pending' | 'completed' | 'ignored';
+    requestedAt: Timestamp | FieldValue;
+    actionTakenBy?: string;
+    actionTakenAt?: Timestamp | FieldValue;
 }
 
 export interface GuestListChangeRequest {
-  id: string;
-  organizationId: string;
-  campaignId: string;
-  guestListId: string;
-  confirmationId: string;
-  promoterId: string;
-  promoterName: string;
-  promoterEmail: string;
-  listName: string;
-  campaignName: string;
-  status: 'pending' | 'approved' | 'rejected';
-  requestedAt: Timestamp | FieldValue;
-  actionTakenAt?: Timestamp | FieldValue;
-  actionTakenBy?: string; // Admin UID
+    id: string;
+    organizationId: string;
+    campaignId: string;
+    guestListId: string;
+    confirmationId: string;
+    promoterId: string;
+    promoterName: string;
+    promoterEmail: string;
+    listName: string;
+    campaignName: string;
+    status: 'pending' | 'approved' | 'rejected';
+    requestedAt: Timestamp | FieldValue;
+    actionTakenBy?: string;
+    actionTakenAt?: Timestamp | FieldValue;
 }
 
-// --- Follow Loop Types ---
-
 export interface FollowLoopParticipant {
-  id: string;
-  promoterId: string;
-  promoterName: string;
-  instagram: string;
-  photoUrl: string;
-  organizationId: string;
-  isActive: boolean;
-  isBanned?: boolean; // New field for admin control
-  joinedAt: Timestamp | FieldValue;
-  lastActiveAt: Timestamp | FieldValue;
-  followersCount: number;
-  followingCount: number;
-  rejectedCount?: number; // New field to track negative feedback (people saying she didn't follow back)
-  state?: string;
+    id: string; // Usually the promoter ID
+    promoterId: string;
+    promoterName: string;
+    instagram: string;
+    photoUrl: string;
+    organizationId: string;
+    isActive: boolean;
+    isBanned: boolean;
+    joinedAt: Timestamp | FieldValue;
+    lastActiveAt: Timestamp | FieldValue;
+    followingCount: number; // How many they have followed (validated)
+    followersCount: number; // How many followers they have gained
+    rejectedCount: number; // How many times they were rejected (didn't follow back)
+    state?: string; // Added for filtering
 }
 
 export interface FollowInteraction {
-  id: string;
-  followerId: string; // Promoter ID who clicked follow
-  followedId: string; // Promoter ID who was followed
-  organizationId: string;
-  status: 'pending_validation' | 'validated' | 'rejected' | 'unfollowed';
-  createdAt: Timestamp | FieldValue;
-  validatedAt?: Timestamp | FieldValue | null;
-  followerName: string;
-  followerInstagram: string;
-  followedName: string;
-  followedInstagram?: string; // New field to ensure correct linking in alerts
+    id: string; // followerId_followedId
+    followerId: string;
+    followedId: string;
+    organizationId: string;
+    status: 'pending_validation' | 'validated' | 'rejected' | 'unfollowed';
+    createdAt: Timestamp | FieldValue;
+    validatedAt?: Timestamp | FieldValue;
+    // Snapshots for UI
+    followerName: string;
+    followerInstagram: string;
+    followedName: string;
+    followedInstagram: string;
 }
