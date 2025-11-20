@@ -17,6 +17,8 @@ const stripe = require("stripe")(functions.config().stripe.secret_key);
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
+// IMPORTANT: This setting prevents the server from crashing if 'undefined' is passed in an update object
+db.settings({ ignoreUndefinedProperties: true });
 
 
 // --- Brevo API Client Initialization ---
@@ -53,6 +55,10 @@ const getBrevoErrorDetails = (error) => {
   }
   return details;
 };
+
+// --- Safe String Helpers ---
+const safeTrim = (val) => (typeof val === 'string' ? val.trim() : val);
+const safeLower = (val) => (typeof val === 'string' ? val.toLowerCase().trim() : val);
 
 
 // --- Email Template Management ---
@@ -916,9 +922,10 @@ exports.updatePromoterAndSync = functions
 
         // Check what has changed
         // Use explicit check against undefined to allow empty strings (clearing fields)
-        const newEmail = updateData.email !== undefined ? updateData.email.toLowerCase().trim() : oldData.email;
-        const newName = updateData.name !== undefined ? updateData.name.trim() : oldData.name;
-        const newInstagram = updateData.instagram !== undefined ? updateData.instagram.trim() : oldData.instagram;
+        // Use safe helpers to avoid crashing on null/non-string values
+        const newEmail = updateData.email !== undefined ? safeLower(updateData.email) : oldData.email;
+        const newName = updateData.name !== undefined ? safeTrim(updateData.name) : oldData.name;
+        const newInstagram = updateData.instagram !== undefined ? safeTrim(updateData.instagram) : oldData.instagram;
 
         const emailHasChanged = newEmail !== oldData.email;
         const nameHasChanged = newName !== oldData.name;
