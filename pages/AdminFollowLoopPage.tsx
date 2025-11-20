@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction, getAllFollowInteractions } from '../services/followLoopService';
+import { getAllParticipantsForAdmin, toggleParticipantBan, adminCreateFollowInteraction, getAllFollowInteractions, updateParticipantInstagram } from '../services/followLoopService';
 import { getStatsForPromoter } from '../services/postService';
 import { getOrganization, updateOrganization } from '../services/organizationService';
 import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
-import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon, RefreshIcon, PencilIcon } from '../components/Icons';
 
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
@@ -113,6 +113,22 @@ const AdminFollowLoopPage: React.FC = () => {
             alert(err.message);
         } finally {
             setProcessingId(null);
+        }
+    };
+
+    const handleEditInstagram = async (participant: ParticipantWithStats) => {
+        const newInstagram = window.prompt("Editar Instagram (Conexões):", participant.instagram);
+        if (newInstagram !== null && newInstagram.trim() !== participant.instagram) {
+            try {
+                await updateParticipantInstagram(participant.id, newInstagram.trim());
+                // Update local state to avoid full refresh
+                setParticipants(prev => prev.map(p => 
+                    p.id === participant.id ? { ...p, instagram: newInstagram.trim() } : p
+                ));
+                alert("Instagram atualizado na lista de conexões.");
+            } catch (e: any) {
+                alert(e.message);
+            }
         }
     };
 
@@ -316,7 +332,13 @@ const AdminFollowLoopPage: React.FC = () => {
                                                     <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
                                                     <div>
                                                         <div className="font-medium text-white">{p.promoterName}</div>
-                                                        <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}</div>
+                                                        <div className="text-xs text-gray-400 flex items-center gap-1">
+                                                            <InstagramIcon className="w-3 h-3"/> 
+                                                            {p.instagram}
+                                                            <button onClick={() => handleEditInstagram(p)} className="ml-1 text-gray-500 hover:text-white" title="Editar Instagram">
+                                                                <PencilIcon className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
