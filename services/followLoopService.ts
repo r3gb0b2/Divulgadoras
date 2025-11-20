@@ -558,3 +558,41 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
         throw new Error("Falha ao criar conexão manual.");
     }
 }
+
+// NEW: Send a reminder to the followed person
+export const sendFollowReminder = async (interactionId: string): Promise<void> => {
+    try {
+        await firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId).update({
+            lastRemindedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error sending reminder:", error);
+        throw new Error("Não foi possível enviar o aviso.");
+    }
+}
+
+// NEW: Get reminders for the current user (where they are the target)
+export const getFollowReminders = async (promoterId: string): Promise<FollowInteraction[]> => {
+    try {
+        // Query for interactions where this user is followed and lastRemindedAt is set
+        const q = firestore.collection(COLLECTION_INTERACTIONS)
+            .where('followedId', '==', promoterId);
+        
+        const snap = await q.get();
+        const reminders = snap.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction))
+            .filter(i => !!i.lastRemindedAt);
+            
+        // Sort desc by reminder time
+        reminders.sort((a, b) => {
+             const timeA = (a.lastRemindedAt as any)?.toMillis() || 0;
+             const timeB = (b.lastRemindedAt as any)?.toMillis() || 0;
+             return timeB - timeA;
+        });
+
+        return reminders;
+    } catch (error: any) {
+        console.error("Error getting reminders:", error);
+        return [];
+    }
+}
