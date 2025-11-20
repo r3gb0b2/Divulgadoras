@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -914,9 +915,10 @@ exports.updatePromoterAndSync = functions
         const oldData = promoterSnap.data();
 
         // Check what has changed
-        const newEmail = updateData.email ? updateData.email.toLowerCase().trim() : oldData.email;
-        const newName = updateData.name ? updateData.name.trim() : oldData.name;
-        const newInstagram = updateData.instagram ? updateData.instagram.trim() : oldData.instagram;
+        // Use explicit check against undefined to allow empty strings (clearing fields)
+        const newEmail = updateData.email !== undefined ? updateData.email.toLowerCase().trim() : oldData.email;
+        const newName = updateData.name !== undefined ? updateData.name.trim() : oldData.name;
+        const newInstagram = updateData.instagram !== undefined ? updateData.instagram.trim() : oldData.instagram;
 
         const emailHasChanged = newEmail !== oldData.email;
         const nameHasChanged = newName !== oldData.name;

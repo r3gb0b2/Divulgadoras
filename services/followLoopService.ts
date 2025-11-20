@@ -94,8 +94,6 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
     if (stateFilter) {
         // Attempt to filter by state if the field exists in the index
-        // Note: If older records don't have 'state', this might exclude them,
-        // but the 'joinFollowLoop' updates 'state', so active users will have it.
         potentialQuery = potentialQuery.where('state', '==', stateFilter);
     }
 
@@ -106,8 +104,11 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
     potentialSnap.forEach(doc => {
       const data = doc.data();
       
-      // Self-healing: If we see a record without 'state', and we know the current context,
-      // we could technically assume, but for now we rely on 'isActive'.
+      // Strict In-Memory Check: Ensure state matches if filter is provided.
+      // This fixes the "mixed states" issue if the DB query is too broad.
+      if (stateFilter && data.state && data.state !== stateFilter) {
+          return; 
+      }
       
       if (
           !followedIds.has(doc.id) && 
@@ -129,6 +130,7 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
              broadSnap.forEach(doc => {
                  const data = doc.data();
                  // Include if active, not banned, not followed, AND state is missing/undefined (legacy)
+                 // We DO NOT include people who have a state set that is different from stateFilter.
                  if (!followedIds.has(doc.id) && data.isActive === true && data.isBanned === false && !data.state) {
                      candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
                  }
