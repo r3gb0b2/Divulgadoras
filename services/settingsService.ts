@@ -1,7 +1,8 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
 import { states } from '../constants/states';
-import { StatesConfig, StateConfig, Campaign, InstructionTemplate, Timestamp } from '../types';
+import { StatesConfig, StateConfig, Campaign, InstructionTemplate, LinkTemplate, Timestamp } from '../types';
 
 const STATES_CONFIG_DOC_ID = 'statesConfig';
 const SETTINGS_COLLECTION = 'settings';
@@ -204,5 +205,64 @@ export const deleteInstructionTemplate = async (id: string): Promise<void> => {
     } catch (error) {
         console.error("Error deleting instruction template: ", error);
         throw new Error("Não foi possível deletar o modelo de instrução.");
+    }
+};
+
+// --- Link Templates Service Functions ---
+
+export const getLinkTemplates = async (organizationId: string): Promise<LinkTemplate[]> => {
+    try {
+        const q = firestore.collection("linkTemplates")
+            .where("organizationId", "==", organizationId);
+        const querySnapshot = await q.get();
+        const templates = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LinkTemplate));
+        
+        // Sort client-side
+        templates.sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA; // descending
+        });
+
+        return templates;
+    } catch (error) {
+        console.error("Error getting link templates: ", error);
+        if (error instanceof Error && error.message.includes("requires an index")) {
+            throw new Error("Erro de configuração do banco de dados (índice ausente). Peça para o desenvolvedor criar o índice no Firebase Console.");
+        }
+        throw new Error("Não foi possível buscar os modelos de links.");
+    }
+};
+
+export const addLinkTemplate = async (name: string, url: string, organizationId: string): Promise<string> => {
+    try {
+        const docRef = await firestore.collection('linkTemplates').add({ 
+            name,
+            url, 
+            organizationId,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
+        return docRef.id;
+    } catch (error) {
+        console.error("Error adding link template: ", error);
+        throw new Error("Não foi possível adicionar o modelo de link.");
+    }
+};
+
+export const updateLinkTemplate = async (id: string, name: string, url: string): Promise<void> => {
+    try {
+        await firestore.collection('linkTemplates').doc(id).update({ name, url });
+    } catch (error) {
+        console.error("Error updating link template: ", error);
+        throw new Error("Não foi possível atualizar o modelo de link.");
+    }
+};
+
+export const deleteLinkTemplate = async (id: string): Promise<void> => {
+    try {
+        await firestore.collection("linkTemplates").doc(id).delete();
+    } catch (error) {
+        console.error("Error deleting link template: ", error);
+        throw new Error("Não foi possível deletar o modelo de link.");
     }
 };

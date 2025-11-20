@@ -3,10 +3,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
-import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updateInstructionTemplate, deleteInstructionTemplate } from '../services/settingsService';
+import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updateInstructionTemplate, deleteInstructionTemplate, getLinkTemplates, addLinkTemplate, updateLinkTemplate, deleteLinkTemplate } from '../services/settingsService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
-import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, Timestamp } from '../types';
+import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, LinkTemplate, Timestamp } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
 import { auth } from '../firebase/config';
 import { storage } from '../firebase/config';
@@ -37,7 +37,7 @@ const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
 );
 
 // ===================================================================
-// START: Modal Component defined within the same file for convenience
+// START: Modal Components defined within the same file for convenience
 // ===================================================================
 interface ManageInstructionsModalProps {
   isOpen: boolean;
@@ -178,6 +178,167 @@ const ManageInstructionsModal: React.FC<ManageInstructionsModalProps> = ({ isOpe
     </div>
   );
 };
+
+interface ManageLinksModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onTemplatesUpdated: () => void;
+    organizationId: string;
+}
+
+const ManageLinksModal: React.FC<ManageLinksModalProps> = ({ isOpen, onClose, onTemplatesUpdated, organizationId }) => {
+    const [templates, setTemplates] = useState<LinkTemplate[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [newName, setNewName] = useState('');
+    const [newUrl, setNewUrl] = useState('');
+    const [editingTemplate, setEditingTemplate] = useState<LinkTemplate | null>(null);
+
+    const fetchTemplates = useCallback(async () => {
+        if (!organizationId) return;
+        setIsLoading(true);
+        setError('');
+        try {
+            const data = await getLinkTemplates(organizationId);
+            setTemplates(data);
+        } catch (err) {
+            setError('Falha ao carregar os modelos.');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [organizationId]);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchTemplates();
+        }
+    }, [isOpen, fetchTemplates]);
+
+    if (!isOpen) {
+        return null;
+    }
+
+    const handleAddTemplate = async () => {
+        if (!newName.trim() || !newUrl.trim() || !organizationId) return;
+        try {
+            await addLinkTemplate(newName.trim(), newUrl.trim(), organizationId);
+            setNewName('');
+            setNewUrl('');
+            await fetchTemplates();
+            onTemplatesUpdated();
+        } catch (err) {
+            setError('Falha ao adicionar modelo.');
+        }
+    };
+
+    const handleUpdateTemplate = async () => {
+        if (!editingTemplate || !editingTemplate.name.trim() || !editingTemplate.url.trim()) return;
+        try {
+            await updateLinkTemplate(editingTemplate.id, editingTemplate.name, editingTemplate.url);
+            setEditingTemplate(null);
+            await fetchTemplates();
+            onTemplatesUpdated();
+        } catch (err) {
+            setError('Falha ao atualizar modelo.');
+        }
+    };
+
+    const handleDeleteTemplate = async (id: string) => {
+        if (window.confirm('Tem certeza que deseja remover este modelo?')) {
+            try {
+                await deleteLinkTemplate(id);
+                await fetchTemplates();
+                onTemplatesUpdated();
+            } catch (err) {
+                setError('Falha ao remover modelo.');
+            }
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold text-white">Gerenciar Modelos de Links</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
+                </div>
+
+                <div className="space-y-4 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-200">Adicionar Novo Modelo</h3>
+                    <div className="flex flex-col gap-2">
+                        <input
+                            type="text"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            placeholder="Nome do Link (ex: Instagram Festa)"
+                            className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                        />
+                         <input
+                            type="url"
+                            value={newUrl}
+                            onChange={(e) => setNewUrl(e.target.value)}
+                            placeholder="URL (ex: https://instagram.com/...)"
+                            className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary"
+                        />
+                        <button onClick={handleAddTemplate} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark self-end">Adicionar</button>
+                    </div>
+                </div>
+
+                <div className="flex-grow overflow-y-auto border-t border-b border-gray-700 py-4">
+                    <h3 className="text-lg font-semibold text-gray-200 mb-2">Modelos Existentes</h3>
+                    {isLoading && <p>Carregando...</p>}
+                    {error && <p className="text-red-500">{error}</p>}
+                    <ul className="space-y-2">
+                        {templates.map(template => (
+                            <li key={template.id} className="p-2 bg-gray-700/50 rounded-md">
+                                {editingTemplate?.id === template.id ? (
+                                    <div className="flex flex-col gap-2">
+                                        <input
+                                            type="text"
+                                            value={editingTemplate.name}
+                                            onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800"
+                                        />
+                                         <input
+                                            type="url"
+                                            value={editingTemplate.url}
+                                            onChange={(e) => setEditingTemplate({ ...editingTemplate, url: e.target.value })}
+                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-gray-200 font-semibold">{template.name}</p>
+                                        <p className="text-gray-400 text-sm truncate">{template.url}</p>
+                                    </div>
+                                )}
+                                <div className="flex gap-4 justify-end mt-2">
+                                    {editingTemplate?.id === template.id ? (
+                                        <>
+                                            <button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button>
+                                            <button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button>
+                                            <button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button>
+                                        </>
+                                    )}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="mt-6 flex justify-end">
+                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+                    Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ===================================================================
 // END: Modal Component
 // ===================================================================
@@ -193,6 +354,7 @@ const CreatePost: React.FC = () => {
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
     const [instructionTemplates, setInstructionTemplates] = useState<InstructionTemplate[]>([]);
+    const [linkTemplates, setLinkTemplates] = useState<LinkTemplate[]>([]);
     
     // Form states
     const [selectedState, setSelectedState] = useState('');
@@ -229,6 +391,7 @@ const CreatePost: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
+    const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
     
     useEffect(() => {
         if (isScheduling && scheduleDate && scheduleTime) {
@@ -256,10 +419,11 @@ const CreatePost: React.FC = () => {
                 return;
             }
             try {
-                const [orgData, allCampaigns, templatesData] = await Promise.all([
+                const [orgData, allCampaigns, templatesData, linksData] = await Promise.all([
                     getOrganization(selectedOrgId),
                     getAllCampaigns(selectedOrgId),
                     getInstructionTemplates(selectedOrgId),
+                    getLinkTemplates(selectedOrgId),
                 ]);
 
                 if (orgData?.assignedStates) {
@@ -267,6 +431,7 @@ const CreatePost: React.FC = () => {
                 }
                 setCampaigns(allCampaigns);
                 setInstructionTemplates(templatesData);
+                setLinkTemplates(linksData);
                 
                 // Check for duplication or edit request
                 const queryParams = new URLSearchParams(location.search);
@@ -404,6 +569,12 @@ const CreatePost: React.FC = () => {
         if (!selectedOrgId) return;
         const templatesData = await getInstructionTemplates(selectedOrgId);
         setInstructionTemplates(templatesData);
+    };
+
+    const handleRefreshLinkTemplates = async () => {
+        if (!selectedOrgId) return;
+        const linksData = await getLinkTemplates(selectedOrgId);
+        setLinkTemplates(linksData);
     };
 
     const filteredCampaigns = useMemo(() => {
@@ -755,7 +926,32 @@ const CreatePost: React.FC = () => {
                     </div>
                      <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação (ex: marque nosso @, use a #, etc)" rows={4} className="mt-4 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                     <div className="mt-4">
-                       <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                       <div className="flex justify-between items-center mb-1">
+                           <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
+                           <button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">
+                                Gerenciar Links
+                           </button>
+                       </div>
+                       <div className="flex gap-2">
+                           <div className="flex-grow">
+                               <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                           </div>
+                           <select
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        setPostLink(e.target.value);
+                                    }
+                                }}
+                                className="w-1/3 px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 text-sm"
+                           >
+                               <option value="">Modelos...</option>
+                               {linkTemplates.map((template) => (
+                                   <option key={template.id} value={template.url}>
+                                       {template.name}
+                                   </option>
+                               ))}
+                           </select>
+                       </div>
                     </div>
                 </fieldset>
                 
@@ -825,12 +1021,20 @@ const CreatePost: React.FC = () => {
                 </div>
             </form>
             {selectedOrgId && (
-                <ManageInstructionsModal 
-                    isOpen={isInstructionsModalOpen}
-                    onClose={() => setIsInstructionsModalOpen(false)}
-                    onTemplatesUpdated={handleRefreshTemplates}
-                    organizationId={selectedOrgId}
-                />
+                <>
+                    <ManageInstructionsModal 
+                        isOpen={isInstructionsModalOpen}
+                        onClose={() => setIsInstructionsModalOpen(false)}
+                        onTemplatesUpdated={handleRefreshTemplates}
+                        organizationId={selectedOrgId}
+                    />
+                    <ManageLinksModal 
+                        isOpen={isLinksModalOpen}
+                        onClose={() => setIsLinksModalOpen(false)}
+                        onTemplatesUpdated={handleRefreshLinkTemplates}
+                        organizationId={selectedOrgId}
+                    />
+                </>
             )}
         </div>
     );

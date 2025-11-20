@@ -277,6 +277,14 @@ export interface InstructionTemplate {
   createdAt?: Timestamp | FieldValue;
 }
 
+export interface LinkTemplate {
+  id: string;
+  name: string;
+  url: string;
+  organizationId: string;
+  createdAt?: Timestamp | FieldValue;
+}
+
 export interface OneTimePost {
   id: string;
   organizationId: string;
