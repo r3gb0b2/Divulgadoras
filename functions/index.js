@@ -916,11 +916,13 @@ exports.updatePromoterAndSync = functions
         // Check what has changed
         const newEmail = updateData.email ? updateData.email.toLowerCase().trim() : oldData.email;
         const newName = updateData.name ? updateData.name.trim() : oldData.name;
+        const newInstagram = updateData.instagram ? updateData.instagram.trim() : oldData.instagram;
 
         const emailHasChanged = newEmail !== oldData.email;
         const nameHasChanged = newName !== oldData.name;
+        const instagramHasChanged = newInstagram !== oldData.instagram;
 
-        if (!emailHasChanged && !nameHasChanged) {
+        if (!emailHasChanged && !nameHasChanged && !instagramHasChanged) {
           // If nothing to sync has changed, just update the main doc.
           await promoterRef.update(updateData);
           return { success: true, message: "Divulgadora atualizada. Nenhuma sincronização necessária." };
@@ -987,6 +989,61 @@ exports.updatePromoterAndSync = functions
               await scheduledBatch.commit();
               console.log(`Synced ${updatedCount} scheduled posts for promoter ${promoterId}`);
             }
+        }
+
+        // --- SYNC FOLLOW LOOP DATA ---
+        if (nameHasChanged || instagramHasChanged) {
+            // 1. Update Participant Profile
+            const participantRef = db.collection("followLoopParticipants").doc(promoterId);
+            const participantSnap = await participantRef.get();
+            if (participantSnap.exists) {
+                const pUpdate = {};
+                if (nameHasChanged) pUpdate.promoterName = newName;
+                if (instagramHasChanged) pUpdate.instagram = newInstagram;
+                await participantRef.update(pUpdate);
+            }
+
+            // Helper function for batch processing chunks
+            const batchUpdate = async (docs, updateFn) => {
+                const CHUNK_SIZE = 490; 
+                const chunks = [];
+                for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+                    chunks.push(docs.slice(i, i + CHUNK_SIZE));
+                }
+                
+                for (const chunk of chunks) {
+                    const batch = db.batch();
+                    chunk.forEach(doc => {
+                        updateFn(batch, doc);
+                    });
+                    await batch.commit();
+                }
+            };
+
+            // 2. Update Interactions (as Follower)
+            const asFollowerQuery = db.collection("followInteractions").where("followerId", "==", promoterId);
+            const asFollowerSnap = await asFollowerQuery.get();
+            if (!asFollowerSnap.empty) {
+                await batchUpdate(asFollowerSnap.docs, (batch, doc) => {
+                    const iUpdate = {};
+                    if (nameHasChanged) iUpdate.followerName = newName;
+                    if (instagramHasChanged) iUpdate.followerInstagram = newInstagram;
+                    batch.update(doc.ref, iUpdate);
+                });
+            }
+
+            // 3. Update Interactions (as Followed)
+            const asFollowedQuery = db.collection("followInteractions").where("followedId", "==", promoterId);
+            const asFollowedSnap = await asFollowedQuery.get();
+            if (!asFollowedSnap.empty) {
+                await batchUpdate(asFollowedSnap.docs, (batch, doc) => {
+                     const iUpdate = {};
+                     if (nameHasChanged) iUpdate.followedName = newName;
+                     if (instagramHasChanged) iUpdate.followedInstagram = newInstagram;
+                     batch.update(doc.ref, iUpdate);
+                });
+            }
+             console.log(`Synced Follow Loop data for promoter ${promoterId}`);
         }
 
         console.log(`Successfully updated promoter ${promoterId} and synced all related data.`);
