@@ -242,31 +242,6 @@ export const getConfirmedFollowers = async (promoterId: string): Promise<FollowI
     }
 };
 
-// NEW: Get list of people I follow (validated)
-export const getPeopleIFollow = async (promoterId: string): Promise<FollowInteraction[]> => {
-    try {
-        const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followerId', '==', promoterId)
-            .where('status', '==', 'validated')
-            .limit(100);
-
-        const snap = await q.get();
-        const following = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-        
-        // Sort by validatedAt descending
-        following.sort((a, b) => {
-             const timeA = (a.validatedAt as Timestamp)?.toMillis() || 0;
-             const timeB = (b.validatedAt as Timestamp)?.toMillis() || 0;
-             return timeB - timeA;
-        });
-
-        return following;
-    } catch (error: any) {
-        console.error('Error fetching following list:', error);
-        return [];
-    }
-};
-
 // NEW: Get rejected interactions where current user was the FOLLOWER (to see rejection alerts)
 export const getRejectedFollowsReceived = async (promoterId: string): Promise<FollowInteraction[]> => {
     try {
@@ -449,6 +424,17 @@ export const reportUnfollow = async (interactionId: string, offenderId: string, 
     }
 };
 
+export const updateParticipantInstagram = async (promoterId: string, newInstagram: string): Promise<void> => {
+  try {
+    await firestore.collection(COLLECTION_PARTICIPANTS).doc(promoterId).update({
+      instagram: newInstagram.trim()
+    });
+  } catch (error: any) {
+    console.error("Error updating instagram:", error);
+    throw new Error("Falha ao atualizar Instagram.");
+  }
+};
+
 // --- Admin Functions ---
 
 export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
@@ -556,43 +542,5 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
         console.error("Error admin creating follow:", error);
         if (error instanceof Error) throw error;
         throw new Error("Falha ao criar conexão manual.");
-    }
-}
-
-// NEW: Send a reminder to the followed person
-export const sendFollowReminder = async (interactionId: string): Promise<void> => {
-    try {
-        await firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId).update({
-            lastRemindedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    } catch (error) {
-        console.error("Error sending reminder:", error);
-        throw new Error("Não foi possível enviar o aviso.");
-    }
-}
-
-// NEW: Get reminders for the current user (where they are the target)
-export const getFollowReminders = async (promoterId: string): Promise<FollowInteraction[]> => {
-    try {
-        // Query for interactions where this user is followed and lastRemindedAt is set
-        const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followedId', '==', promoterId);
-        
-        const snap = await q.get();
-        const reminders = snap.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction))
-            .filter(i => !!i.lastRemindedAt);
-            
-        // Sort desc by reminder time
-        reminders.sort((a, b) => {
-             const timeA = (a.lastRemindedAt as any)?.toMillis() || 0;
-             const timeB = (b.lastRemindedAt as any)?.toMillis() || 0;
-             return timeB - timeA;
-        });
-
-        return reminders;
-    } catch (error: any) {
-        console.error("Error getting reminders:", error);
-        return [];
     }
 }

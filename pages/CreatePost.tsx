@@ -287,8 +287,12 @@ const CreatePost: React.FC = () => {
 
                         if (postData.type === 'image' && postData.mediaUrl) {
                             setOriginalMediaPath(postData.mediaUrl);
-                            const storageRef = storage.ref(postData.mediaUrl);
-                            storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                            if (postData.mediaUrl.startsWith('http')) {
+                                setMediaPreview(postData.mediaUrl);
+                            } else {
+                                const storageRef = storage.ref(postData.mediaUrl);
+                                storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                            }
                         } else if (postData.type === 'video' && postData.mediaUrl) {
                             // Handle legacy cases where GDrive URL was in mediaUrl
                              setGoogleDriveUrl(postData.googleDriveUrl || postData.mediaUrl || '');
@@ -326,8 +330,12 @@ const CreatePost: React.FC = () => {
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
-                        const storageRef = storage.ref(originalPost.mediaUrl);
-                        storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                        if (originalPost.mediaUrl.startsWith('http')) {
+                            setMediaPreview(originalPost.mediaUrl);
+                        } else {
+                            const storageRef = storage.ref(originalPost.mediaUrl);
+                            storageRef.getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                        }
                     }
                 }
 

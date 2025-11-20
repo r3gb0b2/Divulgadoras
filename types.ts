@@ -372,5 +372,4 @@ export interface FollowInteraction {
   followerInstagram: string;
   followedName: string;
   followedInstagram?: string; // New field to ensure correct linking in alerts
-  lastRemindedAt?: Timestamp | FieldValue; // New field for follow reminders
 }

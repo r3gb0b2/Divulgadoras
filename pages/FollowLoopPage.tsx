@@ -12,16 +12,13 @@ import {
   getPendingValidations, 
   validateFollow,
   getConfirmedFollowers,
-  getPeopleIFollow,
   getRejectedFollowsReceived,
   getRejectedFollowsGiven,
   undoRejection,
-  reportUnfollow,
-  sendFollowReminder,
-  getFollowReminders
+  reportUnfollow
 } from '../services/followLoopService';
 import { Promoter, FollowLoopParticipant, FollowInteraction } from '../types';
-import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon, UserMinusIcon, ExternalLinkIcon, BellIcon } from '../components/Icons';
+import { ArrowLeftIcon, InstagramIcon, HeartIcon, RefreshIcon, CheckCircleIcon, XIcon, UsersIcon, ChartBarIcon, AlertTriangleIcon, UndoIcon, UserMinusIcon } from '../components/Icons';
 
 const FollowLoopPage: React.FC = () => {
   const navigate = useNavigate();
@@ -31,22 +28,17 @@ const FollowLoopPage: React.FC = () => {
   const [participant, setParticipant] = useState<FollowLoopParticipant | null>(null);
   const [ineligibleData, setIneligibleData] = useState<{ current: number, required: number } | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers' | 'following' | 'alerts'>('follow');
+  const [activeTab, setActiveTab] = useState<'follow' | 'validate' | 'followers' | 'alerts'>('follow');
   const [targetProfile, setTargetProfile] = useState<FollowLoopParticipant | null>(null);
   const [validations, setValidations] = useState<FollowInteraction[]>([]);
   const [followersList, setFollowersList] = useState<FollowInteraction[]>([]);
-  const [followingList, setFollowingList] = useState<FollowInteraction[]>([]);
   const [alerts, setAlerts] = useState<FollowInteraction[]>([]);
-  const [reminders, setReminders] = useState<FollowInteraction[]>([]);
   const [rejectedByMe, setRejectedByMe] = useState<FollowInteraction[]>([]);
   const [validationView, setValidationView] = useState<'pending' | 'rejected'>('pending');
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasClickedLink, setHasClickedLink] = useState(false);
-  
-  const [processingReminder, setProcessingReminder] = useState<string | null>(null);
-  const [processingFollowBack, setProcessingFollowBack] = useState<string | null>(null);
 
   // --- Auth / Entry ---
   const handleLogin = async (e: React.FormEvent) => {
@@ -159,28 +151,11 @@ const FollowLoopPage: React.FC = () => {
         console.error(err);
     }
   }, []);
-
-  const loadFollowing = useCallback(async (pid: string) => {
-    try {
-        // We also need the followers list to check for mutual following
-        if (followersList.length === 0) {
-            await loadFollowers(pid);
-        }
-        const list = await getPeopleIFollow(pid);
-        setFollowingList(list);
-    } catch (err) {
-        console.error(err);
-    }
-  }, [followersList, loadFollowers]);
   
   const loadAlerts = useCallback(async (pid: string) => {
       try {
-          const [rejections, remindersList] = await Promise.all([
-              getRejectedFollowsReceived(pid),
-              getFollowReminders(pid)
-          ]);
-          setAlerts(rejections);
-          setReminders(remindersList);
+          const list = await getRejectedFollowsReceived(pid);
+          setAlerts(list);
       } catch (err) {
           console.error(err);
       }
@@ -256,44 +231,6 @@ const FollowLoopPage: React.FC = () => {
       } catch (err: any) {
           alert(err.message);
       }
-  };
-  
-  const handleNotify = async (interactionId: string) => {
-      setProcessingReminder(interactionId);
-      try {
-          await sendFollowReminder(interactionId);
-          if (promoter) loadFollowing(promoter.id); // Refresh to update UI state if needed
-          alert("Aviso enviado com sucesso!");
-      } catch (err: any) {
-          alert(err.message);
-      } finally {
-          setProcessingReminder(null);
-      }
-  };
-
-  const handleFollowBack = async (targetId: string, reminderId: string) => {
-      if (!promoter) return;
-      setProcessingFollowBack(reminderId);
-      try {
-          await registerFollow(promoter.id, targetId);
-          // Refresh data
-          loadAlerts(promoter.id);
-          // Also refresh following list since I now follow them
-          loadFollowing(promoter.id);
-          alert("Você seguiu de volta com sucesso!");
-      } catch (err: any) {
-          alert(err.message);
-      } finally {
-          setProcessingFollowBack(null);
-      }
-  };
-
-  const isMutualFollow = (personId: string) => {
-      return followersList.some(f => f.followerId === personId);
-  };
-  
-  const amIFollowing = (personId: string) => {
-      return followingList.some(f => f.followedId === personId);
   };
 
   // --- Renders ---
@@ -416,17 +353,11 @@ const FollowLoopPage: React.FC = () => {
                Seguidores
            </button>
            <button 
-             onClick={() => { setActiveTab('following'); if(promoter) loadFollowing(promoter.id); }} 
-             className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all ${activeTab === 'following' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
-           >
-               Seguindo
-           </button>
-           <button 
              onClick={() => { setActiveTab('alerts'); if(promoter) loadAlerts(promoter.id); }} 
              className={`flex-1 py-2 px-3 text-sm font-medium rounded-md whitespace-nowrap transition-all flex items-center justify-center gap-1 ${activeTab === 'alerts' ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'}`}
            >
                Alertas
-               {(alerts.length > 0 || reminders.length > 0) && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{alerts.length + reminders.length}</span>}
+               {alerts.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{alerts.length}</span>}
            </button>
        </div>
 
@@ -588,76 +519,34 @@ const FollowLoopPage: React.FC = () => {
 
        {activeTab === 'alerts' && (
            <div className="space-y-4">
-               {/* Reminders Section */}
-               {reminders.length > 0 && (
-                   <div className="mb-6">
-                       <h3 className="text-sm font-bold text-blue-300 mb-3 uppercase tracking-wider border-b border-blue-500/30 pb-1">Avisos de Seguidores</h3>
-                       <div className="space-y-3">
-                           {reminders.filter(r => !amIFollowing(r.followerId)).length === 0 ? (
-                                <p className="text-center text-gray-500 text-sm py-2">Nenhum aviso pendente.</p>
-                           ) : (
-                               reminders.filter(r => !amIFollowing(r.followerId)).map(r => (
-                                   <div key={r.id} className="bg-gray-800 p-4 rounded-lg border-l-4 border-blue-500 flex flex-col gap-3">
-                                       <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-bold text-white text-lg">{r.followerName}</p>
-                                                <p className="text-sm text-gray-400">@{r.followerInstagram}</p>
-                                                <p className="text-xs text-blue-300 mt-1">🔔 Avisou que está te seguindo.</p>
-                                            </div>
-                                       </div>
-                                       <div className="flex gap-2">
-                                           <button 
-                                               onClick={() => handleOpenAlertProfile(r.followerInstagram)}
-                                               className="flex-1 py-2 bg-gray-700 text-white text-xs font-bold rounded hover:bg-gray-600 flex items-center justify-center gap-1"
-                                           >
-                                               <InstagramIcon className="w-3 h-3" /> Ver Perfil
-                                           </button>
-                                           <button 
-                                               onClick={() => handleFollowBack(r.followerId, r.id)}
-                                               disabled={processingFollowBack === r.id}
-                                               className="flex-1 py-2 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 flex items-center justify-center gap-1 disabled:opacity-50"
-                                           >
-                                               <HeartIcon className="w-3 h-3" /> {processingFollowBack === r.id ? '...' : 'Seguir de Volta'}
-                                           </button>
-                                       </div>
-                                   </div>
-                               ))
-                           )}
-                       </div>
+               {alerts.length === 0 ? (
+                   <div className="text-center py-10">
+                       <CheckCircleIcon className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-50" />
+                       <p className="text-gray-300 font-semibold">Tudo certo!</p>
+                       <p className="text-gray-500 text-sm">Nenhuma pendência ou alerta no momento.</p>
                    </div>
-               )}
-
-               {/* Rejections Section */}
-               <div>
-                   <h3 className="text-sm font-bold text-red-300 mb-3 uppercase tracking-wider border-b border-red-500/30 pb-1">Alertas de Negativa</h3>
-                   {alerts.length === 0 ? (
-                       <div className="text-center py-6 bg-gray-800/50 rounded-lg">
-                           <CheckCircleIcon className="w-10 h-10 text-green-500 mx-auto mb-2 opacity-50" />
-                           <p className="text-gray-500 text-sm">Nenhuma negativa recente.</p>
-                       </div>
-                   ) : (
-                       <>
-                           <p className="text-xs text-red-300 bg-red-900/20 p-2 rounded border border-red-900/50 mb-3">
-                               Estas pessoas informaram que você <strong>não seguiu</strong> de volta.
-                           </p>
-                           {alerts.map(alert => (
-                               <div key={alert.id} className="bg-gray-800 p-4 rounded-lg border-l-4 border-red-500 flex justify-between items-center mb-3">
-                                   <div>
-                                       <p className="font-bold text-white">{alert.followedName}</p>
-                                       <p className="text-xs text-gray-400">Informou que você não seguiu.</p>
-                                   </div>
-                                   <button 
-                                       onClick={() => handleOpenAlertProfile(alert.followedInstagram || '')} 
-                                       className="px-3 py-2 bg-white text-black font-bold rounded text-xs flex items-center gap-1 hover:bg-gray-200"
-                                   >
-                                       <InstagramIcon className="w-3 h-3" />
-                                       Corrigir
-                                   </button>
+               ) : (
+                   <>
+                       <p className="text-sm text-red-300 bg-red-900/20 p-3 rounded border border-red-900/50 mb-4">
+                           Estas divulgadoras informaram que você <strong>não seguiu</strong> de volta. Por favor, verifique e siga para regularizar.
+                       </p>
+                       {alerts.map(alert => (
+                           <div key={alert.id} className="bg-gray-800 p-4 rounded-lg border-l-4 border-red-500 flex justify-between items-center">
+                               <div>
+                                   <p className="font-bold text-white">{alert.followedName}</p>
+                                   <p className="text-xs text-gray-400">Informou que você não seguiu.</p>
                                </div>
-                           ))}
-                       </>
-                   )}
-               </div>
+                               <button 
+                                   onClick={() => handleOpenAlertProfile(alert.followedInstagram || '')} 
+                                   className="px-3 py-2 bg-white text-black font-bold rounded text-xs flex items-center gap-1 hover:bg-gray-200"
+                               >
+                                   <InstagramIcon className="w-3 h-3" />
+                                   Corrigir Agora
+                               </button>
+                           </div>
+                       ))}
+                   </>
+               )}
            </div>
        )}
 
@@ -684,83 +573,20 @@ const FollowLoopPage: React.FC = () => {
                                     {f.followerInstagram}
                                 </a>
                             </div>
-                            <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                                <div className="text-green-400 flex items-center gap-1" title="Confirmado">
-                                    <CheckCircleIcon className="w-4 h-4" />
-                                    <span className="text-xs font-medium">Confirmada</span>
+                            <div className="flex-shrink-0 flex items-center gap-2">
+                                <div className="text-green-400" title="Confirmado">
+                                    <CheckCircleIcon className="w-5 h-5" />
                                 </div>
                                 <button 
                                     onClick={() => handleReportUnfollow(f.id, f.followerId)}
-                                    className="text-xs px-2 py-1 bg-gray-700 hover:bg-red-900/40 text-gray-300 hover:text-red-300 border border-gray-600 hover:border-red-500 rounded transition-colors"
+                                    className="p-2 text-gray-400 hover:text-red-400 bg-gray-700/50 rounded-full hover:bg-gray-700 transition-colors"
+                                    title="Parou de Seguir"
                                 >
-                                    Parou de seguir
+                                    <UserMinusIcon className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
                      ))}
-                   </>
-               )}
-           </div>
-       )}
-
-       {activeTab === 'following' && (
-           <div className="space-y-4">
-               {followingList.length === 0 ? (
-                   <p className="text-center text-gray-400 py-8">Você ainda não seguiu ninguém nesta dinâmica.</p>
-               ) : (
-                   <>
-                     <p className="text-center text-gray-400 text-sm mb-2">Você está seguindo {followingList.length} pessoa(s).</p>
-                     {followingList.map(f => {
-                        const isMutual = isMutualFollow(f.followedId);
-                        return (
-                            <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
-                                <div className="w-10 h-10 bg-indigo-900 rounded-full flex items-center justify-center flex-shrink-0 text-white">
-                                    <UsersIcon className="w-5 h-5" />
-                                </div>
-                                <div className="flex-grow overflow-hidden">
-                                    <p className="font-bold text-white truncate">{f.followedName}</p>
-                                    <a 
-                                        href={`https://instagram.com/${f.followedInstagram?.replace('@', '')}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="text-sm text-pink-400 hover:underline truncate block"
-                                    >
-                                        {f.followedInstagram}
-                                    </a>
-                                </div>
-                                <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                                    <a 
-                                        href={`https://instagram.com/${f.followedInstagram?.replace('@', '')}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-full"
-                                        title="Abrir Instagram"
-                                    >
-                                        <ExternalLinkIcon className="w-4 h-4" />
-                                    </a>
-                                    {isMutual ? (
-                                        <span className="text-[10px] font-bold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full border border-green-900">
-                                            Segue você
-                                        </span>
-                                    ) : (
-                                        <>
-                                            <span className="text-[10px] font-bold text-yellow-400 bg-yellow-900/30 px-2 py-0.5 rounded-full border border-yellow-900 mb-1">
-                                                Não te segue
-                                            </span>
-                                            <button 
-                                                onClick={() => handleNotify(f.id)}
-                                                disabled={processingReminder === f.id}
-                                                className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors disabled:opacity-50"
-                                            >
-                                                <BellIcon className="w-3 h-3" />
-                                                {processingReminder === f.id ? '...' : 'Avisar'}
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                     })}
                    </>
                )}
            </div>
