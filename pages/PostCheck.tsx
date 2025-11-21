@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -24,6 +24,37 @@ const extractGoogleDriveId = (url: string): string | null => {
     const patterns = [ /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/, /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/, /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/ ];
     for (const pattern of patterns) { const match = url.match(pattern); if (match && match[1]) { id = match[1]; break; } }
     return id;
+};
+
+const isAssignmentActive = (assignment: PostAssignment): boolean => {
+    // 1. Completed or Justified -> Inactive (History)
+    if (assignment.proofSubmittedAt || assignment.justification) return false;
+
+    // 2. Post Deactivated -> Inactive
+    if (!assignment.post.isActive) return false;
+
+    // 3. Check Expiration
+    const now = new Date();
+    const expiresAt = toDateSafe(assignment.post.expiresAt);
+    
+    if (expiresAt && now > expiresAt) {
+        // If late submissions allowed, it's still active
+        if (assignment.post.allowLateSubmissions) return true;
+
+        // If confirmed, check the 24h window from confirmation time
+        if (assignment.status === 'confirmed' && assignment.confirmedAt) {
+            const confirmedAt = toDateSafe(assignment.confirmedAt);
+            if (confirmedAt) {
+                const deadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+                if (now < deadline) return true; // Still in window
+            }
+        }
+        
+        // Otherwise expired/missed
+        return false;
+    }
+
+    return true;
 };
 
 const CountdownTimer: React.FC<{ targetDate: any, onEnd?: () => void }> = ({ targetDate, onEnd }) => {
@@ -187,6 +218,7 @@ const PostCheck: React.FC = () => {
     const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -296,6 +328,9 @@ const PostCheck: React.FC = () => {
         );
     };
 
+    const activeAssignments = assignments.filter(a => isAssignmentActive(a));
+    const historyAssignments = assignments.filter(a => !isAssignmentActive(a));
+
     return (
         <div className="max-w-2xl mx-auto">
             <div className="flex justify-between items-center mb-4">
@@ -314,14 +349,40 @@ const PostCheck: React.FC = () => {
             {searched && !isLoading && (
                 <div className="space-y-8">
                     {renderScheduledPosts()}
-                    {assignments.length > 0 ? (
-                        <div className="space-y-6">
-                            {assignments.map(assignment => (
+                    
+                    {/* Active Assignments */}
+                    <div className="space-y-6">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <CheckCircleIcon className="w-6 h-6 text-primary" /> Tarefas Pendentes
+                        </h2>
+                        {activeAssignments.length > 0 ? (
+                            activeAssignments.map(assignment => (
                                 <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />
-                            ))}
+                            ))
+                        ) : (
+                            <p className="text-center text-gray-400 py-4 border border-gray-700 rounded-lg bg-dark/50">Nenhuma tarefa pendente no momento! 🎉</p>
+                        )}
+                    </div>
+
+                    {/* History Assignments */}
+                    {historyAssignments.length > 0 && (
+                        <div className="space-y-6 pt-6 border-t border-gray-700">
+                            <button 
+                                onClick={() => setShowHistory(!showHistory)} 
+                                className="w-full flex justify-between items-center text-xl font-bold text-gray-400 hover:text-white transition-colors"
+                            >
+                                <span>Histórico ({historyAssignments.length})</span>
+                                <span className="text-sm bg-gray-700 px-3 py-1 rounded-full">{showHistory ? 'Ocultar' : 'Mostrar'}</span>
+                            </button>
+                            
+                            {showHistory && (
+                                <div className="space-y-6 animate-fadeIn">
+                                    {historyAssignments.map(assignment => (
+                                        <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <p className="text-center text-gray-400">Nenhuma publicação encontrada.</p>
                     )}
                 </div>
             )}
