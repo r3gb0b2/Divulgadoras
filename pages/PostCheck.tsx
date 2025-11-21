@@ -27,13 +27,23 @@ const extractGoogleDriveId = (url: string): string | null => {
 };
 
 const isAssignmentActive = (assignment: PostAssignment): boolean => {
-    // 1. Completed or Justified -> Inactive (History)
-    if (assignment.proofSubmittedAt || assignment.justification) return false;
+    // 1. Proof Submitted -> History (Done)
+    if (assignment.proofSubmittedAt) return false;
 
-    // 2. Post Deactivated -> Inactive
+    // 2. Justification Logic
+    if (assignment.justification) {
+        // If justification is decided (accepted/rejected), it goes to history
+        if (assignment.justificationStatus === 'accepted' || assignment.justificationStatus === 'rejected') {
+            return false;
+        }
+        // If justification is pending, keep it active so user can see status
+        return true;
+    }
+
+    // 3. Post Deactivated -> History
     if (!assignment.post.isActive) return false;
 
-    // 3. Check Expiration
+    // 4. Check Expiration
     const now = new Date();
     const expiresAt = toDateSafe(assignment.post.expiresAt);
     
@@ -50,7 +60,7 @@ const isAssignmentActive = (assignment: PostAssignment): boolean => {
             }
         }
         
-        // Otherwise expired/missed
+        // Otherwise expired/missed -> History
         return false;
     }
 
@@ -170,13 +180,31 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         } catch (error: any) { console.error('Failed to download from Firebase:', error); alert(`Não foi possível baixar a mídia do Link 1: ${error.message}`); } finally { setIsMediaProcessing(false); }
     };
     const handleGoogleDriveDownload = () => { if (!isPostDownloadable || !assignment.post.googleDriveUrl) return; const { googleDriveUrl, type } = assignment.post; let urlToOpen = googleDriveUrl; if (type === 'video') { const fileId = extractGoogleDriveId(googleDriveUrl); if (fileId) { urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`; } } window.open(urlToOpen, '_blank'); };
-    const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => { const styles = { pending: "bg-yellow-900/50 text-yellow-300", accepted: "bg-green-900/50 text-green-300", rejected: "bg-red-900/50 text-red-300" }; const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" }; if (!status) return <span className="text-gray-400">Pendente</span>; return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>; };
+    
+    const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => { 
+        const styles = { pending: "bg-yellow-900/50 text-yellow-300", accepted: "bg-green-900/50 text-green-300", rejected: "bg-red-900/50 text-red-300" }; 
+        const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" }; 
+        const effectiveStatus = status || 'pending';
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[effectiveStatus]}`}>{text[effectiveStatus]}</span>; 
+    };
+    
     const hasProof = !!assignment.proofSubmittedAt;
     const hasJustification = !!assignment.justification;
 
     const renderActions = () => {
         if (hasProof) return (<div className="mt-4 text-center"><p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>{assignment.proofImageUrls && assignment.proofImageUrls.length > 0 ? (<div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, index) => (<a key={index} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div>) : (<p className="text-xs text-gray-400">(Concluído automaticamente)</p>)}</div>);
-        if (hasJustification) return (<div className="mt-4 text-center"><p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p><p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p><div className="text-xs mb-2">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>{assignment.justificationResponse && (<div className="mt-2 text-left bg-dark p-3 rounded-md border-l-4 border-primary"><p className="text-sm font-semibold text-primary mb-1">Resposta do Organizador:</p><p className="text-sm text-gray-300 whitespace-pre-wrap">{assignment.justificationResponse}</p></div>)}</div>);
+        
+        if (hasJustification) {
+            return (
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-yellow-300 font-semibold mb-2">Justificativa Enviada</p>
+                    <p className="text-sm italic text-gray-300 bg-gray-800 p-2 rounded-md mb-2">"{assignment.justification}"</p>
+                    <div className="text-xs mb-2">Status: {renderJustificationStatus(assignment.justificationStatus)}</div>
+                    {assignment.justificationResponse && (<div className="mt-2 text-left bg-dark p-3 rounded-md border-l-4 border-primary"><p className="text-sm font-semibold text-primary mb-1">Resposta do Organizador:</p><p className="text-sm text-gray-300 whitespace-pre-wrap">{assignment.justificationResponse}</p></div>)}
+                </div>
+            );
+        }
+
         if (assignment.status === 'pending') {
             if (!assignment.post.isActive || isExpired) {
                 return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}</div>);
@@ -328,6 +356,7 @@ const PostCheck: React.FC = () => {
         );
     };
 
+    // Filter active vs history based on updated logic
     const activeAssignments = assignments.filter(a => isAssignmentActive(a));
     const historyAssignments = assignments.filter(a => !isAssignmentActive(a));
 
