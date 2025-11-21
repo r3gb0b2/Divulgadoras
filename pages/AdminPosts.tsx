@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPostsForOrg, getAssignmentsForOrganization } from '../services/postService';
+import { getPostsForOrg, getAssignmentsForOrganization, updatePost } from '../services/postService';
 import { getOrganizations } from '../services/organizationService';
 import { Post, Organization, PostAssignment } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -121,6 +122,21 @@ const AdminPosts: React.FC = () => {
                 return posts;
         }
     }, [posts, activePosts, inactivePosts, statusFilter]);
+
+    const handleToggleJustification = async (post: Post) => {
+        try {
+            const newVal = post.allowJustification === false ? true : false;
+            // Optimistic update locally
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, allowJustification: newVal } : p));
+            
+            // Call API
+            await updatePost(post.id, { allowJustification: newVal });
+        } catch (e: any) {
+            alert("Erro ao atualizar permissão de justificativa: " + e.message);
+            // Revert on error
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, allowJustification: post.allowJustification } : p));
+        }
+    }
     
     const renderContent = () => {
         if (isLoading) {
@@ -172,7 +188,18 @@ const AdminPosts: React.FC = () => {
                                 </div>
                                 <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
-                                <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4">
+                                <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4 space-y-3">
+                                     {/* Toggle for Justifications */}
+                                     <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={post.allowJustification !== false} 
+                                            onChange={() => handleToggleJustification(post)}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                        />
+                                        <span>Aceitar Justificativas</span>
+                                     </label>
+
                                      <button 
                                         onClick={() => navigate(`/admin/posts/${post.id}`)}
                                         className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold"

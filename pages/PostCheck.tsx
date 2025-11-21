@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
@@ -103,6 +104,9 @@ const ProofSection: React.FC<{
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
 
+    // Default to true if undefined (legacy posts)
+    const allowJustification = assignment.post.allowJustification !== false;
+
     useEffect(() => {
         if (!assignment.confirmedAt) return;
 
@@ -179,12 +183,14 @@ const ProofSection: React.FC<{
     return (
         <div className="mt-4 text-center">
             {isExpired ? (
-                <button
-                    onClick={() => onJustify(assignment)}
-                    className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                >
-                    Justificar Ausência
-                </button>
+                allowJustification && (
+                    <button
+                        onClick={() => onJustify(assignment)}
+                        className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                )
             ) : (
                 <button
                     onClick={() => navigate(`/proof/${assignment.id}`)}
@@ -209,6 +215,8 @@ const PostCard: React.FC<{
     const [linkCopied, setLinkCopied] = useState(false);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
     
+    const allowJustification = assignment.post.allowJustification !== false;
+
     if (!assignment.promoterHasJoinedGroup) {
         return (
             <div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500">
@@ -357,24 +365,28 @@ const PostCard: React.FC<{
             if (!assignment.post.isActive || isExpired) {
                 return (
                     <div className="w-full flex flex-col sm:flex-row gap-2">
-                        <button 
-                            onClick={() => onJustify(assignment)}
-                            className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                            Justificar Ausência
-                        </button>
+                        {allowJustification && (
+                            <button 
+                                onClick={() => onJustify(assignment)}
+                                className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                            >
+                                Justificar Ausência
+                            </button>
+                        )}
                     </div>
                 );
             }
 
             return (
                 <div className="w-full flex flex-col sm:flex-row gap-2">
-                    <button 
-                        onClick={() => onJustify(assignment)}
-                        className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
-                    >
-                        Justificar Ausência
-                    </button>
+                    {allowJustification && (
+                        <button 
+                            onClick={() => onJustify(assignment)}
+                            className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    )}
                     <button 
                         onClick={handleConfirm}
                         disabled={isConfirming}

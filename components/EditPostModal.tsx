@@ -61,6 +61,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     const [skipProofRequirement, setSkipProofRequirement] = useState(false);
+    const [allowJustification, setAllowJustification] = useState(true);
 
     useEffect(() => {
         if (post) {
@@ -93,6 +94,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setAllowLateSubmissions(post.allowLateSubmissions || false);
             setAllowImmediateProof(post.allowImmediateProof || false);
             setSkipProofRequirement(post.skipProofRequirement || false);
+            setAllowJustification(post.allowJustification !== false);
 
             setMediaFile(null); // Reset file input on open
         }
@@ -140,6 +142,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             allowImmediateProof,
             postFormats,
             skipProofRequirement,
+            allowJustification,
             googleDriveUrl: googleDriveUrl.trim() ? googleDriveUrl.trim() : undefined,
         };
         
@@ -233,6 +236,10 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                          <label className="flex items-center space-x-2 cursor-pointer text-sm">
                             <input type="checkbox" checked={skipProofRequirement} onChange={(e) => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Não exigir envio de print (conclusão automática)</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input type="checkbox" checked={allowJustification} onChange={(e) => setAllowJustification(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Permitir justificativas</span>
                         </label>
                         <div>
                              <label className="block text-sm font-medium text-gray-300 mb-2">Formato (informativo):</label>

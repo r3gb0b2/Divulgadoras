@@ -157,6 +157,7 @@ export interface Post {
   allowImmediateProof?: boolean;
   postFormats?: ('story' | 'reels')[];
   skipProofRequirement?: boolean;
+  allowJustification?: boolean; // New field to control justification button
 }
 
 export interface PostAssignment {
@@ -179,6 +180,7 @@ export interface PostAssignment {
     allowImmediateProof?: boolean;
     postFormats?: ('story' | 'reels')[];
     skipProofRequirement?: boolean;
+    allowJustification?: boolean;
   };
   organizationId: string;
   promoterId: string;
@@ -257,6 +259,7 @@ export interface ScheduledPostData {
   allowImmediateProof?: boolean;
   postFormats?: ('story' | 'reels')[];
   skipProofRequirement?: boolean;
+  allowJustification?: boolean;
 }
 
 export interface ScheduledPost {

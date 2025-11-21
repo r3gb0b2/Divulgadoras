@@ -375,6 +375,7 @@ const CreatePost: React.FC = () => {
     const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     const [skipProofRequirement, setSkipProofRequirement] = useState(false);
+    const [allowJustification, setAllowJustification] = useState(true);
     
     // Scheduling state
     const [isScheduling, setIsScheduling] = useState(false);
@@ -471,6 +472,7 @@ const CreatePost: React.FC = () => {
                         setAllowLateSubmissions(postData.allowLateSubmissions || false);
                         setAllowImmediateProof(postData.allowImmediateProof || false);
                         setSkipProofRequirement(postData.skipProofRequirement || false);
+                        setAllowJustification(postData.allowJustification !== false);
                         setSelectedPromoters(new Set(assignedPromoters.map(p => p.id)));
                         
                         setIsScheduling(true);
@@ -492,6 +494,7 @@ const CreatePost: React.FC = () => {
                     setAllowLateSubmissions(originalPost.allowLateSubmissions || false);
                     setAllowImmediateProof(originalPost.allowImmediateProof || false);
                     setSkipProofRequirement(originalPost.skipProofRequirement || false);
+                    setAllowJustification(originalPost.allowJustification !== false);
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
@@ -682,6 +685,7 @@ const CreatePost: React.FC = () => {
                 allowImmediateProof: allowImmediateProof,
                 postFormats: postFormats,
                 skipProofRequirement: skipProofRequirement,
+                allowJustification: allowJustification,
             };
             
             if (editingScheduledPostId) {
@@ -984,6 +988,10 @@ const CreatePost: React.FC = () => {
                         <label className="flex items-center space-x-2 cursor-pointer" title="Se marcado, ao clicar em 'Eu Publiquei!', a tarefa será marcada como concluída automaticamente, sem pedir o envio de print.">
                             <input type="checkbox" checked={skipProofRequirement} onChange={(e) => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
                             <span>Não exigir envio de print (conclusão automática)</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer" title="Se desmarcado, as divulgadoras não poderão enviar justificativa para este post.">
+                            <input type="checkbox" checked={allowJustification} onChange={(e) => setAllowJustification(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Permitir envio de justificativa</span>
                         </label>
                     </div>
                 </fieldset>
