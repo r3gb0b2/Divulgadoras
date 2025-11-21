@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp, Organization } from '../types';
@@ -133,24 +132,25 @@ export const PostDetails: React.FC = () => {
     }, [organization]);
 
     const assignmentsWithStats = useMemo(() => {
-        const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
+        const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number; justifications: number }>();
         const now = new Date();
 
         allOrgAssignments.forEach(a => {
             if (!a.post) return;
             const promoterId = a.promoterId;
-            const stats = promoterStatsMap.get(promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 };
+            const stats = promoterStatsMap.get(promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0, justifications: 0 };
             
             stats.assigned++;
 
             if (a.proofSubmittedAt) {
                 stats.completed++;
             } else if (a.justification) {
+                stats.justifications++;
                 if (a.justificationStatus === 'accepted') {
                     stats.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
                     stats.missed++;
-                } else { // 'pending'
+                } else if (a.justificationStatus === 'pending' || a.justification) {
                     stats.pending++;
                 }
             } else {

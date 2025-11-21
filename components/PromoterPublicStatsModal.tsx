@@ -53,14 +53,14 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
 
-    // 2. Handle justifications
-    if (assignment.justification) {
-        if (assignment.justificationStatus === 'accepted') {
-            return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
-        }
-        if (assignment.justificationStatus === 'rejected') {
-            return { text: 'Perdido (Justificativa Rejeitada)', color: 'bg-red-900/50 text-red-300' };
-        }
+    // 2. Handle justifications - Check status FIRST
+    if (assignment.justificationStatus === 'accepted') {
+        return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
+    }
+    if (assignment.justificationStatus === 'rejected') {
+        return { text: 'Perdido (Justificativa Rejeitada)', color: 'bg-red-900/50 text-red-300' };
+    }
+    if (assignment.justificationStatus === 'pending' || assignment.justification) {
         return { text: 'Justificativa Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
     }
     

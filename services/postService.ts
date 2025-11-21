@@ -236,16 +236,19 @@ const calculatePromoterStats = (assignments: PostAssignment[]) => {
     
     if (assignment.proofSubmittedAt) {
       completed++;
-    } else if (assignment.justification) {
+    } else if (assignment.justificationStatus === 'accepted') {
+      // Explicitly check status first - counts as success
       justifications++;
-      if (assignment.justificationStatus === 'accepted') {
-        acceptedJustifications++;
-      } else if (assignment.justificationStatus === 'rejected') {
-        missed++;
-      } else { // 'pending' justification
-        pending++;
-      }
-    } else { // No proof, no justification
+      acceptedJustifications++;
+    } else if (assignment.justificationStatus === 'rejected') {
+      // Explicitly check status - counts as failure
+      justifications++;
+      missed++;
+    } else if (assignment.justificationStatus === 'pending' || assignment.justification) {
+      // Has justification text or pending status
+      justifications++;
+      pending++;
+    } else { // No proof, no justification (or empty justification text without status)
       let deadlineHasPassed = false;
       if (!assignment.post.allowLateSubmissions) {
           const confirmedAt = toDateSafe(assignment.confirmedAt);
@@ -723,7 +726,7 @@ export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmissi
     } catch (error) {
         console.error("Error creating one-time post submission: ", error);
         if (error instanceof Error) {
-            throw error;
+            throw new Error(error.message);
         }
         throw new Error("Não foi possível enviar sua comprovação e nome. Ocorreu um erro desconhecido.");
     }

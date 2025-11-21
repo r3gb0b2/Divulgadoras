@@ -31,12 +31,12 @@ const isAssignmentActive = (assignment: PostAssignment): boolean => {
     if (assignment.proofSubmittedAt) return false;
 
     // 2. Justification Logic
-    if (assignment.justification) {
-        // If justification is decided (accepted/rejected), it goes to history
-        if (assignment.justificationStatus === 'accepted' || assignment.justificationStatus === 'rejected') {
-            return false;
-        }
-        // If justification is pending, keep it active so user can see status
+    // If status is accepted or rejected, it's history.
+    if (assignment.justificationStatus === 'accepted' || assignment.justificationStatus === 'rejected') {
+        return false;
+    }
+    // If status is pending (or legacy justification exists without status), it's active.
+    if (assignment.justificationStatus === 'pending' || assignment.justification) {
         return true;
     }
 

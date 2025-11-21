@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -106,13 +107,15 @@ const PostDashboard: React.FC = () => {
                 stat.assigned++;
                 if (a.proofSubmittedAt) {
                     stat.completed++;
-                } else if (a.justification) {
+                } else if (a.justificationStatus === 'accepted') {
                     stat.justifications++;
-                    if (a.justificationStatus === 'accepted') {
-                        stat.acceptedJustifications++;
-                    } else if (a.justificationStatus === 'rejected') {
-                        stat.missed++;
-                    }
+                    stat.acceptedJustifications++;
+                } else if (a.justificationStatus === 'rejected') {
+                    stat.justifications++;
+                    stat.missed++;
+                } else if (a.justificationStatus === 'pending' || a.justification) {
+                    stat.justifications++;
+                    // Pending decision, doesn't count as missed yet
                 } else {
                     let isMissed = false;
                     const postExpiresAt = toDateSafe(a.post.expiresAt);
