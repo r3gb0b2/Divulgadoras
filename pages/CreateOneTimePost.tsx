@@ -40,6 +40,7 @@ const CreateOneTimePost: React.FC = () => {
         expiresAt: '',
         successMessage: '',
         femaleOnly: false,
+        askEmail: true,
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -142,6 +143,7 @@ const CreateOneTimePost: React.FC = () => {
                 submissionLimit: hasLimit ? parseInt(submissionLimit) : undefined,
                 successMessage: formData.successMessage.trim() || undefined,
                 femaleOnly: formData.femaleOnly,
+                askEmail: formData.askEmail,
                 ...(formData.type === 'text' && { textContent: formData.textContent }),
                 ...(finalMediaUrl && { mediaUrl: finalMediaUrl }),
                 ...(formData.googleDriveUrl.trim() && { googleDriveUrl: formData.googleDriveUrl.trim() }),
@@ -222,6 +224,16 @@ const CreateOneTimePost: React.FC = () => {
                                         className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
                                     />
                                     <span className="text-sm text-gray-200">Permitir apenas nomes femininos?</span>
+                                </label>
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        name="askEmail"
+                                        checked={formData.askEmail} 
+                                        onChange={handleChange}
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                    />
+                                    <span className="text-sm text-gray-200">Solicitar E-mail do Convidado?</span>
                                 </label>
                             </div>
                         </div>

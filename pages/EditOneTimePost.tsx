@@ -50,6 +50,7 @@ const EditOneTimePost: React.FC = () => {
         expiresAt: '',
         successMessage: '',
         femaleOnly: false,
+        askEmail: true,
     });
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -87,6 +88,7 @@ const EditOneTimePost: React.FC = () => {
                         expiresAt: timestampToDateTimeLocal(postData.expiresAt),
                         successMessage: postData.successMessage || '',
                         femaleOnly: postData.femaleOnly || false,
+                        askEmail: postData.askEmail !== false, // default true if undefined
                     });
                     
                     if (postData.submissionLimit && postData.submissionLimit > 0) {
@@ -257,6 +259,16 @@ const EditOneTimePost: React.FC = () => {
                                         className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
                                     />
                                     <span className="text-sm text-gray-200">Permitir apenas nomes femininos?</span>
+                                </label>
+                                <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        name="askEmail"
+                                        checked={formData.askEmail} 
+                                        onChange={handleChange}
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                    />
+                                    <span className="text-sm text-gray-200">Solicitar E-mail do Convidado?</span>
                                 </label>
                             </div>
                         </div>

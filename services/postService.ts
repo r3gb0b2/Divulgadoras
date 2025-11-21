@@ -690,16 +690,28 @@ export const getOneTimePostById = async (postId: string): Promise<OneTimePost | 
 
 export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmission, 'id' | 'submittedAt'>): Promise<string> => {
     try {
-        const email = data.email.toLowerCase().trim();
+        const email = data.email ? data.email.toLowerCase().trim() : '';
         
-        // Check for duplicate email submission for this specific post
-        const q = firestore.collection('oneTimePostSubmissions')
-            .where('oneTimePostId', '==', data.oneTimePostId)
-            .where('email', '==', email);
+        // Determine duplicate check strategy
+        let q;
+        if (email) {
+             // If email is provided, check for duplicate email on this post
+             q = firestore.collection('oneTimePostSubmissions')
+                .where('oneTimePostId', '==', data.oneTimePostId)
+                .where('email', '==', email);
+        } else {
+             // If no email (disabled by admin), check for duplicate Instagram handle
+             q = firestore.collection('oneTimePostSubmissions')
+                .where('oneTimePostId', '==', data.oneTimePostId)
+                .where('instagram', '==', data.instagram);
+        }
         
         const snapshot = await q.get();
         if (!snapshot.empty) {
-            throw new Error("Este e-mail já foi utilizado para enviar uma comprovação nesta lista.");
+            const msg = email 
+                ? "Este e-mail já foi utilizado para enviar uma comprovação nesta lista."
+                : "Este Instagram já foi utilizado para enviar uma comprovação nesta lista.";
+            throw new Error(msg);
         }
 
         const docRef = await firestore.collection('oneTimePostSubmissions').add({

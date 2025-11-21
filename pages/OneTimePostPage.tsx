@@ -185,10 +185,17 @@ const OneTimePostPage: React.FC = () => {
         const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
         const trimmedName = guestName.trim();
         const trimmedEmail = email.trim();
+        
+        const isAskingEmail = post.askEmail !== false; // Default true
 
-        if (!trimmedName || !sanitizedInstagram || !trimmedEmail) {
-            setError("Por favor, preencha todos os campos (Nome, Email e Instagram).");
+        if (!trimmedName || !sanitizedInstagram) {
+            setError("Por favor, preencha todos os campos obrigatórios.");
             return;
+        }
+        
+        if (isAskingEmail && !trimmedEmail) {
+             setError("Por favor, informe seu e-mail.");
+             return;
         }
 
         if (trimmedName.split(/\s+/).length < 2) {
@@ -214,7 +221,7 @@ const OneTimePostPage: React.FC = () => {
                 organizationId: post.organizationId,
                 campaignId: post.campaignId,
                 guestName: trimmedName,
-                email: trimmedEmail,
+                email: trimmedEmail, // Will be empty string if not asked
                 instagram: sanitizedInstagram,
                 proofImageUrls: uploadedProofUrls,
             });
@@ -365,19 +372,21 @@ const OneTimePostPage: React.FC = () => {
                         
                         <input type="text" value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Nome completo (Nome e Sobrenome)" required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                         
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <MailIcon className="h-5 w-5 text-gray-400" />
-                            </span>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
-                                placeholder="Seu E-mail"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                                required
-                            />
-                        </div>
+                        {post.askEmail !== false && (
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <MailIcon className="h-5 w-5 text-gray-400" />
+                                </span>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
+                                    placeholder="Seu E-mail"
+                                    className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                                    required
+                                />
+                            </div>
+                        )}
 
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">

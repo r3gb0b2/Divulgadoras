@@ -309,6 +309,7 @@ export interface OneTimePost {
   submissionLimit?: number;
   successMessage?: string;
   femaleOnly?: boolean;
+  askEmail?: boolean;
 }
 
 export interface OneTimePostSubmission {
