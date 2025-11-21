@@ -65,7 +65,6 @@ export interface Campaign {
   stateAbbr: string;
   organizationId: string;
   associatedAdmins?: string[];
-  // FIX: Add guest list properties to Campaign type to support guest list access control.
   guestListAccess?: 'all' | 'specific';
   guestListAssignments?: { [promoterId: string]: string[] };
   guestListTypes?: string[];
@@ -105,7 +104,10 @@ export interface Organization {
   oneTimePostEnabled?: boolean;
   guestListManagementEnabled?: boolean;
   guestListCheckinEnabled?: boolean;
-  followLoopThreshold?: number; // Percentage (0-100) required to join the loop
+  followLoopThreshold?: number;
+  usageStats?: {
+      emailsSent: number;
+  };
 }
 
 export interface StateConfig {
@@ -157,13 +159,13 @@ export interface Post {
   allowImmediateProof?: boolean;
   postFormats?: ('story' | 'reels')[];
   skipProofRequirement?: boolean;
-  allowJustification?: boolean; // New field to control justification button
+  allowJustification?: boolean;
 }
 
 export interface PostAssignment {
-  id: string; // Firestore document ID
+  id: string;
   postId: string;
-  post: { // Denormalized post data
+  post: {
     type: 'image' | 'text' | 'video';
     mediaUrl?: string;
     googleDriveUrl?: string;
@@ -184,7 +186,7 @@ export interface PostAssignment {
   };
   organizationId: string;
   promoterId: string;
-  promoterEmail: string; // lowercase
+  promoterEmail: string;
   promoterName: string;
   status: 'pending' | 'confirmed';
   confirmedAt: Timestamp | FieldValue | null;
@@ -197,12 +199,11 @@ export interface PostAssignment {
   justificationResponse?: string;
 }
 
-// New model for individual guest lists
 export interface GuestList {
   id: string;
   organizationId: string;
   campaignId: string;
-  campaignName: string; // denormalized for easy display
+  campaignName: string;
   stateAbbr: string;
   name: string;
   description?: string;
@@ -220,7 +221,7 @@ export interface GuestListConfirmation {
     organizationId: string;
     campaignId: string;
     campaignName: string;
-    guestListId?: string; // Link to the new GuestList model
+    guestListId?: string;
     promoterId: string;
     promoterName: string;
     promoterEmail: string;
@@ -296,7 +297,7 @@ export interface OneTimePost {
   eventName?: string;
   guestListName: string;
   type: 'image' | 'text' | 'video';
-  mediaUrl?: string; // Can be Firebase Storage path or GDrive URL for video
+  mediaUrl?: string;
   googleDriveUrl?: string;
   textContent?: string;
   instructions: string;
@@ -307,7 +308,7 @@ export interface OneTimePost {
   submissionCount?: number;
   submissionLimit?: number;
   successMessage?: string;
-  femaleOnly?: boolean; // New field
+  femaleOnly?: boolean;
 }
 
 export interface OneTimePostSubmission {
@@ -316,7 +317,7 @@ export interface OneTimePostSubmission {
     organizationId: string;
     campaignId: string;
     guestName: string;
-    email: string; // Added email
+    email: string;
     instagram: string;
     proofImageUrls: string[];
     submittedAt: Timestamp | FieldValue;
@@ -331,7 +332,7 @@ export interface GroupRemovalRequest {
   campaignName: string;
   status: 'pending' | 'completed' | 'ignored';
   requestedAt: Timestamp | FieldValue;
-  actionTakenBy?: string; // UID of admin
+  actionTakenBy?: string;
   actionTakenAt?: Timestamp | FieldValue;
 }
 
@@ -349,7 +350,7 @@ export interface GuestListChangeRequest {
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: Timestamp | FieldValue;
   actionTakenAt?: Timestamp | FieldValue;
-  actionTakenBy?: string; // Admin UID
+  actionTakenBy?: string;
 }
 
 // --- Follow Loop Types ---
@@ -362,19 +363,19 @@ export interface FollowLoopParticipant {
   photoUrl: string;
   organizationId: string;
   isActive: boolean;
-  isBanned?: boolean; // New field for admin control
+  isBanned?: boolean;
   joinedAt: Timestamp | FieldValue;
   lastActiveAt: Timestamp | FieldValue;
   followersCount: number;
   followingCount: number;
-  rejectedCount?: number; // New field to track negative feedback (people saying she didn't follow back)
+  rejectedCount?: number;
   state?: string;
 }
 
 export interface FollowInteraction {
   id: string;
-  followerId: string; // Promoter ID who clicked follow
-  followedId: string; // Promoter ID who was followed
+  followerId: string;
+  followedId: string;
   organizationId: string;
   status: 'pending_validation' | 'validated' | 'rejected' | 'unfollowed';
   createdAt: Timestamp | FieldValue;
@@ -382,5 +383,5 @@ export interface FollowInteraction {
   followerName: string;
   followerInstagram: string;
   followedName: string;
-  followedInstagram?: string; // New field to ensure correct linking in alerts
+  followedInstagram?: string;
 }

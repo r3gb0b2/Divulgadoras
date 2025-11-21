@@ -22,9 +22,7 @@ const formatDate = (timestamp: any): string => {
 const AdminFollowLoopPage: React.FC = () => {
     const navigate = useNavigate();
     const { selectedOrgId } = useAdminAuth();
-    
     const [activeTab, setActiveTab] = useState<'participants' | 'history'>('participants');
-    
     const [participants, setParticipants] = useState<ParticipantWithStats[]>([]);
     const [interactions, setInteractions] = useState<FollowInteraction[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -32,12 +30,8 @@ const AdminFollowLoopPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'active' | 'banned' | 'high_rejection'>('all');
-
-    // Threshold State
     const [threshold, setThreshold] = useState<number>(0);
     const [isSavingThreshold, setIsSavingThreshold] = useState(false);
-
-    // Manual Assignment Modal State
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
     const [manualFollower, setManualFollower] = useState('');
     const [manualFollowed, setManualFollowed] = useState('');
@@ -52,16 +46,11 @@ const AdminFollowLoopPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            // 1. Fetch Organization Settings
             const orgData = await getOrganization(selectedOrgId);
-            if (orgData) {
-                setThreshold(orgData.followLoopThreshold || 0);
-            }
+            if (orgData) setThreshold(orgData.followLoopThreshold || 0);
 
-            // 2. Fetch Participants
             const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId);
             
-            // 3. Enrich with stats
             const enriched = await Promise.all(loopParticipants.map(async (p) => {
                 try {
                     const { stats } = await getStatsForPromoter(p.promoterId);
@@ -74,8 +63,6 @@ const AdminFollowLoopPage: React.FC = () => {
             }));
 
             setParticipants(enriched);
-            
-            // 4. Fetch Interactions History
             const history = await getAllFollowInteractions(selectedOrgId);
             setInteractions(history);
 
@@ -121,10 +108,7 @@ const AdminFollowLoopPage: React.FC = () => {
         if (newInstagram !== null && newInstagram.trim() !== participant.instagram) {
             try {
                 await updateParticipantInstagram(participant.id, newInstagram.trim());
-                // Update local state to avoid full refresh
-                setParticipants(prev => prev.map(p => 
-                    p.id === participant.id ? { ...p, instagram: newInstagram.trim() } : p
-                ));
+                setParticipants(prev => prev.map(p => p.id === participant.id ? { ...p, instagram: newInstagram.trim() } : p));
                 alert("Instagram atualizado na lista de conexões.");
             } catch (e: any) {
                 alert(e.message);
@@ -141,7 +125,6 @@ const AdminFollowLoopPage: React.FC = () => {
             alert("Não pode ser a mesma pessoa.");
             return;
         }
-
         setIsManualProcessing(true);
         try {
             await adminCreateFollowInteraction(manualFollower, manualFollowed);
@@ -149,7 +132,7 @@ const AdminFollowLoopPage: React.FC = () => {
             setIsManualModalOpen(false);
             setManualFollower('');
             setManualFollowed('');
-            fetchData(); // Refresh history
+            fetchData(); 
         } catch (err: any) {
             alert(err.message);
         } finally {
@@ -159,22 +142,14 @@ const AdminFollowLoopPage: React.FC = () => {
 
     const filteredParticipants = useMemo(() => {
         let result = participants;
-
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(p => 
-                p.promoterName.toLowerCase().includes(q) || 
-                p.instagram.toLowerCase().includes(q)
-            );
+            result = result.filter(p => p.promoterName.toLowerCase().includes(q) || p.instagram.toLowerCase().includes(q));
         }
-
         if (filterType === 'active') result = result.filter(p => p.isActive && !p.isBanned);
         if (filterType === 'banned') result = result.filter(p => p.isBanned);
         if (filterType === 'high_rejection') result = result.filter(p => (p.rejectedCount || 0) > 2);
-
-        // Sort: High rejection first, then active
         result.sort((a, b) => (b.rejectedCount || 0) - (a.rejectedCount || 0));
-
         return result;
     }, [participants, searchQuery, filterType]);
     
@@ -182,10 +157,7 @@ const AdminFollowLoopPage: React.FC = () => {
         let result = interactions;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(i => 
-                i.followerName.toLowerCase().includes(q) ||
-                i.followedName.toLowerCase().includes(q)
-            );
+            result = result.filter(i => i.followerName.toLowerCase().includes(q) || i.followedName.toLowerCase().includes(q));
         }
         return result;
     }, [interactions, searchQuery]);
@@ -198,19 +170,8 @@ const AdminFollowLoopPage: React.FC = () => {
     };
     
     const getInteractionStatusBadge = (status: FollowInteraction['status']) => {
-        const styles = {
-            validated: "bg-green-900/50 text-green-300",
-            pending_validation: "bg-yellow-900/50 text-yellow-300",
-            rejected: "bg-red-900/50 text-red-300",
-            unfollowed: "bg-gray-700 text-gray-300 border border-red-500/50",
-        };
-        const labels = {
-            validated: "Confirmado",
-            pending_validation: "Pendente",
-            rejected: "Não Seguiu",
-            unfollowed: "Deixou de Seguir",
-        };
-        // Cast to string in case of legacy data types
+        const styles = { validated: "bg-green-900/50 text-green-300", pending_validation: "bg-yellow-900/50 text-yellow-300", rejected: "bg-red-900/50 text-red-300", unfollowed: "bg-gray-700 text-gray-300 border border-red-500/50" };
+        const labels = { validated: "Confirmado", pending_validation: "Pendente", rejected: "Não Seguiu", unfollowed: "Deixou de Seguir" };
         const s = status as keyof typeof styles;
         return <span className={`px-2 py-1 rounded text-xs font-bold whitespace-nowrap ${styles[s] || styles.pending_validation}`}>{labels[s] || status}</span>;
     };
@@ -223,75 +184,34 @@ const AdminFollowLoopPage: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Gerenciar Conexão Divulgadoras</h1>
-                <button onClick={() => navigate('/admin/settings')} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    <ArrowLeftIcon className="w-4 h-4" />
-                    <span>Voltar</span>
-                </button>
+                <button onClick={() => navigate('/admin/settings')} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm"><ArrowLeftIcon className="w-4 h-4" /><span>Voltar</span></button>
             </div>
 
-            {/* Configuration Panel */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <CogIcon className="w-6 h-6 text-primary" />
-                    Configurar Elegibilidade
-                </h2>
+                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><CogIcon className="w-6 h-6 text-primary" />Configurar Elegibilidade</h2>
                 <div className="flex flex-col sm:flex-row items-center gap-6">
                     <div className="flex-grow">
-                        <p className="text-gray-300 text-sm mb-2">
-                            Defina a taxa mínima de aproveitamento em tarefas (posts) que uma divulgadora precisa ter para participar desta dinâmica.
-                        </p>
+                        <p className="text-gray-300 text-sm mb-2">Defina a taxa mínima de aproveitamento em tarefas que uma divulgadora precisa ter.</p>
                         <div className="flex items-center gap-4">
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max="100" 
-                                value={threshold} 
-                                onChange={(e) => setThreshold(Number(e.target.value))}
-                                className="flex-grow h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary"
-                            />
+                            <input type="range" min="0" max="100" value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="flex-grow h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-primary"/>
                             <span className="text-2xl font-bold text-primary w-16 text-right">{threshold}%</span>
                         </div>
                     </div>
-                    <button 
-                        onClick={handleSaveThreshold} 
-                        disabled={isSavingThreshold}
-                        className="px-6 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50"
-                    >
-                        {isSavingThreshold ? 'Salvando...' : 'Salvar Regra'}
-                    </button>
+                    <button onClick={handleSaveThreshold} disabled={isSavingThreshold} className="px-6 py-2 bg-primary text-white font-bold rounded-md hover:bg-primary-dark disabled:opacity-50">{isSavingThreshold ? 'Salvando...' : 'Salvar Regra'}</button>
                 </div>
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                
-                {/* Tabs */}
                 <div className="flex border-b border-gray-700 mb-6">
-                    <button
-                        className={`py-2 px-4 font-medium ${activeTab === 'participants' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
-                        onClick={() => setActiveTab('participants')}
-                    >
-                        Visão Geral (Participantes)
-                    </button>
-                    <button
-                        className={`py-2 px-4 font-medium ${activeTab === 'history' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`}
-                        onClick={() => setActiveTab('history')}
-                    >
-                        Histórico de Interações
-                    </button>
+                    <button className={`py-2 px-4 font-medium ${activeTab === 'participants' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setActiveTab('participants')}>Visão Geral (Participantes)</button>
+                    <button className={`py-2 px-4 font-medium ${activeTab === 'history' ? 'text-primary border-b-2 border-primary' : 'text-gray-400 hover:text-gray-200'}`} onClick={() => setActiveTab('history')}>Histórico de Interações</button>
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
                     <div className="relative flex-grow w-full md:w-auto">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                        <input 
-                            type="text" 
-                            placeholder={activeTab === 'participants' ? "Buscar participante..." : "Buscar na histórico..."}
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                        />
+                        <input type="text" placeholder={activeTab === 'participants' ? "Buscar participante..." : "Buscar na histórico..."} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
                     </div>
-                    
                     {activeTab === 'participants' && (
                         <div className="flex gap-2 overflow-x-auto pb-2">
                             <button onClick={() => setFilterType('all')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'all' ? 'bg-primary' : 'bg-gray-700'}`}>Todos</button>
@@ -300,14 +220,8 @@ const AdminFollowLoopPage: React.FC = () => {
                             <button onClick={() => setFilterType('banned')} className={`px-3 py-2 text-sm rounded-md whitespace-nowrap ${filterType === 'banned' ? 'bg-primary' : 'bg-gray-700'}`}>Banidos</button>
                         </div>
                     )}
-                    
-                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0 text-sm">
-                        <UserPlusIcon className="w-4 h-4" />
-                        Criar Conexão
-                    </button>
-                     <button onClick={fetchData} className="p-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex-shrink-0" title="Atualizar">
-                        <RefreshIcon className="w-5 h-5" />
-                    </button>
+                    <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 flex-shrink-0 text-sm"><UserPlusIcon className="w-4 h-4" />Criar Conexão</button>
+                     <button onClick={fetchData} className="p-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex-shrink-0" title="Atualizar"><RefreshIcon className="w-5 h-5" /></button>
                 </div>
 
                 {isLoading ? <p className="text-center py-8">Carregando...</p> : (
@@ -332,34 +246,16 @@ const AdminFollowLoopPage: React.FC = () => {
                                                     <img src={p.photoUrl || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover mr-3 border border-gray-600"/>
                                                     <div>
                                                         <div className="font-medium text-white">{p.promoterName}</div>
-                                                        <div className="text-xs text-gray-400 flex items-center gap-1">
-                                                            <InstagramIcon className="w-3 h-3"/> 
-                                                            {p.instagram}
-                                                            <button onClick={() => handleEditInstagram(p)} className="ml-1 text-gray-500 hover:text-white" title="Editar Instagram">
-                                                                <PencilIcon className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
+                                                        <div className="text-xs text-gray-400 flex items-center gap-1"><InstagramIcon className="w-3 h-3"/> {p.instagram}<button onClick={() => handleEditInstagram(p)} className="ml-1 text-gray-500 hover:text-white" title="Editar Instagram"><PencilIcon className="w-3 h-3" /></button></div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followingCount}</td>
                                             <td className="px-4 py-3 text-center text-sm text-gray-300">{p.followersCount}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                {(p.rejectedCount || 0) > 0 ? (
-                                                    <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span>
-                                                ) : <span className="text-gray-500">-</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-center font-bold text-sm">
-                                                <span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span>
-                                            </td>
+                                            <td className="px-4 py-3 text-center">{(p.rejectedCount || 0) > 0 ? <span className="px-2 py-1 rounded-full bg-red-900/50 text-red-300 font-bold text-xs">{p.rejectedCount}</span> : <span className="text-gray-500">-</span>}</td>
+                                            <td className="px-4 py-3 text-center font-bold text-sm"><span className={getPerformanceColor(p.taskCompletionRate)}>{p.taskCompletionRate >= 0 ? `${p.taskCompletionRate}%` : 'N/A'}</span></td>
                                             <td className="px-4 py-3 text-right">
-                                                <button 
-                                                    onClick={() => handleToggleBan(p)}
-                                                    disabled={processingId === p.id}
-                                                    className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}
-                                                >
-                                                    {processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}
-                                                </button>
+                                                <button onClick={() => handleToggleBan(p)} disabled={processingId === p.id} className={`px-3 py-1 rounded-md text-xs font-semibold ${p.isBanned ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{processingId === p.id ? '...' : (p.isBanned ? 'Desbanir' : 'Banir')}</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -367,7 +263,6 @@ const AdminFollowLoopPage: React.FC = () => {
                                 </tbody>
                             </table>
                         ) : (
-                            /* HISTORY TABLE */
                             <table className="min-w-full divide-y divide-gray-700">
                                 <thead className="bg-gray-700/50">
                                     <tr>
@@ -380,20 +275,10 @@ const AdminFollowLoopPage: React.FC = () => {
                                 <tbody className="divide-y divide-gray-700">
                                     {filteredHistory.map(interaction => (
                                         <tr key={interaction.id} className="hover:bg-gray-700/40">
-                                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-400">
-                                                {formatDate(interaction.createdAt)}
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                 <div className="font-medium text-white text-sm">{interaction.followerName}</div>
-                                                 <div className="text-xs text-gray-500">{interaction.followerInstagram}</div>
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                 <div className="font-medium text-white text-sm">{interaction.followedName}</div>
-                                                 <div className="text-xs text-gray-500">{interaction.followedInstagram}</div>
-                                            </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-right">
-                                                {getInteractionStatusBadge(interaction.status)}
-                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-400">{formatDate(interaction.createdAt)}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap"><div className="font-medium text-white text-sm">{interaction.followerName}</div><div className="text-xs text-gray-500">{interaction.followerInstagram}</div></td>
+                                            <td className="px-4 py-3 whitespace-nowrap"><div className="font-medium text-white text-sm">{interaction.followedName}</div><div className="text-xs text-gray-500">{interaction.followedInstagram}</div></td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-right">{getInteractionStatusBadge(interaction.status)}</td>
                                         </tr>
                                     ))}
                                     {filteredHistory.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400">Nenhum registro encontrado.</td></tr>}
@@ -404,63 +289,30 @@ const AdminFollowLoopPage: React.FC = () => {
                 )}
             </div>
 
-            {/* Manual Assignment Modal */}
             {isManualModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
                     <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md">
                         <h2 className="text-xl font-bold text-white mb-4">Atribuir Conexão Manual</h2>
-                        <p className="text-gray-400 text-sm mb-4">
-                            Isso criará um registro de que <strong>Pessoa A</strong> seguiu <strong>Pessoa B</strong> e já foi validada. Os contadores serão atualizados.
-                        </p>
-                        
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm text-gray-300 mb-1">Quem Seguiu (Seguidora)</label>
-                                <select 
-                                    value={manualFollower} 
-                                    onChange={e => setManualFollower(e.target.value)} 
-                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"
-                                >
+                                <select value={manualFollower} onChange={e => setManualFollower(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white">
                                     <option value="">Selecione...</option>
-                                    {activeParticipantsForSelect.map(p => (
-                                        <option key={p.id} value={p.id}>{p.promoterName}</option>
-                                    ))}
+                                    {activeParticipantsForSelect.map(p => <option key={p.id} value={p.id}>{p.promoterName}</option>)}
                                 </select>
                             </div>
-                            
-                            <div className="flex justify-center">
-                                <ArrowLeftIcon className="w-6 h-6 text-gray-500 transform -rotate-90" />
-                            </div>
-
+                            <div className="flex justify-center"><ArrowLeftIcon className="w-6 h-6 text-gray-500 transform -rotate-90" /></div>
                             <div>
                                 <label className="block text-sm text-gray-300 mb-1">Quem foi Seguida (Alvo)</label>
-                                <select 
-                                    value={manualFollowed} 
-                                    onChange={e => setManualFollowed(e.target.value)} 
-                                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white"
-                                >
+                                <select value={manualFollowed} onChange={e => setManualFollowed(e.target.value)} className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white">
                                     <option value="">Selecione...</option>
-                                    {activeParticipantsForSelect.map(p => (
-                                        <option key={p.id} value={p.id}>{p.promoterName}</option>
-                                    ))}
+                                    {activeParticipantsForSelect.map(p => <option key={p.id} value={p.id}>{p.promoterName}</option>)}
                                 </select>
                             </div>
                         </div>
-
                         <div className="flex justify-end gap-3 mt-6">
-                            <button 
-                                onClick={() => setIsManualModalOpen(false)} 
-                                className="px-4 py-2 bg-gray-600 rounded-md text-white hover:bg-gray-500"
-                            >
-                                Cancelar
-                            </button>
-                            <button 
-                                onClick={handleManualAssignment} 
-                                disabled={isManualProcessing}
-                                className="px-4 py-2 bg-green-600 rounded-md text-white hover:bg-green-700 disabled:opacity-50"
-                            >
-                                {isManualProcessing ? 'Salvando...' : 'Confirmar Conexão'}
-                            </button>
+                            <button onClick={() => setIsManualModalOpen(false)} className="px-4 py-2 bg-gray-600 rounded-md text-white hover:bg-gray-500">Cancelar</button>
+                            <button onClick={handleManualAssignment} disabled={isManualProcessing} className="px-4 py-2 bg-green-600 rounded-md text-white hover:bg-green-700 disabled:opacity-50">{isManualProcessing ? 'Salvando...' : 'Confirmar Conexão'}</button>
                         </div>
                     </div>
                 </div>

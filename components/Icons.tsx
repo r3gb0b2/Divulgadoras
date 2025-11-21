@@ -96,23 +96,6 @@ export const MegaphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon
     <path fillRule="evenodd" d="M10.873 3.31a.75.75 0 0 0-1.162-.647l-7.5 4.25a.75.75 0 0 0 0 1.294l7.5 4.25a.75.75 0 0 0 1.162-.647V3.31ZM12 6a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75-.75h-4.5a.75.75 0 0 1-.75-.75V6Z" clipRule="evenodd" />
 );
 
-export const MercadoPagoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg width="24" height="17" viewBox="0 0 24 17" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-        <path d="M21.2186 16.3333L18.4211 4.77708L23.4736 2.375L21.2186 16.3333Z" fill="white"></path>
-        <path d="M19.1413 0L10.0388 16.625H16.1438L19.1413 0Z" fill="white"></path>
-        <path d="M12.9868 2.60417L10.5186 11.5L7.96259 2.47917L4.76134 16.625H0L8.68009 0L12.9868 2.60417Z" fill="white"></path>
-    </svg>
-);
-
-export const PagSeguroIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 42" fill="none" {...props}>
-        <path d="M165.71 21.83c0-4.32 2.1-7.25 5.5-9.15 2.1-1.2 3.7-2.3 3.7-3.96 0-1.8-1.3-2.9-3.5-2.9-2.3 0-3.8 1.1-4.2 3.2h-5.2c.4-4.8 4.4-7.4 9.4-7.4 5.9 0 9.8 3 9.8 7.1 0 4.1-2.6 6.5-5.6 8.3-2 .9-3.4 1.9-3.4 3.6v.2h9.1v4.4h-15.8v-1.33zm-17.2-16.13h6.1l7.8 29.8h-5.8l-1.4-6.1h-8.2l-1.4 6.1h-5.8l8.7-29.8zm-.9 19.3h6.8l-3.4-14.9-3.4 14.9zm-16.7-19.3h14.7v4.4h-8.9v7.8h8.5v4.4h-8.5v8.8h9v4.4h-14.8v-29.8zm-22.3 29.8h-5.4V5.7h13.6c5.3 0 8.8 3.1 8.8 7.9 0 3.7-2 6.5-5.2 7.5l6 14.4h-6.4l-5.6-13.3h-5.8v13.3zm0-17.7h8.1c3.1 0 4.8-1.8 4.8-4.2s-1.8-4.1-4.8-4.1h-8.1v8.3zm-16.8 17.7h-5.4V5.7h5.4v29.8zm-11.4 0h-5.4V5.7h13.6c5.3 0 8.8 3.1 8.8 7.9 0 3.7-2 6.5-5.2 7.5l6 14.4h-6.4l-5.6-13.3h-5.8v13.3zm0-17.7h8.1c3.1 0 4.8-1.8 4.8-4.2s-1.8-4.1-4.8-4.1h-8.1v8.3zm-22.1-3.1c3.8 0 6.3-2.6 6.3-6.1s-2.5-6-6.3-6-6.3 2.5-6.3 6 2.5 6.1 6.3 6.1zm0-16.6c6.8 0 11.5 4.6 11.5 10.9s-4.7 11-11.5 11-11.5-4.7-11.5-11S55.2 5.7 62 5.7zm-20.9 29.8V21.9c0-5.3-3-8.6-8.6-8.6-4.9 0-8.2 3-8.2 7.5v14.7h-5.4V14.1c0-6.7 4.5-11.2 13.6-11.2 9.2 0 14 4.5 14 12.5v20.1h-5.4z" fill="#333"></path>
-        <path d="M12.9 22.8H0V20h12.9v2.8z" fill="#F47B20"></path>
-        <path d="M12.9 20h2.8V5.7H0V3h15.7v17z" fill="#F47B20"></path>
-    </svg>
-);
-
-
 export const BuildingOfficeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M4 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1-1h-3v5a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-5H5a1 1 0 0 1-1-1V2zm4 2v1h2V4H8zm0 3v1h2V7H8zm2 3H8v1h2v-1zm2-3h2V7h-2v1zm0 3h2v-1h-2v1zm-2-6h2V4h-2v1z" clipRule="evenodd" />
 );
@@ -223,12 +206,6 @@ export const QrCodeIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.375h.008v.008H6v-.008zM6 15.375h.008v.008H6v-.008zM15 6.375h.008v.008H15v-.008zM15 15.375h.008v.008H15v-.008z" />
-    </svg>
-);
-
-export const DuplicateIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m9.75 0h-3.375c-.621 0-1.125.504-1.125 1.125v9.25c0 .621.504 1.125 1.125 1.125h3.375c.621 0 1.125-.504 1.125-1.125v-9.25a1.125 1.125 0 00-1.125-1.125z" />
     </svg>
 );
 
