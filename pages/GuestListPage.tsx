@@ -120,10 +120,11 @@ const GuestListPage: React.FC = () => {
             return result;
         };
 
-        const headers = ["Tipo da Lista", "Nome da Divulgadora", "Status Presença", "Convidados (Nome)", "Convidados (Email)"];
+        const headers = ["Tipo da Lista", "Nome da Divulgadora", "Email da Divulgadora", "Status Presença", "Convidados (Nome)", "Convidados (Email)"];
         const rows = filteredConfirmations.map(conf => {
             const listName = formatCSVCell(conf.listName);
             const promoterName = formatCSVCell(conf.promoterName);
+            const promoterEmail = formatCSVCell(conf.promoterEmail || '');
             const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
             
             let guestNames = "";
@@ -142,6 +143,7 @@ const GuestListPage: React.FC = () => {
             return [
                 listName, 
                 promoterName, 
+                promoterEmail,
                 promoterStatus, 
                 formatCSVCell(guestNames), 
                 formatCSVCell(guestEmails)
