@@ -120,13 +120,32 @@ const GuestListPage: React.FC = () => {
             return result;
         };
 
-        const headers = ["Tipo da Lista", "Nome da Divulgadora", "Status Presença", "Convidados"];
+        const headers = ["Tipo da Lista", "Nome da Divulgadora", "Status Presença", "Convidados (Nome)", "Convidados (Email)"];
         const rows = filteredConfirmations.map(conf => {
             const listName = formatCSVCell(conf.listName);
             const promoterName = formatCSVCell(conf.promoterName);
             const promoterStatus = formatCSVCell(conf.isPromoterAttending ? "Confirmada" : "Não vai");
-            const guests = formatCSVCell((conf.guestNames || []).filter(name => name.trim() !== '').join('\n'));
-            return [listName, promoterName, promoterStatus, guests].join(',');
+            
+            let guestNames = "";
+            let guestEmails = "";
+
+            if (conf.guests && conf.guests.length > 0) {
+                // Use detailed structure if available
+                guestNames = conf.guests.map(g => g.name).filter(n => n.trim()).join('\n');
+                guestEmails = conf.guests.map(g => g.email).filter(e => e.trim()).join('\n');
+            } else {
+                // Fallback to simple names array
+                guestNames = (conf.guestNames || []).filter(name => name.trim() !== '').join('\n');
+                guestEmails = ""; // No email data in legacy structure
+            }
+
+            return [
+                listName, 
+                promoterName, 
+                promoterStatus, 
+                formatCSVCell(guestNames), 
+                formatCSVCell(guestEmails)
+            ].join(',');
         });
 
         const csvContent = [headers.join(','), ...rows].join('\n');
@@ -150,8 +169,10 @@ const GuestListPage: React.FC = () => {
     const totalConfirmed = filteredConfirmations.reduce((acc, curr) => {
         let count = 0;
         if (curr.isPromoterAttending) count++;
-        count += (curr.guestNames || []).filter(name => name.trim() !== '').length;
-        return acc + count;
+        const guestsCount = curr.guests 
+            ? curr.guests.filter(g => g.name.trim()).length 
+            : (curr.guestNames || []).filter(name => name.trim() !== '').length;
+        return acc + count + guestsCount;
     }, 0);
     
     const listNames = Object.keys(groupedConfirmations);
@@ -161,8 +182,10 @@ const GuestListPage: React.FC = () => {
         return groupedConfirmations[listName].reduce((acc, curr) => {
             let count = 0;
             if (curr.isPromoterAttending) count++;
-            count += (curr.guestNames || []).filter(name => name.trim() !== '').length;
-            return acc + count;
+            const guestsCount = curr.guests 
+                ? curr.guests.filter(g => g.name.trim()).length 
+                : (curr.guestNames || []).filter(name => name.trim() !== '').length;
+            return acc + count + guestsCount;
         }, 0);
     };
 
@@ -229,7 +252,15 @@ const GuestListPage: React.FC = () => {
                                         <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
-                                        {(conf.guestNames || []).filter(name => name.trim() !== '').join('\n') || 'Nenhum'}
+                                        {conf.guests ? (
+                                            conf.guests.filter(g => g.name.trim()).map((g, i) => (
+                                                <div key={i}>
+                                                    {g.name} {g.email && <span className="text-gray-500 text-xs">({g.email})</span>}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            (conf.guestNames || []).filter(name => name.trim() !== '').join('\n') || 'Nenhum'
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button

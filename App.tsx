@@ -11,7 +11,7 @@ import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
-import { PostCheck } from './pages/PostCheck';
+import PostCheck from './pages/PostCheck';
 // FIX: Changed to a named import to resolve module export error.
 import { GuestListCheck } from './pages/GuestListCheck';
 import ProofUploadPage from './pages/ProofUploadPage';

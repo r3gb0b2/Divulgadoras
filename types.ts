@@ -211,6 +211,7 @@ export interface GuestList {
   startsAt: Timestamp | FieldValue | null;
   closesAt: Timestamp | FieldValue | null;
   isActive: boolean;
+  askEmail?: boolean;
   createdAt: Timestamp | FieldValue;
   createdByEmail: string;
   assignments?: { [promoterId: string]: { guestAllowance: number; info?: string; closesAt?: Timestamp | FieldValue | null; } };
@@ -228,6 +229,7 @@ export interface GuestListConfirmation {
     listName: string;
     isPromoterAttending: boolean;
     guestNames: string[];
+    guests?: { name: string; email: string }[];
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;

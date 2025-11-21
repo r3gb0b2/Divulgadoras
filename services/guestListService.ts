@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
 import { GuestListConfirmation, GuestList, Timestamp, GuestListChangeRequest } from '../types';

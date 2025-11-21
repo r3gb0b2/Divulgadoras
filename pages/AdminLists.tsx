@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -40,6 +41,7 @@ const ListModal: React.FC<{
                 startsAt: list?.startsAt || null,
                 closesAt: list?.closesAt || null,
                 isActive: list?.isActive !== undefined ? list.isActive : true,
+                askEmail: list?.askEmail !== undefined ? list.askEmail : false,
             });
         }
     }, [list, isOpen]);
@@ -103,7 +105,16 @@ const ListModal: React.FC<{
                         <label className="block text-sm font-medium text-gray-300">Encerramento da Lista (opcional)</label>
                         <input type="datetime-local" name="closesAt" value={formData.closesAt ? timestampToDateTimeLocal(formData.closesAt) : ''} onChange={handleDateChange} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" style={{colorScheme: 'dark'}} />
                     </div>
-                    <label className="flex items-center space-x-2 text-white"><input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Ativa (visível para divulgadoras)</span></label>
+                    <div className="flex flex-col gap-2">
+                        <label className="flex items-center space-x-2 text-white">
+                            <input type="checkbox" name="isActive" checked={formData.isActive} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                            <span>Ativa (visível para divulgadoras)</span>
+                        </label>
+                        <label className="flex items-center space-x-2 text-white">
+                            <input type="checkbox" name="askEmail" checked={formData.askEmail} onChange={handleChange} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                            <span>Solicitar E-mail dos Convidados?</span>
+                        </label>
+                    </div>
                 </form>
                 <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
