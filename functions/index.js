@@ -259,6 +259,7 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
                 allowImmediateProof: post.allowImmediateProof || false,
                 postFormats: post.postFormats || [],
                 skipProofRequirement: post.skipProofRequirement || false,
+                allowJustification: post.allowJustification !== false,
             },
             organizationId: promoterData.organizationId,
             promoterId: promoterId,
@@ -1085,6 +1086,7 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
                 ...postData,
                 // Ensure denormalized fields match the main post
                 skipProofRequirement: postData.skipProofRequirement || false,
+                allowJustification: postData.allowJustification !== false, // Default true if undefined
             },
             organizationId: postData.organizationId,
             promoterId: promoter.id,
@@ -1156,6 +1158,7 @@ exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCa
         allowImmediateProof: postData.allowImmediateProof || false,
         postFormats: postData.postFormats || [],
         skipProofRequirement: postData.skipProofRequirement || false,
+        allowJustification: postData.allowJustification !== false, // Default true
     };
     
     // Batch create assignments
@@ -1231,6 +1234,7 @@ exports.updatePostStatus = functions.region("southamerica-east1").https.onCall(a
         allowImmediateProof: updatedDenormalizedPostData.allowImmediateProof || false,
         postFormats: updatedDenormalizedPostData.postFormats || [],
         skipProofRequirement: updatedDenormalizedPostData.skipProofRequirement || false,
+        allowJustification: updatedDenormalizedPostData.allowJustification !== false, // Default true
     };
     
     const batch = db.batch();
