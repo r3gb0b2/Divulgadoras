@@ -183,10 +183,17 @@ const ProofSection: React.FC<{
     return (
         <div className="mt-4 text-center">
             {isExpired ? (
-                allowJustification && (
+                allowJustification ? (
                     <button
                         onClick={() => onJustify(assignment)}
                         className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Justificar Ausência
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")}
+                        className="w-full sm:w-auto px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70"
                     >
                         Justificar Ausência
                     </button>
@@ -365,10 +372,17 @@ const PostCard: React.FC<{
             if (!assignment.post.isActive || isExpired) {
                 return (
                     <div className="w-full flex flex-col sm:flex-row gap-2">
-                        {allowJustification && (
+                        {allowJustification ? (
                             <button 
                                 onClick={() => onJustify(assignment)}
                                 className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                            >
+                                Justificar Ausência
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")}
+                                className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70"
                             >
                                 Justificar Ausência
                             </button>
@@ -379,10 +393,17 @@ const PostCard: React.FC<{
 
             return (
                 <div className="w-full flex flex-col sm:flex-row gap-2">
-                    {allowJustification && (
+                    {allowJustification ? (
                         <button 
                             onClick={() => onJustify(assignment)}
                             className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors"
+                        >
+                            Justificar Ausência
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")}
+                            className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70"
                         >
                             Justificar Ausência
                         </button>
