@@ -228,8 +228,8 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guestNames: string[];
-    guests?: { name: string; email: string }[];
+    guestNames: string[]; // Legacy support
+    guests?: { name: string; email: string }[]; // New structure
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;
