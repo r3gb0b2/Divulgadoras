@@ -69,6 +69,7 @@ export interface Campaign {
   guestListAssignments?: { [promoterId: string]: string[] };
   guestListTypes?: string[];
   pixelId?: string;
+  preventDuplicateInOrg?: boolean;
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';

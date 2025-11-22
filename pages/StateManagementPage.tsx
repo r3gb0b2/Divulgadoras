@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
@@ -22,6 +23,7 @@ const CampaignModal: React.FC<{
         rules: '', 
         status: 'active' as CampaignStatus,
         pixelId: '',
+        preventDuplicateInOrg: false,
     });
     
     useEffect(() => {
@@ -33,9 +35,10 @@ const CampaignModal: React.FC<{
                 rules: campaign.rules || '',
                 status: campaign.status || 'active',
                 pixelId: campaign.pixelId || '',
+                preventDuplicateInOrg: campaign.preventDuplicateInOrg || false,
             });
         } else {
-            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active', pixelId: '' });
+            setFormData({ name: '', description: '', whatsappLink: '', rules: '', status: 'active', pixelId: '', preventDuplicateInOrg: false });
         }
     }, [campaign, isOpen]);
     
@@ -68,6 +71,20 @@ const CampaignModal: React.FC<{
                             <option value="inactive">Inativo (não permite novos cadastros)</option>
                             <option value="hidden">Oculto (não aparece na lista de eventos)</option>
                         </select>
+                    </div>
+                    <div>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={formData.preventDuplicateInOrg} 
+                                onChange={e => setFormData({...formData, preventDuplicateInOrg: e.target.checked})} 
+                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
+                            />
+                            <span className="text-sm font-medium text-gray-300">Bloquear se já aprovada na organização</span>
+                        </label>
+                        <p className="text-xs text-gray-400 mt-1 ml-6">
+                            Se marcado, impede que uma divulgadora se cadastre neste evento se ela já tiver um cadastro 'Aprovado' em qualquer outro evento desta organização.
+                        </p>
                     </div>
                 </form>
                  <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
@@ -256,6 +273,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                                 <div>
                                     <p className="font-semibold text-white flex items-center">{c.name} {getStatusBadge(c.status)}</p>
                                     <p className="text-sm text-gray-400">{c.description}</p>
+                                    {c.preventDuplicateInOrg && (
+                                        <span className="text-xs text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded mt-1 inline-block">Bloqueia Duplicidade</span>
+                                    )}
                                 </div>
                                 {adminData.role !== 'viewer' && (
                                     <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">

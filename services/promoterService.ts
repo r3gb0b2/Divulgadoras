@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp, GroupRemovalRequest } from '../types';
@@ -8,7 +9,8 @@ type DocumentData = firebase.firestore.DocumentData;
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
-    // Check for existing registration for the same email, state, campaign and organization
+    
+    // 1. Check for existing registration for the specific event (standard check)
     const q = firestore.collection("promoters")
       .where("email", "==", normalizedEmail)
       .where("state", "==", promoterData.state)
@@ -18,6 +20,34 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
     const querySnapshot = await q.get();
     if (!querySnapshot.empty) {
       throw new Error("Você já se cadastrou para este evento/gênero.");
+    }
+
+    // 2. Check for duplicates in the Organization if the Campaign requires it
+    if (promoterData.campaignName) {
+        const campaignQuery = firestore.collection('campaigns')
+            .where('organizationId', '==', promoterData.organizationId)
+            .where('stateAbbr', '==', promoterData.state)
+            .where('name', '==', promoterData.campaignName)
+            .limit(1);
+        
+        const campaignSnap = await campaignQuery.get();
+        if (!campaignSnap.empty) {
+            const campaignData = campaignSnap.docs[0].data();
+            
+            if (campaignData.preventDuplicateInOrg) {
+                // Check if the promoter is APPROVED in ANY other campaign of the same organization
+                const existingApprovedQuery = firestore.collection('promoters')
+                    .where('organizationId', '==', promoterData.organizationId)
+                    .where('email', '==', normalizedEmail)
+                    .where('status', '==', 'approved')
+                    .limit(1);
+                
+                const existingApprovedSnap = await existingApprovedQuery.get();
+                if (!existingApprovedSnap.empty) {
+                    throw new Error("Você já possui um cadastro aprovado nesta organização e este evento não permite múltiplos cadastros.");
+                }
+            }
+        }
     }
 
     let facePhotoUrl: string | undefined = undefined;
