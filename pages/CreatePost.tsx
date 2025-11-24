@@ -388,6 +388,7 @@ const CreatePost: React.FC = () => {
                     if (originalPost.postFormats) setPostFormats(originalPost.postFormats);
                     if (originalPost.googleDriveUrl) setGoogleDriveUrl(originalPost.googleDriveUrl);
                     if (originalPost.mediaUrl) {
+                        setOriginalMediaPath(originalPost.mediaUrl);
                         if (originalPost.mediaUrl.startsWith('http')) setMediaPreview(originalPost.mediaUrl);
                         else storage.ref(originalPost.mediaUrl).getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
                     }
@@ -460,7 +461,7 @@ const CreatePost: React.FC = () => {
             let expiryTimestamp: Date | null = null;
             if (expiresAt) { const [year, month, day] = expiresAt.split('-').map(Number); expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59); }
 
-            const basePostData: Omit<ScheduledPostData, 'mediaUrl'> = {
+            const basePostData: Omit<ScheduledPostData, 'mediaUrl'> & { mediaUrl?: string } = {
                 campaignName: campaignDetails.name,
                 eventName: eventName.trim() || undefined,
                 stateAbbr: selectedState,
@@ -503,12 +504,17 @@ const CreatePost: React.FC = () => {
             } else if (isScheduling) {
                  if (!scheduleDate || !scheduleTime) throw new Error("Por favor, selecione data e hora para agendar.");
                 let scheduledMediaUrl: string | undefined = undefined;
-                if ((postType === 'image' || postType === 'video') && mediaFile) {
-                    const fileExtension = mediaFile.name.split('.').pop();
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = storage.ref(`posts-media/${fileName}`);
-                    await storageRef.put(mediaFile);
-                    scheduledMediaUrl = storageRef.fullPath;
+                if ((postType === 'image' || postType === 'video')) {
+                    if (mediaFile) {
+                        const fileExtension = mediaFile.name.split('.').pop();
+                        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                        const storageRef = storage.ref(`posts-media/${fileName}`);
+                        await storageRef.put(mediaFile);
+                        scheduledMediaUrl = storageRef.fullPath;
+                    } else {
+                        // Reuse original media path if duplicating and no new file is selected
+                        scheduledMediaUrl = originalMediaPath || undefined;
+                    }
                 }
                 const postDataForScheduling: ScheduledPostData = { ...basePostData, mediaUrl: scheduledMediaUrl };
                 const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
@@ -520,7 +526,13 @@ const CreatePost: React.FC = () => {
                 navigate('/admin/scheduled-posts');
 
             } else {
-                const postDataForImmediate = { ...basePostData, organizationId: selectedOrgId, createdByEmail: adminData.email };
+                const postDataForImmediate = {
+                    ...basePostData,
+                    organizationId: selectedOrgId,
+                    createdByEmail: adminData.email,
+                    // If duplicating (originalMediaPath exists) and no new file (mediaFile is null), use original path
+                    mediaUrl: (mediaFile ? undefined : originalMediaPath) || undefined
+                };
                 await createPost(postDataForImmediate, mediaFile, promotersToAssignFull);
                 alert('Publicação criada com sucesso! As notificações para as divulgadoras estão sendo enviadas em segundo plano.');
                 navigate('/admin/posts');

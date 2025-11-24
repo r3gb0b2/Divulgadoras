@@ -43,9 +43,12 @@ export const createPost = async (
     }
 
     // 2. Prepare data for the cloud function
+    // Check if there's an existing mediaUrl in postData (from duplication) if no new file
+    const existingMediaUrl = (postData as any).mediaUrl;
+
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl, // This will be undefined if no file was uploaded
+        mediaUrl: finalMediaUrl || existingMediaUrl || null,
         // googleDriveUrl is already in postData from the form
     };
 

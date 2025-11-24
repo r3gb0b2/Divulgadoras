@@ -5,7 +5,7 @@ import { getPostsForOrg, getAssignmentsForOrganization, updatePost } from '../se
 import { getOrganizations } from '../services/organizationService';
 import { Post, Organization, PostAssignment } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, MegaphoneIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../firebase/config';
 import StorageMedia from '../components/StorageMedia';
@@ -177,8 +177,19 @@ const AdminPosts: React.FC = () => {
                             </div>
                             <div className="p-4 flex flex-col flex-grow">
                                 {isSuperAdmin && <p className="text-xs font-semibold text-gray-400">{orgNameMap[post.organizationId] || 'Organização Desconhecida'}</p>}
-                                <p className="font-bold text-lg text-primary">{post.campaignName}</p>
-                                {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold text-lg text-primary">{post.campaignName}</p>
+                                        {post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{post.eventName}</p>}
+                                    </div>
+                                    <button 
+                                        onClick={() => navigate('/admin/posts/new?fromPost=' + post.id)}
+                                        className="text-gray-400 hover:text-white"
+                                        title="Duplicar para outro evento"
+                                    >
+                                        <DocumentDuplicateIcon className="w-5 h-5" />
+                                    </button>
+                                </div>
                                 <div className="flex items-center gap-3 text-sm text-gray-400 mt-2">
                                     <span className="capitalize">{post.type}</span>
                                     <span>-</span>
