@@ -1,4 +1,3 @@
-
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -141,16 +140,21 @@ exports.onPromoterStatusChange = functions
         newValue.status === "rejected_editable";
 
       if (statusChanged && isNotificationStatus) {
+        // 1. Envia E-mail (Brevo)
         try {
-          // 1. Envia E-mail (Brevo)
-          await sendStatusChangeEmail(newValue, promoterId);
-          
-          // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado e configurado
-          if (newValue.status === "approved" && newValue.whatsapp) {
-             await sendWhatsAppStatusChange(newValue, promoterId);
-          }
+            await sendStatusChangeEmail(newValue, promoterId);
         } catch (error) {
-          console.error(`[Notification Trigger] Failed for promoter ${promoterId}:`, error);
+            console.error(`[Notification Trigger] Failed to send email for ${promoterId}:`, error);
+        }
+
+        // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado e configurado
+        // Separado em bloco try/catch próprio para não depender do email
+        if (newValue.status === "approved" && newValue.whatsapp) {
+            try {
+                await sendWhatsAppStatusChange(newValue, promoterId);
+            } catch (waError) {
+                console.error(`[Notification Trigger] Failed to send WhatsApp for ${promoterId}:`, waError);
+            }
         }
       }
     });
@@ -255,19 +259,41 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
 
 // --- Função de Envio de WhatsApp (Z-API) ---
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
-    // 1. Verifica se a configuração do Z-API existe
-    if (!zapiConfig || !zapiConfig.instance_id || !zapiConfig.token || !zapiConfig.client_token) {
-        console.log("Z-API not configured in Firebase environment variables. Skipping WhatsApp.");
+    // 1. Verifica e Loga Configurações
+    console.log(`[Z-API] Iniciando envio para Promoter ID: ${promoterId}`);
+    
+    // Leitura direta de functions.config()
+    // Se isso falhar, certifique-se de ter rodado:
+    // firebase functions:config:set zapi.instance_id="ID" zapi.token="TOKEN" zapi.client_token="CLIENT"
+    const instanceId = functions.config().zapi?.instance_id;
+    const token = functions.config().zapi?.token;
+    const clientToken = functions.config().zapi?.client_token;
+
+    if (!instanceId || !token || !clientToken) {
+        console.error("[Z-API] ERRO CRÍTICO: Configurações ausentes. Verifique functions.config().zapi");
+        console.error(`[Z-API Config] Instance: ${!!instanceId}, Token: ${!!token}, Client: ${!!clientToken}`);
         return;
     }
 
     // 2. Limpa o número de telefone (formato 5511999999999)
-    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
-    if (!cleanPhone) return;
+    let rawPhone = promoterData.whatsapp || "";
+    let cleanPhone = rawPhone.replace(/\D/g, '');
     
-    // Adiciona DDI 55 se não tiver (assumindo Brasil)
+    // Remove zero inicial (ex: 011999...) -> 11999...
+    if (cleanPhone.startsWith('0')) {
+        cleanPhone = cleanPhone.substring(1);
+    }
+    
+    // Adiciona DDI 55 se for Brasil (10 ou 11 dígitos)
     if (cleanPhone.length === 10 || cleanPhone.length === 11) {
         cleanPhone = '55' + cleanPhone;
+    }
+
+    console.log(`[Z-API] Telefone Original: ${rawPhone} -> Formatado: ${cleanPhone}`);
+
+    if (!cleanPhone || cleanPhone.length < 10) {
+        console.error("[Z-API] Telefone inválido ou muito curto.");
+        return;
     }
 
     // 3. Obtém detalhes da organização e link
@@ -285,14 +311,14 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
     const message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro para *${campaignDisplay}* foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
 
     // 5. Envia via fetch para a API do Z-API
+    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`;
+    
     try {
-        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
-        
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Client-Token': zapiConfig.client_token
+                'Client-Token': clientToken
             },
             body: JSON.stringify({
                 phone: cleanPhone,
@@ -302,13 +328,14 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
 
         if (!response.ok) {
             const errText = await response.text();
-            console.error(`[Z-API Error] Status: ${response.status} - ${errText}`);
+            console.error(`[Z-API] Erro na Resposta da API: Status ${response.status} - ${errText}`);
         } else {
-            console.log(`WhatsApp successfully sent to ${cleanPhone} via Z-API.`);
+            const successData = await response.json();
+            console.log(`[Z-API] Sucesso! Mensagem enviada. ID: ${successData.messageId || 'OK'}`);
         }
 
     } catch (error) {
-        console.error(`[Z-API Exception] Failed to send to ${cleanPhone}.`, error);
+        console.error(`[Z-API] Exceção ao tentar enviar fetch:`, error);
     }
 }
 
