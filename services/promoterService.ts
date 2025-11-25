@@ -437,6 +437,18 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
   }
 };
 
+// **NEW FUNCTION**: Updates group status directly in Firestore (bypassing Admin Cloud Function)
+export const confirmPromoterGroupEntry = async (promoterId: string): Promise<void> => {
+  try {
+    await firestore.collection('promoters').doc(promoterId).update({
+        hasJoinedGroup: true
+    });
+  } catch (error) {
+    console.error("Error confirming group entry:", error);
+    throw new Error("Não foi possível confirmar a entrada no grupo.");
+  }
+};
+
 export const deletePromoter = async (id: string): Promise<void> => {
     try {
       await firestore.collection("promoters").doc(id).delete();

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { checkPromoterStatus, updatePromoter } from '../services/promoterService';
+import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
 import { WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
@@ -81,7 +82,8 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
 
         if (isChecked && promoter && !promoter.hasJoinedGroup) {
             try {
-                await updatePromoter(promoter.id, { hasJoinedGroup: true });
+                // Use the new direct update function instead of the Admin SDK function
+                await confirmPromoterGroupEntry(promoter.id);
             } catch (updateError) {
                 console.error("Failed to update status:", updateError);
                 setCardError("Não foi possível salvar sua confirmação. Tente novamente.");
