@@ -209,6 +209,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         fetchStaticData();
     }, [adminData, isSuperAdmin, selectedOrgId]);
 
+    // Add function to refresh reasons when modal updates them
+    const refreshReasons = async () => {
+        if (organizationIdForReasons) {
+            try {
+                const reasonsData = await getRejectionReasons(organizationIdForReasons);
+                setRejectionReasons(reasonsData);
+            } catch (e) {
+                console.error("Failed to refresh rejection reasons", e);
+            }
+        }
+    };
+
     const getStatesForScope = useCallback(() => {
         let statesForScope: string[] | null = null;
         if (!isSuperAdmin) {
@@ -909,7 +921,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
-            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={() => {}} organizationId={organizationIdForReasons} />}
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
         </div>
     );
