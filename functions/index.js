@@ -173,6 +173,7 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
             const orgDoc = await db.collection("organizations").doc(organizationId).get();
             const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
 
+            // 1. Send Email
             await sendNewPostNotificationEmail(
                 { email: promoterEmail, name: promoterName, id: promoterId },
                 {
@@ -182,6 +183,16 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
                     organizationId: organizationId,
                 }
             );
+
+            // 2. Send WhatsApp (Z-API)
+            const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+            if (promoterDoc.exists) {
+                const promoterData = promoterDoc.data();
+                if (promoterData.whatsapp) {
+                    await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+                }
+            }
+
         } catch (error) {
             console.error(`Failed to send notification for assignment ${context.params.assignmentId}:`, error);
         }
@@ -258,7 +269,126 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
     await batch.commit();
 }
 
-// --- Função de Envio de WhatsApp (Z-API) ---
+// --- Helper to generate Signed URL for Firebase Storage files ---
+async function getSignedUrl(storagePath) {
+    try {
+        if (!storagePath) return null;
+        if (storagePath.startsWith('http')) return storagePath; // Already a URL
+
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(storagePath);
+        
+        // Check if file exists first to avoid error
+        const [exists] = await file.exists();
+        if (!exists) return null;
+
+        const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 1000 * 60 * 60 * 24, // 24 hours
+        });
+        return url;
+    } catch (e) {
+        console.error("[Z-API] Failed to generate signed URL:", e);
+        return null;
+    }
+}
+
+// --- Função de Envio de WhatsApp para Novos Posts (Z-API) ---
+async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData) {
+    console.log(`[Z-API Post] >>> Preparando envio para ${promoterData.name}`);
+    
+    const config = functions.config().zapi;
+    if (!config || !config.instance_id || !config.token) return;
+    const { instance_id, token, client_token } = config;
+
+    // 1. Formatação do Telefone
+    let rawPhone = promoterData.whatsapp || "";
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+    if (cleanPhone.length < 10) return;
+
+    // 2. Links e Infos
+    const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
+    const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
+    const eventName = postData.eventName || postData.campaignName;
+
+    // 3. Montagem da Legenda/Mensagem
+    let caption = `✨ *NOVA MISSÃO DISPONÍVEL* ✨\n\n`;
+    caption += `Olá ${firstName}! Temos uma nova publicação para *${eventName}*.\n\n`;
+    
+    if (postData.instructions) {
+        const shortInstructions = postData.instructions.length > 150 
+            ? postData.instructions.substring(0, 150) + '...' 
+            : postData.instructions;
+        caption += `📝 *Instruções:* ${shortInstructions}\n\n`;
+    }
+
+    if (postData.postLink) {
+        caption += `🔗 *Link do Post:* ${postData.postLink}\n\n`;
+    }
+
+    caption += `👇 *PARA CONFIRMAR E ENVIAR O PRINT:* 👇\n${portalLink}`;
+
+    // 4. Definição do Tipo de Envio (Imagem, Vídeo ou Texto)
+    let endpoint = 'send-text';
+    let body = { phone: cleanPhone, message: caption };
+
+    // Tenta obter URL da mídia se for imagem ou vídeo
+    if (postData.type === 'image' || postData.type === 'video') {
+        let mediaUrl = postData.mediaUrl || postData.googleDriveUrl;
+        
+        // Se for caminho do storage, gera link assinado
+        if (mediaUrl && !mediaUrl.startsWith('http')) {
+             mediaUrl = await getSignedUrl(mediaUrl);
+        }
+
+        // Se temos uma URL válida (assinada ou externa), usamos o endpoint correto
+        if (mediaUrl && mediaUrl.startsWith('http')) {
+            if (postData.type === 'image') {
+                endpoint = 'send-image';
+                body = { phone: cleanPhone, image: mediaUrl, caption: caption };
+            } else if (postData.type === 'video' && !mediaUrl.includes('drive.google.com')) {
+                // Z-API send-video works best with direct MP4 links, Drive links often fail or send as text
+                endpoint = 'send-video';
+                body = { phone: cleanPhone, video: mediaUrl, caption: caption };
+            } else {
+                // Fallback for Drive Video links -> Send as text with link
+                caption = caption.replace('Instruções:', `🎥 *Link do Vídeo:* ${mediaUrl}\n\n📝 *Instruções:*`);
+                body = { phone: cleanPhone, message: caption };
+            }
+        } else {
+            // Fallback if URL generation failed
+             console.log(`[Z-API Post] Mídia não acessível, enviando apenas texto.`);
+        }
+    }
+
+    // 5. Envio HTTP
+    const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/${endpoint}`;
+    
+    try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (client_token) headers['Client-Token'] = client_token;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[Z-API Post Error] ${endpoint}: ${response.status} - ${errText}`);
+        } else {
+            console.log(`[Z-API Post Success] Enviado para ${cleanPhone}`);
+        }
+    } catch (error) {
+        console.error(`[Z-API Post Exception]`, error);
+    }
+}
+
+
+// --- Função de Envio de WhatsApp de Aprovação (Z-API) ---
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
     console.log(`[Z-API] >>> Iniciando envio para ${promoterId}`);
     
