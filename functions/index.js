@@ -265,7 +265,7 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
     let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
     if (!cleanPhone) return;
     
-    // Adiciona DDI 55 se não tiver
+    // Adiciona DDI 55 se não tiver (assumindo Brasil)
     if (cleanPhone.length === 10 || cleanPhone.length === 11) {
         cleanPhone = '55' + cleanPhone;
     }
