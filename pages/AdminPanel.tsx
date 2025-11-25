@@ -108,6 +108,16 @@ const toDateSafe = (timestamp: any): Date | null => {
     return null;
 };
 
+const getActionLabel = (status: PromoterStatus) => {
+    switch (status) {
+        case 'approved': return 'Aprovado por';
+        case 'rejected': return 'Rejeitado por';
+        case 'rejected_editable': return 'Correção solicitada por';
+        case 'removed': return 'Removido por';
+        default: return 'Atualizado por';
+    }
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
@@ -848,6 +858,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 )}
                                 {promoter.rejectionReason && (
                                     <div className="mt-2 p-2 bg-dark/70 rounded text-xs text-red-300"><strong>Motivo:</strong> {promoter.rejectionReason}</div>
+                                )}
+                                
+                                {promoter.status !== 'pending' && promoter.actionTakenByEmail && (
+                                    <div className="mt-3 pt-2 border-t border-gray-700/50 text-xs">
+                                        <p className="text-gray-500">
+                                            {getActionLabel(promoter.status)}: <span className="text-gray-300 font-medium">{promoter.actionTakenByEmail}</span>
+                                        </p>
+                                        {promoter.statusChangedAt && (
+                                            <p className="text-gray-600 mt-0.5">{formatDate(promoter.statusChangedAt)}</p>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                     
