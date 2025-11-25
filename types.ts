@@ -102,6 +102,7 @@ export interface Organization {
   ownerPhone?: string;
   ownerTaxId?: string;
   emailRemindersEnabled?: boolean;
+  whatsappNotificationsEnabled?: boolean;
   oneTimePostEnabled?: boolean;
   guestListManagementEnabled?: boolean;
   guestListCheckinEnabled?: boolean;

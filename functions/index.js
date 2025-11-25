@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -152,7 +153,16 @@ exports.onPromoterStatusChange = functions
         // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado - Isolado
         if (newValue.status === "approved" && newValue.whatsapp) {
             try {
-                await sendWhatsAppStatusChange(newValue, promoterId);
+                // Check organization config first
+                const orgRef = db.collection("organizations").doc(newValue.organizationId);
+                const orgSnap = await orgRef.get();
+                const orgData = orgSnap.exists ? orgSnap.data() : {};
+
+                if (orgData.whatsappNotificationsEnabled !== false) {
+                    await sendWhatsAppStatusChange(newValue, promoterId);
+                } else {
+                    console.log(`[Z-API Trigger] WhatsApp skipped for ${promoterId} (Disabled by Org).`);
+                }
             } catch (waError) {
                 console.error(`[Z-API Trigger Error] Failed to send WhatsApp for ${promoterId}:`, waError);
             }
@@ -171,7 +181,8 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
         try {
             const orgDoc = await db.collection("organizations").doc(organizationId).get();
-            const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Organização";
+            const orgData = orgDoc.exists ? orgDoc.data() : {};
+            const orgName = orgData.name || "Sua Organização";
 
             // 1. Send Email
             await sendNewPostNotificationEmail(
@@ -185,12 +196,17 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
             );
 
             // 2. Send WhatsApp (Z-API)
-            const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-            if (promoterDoc.exists) {
-                const promoterData = promoterDoc.data();
-                if (promoterData.whatsapp) {
-                    await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+            // Check if org has WhatsApp notifications enabled (default: true if undefined)
+            if (orgData.whatsappNotificationsEnabled !== false) {
+                const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+                if (promoterDoc.exists) {
+                    const promoterData = promoterDoc.data();
+                    if (promoterData.whatsapp) {
+                        await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+                    }
                 }
+            } else {
+                console.log(`[Z-API Post] Skipped for ${assignmentData.id} (Disabled by Org).`);
             }
 
         } catch (error) {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOrganization, updateOrganization, deleteOrganization } from '../services/organizationService';
@@ -307,6 +308,18 @@ const ManageOrganizationPage: React.FC = () => {
                                     <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
                                 </div>
                             </label>
+
+                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Notificações via WhatsApp</span>
+                                    <p className="text-sm text-gray-400">Permite o envio automático de mensagens via Z-API.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="whatsappNotificationsEnabled" checked={formData.whatsappNotificationsEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, whatsappNotificationsEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+
                              <label className="flex items-center justify-between space-x-3 cursor-pointer">
                                 <div>
                                     <span className="text-white font-medium">Post Único</span>
