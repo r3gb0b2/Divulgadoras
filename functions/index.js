@@ -309,6 +309,29 @@ async function getSignedUrl(storagePath) {
     }
 }
 
+// --- Helper to convert Drive View URL to Direct Download URL ---
+function convertDriveToDirectLink(url) {
+    if (!url || !url.includes('drive.google.com')) return url;
+    
+    let id = null;
+    const patterns = [
+        /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
+        /drive\.google\.com\/uc\?id=([a-zA-Z0-9_-]+)/
+    ];
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) {
+            id = match[1];
+            break;
+        }
+    }
+    if (id) {
+        return `https://drive.google.com/uc?export=download&id=${id}`;
+    }
+    return url;
+}
+
 // --- Função de Envio de WhatsApp para Novos Posts (Z-API) ---
 async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData) {
     console.log(`[Z-API Post] >>> Preparando envio para ${promoterData.name}`);
@@ -357,6 +380,9 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
         // Se for caminho do storage, gera link assinado
         if (mediaUrl && !mediaUrl.startsWith('http')) {
              mediaUrl = await getSignedUrl(mediaUrl);
+        } else {
+             // Se for link externo (ex: Drive), tenta converter para link direto
+             mediaUrl = convertDriveToDirectLink(mediaUrl);
         }
 
         // Se temos uma URL válida (assinada ou externa), usamos o endpoint correto
@@ -364,15 +390,11 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
             if (postData.type === 'image') {
                 endpoint = 'send-image';
                 body = { phone: cleanPhone, image: mediaUrl, caption: caption };
-            } else if (postData.type === 'video' && !mediaUrl.includes('drive.google.com')) {
-                // Z-API send-video works best with direct MP4 links, Drive links often fail or send as text
+            } else if (postData.type === 'video') {
+                // Agora tentamos enviar Drive Videos como vídeo real também, pois convertemos o link
                 endpoint = 'send-video';
                 body = { phone: cleanPhone, video: mediaUrl, caption: caption };
-            } else {
-                // Fallback for Drive Video links -> Send as text with link
-                caption = caption.replace('Instruções:', `🎥 *Link do Vídeo:* ${mediaUrl}\n\n📝 *Instruções:*`);
-                body = { phone: cleanPhone, message: caption };
-            }
+            } 
         } else {
             // Fallback if URL generation failed
              console.log(`[Z-API Post] Mídia não acessível, enviando apenas texto.`);
