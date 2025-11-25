@@ -24,10 +24,12 @@ db.settings({ ignoreUndefinedProperties: true });
 // --- Brevo API Client Initialization ---
 const brevoConfig = functions.config().brevo;
 let brevoApiInstance;
+
 if (brevoConfig && brevoConfig.key) {
   const defaultClient = Brevo.ApiClient.instance;
   const apiKey = defaultClient.authentications["api-key"];
   apiKey.apiKey = brevoConfig.key;
+  
   brevoApiInstance = new Brevo.TransactionalEmailsApi();
 }
 
@@ -46,6 +48,9 @@ const getBrevoErrorDetails = (error) => {
   }
   return details;
 };
+
+// --- Z-API Configuration ---
+const zapiConfig = functions.config().zapi;
 
 // --- Safe String Helpers ---
 const safeTrim = (val) => (typeof val === 'string' ? val.trim() : val);
@@ -137,9 +142,15 @@ exports.onPromoterStatusChange = functions
 
       if (statusChanged && isNotificationStatus) {
         try {
+          // 1. Envia E-mail (Brevo)
           await sendStatusChangeEmail(newValue, promoterId);
+          
+          // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado e configurado
+          if (newValue.status === "approved" && newValue.whatsapp) {
+             await sendWhatsAppStatusChange(newValue, promoterId);
+          }
         } catch (error) {
-          console.error(`[Email Trigger] Failed to send status change email for promoter ${promoterId}:`, error);
+          console.error(`[Notification Trigger] Failed for promoter ${promoterId}:`, error);
         }
       }
     });
@@ -240,6 +251,65 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
     }
 
     await batch.commit();
+}
+
+// --- Função de Envio de WhatsApp (Z-API) ---
+async function sendWhatsAppStatusChange(promoterData, promoterId) {
+    // 1. Verifica se a configuração do Z-API existe
+    if (!zapiConfig || !zapiConfig.instance_id || !zapiConfig.token || !zapiConfig.client_token) {
+        console.log("Z-API not configured in Firebase environment variables. Skipping WhatsApp.");
+        return;
+    }
+
+    // 2. Limpa o número de telefone (formato 5511999999999)
+    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
+    if (!cleanPhone) return;
+    
+    // Adiciona DDI 55 se não tiver
+    if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+        cleanPhone = '55' + cleanPhone;
+    }
+
+    // 3. Obtém detalhes da organização e link
+    const { orgName } = await getOrgAndCampaignDetails(
+        promoterData.organizationId,
+        promoterData.state,
+        promoterData.campaignName,
+    );
+
+    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
+    const firstName = promoterData.name.split(' ')[0];
+    const campaignDisplay = promoterData.campaignName || orgName;
+
+    // 4. Monta a mensagem de texto
+    const message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro para *${campaignDisplay}* foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
+
+    // 5. Envia via fetch para a API do Z-API
+    try {
+        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Client-Token': zapiConfig.client_token
+            },
+            body: JSON.stringify({
+                phone: cleanPhone,
+                message: message
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error(`[Z-API Error] Status: ${response.status} - ${errText}`);
+        } else {
+            console.log(`WhatsApp successfully sent to ${cleanPhone} via Z-API.`);
+        }
+
+    } catch (error) {
+        console.error(`[Z-API Exception] Failed to send to ${cleanPhone}.`, error);
+    }
 }
 
 
