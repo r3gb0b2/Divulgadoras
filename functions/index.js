@@ -56,6 +56,7 @@ const safeTrim = (val) => (typeof val === 'string' ? val.trim() : val);
 const safeLower = (val) => (typeof val === 'string' ? val.toLowerCase().trim() : val);
 
 // --- Helper: Increment Email Usage ---
+// Wrapped in its own try/catch to prevent blocking main flows or creating false positive errors in logs
 const incrementOrgEmailCount = async (organizationId) => {
     if (!organizationId) return;
     try {
@@ -64,7 +65,8 @@ const incrementOrgEmailCount = async (organizationId) => {
             "usageStats.emailsSent": admin.firestore.FieldValue.increment(1)
         });
     } catch (e) {
-        console.error(`Failed to increment email count for org ${organizationId}`, e);
+        // Log as warning, do not throw. This is a non-critical operation.
+        console.warn(`[Non-Critical] Failed to increment email count for org ${organizationId}: ${e.message}`);
     }
 };
 
@@ -140,18 +142,16 @@ exports.onPromoterStatusChange = functions
         newValue.status === "rejected_editable";
 
       if (statusChanged && isNotificationStatus) {
-        // 1. Envia E-mail (Brevo) - Independente do WhatsApp
+        // 1. Envia E-mail (Brevo) - Isolado
         try {
             await sendStatusChangeEmail(newValue, promoterId);
         } catch (error) {
             console.error(`[Notification Trigger] Failed to send email for ${promoterId}:`, error);
         }
 
-        // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado
-        // Separado em bloco try/catch próprio para não depender do sucesso do email
+        // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado - Isolado
         if (newValue.status === "approved" && newValue.whatsapp) {
             try {
-                console.log(`[Z-API Trigger] Tentando enviar WhatsApp para ${promoterId}...`);
                 await sendWhatsAppStatusChange(newValue, promoterId);
             } catch (waError) {
                 console.error(`[Z-API Trigger Error] Failed to send WhatsApp for ${promoterId}:`, waError);
@@ -262,28 +262,23 @@ async function assignPostsToNewPromoter(promoterData, promoterId) {
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
     console.log(`[Z-API] >>> Iniciando envio para ${promoterId}`);
     
-    // 1. Configuração
-    // IMPORTANTE: Certifique-se de rodar: firebase functions:config:set zapi.instance_id="..." zapi.token="..." zapi.client_token="..."
     const config = functions.config().zapi;
     
-    if (!config || !config.instance_id || !config.token || !config.client_token) {
-        console.error("[Z-API] ERRO: Configurações não encontradas no ambiente (functions.config().zapi). Execute o comando firebase functions:config:set ...");
+    if (!config || !config.instance_id || !config.token) {
+        console.error("[Z-API] ERRO: 'instance_id' ou 'token' não configurados no Firebase (functions.config().zapi).");
         return;
     }
 
     const { instance_id, token, client_token } = config;
 
-    // 2. Formatação do Telefone
+    // Formatação do Telefone
     let rawPhone = promoterData.whatsapp || "";
-    // Remove tudo que não for dígito
     let cleanPhone = rawPhone.replace(/\D/g, '');
     
-    // Se começar com 0 (ex: 011...), remove o zero
     if (cleanPhone.startsWith('0')) {
         cleanPhone = cleanPhone.substring(1);
     }
     
-    // Se tiver 10 ou 11 dígitos (formato Brasil sem DDI), adiciona 55
     if (cleanPhone.length === 10 || cleanPhone.length === 11) {
         cleanPhone = '55' + cleanPhone;
     }
@@ -295,7 +290,6 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
         return;
     }
 
-    // 3. Montagem da Mensagem
     const { orgName } = await getOrgAndCampaignDetails(
         promoterData.organizationId,
         promoterData.state,
@@ -308,18 +302,19 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
 
     const message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro para *${campaignDisplay}* foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
 
-    // 4. Envio HTTP
     const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
     
     try {
         console.log(`[Z-API] Enviando request POST para ${url}...`);
         
+        const headers = { 'Content-Type': 'application/json' };
+        if (client_token) {
+            headers['Client-Token'] = client_token;
+        }
+
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Client-Token': client_token
-            },
+            headers: headers,
             body: JSON.stringify({
                 phone: cleanPhone,
                 message: message
@@ -340,12 +335,11 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
 }
 
 // --- Função de Teste do Z-API (Para Debug) ---
-// Chame esta função manualmente via Firebase Console ou Script para testar as chaves
 exports.testZapi = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     
     const config = functions.config().zapi;
-    const phoneToTest = data.phone || '5511999999999'; // Use um número seguro para teste
+    const phoneToTest = data.phone || '5511999999999'; 
 
     return {
         configFound: !!config,
@@ -413,6 +407,7 @@ async function sendStatusChangeEmail(promoterData, promoterId) {
 
   try {
     await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+    // Increment email usage separately so it doesn't crash the Brevo try/catch if it fails
     await incrementOrgEmailCount(promoterData.organizationId);
   } catch (error) {
     console.error(`[Brevo API Error] Failed to send email to ${promoterData.email}.`, getBrevoErrorDetails(error));
