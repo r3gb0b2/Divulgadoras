@@ -397,30 +397,37 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
 
     // Tenta resolver URL da mídia se for imagem ou vídeo
     if (postData.type === 'image' || postData.type === 'video') {
-        // A) Tenta Upload do Firebase primeiro
-        if (postData.mediaUrl && !postData.mediaUrl.includes('drive.google.com')) {
-             mediaUrl = await getSignedUrl(postData.mediaUrl);
-        }
-        
-        // B) Se não conseguiu no Firebase (ou não tinha), tenta Google Drive
-        if (!mediaUrl && postData.googleDriveUrl) {
-             mediaUrl = convertDriveToDirectLink(postData.googleDriveUrl);
-        } else if (!mediaUrl && postData.mediaUrl && postData.mediaUrl.startsWith('http')) {
-             // Caso o mediaUrl seja um link direto (ex: duplicado de drive)
-             mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
-        }
+        try {
+            // A) Tenta Upload do Firebase primeiro
+            if (postData.mediaUrl && !postData.mediaUrl.includes('drive.google.com')) {
+                 mediaUrl = await getSignedUrl(postData.mediaUrl);
+            }
+            
+            // B) Se não conseguiu no Firebase (ou não tinha), tenta Google Drive
+            if (!mediaUrl && postData.googleDriveUrl) {
+                 mediaUrl = convertDriveToDirectLink(postData.googleDriveUrl);
+            } else if (!mediaUrl && postData.mediaUrl && postData.mediaUrl.startsWith('http')) {
+                 // Caso o mediaUrl seja um link direto (ex: duplicado de drive)
+                 mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
+            }
 
-        // C) Se temos uma URL válida, configuramos o envio de mídia
-        if (mediaUrl && mediaUrl.startsWith('http')) {
-            if (postData.type === 'image') {
-                endpoint = 'send-image';
-                body = { phone: cleanPhone, image: mediaUrl, caption: caption };
-            } else if (postData.type === 'video') {
-                endpoint = 'send-video';
-                body = { phone: cleanPhone, video: mediaUrl, caption: caption };
-            } 
-        } else {
-             console.log(`[Z-API Post] Mídia não encontrada ou inválida. Caindo para envio de texto.`);
+            // C) Valida se temos URL. Se falhar, LOGA e mantém como texto.
+            if (mediaUrl && mediaUrl.startsWith('http')) {
+                if (postData.type === 'image') {
+                    endpoint = 'send-image';
+                    body = { phone: cleanPhone, image: mediaUrl, caption: caption };
+                } else if (postData.type === 'video') {
+                    endpoint = 'send-video';
+                    body = { phone: cleanPhone, video: mediaUrl, caption: caption };
+                } 
+            } else {
+                 console.warn(`[Z-API Post Warning] Mídia não encontrada ou inválida para ${postData.type}. Enviando como texto.`);
+                 // Endpoint remains send-text, body uses message
+                 body = { phone: cleanPhone, message: caption };
+            }
+        } catch (mediaError) {
+            console.error(`[Z-API Post Warning] Erro ao processar mídia: ${mediaError}. Enviando como texto.`);
+            body = { phone: cleanPhone, message: caption };
         }
     }
 
