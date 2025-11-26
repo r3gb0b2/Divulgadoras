@@ -118,6 +118,35 @@ const getActionLabel = (status: PromoterStatus) => {
     }
 };
 
+const PromoterHistoryBadge: React.FC<{ promoter: Promoter, allPromoters: Promoter[] }> = ({ promoter, allPromoters }) => {
+    if (promoter.status !== 'pending' && promoter.status !== 'rejected_editable') {
+        return null;
+    }
+
+    const otherProfiles = allPromoters.filter(p => p.email === promoter.email && p.id !== promoter.id);
+
+    if (otherProfiles.length === 0) {
+        return null;
+    }
+
+    const isApprovedElsewhere = otherProfiles.some(p => p.status === 'approved');
+
+    if (isApprovedElsewhere) {
+        return (
+            <div className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 inline-block" title="Esta divulgadora já possui um cadastro aprovado em outro evento.">
+                Já aprovada em outro evento
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-600 text-gray-300 inline-block" title="Esta divulgadora possui outros cadastros (pendentes ou rejeitados).">
+            Possui outros cadastros
+        </div>
+    );
+};
+
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
@@ -845,6 +874,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
                         <div className="p-4 flex-grow flex flex-col">
                             <h3 className="text-lg font-bold truncate" title={promoter.name}>{promoter.name}</h3>
+                            <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} />
                             <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             
                             <div className="flex items-center gap-4 mt-2">
