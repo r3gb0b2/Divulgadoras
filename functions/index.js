@@ -183,40 +183,56 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
         if (!assignmentData) return;
 
         const { organizationId, promoterId, promoterEmail, promoterName, post } = assignmentData;
-        if (!organizationId || !promoterId || !promoterEmail || !promoterName || !post) return;
+        if (!organizationId || !promoterId || !promoterEmail || !promoterName || !post) {
+            console.error(`[onPostAssignmentCreated] Dados incompletos para a tarefa ${context.params.assignmentId}`);
+            return;
+        }
 
         try {
             const orgDoc = await db.collection("organizations").doc(organizationId).get();
             const orgData = orgDoc.exists ? orgDoc.data() : {};
             const orgName = orgData.name || "Sua Organização";
 
-            // 1. Send Email
-            await sendNewPostNotificationEmail(
-                { email: promoterEmail, name: promoterName, id: promoterId },
-                {
-                    campaignName: post.campaignName,
-                    eventName: post.eventName,
-                    orgName: orgName,
-                    organizationId: organizationId,
-                }
-            );
-
-            // 2. Send WhatsApp (Z-API)
-            // Check if org has WhatsApp notifications enabled (default: true if undefined)
-            if (orgData.whatsappNotificationsEnabled !== false) {
-                const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-                if (promoterDoc.exists) {
-                    const promoterData = promoterDoc.data();
-                    if (promoterData.whatsapp) {
-                        await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+            // 1. Send Email - Isolated Try/Catch
+            try {
+                console.log(`[Email Post] Iniciando envio para ${promoterEmail}`);
+                await sendNewPostNotificationEmail(
+                    { email: promoterEmail, name: promoterName, id: promoterId },
+                    {
+                        campaignName: post.campaignName,
+                        eventName: post.eventName,
+                        orgName: orgName,
+                        organizationId: organizationId,
                     }
+                );
+            } catch (emailErr) {
+                console.error(`[Email Post Error] Falha ao enviar email para ${promoterEmail}:`, emailErr);
+            }
+
+            // 2. Send WhatsApp (Z-API) - Isolated Try/Catch
+            if (orgData.whatsappNotificationsEnabled !== false) {
+                try {
+                    const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+                    if (promoterDoc.exists) {
+                        const promoterData = promoterDoc.data();
+                        if (promoterData.whatsapp) {
+                            console.log(`[WhatsApp Post] Iniciando envio para ${promoterData.name}`);
+                            await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+                        } else {
+                            console.log(`[WhatsApp Post] Divulgadora sem WhatsApp cadastrado.`);
+                        }
+                    } else {
+                        console.warn(`[WhatsApp Post] Documento da divulgadora ${promoterId} não encontrado.`);
+                    }
+                } catch (waErr) {
+                    console.error(`[WhatsApp Post Error] Falha crítica ao enviar WhatsApp:`, waErr);
                 }
             } else {
                 console.log(`[Z-API Post] Skipped for ${assignmentData.id} (Disabled by Org).`);
             }
 
         } catch (error) {
-            console.error(`Failed to send notification for assignment ${context.params.assignmentId}:`, error);
+            console.error(`Failed to process notification for assignment ${context.params.assignmentId}:`, error);
         }
     });
 
@@ -399,14 +415,14 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
     if (postData.type === 'image' || postData.type === 'video') {
         try {
             // A) Tenta Upload do Firebase primeiro
-            if (postData.mediaUrl && !postData.mediaUrl.includes('drive.google.com')) {
+            if (postData.mediaUrl && typeof postData.mediaUrl === 'string' && !postData.mediaUrl.includes('drive.google.com')) {
                  mediaUrl = await getSignedUrl(postData.mediaUrl);
             }
             
             // B) Se não conseguiu no Firebase (ou não tinha), tenta Google Drive
-            if (!mediaUrl && postData.googleDriveUrl) {
+            if (!mediaUrl && postData.googleDriveUrl && typeof postData.googleDriveUrl === 'string') {
                  mediaUrl = convertDriveToDirectLink(postData.googleDriveUrl);
-            } else if (!mediaUrl && postData.mediaUrl && postData.mediaUrl.startsWith('http')) {
+            } else if (!mediaUrl && postData.mediaUrl && typeof postData.mediaUrl === 'string' && postData.mediaUrl.startsWith('http')) {
                  // Caso o mediaUrl seja um link direto (ex: duplicado de drive)
                  mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
             }

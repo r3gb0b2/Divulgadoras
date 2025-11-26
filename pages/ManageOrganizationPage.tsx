@@ -299,66 +299,69 @@ const ManageOrganizationPage: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-700 pt-6 mt-6">
-                    <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades</h2>
-                    <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h2 className="text-xl font-semibold mb-3">Configurações de Comunicação</h2>
+                    <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 gap-6">
                         <label className="flex items-center justify-between space-x-3 cursor-pointer">
                             <div>
                                 <span className="text-white font-medium">Notificações via WhatsApp</span>
-                                <p className="text-sm text-gray-400">Permite o envio automático de mensagens via Z-API.</p>
+                                <p className="text-sm text-gray-400">Permite o envio automático de mensagens para divulgadoras via Z-API.</p>
                             </div>
                             <div className="relative">
                                 <input type="checkbox" name="whatsappNotificationsEnabled" checked={formData.whatsappNotificationsEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, whatsappNotificationsEnabled: e.target.checked }))} className="sr-only peer" />
                                 <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
                             </div>
                         </label>
-
-                        {isSuperAdmin && (
-                            <>
-                                <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                                    <div>
-                                        <span className="text-white font-medium">Lembretes por E-mail</span>
-                                        <p className="text-sm text-gray-400">Permite o envio de e-mails de lembrete de postagem.</p>
-                                    </div>
-                                    <div className="relative">
-                                        <input type="checkbox" name="emailRemindersEnabled" checked={formData.emailRemindersEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, emailRemindersEnabled: e.target.checked }))} className="sr-only peer" />
-                                        <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                                    </div>
-                                </label>
-
-                                <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                                    <div>
-                                        <span className="text-white font-medium">Post Único</span>
-                                        <p className="text-sm text-gray-400">Permite criar posts com link compartilhável.</p>
-                                    </div>
-                                    <div className="relative">
-                                        <input type="checkbox" name="oneTimePostEnabled" checked={formData.oneTimePostEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, oneTimePostEnabled: e.target.checked }))} className="sr-only peer" />
-                                        <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                                    </div>
-                                </label>
-                                <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                                    <div>
-                                        <span className="text-white font-medium">Gerenciador de Listas</span>
-                                        <p className="text-sm text-gray-400">Permite criar listas (VIP, Aniversariante) e atribuir divulgadoras.</p>
-                                    </div>
-                                    <div className="relative">
-                                        <input type="checkbox" name="guestListManagementEnabled" checked={formData.guestListManagementEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, guestListManagementEnabled: e.target.checked }))} className="sr-only peer" />
-                                        <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                                    </div>
-                                </label>
-                                <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                                    <div>
-                                        <span className="text-white font-medium">Controle de Entrada (Check-in)</span>
-                                        <p className="text-sm text-gray-400">Permite usar a tela de check-in para validar a entrada.</p>
-                                    </div>
-                                    <div className="relative">
-                                        <input type="checkbox" name="guestListCheckinEnabled" checked={formData.guestListCheckinEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, guestListCheckinEnabled: e.target.checked }))} className="sr-only peer" />
-                                        <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                                    </div>
-                                </label>
-                            </>
-                        )}
                     </div>
                 </div>
+
+                {isSuperAdmin && (
+                    <div className="border-t border-gray-700 pt-6 mt-6">
+                        <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades (Super Admin)</h2>
+                        <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Lembretes por E-mail</span>
+                                    <p className="text-sm text-gray-400">Permite o envio de e-mails de lembrete de postagem.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="emailRemindersEnabled" checked={formData.emailRemindersEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, emailRemindersEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+
+                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Post Único</span>
+                                    <p className="text-sm text-gray-400">Permite criar posts com link compartilhável.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="oneTimePostEnabled" checked={formData.oneTimePostEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, oneTimePostEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Gerenciador de Listas</span>
+                                    <p className="text-sm text-gray-400">Permite criar listas (VIP, Aniversariante) e atribuir divulgadoras.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="guestListManagementEnabled" checked={formData.guestListManagementEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, guestListManagementEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Controle de Entrada (Check-in)</span>
+                                    <p className="text-sm text-gray-400">Permite usar a tela de check-in para validar a entrada.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="guestListCheckinEnabled" checked={formData.guestListCheckinEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, guestListCheckinEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                )}
 
                 {isSuperAdmin && (
                     <div className="border-t border-gray-700 pt-6 mt-6">
