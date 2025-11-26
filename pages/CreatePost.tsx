@@ -277,8 +277,11 @@ const CreatePost: React.FC = () => {
     const [assignedStates, setAssignedStates] = useState<string[]>([]);
     const [instructionTemplates, setInstructionTemplates] = useState<InstructionTemplate[]>([]);
     const [linkTemplates, setLinkTemplates] = useState<LinkTemplate[]>([]);
+    
     const [selectedState, setSelectedState] = useState('');
-    const [selectedCampaign, setSelectedCampaign] = useState('');
+    // Change to array for multi-select
+    const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
+    
     const [eventName, setEventName] = useState('');
     const [selectedPromoters, setSelectedPromoters] = useState<Set<string>>(new Set());
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
@@ -405,7 +408,7 @@ const CreatePost: React.FC = () => {
             getScheduledPostById(editScheduledId).then(scheduledPost => {
                 if (scheduledPost) {
                     const campaign = campaigns.find(c => c.name === scheduledPost.postData.campaignName && c.stateAbbr === scheduledPost.postData.stateAbbr);
-                    if (campaign) setSelectedCampaign(campaign.id);
+                    if (campaign) setSelectedCampaigns([campaign.id]);
                 }
             });
         }
@@ -413,39 +416,97 @@ const CreatePost: React.FC = () => {
     
     useEffect(() => {
         const fetchPromoters = async () => {
-            if (selectedCampaign && selectedState && selectedOrgId) {
+            if (selectedCampaigns.length > 0 && selectedState && selectedOrgId) {
                 setIsLoading(true);
                 try {
-                    const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
-                    if (campaignDetails) {
-                        const promoterData = await getApprovedPromoters(selectedOrgId, selectedState, campaignDetails.name);
-                        promoterData.sort((a, b) => {
-                            const aJoined = a.hasJoinedGroup ? 1 : 0;
-                            const bJoined = b.hasJoinedGroup ? 1 : 0;
-                            if (bJoined !== aJoined) return bJoined - aJoined;
-                            return a.name.localeCompare(b.name);
+                    const allPromoters = new Map<string, Promoter>();
+                    
+                    // Fetch promoters for each selected campaign
+                    const promises = selectedCampaigns.map(campaignId => {
+                        const campaignDetails = campaigns.find(c => c.id === campaignId);
+                        if (campaignDetails) {
+                            return getApprovedPromoters(selectedOrgId, selectedState, campaignDetails.name);
+                        }
+                        return Promise.resolve([]);
+                    });
+
+                    const results = await Promise.all(promises);
+                    
+                    // Combine and deduplicate
+                    results.forEach(group => {
+                        group.forEach(p => {
+                            if (!allPromoters.has(p.id)) {
+                                allPromoters.set(p.id, p);
+                            }
                         });
-                        setPromoters(promoterData);
-                    }
+                    });
+
+                    const uniquePromoters = Array.from(allPromoters.values());
+                    
+                    uniquePromoters.sort((a, b) => {
+                        const aJoined = a.hasJoinedGroup ? 1 : 0;
+                        const bJoined = b.hasJoinedGroup ? 1 : 0;
+                        if (bJoined !== aJoined) return bJoined - aJoined;
+                        return a.name.localeCompare(b.name);
+                    });
+                    
+                    setPromoters(uniquePromoters);
                 } catch(err:any) { setError(err.message); } finally { setIsLoading(false); }
             } else setPromoters([]);
         };
         fetchPromoters();
-    }, [selectedCampaign, selectedState, selectedOrgId, campaigns]);
+    }, [selectedCampaigns, selectedState, selectedOrgId, campaigns]);
     
     const handleLogout = async () => { try { await auth.signOut(); } catch (error) { console.error("Logout failed", error); } };
     const handleRefreshTemplates = async () => { if (!selectedOrgId) return; const templatesData = await getInstructionTemplates(selectedOrgId); setInstructionTemplates(templatesData); };
     const handleRefreshLinkTemplates = async () => { if (!selectedOrgId) return; const linksData = await getLinkTemplates(selectedOrgId); setLinkTemplates(linksData); };
+    
     const filteredCampaigns = useMemo(() => campaigns.filter(c => c.stateAbbr === selectedState), [campaigns, selectedState]);
+    
+    const handleCampaignToggle = (campaignId: string) => {
+        setSelectedCampaigns(prev => {
+            if (prev.includes(campaignId)) {
+                return prev.filter(id => id !== campaignId);
+            } else {
+                return [...prev, campaignId];
+            }
+        });
+        // Reset promoters when campaign selection changes to trigger re-fetch
+        setPromoters([]);
+        setSelectedPromoters(new Set());
+    };
+
+    const handleSelectAllCampaigns = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            // Only select active campaigns
+            const activeCampaignIds = filteredCampaigns.filter(c => c.status === 'active').map(c => c.id);
+            setSelectedCampaigns(activeCampaignIds);
+        } else {
+            setSelectedCampaigns([]);
+        }
+        setPromoters([]);
+        setSelectedPromoters(new Set());
+    };
+
     const handlePromoterToggle = (promoterId: string) => setSelectedPromoters(prev => { const newSet = new Set(prev); if (newSet.has(promoterId)) newSet.delete(promoterId); else newSet.add(promoterId); return newSet; });
-    const handleSelectAllPromoters = (e: React.ChangeEvent<HTMLInputElement>) => e.target.checked ? setSelectedPromoters(new Set(promoters.map(p => p.id))) : setSelectedPromoters(new Set());
+    
+    const handleSelectAllPromoters = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            // Filter only promoters who have joined the group
+            const inGroupIds = promoters.filter(p => p.hasJoinedGroup).map(p => p.id);
+            setSelectedPromoters(new Set(inGroupIds));
+        } else {
+            setSelectedPromoters(new Set());
+        }
+    };
+
     const handleFormatChange = (format: 'story' | 'reels') => setPostFormats(prev => prev.includes(format) ? prev.filter(f => f !== format) : [...prev, format]);
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { setMediaFile(file); setMediaPreview(URL.createObjectURL(file)); } }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos ou organização não selecionada."); return; }
-        if (!selectedCampaign || !selectedState) { setError("Selecione um estado e evento."); return; }
+        if (selectedCampaigns.length === 0 || !selectedState) { setError("Selecione um estado e ao menos um evento."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione ao menos uma divulgadora."); return; }
         if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) { setError(`Selecione uma imagem ou forneça um link do Google Drive.`); return; }
         if (postType === 'video' && !mediaFile && !mediaPreview && !googleDriveUrl.trim()) { setError('Faça o upload de um vídeo ou forneça um link do Google Drive.'); return; }
@@ -454,15 +515,21 @@ const CreatePost: React.FC = () => {
         setIsSubmitting(true);
         setError('');
         try {
-            const campaignDetails = campaigns.find(c => c.id === selectedCampaign);
-            if (!campaignDetails) throw new Error("Detalhes do evento não encontrados.");
+            const selectedCampaignDetails = campaigns.filter(c => selectedCampaigns.includes(c.id));
+            if (selectedCampaignDetails.length === 0) throw new Error("Detalhes dos eventos não encontrados.");
+            
+            // Determine campaign name string for the post
+            const campaignName = selectedCampaignDetails.length === 1 
+                ? selectedCampaignDetails[0].name 
+                : `${selectedCampaignDetails[0].name} e outros`;
+
             const promotersToAssignFull = promoters.filter(p => selectedPromoters.has(p.id));
             const promotersToAssignMapped = promotersToAssignFull.map(p => ({ id: p.id, email: p.email, name: p.name }));
             let expiryTimestamp: Date | null = null;
             if (expiresAt) { const [year, month, day] = expiresAt.split('-').map(Number); expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59); }
 
             const basePostData: Omit<ScheduledPostData, 'mediaUrl'> & { mediaUrl?: string } = {
-                campaignName: campaignDetails.name,
+                campaignName: campaignName,
                 eventName: eventName.trim() || undefined,
                 stateAbbr: selectedState,
                 type: postType,
@@ -546,35 +613,89 @@ const CreatePost: React.FC = () => {
             <h1 className="text-3xl font-bold mb-6">{editingScheduledPostId ? 'Editar Agendamento' : 'Nova Publicação'}</h1>
             <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
-                <fieldset className="p-4 border border-gray-700 rounded-lg"><legend className="px-2 font-semibold text-primary">1. Selecione o Alvo</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedCampaign(''); setPromoters([]); setSelectedPromoters(new Set()); }} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
-                            <option value="" disabled>Selecione um Estado</option>
-                            {assignedStates.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <select 
-                            value={selectedCampaign} 
-                            onChange={e => setSelectedCampaign(e.target.value)} 
-                            disabled={!selectedState} 
-                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:opacity-50"
-                        >
-                            <option value="" disabled>Selecione um Evento/Gênero</option>
-                            {filteredCampaigns.map(c => (
-                                <option 
-                                    key={c.id} 
-                                    value={c.id} 
-                                    disabled={c.status === 'inactive'}
-                                >
-                                    {c.name} {c.status !== 'active' ? `(${c.status === 'inactive' ? 'Inativo' : 'Oculto'})` : ''}
-                                </option>
-                            ))}
-                        </select>
+                
+                <fieldset className="p-4 border border-gray-700 rounded-lg">
+                    <legend className="px-2 font-semibold text-primary">1. Selecione o Alvo</legend>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedCampaigns([]); setPromoters([]); setSelectedPromoters(new Set()); }} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                                <option value="" disabled>Selecione um Estado</option>
+                                {assignedStates.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                            <div className="flex flex-col justify-end">
+                                {/* Multi-select for Campaigns */}
+                                <label className="text-sm text-gray-400 mb-1">Selecione os Eventos:</label>
+                                <div className="border border-gray-600 rounded-md bg-gray-700 p-2 max-h-40 overflow-y-auto">
+                                    {filteredCampaigns.length === 0 ? (
+                                        <p className="text-gray-400 text-sm text-center p-2">Selecione um estado primeiro.</p>
+                                    ) : (
+                                        <>
+                                            <label className="flex items-center space-x-2 p-1 border-b border-gray-600 pb-1 mb-1 cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    onChange={handleSelectAllCampaigns}
+                                                    checked={filteredCampaigns.length > 0 && selectedCampaigns.length === filteredCampaigns.filter(c => c.status === 'active').length}
+                                                    className="h-4 w-4 text-primary bg-gray-600 border-gray-500 rounded"
+                                                />
+                                                <span className="font-bold text-white text-sm">Selecionar Todos Ativos</span>
+                                            </label>
+                                            {filteredCampaigns.map(c => (
+                                                <label key={c.id} className="flex items-center space-x-2 p-1 hover:bg-gray-600/50 rounded cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        value={c.id} 
+                                                        checked={selectedCampaigns.includes(c.id)} 
+                                                        onChange={() => handleCampaignToggle(c.id)}
+                                                        disabled={c.status !== 'active'}
+                                                        className="h-4 w-4 text-primary bg-gray-600 border-gray-500 rounded disabled:opacity-50"
+                                                    />
+                                                    <span className={`text-sm ${c.status !== 'active' ? 'text-gray-500' : 'text-gray-200'}`}>
+                                                        {c.name} {c.status !== 'active' ? `(${c.status === 'inactive' ? 'Inativo' : 'Oculto'})` : ''}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div><input type="text" value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Nome do Evento (Opcional, ex: Festa Neon)" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"/></div>
                     </div>
-                     <div className="mt-4"><input type="text" value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Nome do Evento (Opcional, ex: Festa Neon)" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"/></div>
                 </fieldset>
-                {selectedCampaign && (<fieldset className="p-4 border border-gray-700 rounded-lg"><legend className="px-2 font-semibold text-primary">2. Selecione as Divulgadoras</legend>
-                        {isLoading ? <p>Carregando divulgadoras...</p> : promoters.length > 0 ? (<><label className="flex items-center space-x-2 mb-2 p-1"><input type="checkbox" onChange={handleSelectAllPromoters} checked={selectedPromoters.size === promoters.length && promoters.length > 0} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Selecionar Todas ({selectedPromoters.size}/{promoters.length})</span></label><div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-600 rounded-md">{promoters.map(p => (<label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50"><input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded flex-shrink-0" /><span className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : ''}`} title={`${p.name} (${p.instagram})${p.hasJoinedGroup ? ' - no grupo' : ''}`}>{p.instagram || p.name}</span></label>))}</div></>) : <p className="text-gray-400">Nenhuma divulgadora aprovada para este evento.</p>}
-                    </fieldset>)}
+
+                {selectedCampaigns.length > 0 && (
+                    <fieldset className="p-4 border border-gray-700 rounded-lg">
+                        <legend className="px-2 font-semibold text-primary">2. Selecione as Divulgadoras</legend>
+                        {isLoading ? <p>Carregando divulgadoras...</p> : promoters.length > 0 ? (
+                            <>
+                                <label className="flex items-center space-x-2 mb-2 p-1">
+                                    <input 
+                                        type="checkbox" 
+                                        onChange={handleSelectAllPromoters} 
+                                        checked={selectedPromoters.size > 0 && selectedPromoters.size === promoters.filter(p => p.hasJoinedGroup).length}
+                                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" 
+                                    />
+                                    <span>Selecionar Todas no Grupo ({promoters.filter(p => p.hasJoinedGroup).length})</span>
+                                </label>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-2 border border-gray-600 rounded-md">
+                                    {promoters.map(p => (
+                                        <label key={p.id} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
+                                            <input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded flex-shrink-0" />
+                                            <div className="flex flex-col overflow-hidden">
+                                                <span className={`truncate text-sm font-medium ${p.hasJoinedGroup ? 'text-green-400' : 'text-gray-400'}`} title={`${p.name} (${p.instagram})${p.hasJoinedGroup ? ' - no grupo' : ' - fora do grupo'}`}>
+                                                    {p.instagram || p.name}
+                                                </span>
+                                                <span className="text-[10px] text-gray-500 truncate">{p.campaignName}</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">* Divulgadoras marcadas em verde estão no grupo do WhatsApp.</p>
+                            </>
+                        ) : <p className="text-gray-400">Nenhuma divulgadora aprovada encontrada para os eventos selecionados.</p>}
+                    </fieldset>
+                )}
+
                 <fieldset className="p-4 border border-gray-700 rounded-lg"><legend className="px-2 font-semibold text-primary">3. Crie o Conteúdo</legend>
                      <div className="flex gap-4 mb-4"><label className="flex items-center space-x-2"><input type="radio" name="postType" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /><span>Texto</span></label><label className="flex items-center space-x-2"><input type="radio" name="postType" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /><span>Imagem</span></label><label className="flex items-center space-x-2"><input type="radio" name="postType" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /><span>Vídeo</span></label></div>
                      <div className="mb-4"><label className="block text-sm font-medium text-gray-400 mb-2">Formato (informativo):</label><div className="flex gap-6"><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('story')} onChange={() => handleFormatChange('story')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/><span>Story</span></label><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('reels')} onChange={() => handleFormatChange('reels')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"/><span>Reels</span></label></div></div>

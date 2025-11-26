@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon } from '../components/Icons';
+import { WhatsAppIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
 
@@ -105,13 +105,13 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
 
                 {/* Step 1 */}
                 <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center font-bold text-white border border-gray-500">1</div>
+                    <div className="flex-shrink-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center font-bold text-white">1</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Leia as Regras</p>
                         <p className="text-xs text-gray-400 mb-2">Clique no botão para ver todas as regras e informações sobre o evento.</p>
                         <button
                             onClick={() => setIsRulesModalOpen(true)}
-                            className="inline-block w-full sm:w-auto text-center bg-gray-700 text-white font-bold py-2 px-4 rounded hover:bg-gray-600 transition-colors text-sm border border-gray-600"
+                            className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors text-sm"
                         >
                             Ver Regras de {campaign.name}
                         </button>
@@ -120,7 +120,7 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
 
                 {/* Step 2 */}
                 <div className="flex items-start gap-4">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-gray-700 border border-gray-500`}>2</div>
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-primary`}>2</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Confirme a Leitura</p>
                         <div className="p-3 border border-gray-600/50 rounded-md bg-black/20 mt-2">
@@ -139,10 +139,10 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
 
                 {/* Step 3 */}
                 <div className="flex items-start gap-4">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${hasAcceptedRules ? 'bg-green-600' : 'bg-gray-700 border border-gray-500'}`}>3</div>
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${hasAcceptedRules ? 'bg-primary' : 'bg-gray-600'}`}>3</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Entre no Grupo</p>
-                        <p className="text-xs text-gray-400 mb-2">Entre no grupo oficial para receber os avisos.</p>
+                        <p className="text-xs text-gray-400 mb-2">Após confirmar a leitura das regras, o botão para entrar no grupo será liberado.</p>
                         <a
                             href={hasAcceptedRules ? campaign?.whatsappLink || '#' : undefined}
                             target="_blank"
@@ -152,23 +152,10 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
                             onClick={(e) => (!hasAcceptedRules || !campaign?.whatsappLink) && e.preventDefault()}
                         >
                             <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                            Entrar no Grupo
+                            Entrar no Grupo de {campaign.name}
                         </a>
                         {!campaign?.whatsappLink && hasAcceptedRules && <p className="text-xs text-yellow-400 mt-2">O link para o grupo ainda não foi disponibilizado pelo organizador.</p>}
                     </div>
-                </div>
-
-                {/* Option: View Posts */}
-                <div className="mt-6 pt-6 border-t border-gray-700">
-                    <h4 className="text-white font-semibold mb-3">Já está no grupo?</h4>
-                    <Link
-                        to={`/posts?email=${encodeURIComponent(promoter.email)}`}
-                        className="flex items-center justify-center w-full bg-primary text-white font-bold py-4 px-4 rounded-lg hover:bg-primary-dark transition-colors text-lg shadow-lg"
-                    >
-                        <MegaphoneIcon className="w-6 h-6 mr-2" />
-                        VER MINHAS POSTAGENS
-                    </Link>
-                    <p className="text-center text-xs text-gray-400 mt-2">Acesse suas tarefas, envie prints e justifique ausências.</p>
                 </div>
             </div>
 
@@ -225,7 +212,7 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
         },
         approved: {
             title: 'Portal da Divulgadora',
-            message: 'Parabéns, seu cadastro foi aprovado! Siga os passos abaixo ou acesse suas postagens.',
+            message: 'Parabéns, seu cadastro foi aprovado! Siga os próximos passos abaixo para concluir sua entrada na equipe.',
             styles: 'bg-green-900/50 border-green-500 text-green-300'
         },
         rejected: {
@@ -314,6 +301,15 @@ const StatusCheck: React.FC = () => {
         setSearched(true);
         try {
             const result = await checkPromoterStatus(searchEmail);
+
+            // If promoter has no applications or is already approved and in a group, redirect to posts
+            const shouldRedirect = !result || result.length === 0 || result.every(p => p.status === 'approved' && p.hasJoinedGroup);
+
+            if (shouldRedirect) {
+                navigate(`/posts?email=${encodeURIComponent(searchEmail)}`);
+                return; // Redirect will unmount, so we stop here. Finally will still run.
+            }
+
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');

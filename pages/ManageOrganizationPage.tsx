@@ -269,12 +269,8 @@ const ManageOrganizationPage: React.FC = () => {
                                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
                                 style={{ colorScheme: 'dark' }}
                             />
-                            {isSuperAdmin && (
-                                <>
-                                    <button type="button" onClick={() => addDaysToExpirtation(15)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 15 dias</button>
-                                    <button type="button" onClick={() => addDaysToExpirtation(30)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 30 dias</button>
-                                </>
-                            )}
+                            <button type="button" onClick={() => addDaysToExpirtation(15)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 15 dias</button>
+                            <button type="button" onClick={() => addDaysToExpirtation(30)} className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm whitespace-nowrap">+ 30 dias</button>
                         </div>
                     </div>
                      <div className="flex items-end">
@@ -298,25 +294,9 @@ const ManageOrganizationPage: React.FC = () => {
                     <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
-                <div className="border-t border-gray-700 pt-6 mt-6">
-                    <h2 className="text-xl font-semibold mb-3">Configurações de Comunicação</h2>
-                    <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 gap-6">
-                        <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                            <div>
-                                <span className="text-white font-medium">Notificações via WhatsApp</span>
-                                <p className="text-sm text-gray-400">Permite o envio automático de mensagens para divulgadoras via Z-API.</p>
-                            </div>
-                            <div className="relative">
-                                <input type="checkbox" name="whatsappNotificationsEnabled" checked={formData.whatsappNotificationsEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, whatsappNotificationsEnabled: e.target.checked }))} className="sr-only peer" />
-                                <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
                 {isSuperAdmin && (
                     <div className="border-t border-gray-700 pt-6 mt-6">
-                        <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades (Super Admin)</h2>
+                        <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades</h2>
                         <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-6">
                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
                                 <div>
@@ -329,7 +309,18 @@ const ManageOrganizationPage: React.FC = () => {
                                 </div>
                             </label>
 
-                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                                <div>
+                                    <span className="text-white font-medium">Notificações via WhatsApp</span>
+                                    <p className="text-sm text-gray-400">Permite o envio automático de mensagens via Z-API.</p>
+                                </div>
+                                <div className="relative">
+                                    <input type="checkbox" name="whatsappNotificationsEnabled" checked={formData.whatsappNotificationsEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, whatsappNotificationsEnabled: e.target.checked }))} className="sr-only peer" />
+                                    <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+                                </div>
+                            </label>
+
+                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
                                 <div>
                                     <span className="text-white font-medium">Post Único</span>
                                     <p className="text-sm text-gray-400">Permite criar posts com link compartilhável.</p>
@@ -339,7 +330,7 @@ const ManageOrganizationPage: React.FC = () => {
                                     <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
                                 </div>
                             </label>
-                            <label className="flex items-center justify-between space-x-3 cursor-pointer">
+                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
                                 <div>
                                     <span className="text-white font-medium">Gerenciador de Listas</span>
                                     <p className="text-sm text-gray-400">Permite criar listas (VIP, Aniversariante) e atribuir divulgadoras.</p>
