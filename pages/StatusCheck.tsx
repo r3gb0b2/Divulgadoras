@@ -314,10 +314,6 @@ const StatusCheck: React.FC = () => {
         setSearched(true);
         try {
             const result = await checkPromoterStatus(searchEmail);
-            
-            // NOTE: Auto-redirect removed to allow users to choose between "Join Group" and "View Posts"
-            // if (shouldRedirect) navigate(`/posts?email=${encodeURIComponent(searchEmail)}`);
-
             setPromoters(result);
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');

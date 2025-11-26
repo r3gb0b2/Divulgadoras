@@ -547,7 +547,29 @@ const CreatePost: React.FC = () => {
             <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
                 <fieldset className="p-4 border border-gray-700 rounded-lg"><legend className="px-2 font-semibold text-primary">1. Selecione o Alvo</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedCampaign(''); setPromoters([]); setSelectedPromoters(new Set()); }} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"><option value="" disabled>Selecione um Estado</option>{assignedStates.map(s => <option key={s} value={s}>{s}</option>)}</select><select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} disabled={!selectedState} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:opacity-50"><option value="" disabled>Selecione um Evento/Gênero</option>{filteredCampaigns.map(c => <option key={c.id} value={c.id} disabled={c.status === 'inactive'}>{c.name} {c.status !== 'active' ? `(${c.status === 'inactive' ? 'Inativo' : 'Oculto'})` : ''}</option>)}</select></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedCampaign(''); setPromoters([]); setSelectedPromoters(new Set()); }} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                            <option value="" disabled>Selecione um Estado</option>
+                            {assignedStates.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <select 
+                            value={selectedCampaign} 
+                            onChange={e => setSelectedCampaign(e.target.value)} 
+                            disabled={!selectedState} 
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200 disabled:opacity-50"
+                        >
+                            <option value="" disabled>Selecione um Evento/Gênero</option>
+                            {filteredCampaigns.map(c => (
+                                <option 
+                                    key={c.id} 
+                                    value={c.id} 
+                                    disabled={c.status === 'inactive'}
+                                >
+                                    {c.name} {c.status !== 'active' ? `(${c.status === 'inactive' ? 'Inativo' : 'Oculto'})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                      <div className="mt-4"><input type="text" value={eventName} onChange={e => setEventName(e.target.value)} placeholder="Nome do Evento (Opcional, ex: Festa Neon)" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"/></div>
                 </fieldset>
                 {selectedCampaign && (<fieldset className="p-4 border border-gray-700 rounded-lg"><legend className="px-2 font-semibold text-primary">2. Selecione as Divulgadoras</legend>

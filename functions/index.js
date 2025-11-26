@@ -1,4 +1,3 @@
-
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -14,6 +13,7 @@ db.settings({ ignoreUndefinedProperties: true });
 // --- Safe Initialization of Third-Party Services ---
 
 const getConfig = () => {
+    // Prevents crash if config is not set in environment
     return functions.config() || {};
 };
 
@@ -362,7 +362,7 @@ function convertDriveToDirectLink(url) {
 async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData) {
     console.log(`[Z-API Post] >>> Preparando envio para ${promoterData.name}`);
     
-    const config = functions.config().zapi || {};
+    const config = getConfig().zapi;
     if (!config.instance_id || !config.token) {
         console.log("[Z-API Post] Configuração Z-API ausente.");
         return;
@@ -374,13 +374,14 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
     let cleanPhone = rawPhone.replace(/\D/g, '');
     if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
     if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-    if (cleanPhone.length < 10) return;
+    if (cleanPhone.length < 10) {
+        console.error(`[Z-API Post] Telefone inválido: ${cleanPhone}`);
+        return;
+    }
 
     // 2. Links e Infos
     const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
-    
-    // Link de Remoção (Leave Group)
-    const promoterId = assignmentData.promoterId;
+    const promoterId = assignmentData.promoterId || promoterData.id;
     const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoterId}&campaignName=${encodeURIComponent(postData.campaignName)}&orgId=${postData.organizationId}`;
 
     const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
@@ -402,32 +403,35 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
     }
 
     caption += `👇 *PARA CONFIRMAR E ENVIAR O PRINT:* 👇\n${portalLink}\n\n`;
-    
-    // Adiciona o link de remoção no final da mensagem
     caption += `⚠️ *Não faz parte ou não tem interesse?*\nSolicite a remoção aqui: ${leaveGroupLink}`;
 
-    // 4. Definição do Tipo de Envio (Imagem, Vídeo ou Texto)
+    // 4. Definição do Tipo de Envio: DEFAULT TO TEXT
+    // We always prepare a text payload first. We only change it if media resolution succeeds.
     let endpoint = 'send-text';
     let body = { phone: cleanPhone, message: caption };
-    let mediaUrl = null;
 
-    // Tenta resolver URL da mídia se for imagem ou vídeo
+    // Try to resolve media if available
     if (postData.type === 'image' || postData.type === 'video') {
         try {
-            // A) Tenta Upload do Firebase primeiro
-            if (postData.mediaUrl && typeof postData.mediaUrl === 'string' && !postData.mediaUrl.includes('drive.google.com')) {
-                 mediaUrl = await getSignedUrl(postData.mediaUrl);
+            let mediaUrl = null;
+
+            // A) Check Firebase Storage
+            if (postData.mediaUrl && typeof postData.mediaUrl === 'string') {
+                if (postData.mediaUrl.startsWith('http')) {
+                    // Already a URL (e.g. previous Drive link saved here)
+                    mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
+                } else if (!postData.mediaUrl.includes('drive.google.com')) {
+                    // Firebase Storage Path
+                    mediaUrl = await getSignedUrl(postData.mediaUrl);
+                }
             }
             
-            // B) Se não conseguiu no Firebase (ou não tinha), tenta Google Drive
+            // B) Check Google Drive URL field if Firebase didn't yield results
             if (!mediaUrl && postData.googleDriveUrl && typeof postData.googleDriveUrl === 'string') {
                  mediaUrl = convertDriveToDirectLink(postData.googleDriveUrl);
-            } else if (!mediaUrl && postData.mediaUrl && typeof postData.mediaUrl === 'string' && postData.mediaUrl.startsWith('http')) {
-                 // Caso o mediaUrl seja um link direto (ex: duplicado de drive)
-                 mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
             }
 
-            // C) Valida se temos URL. Se falhar, LOGA e mantém como texto.
+            // C) If we found a valid HTTP URL, upgrade the request to media
             if (mediaUrl && mediaUrl.startsWith('http')) {
                 if (postData.type === 'image') {
                     endpoint = 'send-image';
@@ -435,14 +439,15 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
                 } else if (postData.type === 'video') {
                     endpoint = 'send-video';
                     body = { phone: cleanPhone, video: mediaUrl, caption: caption };
-                } 
+                }
+                console.log(`[Z-API Post] Mídia resolvida: ${mediaUrl.substring(0, 50)}...`);
             } else {
-                 console.warn(`[Z-API Post Warning] Mídia não encontrada ou inválida para ${postData.type}. Enviando como texto.`);
-                 // Endpoint remains send-text, body uses message
-                 body = { phone: cleanPhone, message: caption };
+                console.log(`[Z-API Post] Mídia não encontrada/resolvida. Enviando apenas texto.`);
             }
         } catch (mediaError) {
-            console.error(`[Z-API Post Warning] Erro ao processar mídia: ${mediaError}. Enviando como texto.`);
+            console.error(`[Z-API Post Warning] Erro ao resolver mídia: ${mediaError}. Enviando apenas texto.`);
+            // Ensure we fall back to text body
+            endpoint = 'send-text';
             body = { phone: cleanPhone, message: caption };
         }
     }
@@ -476,7 +481,7 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
     console.log(`[Z-API] >>> Iniciando envio para ${promoterId}`);
     
-    const config = functions.config().zapi || {};
+    const config = getConfig().zapi;
     
     if (!config.instance_id || !config.token) {
         console.error("[Z-API] ERRO: 'instance_id' ou 'token' não configurados no Firebase (functions.config().zapi).");
@@ -548,7 +553,7 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
 exports.testZapi = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     
-    const config = functions.config().zapi;
+    const config = getConfig().zapi;
     const phoneToTest = data.phone || '5511999999999'; 
 
     return {
@@ -631,7 +636,38 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoter.id}&campaignName=${encodeURIComponent(postDetails.campaignName)}&orgId=${postDetails.organizationId}`;
   const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
   const subject = `Nova Publicação Disponível - ${eventDisplayName}`;
-  const htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;background-color:#f4f4f4;color:#333;}.container{max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;}.header{background-color:#1a1a2e;color:#ffffff;padding:20px;text-align:center;}.content{padding:30px;}.footer{padding:20px;text-align:center;font-size:12px;color:#888;}.button{display:inline-block;background-color:#e83a93;color:#ffffff;padding:12px 25px;text-decoration:none;border-radius:5px;font-weight:bold;}</style></head><body><div class="container"><div class="header"><h1>Olá, ${promoter.name}!</h1></div><div class="content"><p>Nova publicação para <strong>${eventDisplayName}</strong>.</p><p style="text-align:center;margin:30px 0;"><a href="${portalLink}" class="button">Ver Publicação</a></p><p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p></div><div class="footer"><p><a href="${leaveGroupLink}">Sair do grupo</a></p></div></div></body></html>`;
+  const htmlContent = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <style>
+        body{font-family:sans-serif;background-color:#f4f4f4;color:#333;margin:0;padding:20px;}
+        .container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #ddd;}
+        .header{background-color:#1a1a2e;color:#ffffff;padding:20px;text-align:center;}
+        .content{padding:30px;}
+        .footer{padding:20px;text-align:center;font-size:12px;color:#888;background-color:#f9f9f9;border-top:1px solid #eee;}
+        .button{display:inline-block;background-color:#e83a93;color:#ffffff;padding:12px 25px;text-decoration:none;border-radius:5px;font-weight:bold;}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+        <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
+        <div class="content">
+            <p>Temos uma nova publicação para <strong>${eventDisplayName}</strong>.</p>
+            <p>Acesse seu painel para ver as instruções, baixar a mídia e enviar o print.</p>
+            <p style="text-align:center;margin:30px 0;">
+                <a href="${portalLink}" class="button">Ver Publicação</a>
+            </p>
+            <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
+        </div>
+        <div class="footer">
+            <p>Não faz mais parte da equipe ou deseja sair?</p>
+            <p><a href="${leaveGroupLink}">Solicitar remoção do grupo</a></p>
+        </div>
+    </div>
+  </body>
+  </html>`;
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
