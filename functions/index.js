@@ -3,6 +3,7 @@
  */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
+const Brevo = require("@getbrevo/brevo");
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -23,7 +24,6 @@ let brevoApiInstance = null;
 
 if (brevoConfig.key) {
   try {
-      const Brevo = require("@getbrevo/brevo");
       const defaultClient = Brevo.ApiClient.instance;
       const apiKey = defaultClient.authentications["api-key"];
       apiKey.apiKey = brevoConfig.key;
