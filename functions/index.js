@@ -217,7 +217,7 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
                         const promoterData = promoterDoc.data();
                         if (promoterData.whatsapp) {
                             console.log(`[WhatsApp Post] Iniciando envio para ${promoterData.name}`);
-                            await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData);
+                            await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData, promoterId);
                         } else {
                             console.log(`[WhatsApp Post] Divulgadora sem WhatsApp cadastrado.`);
                         }
@@ -359,11 +359,11 @@ function convertDriveToDirectLink(url) {
 }
 
 // --- Função de Envio de WhatsApp para Novos Posts (Z-API) ---
-async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData) {
+async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData, promoterId) {
     console.log(`[Z-API Post] >>> Preparando envio para ${promoterData.name}`);
     
     const config = getConfig().zapi;
-    if (!config.instance_id || !config.token) {
+    if (!config || !config.instance_id || !config.token) {
         console.log("[Z-API Post] Configuração Z-API ausente.");
         return;
     }
@@ -381,7 +381,6 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
 
     // 2. Links e Infos
     const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
-    const promoterId = assignmentData.promoterId || promoterData.id;
     const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoterId}&campaignName=${encodeURIComponent(postData.campaignName)}&orgId=${postData.organizationId}`;
 
     const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
