@@ -118,7 +118,7 @@ const getActionLabel = (status: PromoterStatus) => {
     }
 };
 
-const PromoterHistoryBadge: React.FC<{ promoter: Promoter, allPromoters: Promoter[] }> = ({ promoter, allPromoters }) => {
+const PromoterHistoryBadge: React.FC<{ promoter: Promoter, allPromoters: Promoter[], onClick: (email: string) => void }> = ({ promoter, allPromoters, onClick }) => {
     if (promoter.status !== 'pending' && promoter.status !== 'rejected_editable') {
         return null;
     }
@@ -133,16 +133,22 @@ const PromoterHistoryBadge: React.FC<{ promoter: Promoter, allPromoters: Promote
 
     if (isApprovedElsewhere) {
         return (
-            <div className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 inline-block" title="Esta divulgadora já possui um cadastro aprovado em outro evento.">
+            <button
+                onClick={() => onClick(promoter.email)}
+                className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-300 inline-block hover:bg-blue-800/50 transition-colors"
+                title="Clique para ver outros cadastros.">
                 Já aprovada em outro evento
-            </div>
+            </button>
         );
     }
 
     return (
-        <div className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-600 text-gray-300 inline-block" title="Esta divulgadora possui outros cadastros (pendentes ou rejeitados).">
+        <button
+            onClick={() => onClick(promoter.email)}
+            className="mt-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-600 text-gray-300 inline-block hover:bg-gray-500 transition-colors"
+            title="Clique para ver outros cadastros.">
             Possui outros cadastros
-        </div>
+        </button>
     );
 };
 
@@ -526,14 +532,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    const handleLookupPromoter = async () => {
-        if (!lookupEmail.trim()) return;
+    const handleLookupPromoter = async (emailToSearch?: string) => {
+        const email = emailToSearch || lookupEmail;
+        if (!email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(lookupEmail);
+            const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (err: any) {
             setLookupError(err.message);
@@ -771,7 +778,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 onChange={(e) => setLookupEmail(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
                             />
-                            <button onClick={handleLookupPromoter} disabled={isLookingUp} className="px-4 py-2 bg-indigo-600 text-white rounded-md whitespace-nowrap">
+                            <button onClick={() => handleLookupPromoter()} disabled={isLookingUp} className="px-4 py-2 bg-indigo-600 text-white rounded-md whitespace-nowrap">
                                 {isLookingUp ? 'Buscando...' : 'Buscar Global'}
                             </button>
                             {canManage && (
@@ -874,7 +881,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         </div>
                         <div className="p-4 flex-grow flex flex-col">
                             <h3 className="text-lg font-bold truncate" title={promoter.name}>{promoter.name}</h3>
-                            <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} />
+                            <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
                             <p className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</p>
                             
                             <div className="flex items-center gap-4 mt-2">
