@@ -172,7 +172,6 @@ const GuestListPage: React.FC = () => {
         if (filteredConfirmations.length === 0) return;
 
         // Construct HTML Table for Excel
-        // Using HTML format allows us to control styles like mso-data-placement for line breaks within cells
         let table = `
             <html xmlns:x="urn:schemas-microsoft-com:office:excel">
             <head>
@@ -203,7 +202,6 @@ const GuestListPage: React.FC = () => {
             let guestEmails = "";
 
             // Style for line break inside Excel cell: mso-data-placement:same-cell;
-            // This forces Excel to keep content in one cell but wrap lines visually
             if (conf.guests && conf.guests.length > 0) {
                 guestNames = conf.guests.map(g => g.name).filter(n => n.trim()).join('<br style="mso-data-placement:same-cell;" />');
                 guestEmails = conf.guests.map(g => g.email).filter(e => e.trim()).join('<br style="mso-data-placement:same-cell;" />');
@@ -379,7 +377,7 @@ const GuestListPage: React.FC = () => {
                         />
                         <span>Mostrar apenas quem está no grupo</span>
                     </label>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                         <Link
                             to={`/admin/checkin/${campaignId}`}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold"
