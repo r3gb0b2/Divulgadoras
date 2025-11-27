@@ -168,6 +168,81 @@ const GuestListPage: React.FC = () => {
         }
     };
 
+    const handleDownloadExcel = () => {
+        if (filteredConfirmations.length === 0) return;
+
+        // Construct HTML Table for Excel
+        // Using HTML format allows us to control styles like mso-data-placement for line breaks within cells
+        let table = `
+            <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+            <head>
+                <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+            </head>
+            <body>
+                <table border="1">
+                    <thead>
+                        <tr>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Tipo da Lista</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Nome da Divulgadora</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Email da Divulgadora</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Status Presença</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Convidados (Nome)</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Convidados (Email)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        filteredConfirmations.forEach(conf => {
+            const listName = conf.listName || '';
+            const promoterName = conf.promoterName || '';
+            const promoterEmail = conf.promoterEmail || '';
+            const promoterStatus = conf.isPromoterAttending ? "Confirmada" : "Não vai";
+            
+            let guestNames = "";
+            let guestEmails = "";
+
+            // Style for line break inside Excel cell: mso-data-placement:same-cell;
+            // This forces Excel to keep content in one cell but wrap lines visually
+            if (conf.guests && conf.guests.length > 0) {
+                guestNames = conf.guests.map(g => g.name).filter(n => n.trim()).join('<br style="mso-data-placement:same-cell;" />');
+                guestEmails = conf.guests.map(g => g.email).filter(e => e.trim()).join('<br style="mso-data-placement:same-cell;" />');
+            } else {
+                guestNames = (conf.guestNames || []).filter(name => name.trim() !== '').join('<br style="mso-data-placement:same-cell;" />');
+            }
+
+            table += `
+                <tr>
+                    <td valign="top">${listName}</td>
+                    <td valign="top">${promoterName}</td>
+                    <td valign="top">${promoterEmail}</td>
+                    <td valign="top">${promoterStatus}</td>
+                    <td valign="top">${guestNames}</td>
+                    <td valign="top">${guestEmails}</td>
+                </tr>
+            `;
+        });
+
+        table += `
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        const campaignNameSlug = campaign?.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'evento';
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", `lista_convidados_${campaignNameSlug}.xls`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const totalConfirmed = filteredConfirmations.reduce((acc, curr) => {
         let count = 0;
         if (curr.isPromoterAttending) count++;
@@ -315,10 +390,18 @@ const GuestListPage: React.FC = () => {
                         <button
                             onClick={handleDownloadCSV}
                             disabled={filteredConfirmations.length === 0 || isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold disabled:opacity-50"
                         >
                             <DownloadIcon className="w-4 h-4" />
                             <span>Baixar Excel (CSV)</span>
+                        </button>
+                        <button
+                            onClick={handleDownloadExcel}
+                            disabled={filteredConfirmations.length === 0 || isLoading}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
+                        >
+                            <DownloadIcon className="w-4 h-4" />
+                            <span>Baixar Excel (.xls)</span>
                         </button>
                         <div className="bg-primary text-white font-bold text-center rounded-lg px-4 py-2">
                             <div className="text-3xl">{totalConfirmed}</div>
