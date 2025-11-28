@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -24,7 +23,15 @@ interface AdminPanelProps {
 
 const formatRelativeTime = (timestamp: any): string => {
   if (!timestamp) return 'N/A';
-  const date = (timestamp as Timestamp).toDate ? (timestamp as Timestamp).toDate() : new Date(timestamp);
+  let date: Date;
+  if (typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+  } else if (timestamp && typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+      date = new Date(timestamp.seconds * 1000);
+  } else {
+      date = new Date(timestamp);
+  }
+
   if (isNaN(date.getTime())) return 'Data inválida';
 
   const now = new Date();
@@ -80,7 +87,15 @@ const getAgeAsNumber = (dateString: string | undefined): number | null => {
 
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    let date: Date;
+    if (typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+    } else if (timestamp && typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+        date = new Date(timestamp.seconds * 1000);
+    } else {
+        date = new Date(timestamp);
+    }
+
     if (isNaN(date.getTime())) return 'Data inválida';
     return date.toLocaleString('pt-BR', {
         day: '2-digit',
