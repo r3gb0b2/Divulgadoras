@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
@@ -20,6 +19,8 @@ type Person = {
     photoUrl?: string;
     listName: string;
     promoterName: string;
+    email?: string;
+    info?: string;
 };
 
 // --- Áudio Feedback Helper ---
@@ -237,6 +238,7 @@ const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
     const [allConfirmations, setAllConfirmations] = useState<ConfirmationWithDetails[]>([]);
+    const [guestLists, setGuestLists] = useState<GuestList[]>([]);
     const [campaignName, setCampaignName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -292,6 +294,7 @@ const GuestListCheckinPage: React.FC = () => {
             
             const camp = allCampaigns.find(c => c.id === campaignId);
             setCampaignName(camp?.name || 'Evento');
+            setGuestLists(activeLists);
             
             const activeListIds = new Set(activeLists.map(l => l.id));
             const filteredConfirmations = confirmations.filter(c => c.guestListId && activeListIds.has(c.guestListId));
@@ -343,6 +346,10 @@ const GuestListCheckinPage: React.FC = () => {
     const allPeople = useMemo(() => {
         const people: Person[] = [];
         allConfirmations.forEach(conf => {
+            // Find info based on assignment
+            const targetList = guestLists.find(l => l.id === conf.guestListId);
+            const info = targetList?.assignments?.[conf.promoterId]?.info || '';
+
             if (conf.isPromoterAttending) {
                 people.push({
                     name: conf.promoterName,
@@ -352,11 +359,14 @@ const GuestListCheckinPage: React.FC = () => {
                     checkedOutAt: conf.promoterCheckedOutAt,
                     photoUrl: conf.promoterPhotoUrl,
                     listName: conf.listName,
-                    promoterName: conf.promoterName // Self-reference for consistent data structure
+                    promoterName: conf.promoterName, // Self-reference for consistent data structure
+                    email: conf.promoterEmail,
+                    info: info
                 });
             }
             (conf.guestNames || []).filter(name => name.trim()).forEach(guestName => {
                  const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guestName);
+                 const guestDetail = (conf.guests || []).find(g => g.name === guestName);
                 people.push({
                     name: guestName,
                     isPromoter: false,
@@ -365,12 +375,14 @@ const GuestListCheckinPage: React.FC = () => {
                     checkedOutAt: guestCheckinData?.checkedOutAt,
                     photoUrl: undefined,
                     listName: conf.listName,
-                    promoterName: conf.promoterName
+                    promoterName: conf.promoterName,
+                    email: guestDetail?.email || '',
+                    info: info
                 });
             });
         });
         return people.sort((a, b) => a.name.localeCompare(b.name));
-    }, [allConfirmations]);
+    }, [allConfirmations, guestLists]);
 
     const listStats = useMemo(() => {
         const total = allPeople.length;
@@ -481,7 +493,7 @@ const GuestListCheckinPage: React.FC = () => {
     const handleDownloadCSV = () => {
         if (filteredPeople.length === 0) return;
 
-        const headers = ["Nome", "Tipo", "Lista", "Indicado Por", "Status", "Horário Entrada", "Horário Saída"];
+        const headers = ["Nome", "Tipo", "Lista", "Indicado Por", "Status", "Horário Entrada", "Horário Saída", "Email", "Informativo"];
         const rows = filteredPeople.map(p => {
             const status = p.checkedInAt ? (p.checkedOutAt ? "Saiu" : "Presente") : "Pendente";
             const checkInTime = p.checkedInAt ? formatTime(p.checkedInAt) : "";
@@ -496,7 +508,9 @@ const GuestListCheckinPage: React.FC = () => {
                 escape(p.promoterName), // If promoter, it's self, if guest, it's the promoter who added
                 escape(status),
                 escape(checkInTime),
-                escape(checkOutTime)
+                escape(checkOutTime),
+                escape(p.email || ''),
+                escape(p.info || '')
             ].join(',');
         });
 
