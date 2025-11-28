@@ -8,6 +8,7 @@ import { submitAdminApplication } from '../services/adminService';
 // FIX: Changed to a named import to resolve module export error.
 import { AdminPanel } from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
+import AdminDashboard from './AdminDashboard'; // Import the new dashboard
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
@@ -224,6 +225,7 @@ const AdminAuth: React.FC = () => {
                 <ProtectedRoute>
                     {
                         adminData?.role === 'superadmin' ? <SuperAdminDashboard /> :
+                        adminData?.role === 'admin' ? <AdminDashboard /> :
                         adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
                         <AdminPanel adminData={adminData!} />
                     }
@@ -271,6 +273,7 @@ const AdminAuth: React.FC = () => {
             {/* Routes for regular Admins */}
             {adminData?.role === 'admin' && (
                 <>
+                    <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
                     <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
                     <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
@@ -297,6 +300,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
+                    <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
                     <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                 </>
             )}
