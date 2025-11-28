@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, DownloadIcon } from '../components/Icons';
 import { getAllCampaigns } from '../services/settingsService';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
@@ -478,6 +478,45 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
+    const handleDownloadCSV = () => {
+        if (filteredPeople.length === 0) return;
+
+        const headers = ["Nome", "Tipo", "Lista", "Indicado Por", "Status", "Horário Entrada", "Horário Saída"];
+        const rows = filteredPeople.map(p => {
+            const status = p.checkedInAt ? (p.checkedOutAt ? "Saiu" : "Presente") : "Pendente";
+            const checkInTime = p.checkedInAt ? formatTime(p.checkedInAt) : "";
+            const checkOutTime = p.checkedOutAt ? formatTime(p.checkedOutAt) : "";
+
+            const escape = (txt: string) => `"${txt.replace(/"/g, '""')}"`;
+
+            return [
+                escape(p.name),
+                escape(p.isPromoter ? "Divulgadora" : "Convidado"),
+                escape(p.listName),
+                escape(p.promoterName), // If promoter, it's self, if guest, it's the promoter who added
+                escape(status),
+                escape(checkInTime),
+                escape(checkOutTime)
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            const fileName = `checkin_list_${campaignName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
 
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -545,6 +584,14 @@ const GuestListCheckinPage: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <button
+                                    onClick={handleDownloadCSV}
+                                    disabled={filteredPeople.length === 0}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 text-sm font-medium transition-colors"
+                                >
+                                    <DownloadIcon className="w-4 h-4" />
+                                    <span>Baixar Lista</span>
+                                </button>
                             </div>
                         </div>
                         {error && <p className="text-red-400 text-center mb-4">{error}</p>}
