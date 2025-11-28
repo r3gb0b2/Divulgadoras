@@ -42,6 +42,7 @@ import NewsletterPage from './NewsletterPage';
 import GroupRemovalsPage from './GroupRemovalsPage';
 import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 import AdminFollowLoopPage from './AdminFollowLoopPage';
+import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -263,6 +264,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
+                    <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -295,6 +297,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="group-removals" element={<ProtectedRoute><GroupRemovalsPage /></ProtectedRoute>} />
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
+                    <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                 </>
             )}
 

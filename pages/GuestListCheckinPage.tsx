@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
 import { getAllCampaigns } from '../services/settingsService';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
@@ -19,8 +20,6 @@ type Person = {
     photoUrl?: string;
     listName: string;
     promoterName: string;
-    email?: string;
-    info?: string;
 };
 
 // --- Áudio Feedback Helper ---
@@ -238,7 +237,6 @@ const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
     const [allConfirmations, setAllConfirmations] = useState<ConfirmationWithDetails[]>([]);
-    const [guestLists, setGuestLists] = useState<GuestList[]>([]);
     const [campaignName, setCampaignName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -294,7 +292,6 @@ const GuestListCheckinPage: React.FC = () => {
             
             const camp = allCampaigns.find(c => c.id === campaignId);
             setCampaignName(camp?.name || 'Evento');
-            setGuestLists(activeLists);
             
             const activeListIds = new Set(activeLists.map(l => l.id));
             const filteredConfirmations = confirmations.filter(c => c.guestListId && activeListIds.has(c.guestListId));
@@ -346,10 +343,6 @@ const GuestListCheckinPage: React.FC = () => {
     const allPeople = useMemo(() => {
         const people: Person[] = [];
         allConfirmations.forEach(conf => {
-            // Find info based on assignment
-            const targetList = guestLists.find(l => l.id === conf.guestListId);
-            const info = targetList?.assignments?.[conf.promoterId]?.info || '';
-
             if (conf.isPromoterAttending) {
                 people.push({
                     name: conf.promoterName,
@@ -359,14 +352,11 @@ const GuestListCheckinPage: React.FC = () => {
                     checkedOutAt: conf.promoterCheckedOutAt,
                     photoUrl: conf.promoterPhotoUrl,
                     listName: conf.listName,
-                    promoterName: conf.promoterName, // Self-reference for consistent data structure
-                    email: conf.promoterEmail,
-                    info: info
+                    promoterName: conf.promoterName // Self-reference for consistent data structure
                 });
             }
             (conf.guestNames || []).filter(name => name.trim()).forEach(guestName => {
                  const guestCheckinData = (conf.guestsCheckedIn || []).find(g => g.name === guestName);
-                 const guestDetail = (conf.guests || []).find(g => g.name === guestName);
                 people.push({
                     name: guestName,
                     isPromoter: false,
@@ -375,14 +365,12 @@ const GuestListCheckinPage: React.FC = () => {
                     checkedOutAt: guestCheckinData?.checkedOutAt,
                     photoUrl: undefined,
                     listName: conf.listName,
-                    promoterName: conf.promoterName,
-                    email: guestDetail?.email || '',
-                    info: info
+                    promoterName: conf.promoterName
                 });
             });
         });
         return people.sort((a, b) => a.name.localeCompare(b.name));
-    }, [allConfirmations, guestLists]);
+    }, [allConfirmations]);
 
     const listStats = useMemo(() => {
         const total = allPeople.length;
@@ -490,47 +478,6 @@ const GuestListCheckinPage: React.FC = () => {
         }
     };
 
-    const handleDownloadCSV = () => {
-        if (filteredPeople.length === 0) return;
-
-        const headers = ["Nome", "Tipo", "Lista", "Indicado Por", "Status", "Horário Entrada", "Horário Saída", "Email", "Informativo"];
-        const rows = filteredPeople.map(p => {
-            const status = p.checkedInAt ? (p.checkedOutAt ? "Saiu" : "Presente") : "Pendente";
-            const checkInTime = p.checkedInAt ? formatTime(p.checkedInAt) : "";
-            const checkOutTime = p.checkedOutAt ? formatTime(p.checkedOutAt) : "";
-
-            const escape = (txt: string) => `"${txt.replace(/"/g, '""')}"`;
-
-            return [
-                escape(p.name),
-                escape(p.isPromoter ? "Divulgadora" : "Convidado"),
-                escape(p.listName),
-                escape(p.promoterName), // If promoter, it's self, if guest, it's the promoter who added
-                escape(status),
-                escape(checkInTime),
-                escape(checkOutTime),
-                escape(p.email || ''),
-                escape(p.info || '')
-            ].join(',');
-        });
-
-        const csvContent = [headers.join(','), ...rows].join('\n');
-        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
-        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
-        
-        const link = document.createElement("a");
-        if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob);
-            const fileName = `checkin_list_${campaignName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-            link.setAttribute("href", url);
-            link.setAttribute("download", fileName);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-    };
-
 
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -598,14 +545,6 @@ const GuestListCheckinPage: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
-                                <button
-                                    onClick={handleDownloadCSV}
-                                    disabled={filteredPeople.length === 0}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 text-sm font-medium transition-colors"
-                                >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    <span>Baixar Lista</span>
-                                </button>
                             </div>
                         </div>
                         {error && <p className="text-red-400 text-center mb-4">{error}</p>}

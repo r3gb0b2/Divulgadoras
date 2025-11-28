@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -50,6 +50,14 @@ const SettingsPage: React.FC = () => {
       title: 'Gerenciar Usuários',
       description: 'Adicione, edite ou remova membros da sua equipe que podem acessar este painel.',
       condition: () => true,
+    },
+    {
+      id: 'whatsapp_campaign',
+      to: '/admin/whatsapp-campaign',
+      Icon: WhatsAppIcon,
+      title: 'Campanha WhatsApp',
+      description: 'Envie mensagens em massa personalizadas para suas divulgadoras (por evento, estado ou status).',
+      condition: () => organization?.whatsappNotificationsEnabled !== false,
     },
     {
       id: 'group_removals',

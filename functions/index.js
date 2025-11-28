@@ -548,6 +548,121 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
     }
 }
 
+// --- Função de Disparo em Massa de WhatsApp ---
+exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    
+    // Check Config
+    const config = getConfig().zapi;
+    if (!config || !config.instance_id || !config.token) {
+        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurada.");
+    }
+
+    const { messageTemplate, filters, organizationId } = data;
+    
+    if (!messageTemplate || !organizationId) {
+        throw new functions.https.HttpsError("invalid-argument", "Mensagem e organização são obrigatórios.");
+    }
+
+    let query = db.collection("promoters").where("organizationId", "==", organizationId);
+
+    // Apply filters
+    if (filters) {
+        if (filters.promoterIds && filters.promoterIds.length > 0) {
+            // Se IDs específicos foram passados, usamos apenas eles (limite do 'in' é 30, então melhor fazer leitura direta se forem poucos ou loop)
+            // Aqui assumimos que o frontend mandará poucos IDs ou cuidará do batching se for seleção manual massiva.
+            // Para simplicidade na query, se for lista de IDs, usamos 'in' (até 30) ou ignoramos a query e fazemos multiget.
+            // Como é 'bulk', vamos assumir filtros gerais ou IDs limitados.
+            if (filters.promoterIds.length <= 30) {
+                query = query.where(admin.firestore.FieldPath.documentId(), "in", filters.promoterIds);
+            } else {
+                // Fallback: não filtrar na query, filtrar em memória (não ideal para grandes bases, mas ok para cloud function com limite de tempo)
+                // Melhor abordagem: confiar nos filtros de campanha/estado se IDs não forem passados.
+                console.warn("Muitos IDs específicos passados. Filtrando em memória (pode ser lento).");
+            }
+        } else {
+            if (filters.state && filters.state !== 'all') {
+                query = query.where("state", "==", filters.state);
+            }
+            if (filters.campaignName && filters.campaignName !== 'all') {
+                query = query.where("campaignName", "==", filters.campaignName);
+            }
+            if (filters.status && filters.status !== 'all') {
+                query = query.where("status", "==", filters.status);
+            }
+        }
+    }
+
+    const snapshot = await query.get();
+    
+    if (snapshot.empty) {
+        return { success: true, count: 0, message: "Nenhum destinatário encontrado." };
+    }
+
+    const { instance_id, token, client_token } = config;
+    const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
+    const headers = { 'Content-Type': 'application/json' };
+    if (client_token) headers['Client-Token'] = client_token;
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Process in chunks to avoid blowing up memory or rate limits
+    const promoters = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Filter by specific IDs if list was too huge for 'in' query
+    const targetPromoters = (filters?.promoterIds && filters.promoterIds.length > 30) 
+        ? promoters.filter(p => filters.promoterIds.includes(p.id)) 
+        : promoters;
+
+    for (const promoter of targetPromoters) {
+        if (!promoter.whatsapp) continue;
+
+        let cleanPhone = promoter.whatsapp.replace(/\D/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+        if (cleanPhone.length < 10) continue;
+
+        // Personalize message
+        let personalizedMsg = messageTemplate;
+        personalizedMsg = personalizedMsg.replace(/{{name}}/g, promoter.name ? promoter.name.split(' ')[0] : 'Divulgadora');
+        personalizedMsg = personalizedMsg.replace(/{{fullName}}/g, promoter.name || '');
+        personalizedMsg = personalizedMsg.replace(/{{email}}/g, promoter.email || '');
+        personalizedMsg = personalizedMsg.replace(/{{campaignName}}/g, promoter.campaignName || 'Eventos');
+        personalizedMsg = personalizedMsg.replace(/{{portalLink}}/g, `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoter.email)}`);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    phone: cleanPhone,
+                    message: personalizedMsg
+                })
+            });
+
+            if (response.ok) {
+                successCount++;
+            } else {
+                failCount++;
+                console.error(`Falha Z-API para ${cleanPhone}:`, await response.text());
+            }
+            // Small delay to be nice to the API
+            await new Promise(r => setTimeout(r, 100)); 
+        } catch (e) {
+            console.error(`Erro envio ${cleanPhone}:`, e);
+            failCount++;
+        }
+    }
+
+    return { 
+        success: true, 
+        count: successCount, 
+        failures: failCount, 
+        message: `Enviado para ${successCount} divulgadoras. Falhas: ${failCount}` 
+    };
+});
+
 // --- Função de Teste do Z-API (Para Debug) ---
 exports.testZapi = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
@@ -635,38 +750,7 @@ async function sendNewPostNotificationEmail(promoter, postDetails) {
   const leaveGroupLink = `https://divulgadoras.vercel.app/#/leave-group?promoterId=${promoter.id}&campaignName=${encodeURIComponent(postDetails.campaignName)}&orgId=${postDetails.organizationId}`;
   const eventDisplayName = postDetails.eventName ? `${postDetails.campaignName} - ${postDetails.eventName}` : postDetails.campaignName;
   const subject = `Nova Publicação Disponível - ${eventDisplayName}`;
-  const htmlContent = `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="UTF-8">
-    <style>
-        body{font-family:sans-serif;background-color:#f4f4f4;color:#333;margin:0;padding:20px;}
-        .container{max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #ddd;}
-        .header{background-color:#1a1a2e;color:#ffffff;padding:20px;text-align:center;}
-        .content{padding:30px;}
-        .footer{padding:20px;text-align:center;font-size:12px;color:#888;background-color:#f9f9f9;border-top:1px solid #eee;}
-        .button{display:inline-block;background-color:#e83a93;color:#ffffff;padding:12px 25px;text-decoration:none;border-radius:5px;font-weight:bold;}
-    </style>
-  </head>
-  <body>
-    <div class="container">
-        <div class="header"><h1>Olá, ${promoter.name}!</h1></div>
-        <div class="content">
-            <p>Temos uma nova publicação para <strong>${eventDisplayName}</strong>.</p>
-            <p>Acesse seu painel para ver as instruções, baixar a mídia e enviar o print.</p>
-            <p style="text-align:center;margin:30px 0;">
-                <a href="${portalLink}" class="button">Ver Publicação</a>
-            </p>
-            <p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p>
-        </div>
-        <div class="footer">
-            <p>Não faz mais parte da equipe ou deseja sair?</p>
-            <p><a href="${leaveGroupLink}">Solicitar remoção do grupo</a></p>
-        </div>
-    </div>
-  </body>
-  </html>`;
+  const htmlContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:sans-serif;background-color:#f4f4f4;color:#333;}.container{max-width:600px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;}.header{background-color:#1a1a2e;color:#ffffff;padding:20px;text-align:center;}.content{padding:30px;}.footer{padding:20px;text-align:center;font-size:12px;color:#888;}.button{display:inline-block;background-color:#e83a93;color:#ffffff;padding:12px 25px;text-decoration:none;border-radius:5px;font-weight:bold;}</style></head><body><div class="container"><div class="header"><h1>Olá, ${promoter.name}!</h1></div><div class="content"><p>Nova publicação para <strong>${eventDisplayName}</strong>.</p><p style="text-align:center;margin:30px 0;"><a href="${portalLink}" class="button">Ver Publicação</a></p><p>Atenciosamente,<br>Equipe ${postDetails.orgName}</p></div><div class="footer"><p><a href="${leaveGroupLink}">Sair do grupo</a></p></div></div></body></html>`;
 
   const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.to = [{ email: promoter.email, name: promoter.name }];
