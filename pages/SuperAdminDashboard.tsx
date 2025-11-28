@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -224,6 +225,15 @@ const SuperAdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Usuários Admin</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Gerenciar todos os usuários administradores da plataforma.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
+                    
+                    <Link to="/admin/whatsapp-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <WhatsAppIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Campanha WhatsApp</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Envie mensagens em massa via WhatsApp para as divulgadoras.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
 
