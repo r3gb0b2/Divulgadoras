@@ -40,22 +40,25 @@ const WhatsAppCampaignPage: React.FC = () => {
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
+    // Redirect non-superadmin
+    useEffect(() => {
+        if (adminData && !isSuperAdmin) {
+            navigate('/admin');
+        }
+    }, [adminData, isSuperAdmin, navigate]);
+
     // 1. Fetch Initial Data (Orgs & Campaigns)
     useEffect(() => {
         const loadInitialData = async () => {
+            if (!isSuperAdmin) return;
             setIsLoadingData(true);
             try {
-                if (isSuperAdmin) {
-                    const orgs = await getOrganizations();
-                    setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name)));
-                } else if (selectedOrgId) {
-                    setTargetOrgId(selectedOrgId); // Auto-select current org
-                }
+                const orgs = await getOrganizations();
+                setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name)));
                 
-                // Load campaigns for current scope
-                const orgIdToLoad = isSuperAdmin ? (targetOrgId || undefined) : selectedOrgId;
-                if (orgIdToLoad) {
-                    const camps = await getAllCampaigns(orgIdToLoad);
+                // If a specific org is selected in dropdown or passed as target, load campaigns
+                if (targetOrgId) {
+                    const camps = await getAllCampaigns(targetOrgId);
                     setCampaigns(camps.sort((a,b) => a.name.localeCompare(b.name)));
                 }
             } catch (err: any) {
@@ -65,7 +68,7 @@ const WhatsAppCampaignPage: React.FC = () => {
             }
         };
         loadInitialData();
-    }, [isSuperAdmin, selectedOrgId, targetOrgId]);
+    }, [isSuperAdmin, targetOrgId]);
 
     // 2. Fetch Promoters when filters change
     const fetchPromoters = useCallback(async () => {
@@ -74,25 +77,7 @@ const WhatsAppCampaignPage: React.FC = () => {
 
         setIsLoadingData(true);
         try {
-            // We use getApprovedPromoters but allow filtering by status in memory for now if needed,
-            // or we use a more generic fetch. Ideally reusing getAllPromoters service.
-            // For simplicity in this specialized view, we fetch approved by default as it's most common for msg.
-            // If user wants other status, we can adapt.
-            // Using existing service `getApprovedPromoters` takes orgId, state, campaignName.
-            // If state or campaign is 'all', we might need to fetch wider.
-            
-            // To support 'all', we better use the generic query if available, or fetch all for org and filter.
-            // Let's reuse the logic from AdminPanel (getAllPromoters)
-            // But we can't import getAllPromoters easily if it wasn't exported or if it's too heavy.
-            // Let's use a simpler approach: getApprovedPromoters works well if we iterate.
-            // Actually, `getApprovedPromoters` requires specific state/campaign.
-            // Let's use the generic firestore query logic here to be precise.
-            
-            // Re-implementing a simple fetch for this page to allow flexibility
-            // In a real app, I'd move this to a service.
-            
-            // ... (Implementing logic via existing service if possible or custom fetch) ...
-            // Let's use `getAllPromoters` from promoterService as it supports 'all' filters
+            // Using dynamic import or direct call to getAllPromoters from service
             const { getAllPromoters } = await import('../services/promoterService');
             
             const fetched = await getAllPromoters({
@@ -104,7 +89,6 @@ const WhatsAppCampaignPage: React.FC = () => {
             });
             
             setPromoters(fetched);
-            // Default: Select all if mode is manual? No, clear selection.
             if (selectionMode === 'all') {
                 setSelectedPromoterIds(new Set(fetched.map(p => p.id)));
             } else {
@@ -117,11 +101,11 @@ const WhatsAppCampaignPage: React.FC = () => {
         } finally {
             setIsLoadingData(false);
         }
-    }, [isSuperAdmin, targetOrgId, selectedOrgId, targetState, targetCampaignName, targetStatus]);
+    }, [isSuperAdmin, targetOrgId, selectedOrgId, targetState, targetCampaignName, targetStatus, selectionMode]);
 
     useEffect(() => {
-        fetchPromoters();
-    }, [fetchPromoters]);
+        if (targetOrgId) fetchPromoters();
+    }, [fetchPromoters, targetOrgId]);
 
     // 3. Handlers
     const handleInsertVariable = (variable: string) => {
@@ -145,13 +129,13 @@ const WhatsAppCampaignPage: React.FC = () => {
     };
 
     const handleSend = async () => {
-        const orgId = isSuperAdmin ? targetOrgId : selectedOrgId;
+        const orgId = targetOrgId;
         if (!orgId) { setError("Organização inválida."); return; }
         if (!message.trim()) { setError("Digite uma mensagem."); return; }
         
         const finalIds = selectionMode === 'manual' 
             ? Array.from(selectedPromoterIds)
-            : promoters.map(p => p.id); // If 'all' mode, send all visible IDs to be safe/consistent with UI
+            : promoters.map(p => p.id);
 
         if (finalIds.length === 0) {
             setError("Nenhuma divulgadora selecionada.");
@@ -166,7 +150,7 @@ const WhatsAppCampaignPage: React.FC = () => {
 
         try {
             const res = await sendWhatsAppCampaign(message, {
-                promoterIds: finalIds, // We pass explicit IDs to be precise based on UI selection
+                promoterIds: finalIds,
             }, orgId);
             
             setResult({ success: res.success, message: res.message });
@@ -202,12 +186,14 @@ const WhatsAppCampaignPage: React.FC = () => {
         .replace(/{{portalLink}}/g, 'https://divulgadoras.vercel.app/...') : message;
 
 
+    if (!isSuperAdmin) return null;
+
     return (
         <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <WhatsAppIcon className="w-8 h-8 text-green-500" />
-                    Campanha WhatsApp
+                    Campanha WhatsApp (Super Admin)
                 </h1>
                 <button onClick={() => navigate('/admin/settings')} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" />
@@ -222,19 +208,17 @@ const WhatsAppCampaignPage: React.FC = () => {
                         <h2 className="text-xl font-semibold text-white mb-4">1. Selecionar Audiência</h2>
                         
                         <div className="space-y-4">
-                            {isSuperAdmin && (
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Organização</label>
-                                    <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
-                                        <option value="">Selecione...</option>
-                                        {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                    </select>
-                                </div>
-                            )}
+                            <div>
+                                <label className="block text-sm text-gray-400 mb-1">Organização (Obrigatório)</label>
+                                <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                                    <option value="">Selecione...</option>
+                                    {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                </select>
+                            </div>
 
                             <div>
                                 <label className="block text-sm text-gray-400 mb-1">Evento / Gênero</label>
-                                <select value={targetCampaignName} onChange={e => setTargetCampaignName(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                                <select value={targetCampaignName} onChange={e => setTargetCampaignName(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white" disabled={!targetOrgId}>
                                     <option value="all">Todos os Eventos</option>
                                     {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>

@@ -57,7 +57,7 @@ const SettingsPage: React.FC = () => {
       Icon: WhatsAppIcon,
       title: 'Campanha WhatsApp',
       description: 'Envie mensagens em massa personalizadas para suas divulgadoras (por evento, estado ou status).',
-      condition: () => organization?.whatsappNotificationsEnabled !== false,
+      condition: () => adminData?.role === 'superadmin',
     },
     {
       id: 'group_removals',

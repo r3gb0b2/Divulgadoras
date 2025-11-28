@@ -569,17 +569,12 @@ exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCa
     // Apply filters
     if (filters) {
         if (filters.promoterIds && filters.promoterIds.length > 0) {
-            // Se IDs específicos foram passados, usamos apenas eles (limite do 'in' é 30, então melhor fazer leitura direta se forem poucos ou loop)
-            // Aqui assumimos que o frontend mandará poucos IDs ou cuidará do batching se for seleção manual massiva.
-            // Para simplicidade na query, se for lista de IDs, usamos 'in' (até 30) ou ignoramos a query e fazemos multiget.
-            // Como é 'bulk', vamos assumir filtros gerais ou IDs limitados.
-            if (filters.promoterIds.length <= 30) {
-                query = query.where(admin.firestore.FieldPath.documentId(), "in", filters.promoterIds);
-            } else {
-                // Fallback: não filtrar na query, filtrar em memória (não ideal para grandes bases, mas ok para cloud function com limite de tempo)
-                // Melhor abordagem: confiar nos filtros de campanha/estado se IDs não forem passados.
-                console.warn("Muitos IDs específicos passados. Filtrando em memória (pode ser lento).");
-            }
+            // Batching logic needed if ID list is huge, but here we assume 'in' limit of 30 or fetch-all fallback
+            // Simple approach: if IDs provided, rely on client to send reasonable batches or fetch all and filter in memory.
+            // For robust large scale, this should use Task Queue, but for immediate call:
+            // We'll ignore the 'in' query limitation here and fetch all for the org, then filter in memory for simplicity/reliability
+            // given Firestore limitations on 'in' queries with > 10 items in older SDKs or > 30 in newer.
+            // A safer approach for bulk IDs is just fetch based on other filters if present, or fetch all.
         } else {
             if (filters.state && filters.state !== 'all') {
                 query = query.where("state", "==", filters.state);
@@ -610,8 +605,8 @@ exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCa
     // Process in chunks to avoid blowing up memory or rate limits
     const promoters = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    // Filter by specific IDs if list was too huge for 'in' query
-    const targetPromoters = (filters?.promoterIds && filters.promoterIds.length > 30) 
+    // Filter by specific IDs if provided (in-memory filtering for robustness)
+    const targetPromoters = (filters?.promoterIds && filters.promoterIds.length > 0) 
         ? promoters.filter(p => filters.promoterIds.includes(p.id)) 
         : promoters;
 
