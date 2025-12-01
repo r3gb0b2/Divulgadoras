@@ -8,7 +8,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { PostAssignment, Promoter, Campaign, PromoterStats } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon } from '../components/Icons';
+import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon, TrashIcon, FilterIcon, ClockIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'state' | 'campaignName' | 'associatedCampaigns' | 'allCampaigns' | 'organizationId' | 'rejectionReason' | 'hasJoinedGroup' | 'actionTakenByUid' | 'actionTakenByEmail' | 'statusChangedAt' | 'observation' | 'lastManualNotificationAt' | 'status' | 'tiktok' | 'dateOfBirth'> | 'name';
@@ -42,6 +42,24 @@ const toDateSafe = (timestamp: any): Date | null => {
     return null;
 };
 
+const calculateTimeInGroup = (createdAt: any): string => {
+    const date = toDateSafe(createdAt);
+    if (!date) return '';
+    
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Entrou hoje';
+    if (diffDays === 1) return 'há 1 dia no grupo';
+    return `há ${diffDays} dias no grupo`;
+};
+
+interface NumericFilter {
+    min: string;
+    max: string;
+}
+
 const PostDashboard: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -52,6 +70,7 @@ const PostDashboard: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
     // Filtering and sorting state
     const [filterCampaign, setFilterCampaign] = useState('all');
@@ -59,6 +78,23 @@ const PostDashboard: React.FC = () => {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [groupFilterStatus, setGroupFilterStatus] = useState<'all' | 'inGroup' | 'notInGroup'>('all');
+    const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
+    const [showFilters, setShowFilters] = useState(false);
+
+    // Numeric Filters State
+    const [numFilters, setNumFilters] = useState<{
+        assigned: NumericFilter;
+        completed: NumericFilter;
+        missed: NumericFilter;
+        justifications: NumericFilter;
+        rate: NumericFilter;
+    }>({
+        assigned: { min: '', max: '' },
+        completed: { min: '', max: '' },
+        missed: { min: '', max: '' },
+        justifications: { min: '', max: '' },
+        rate: { min: '', max: '' },
+    });
 
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
@@ -88,6 +124,18 @@ const PostDashboard: React.FC = () => {
         fetchData();
     }, [fetchData]);
     
+    // Clear selection when filters change
+    useEffect(() => {
+        setSelectedPromoterIds(new Set());
+    }, [filterCampaign, searchQuery, colorFilter, groupFilterStatus, numFilters]);
+
+    const handleNumFilterChange = (category: keyof typeof numFilters, type: 'min' | 'max', value: string) => {
+        setNumFilters(prev => ({
+            ...prev,
+            [category]: { ...prev[category], [type]: value }
+        }));
+    };
+
     const processedStats = useMemo(() => {
         type PromoterStatsWithAccepted = PromoterStats & { acceptedJustifications: number };
         const statsMap = new Map<string, PromoterStatsWithAccepted>();
@@ -157,6 +205,7 @@ const PostDashboard: React.FC = () => {
             finalStats = finalStats.filter(s => s.name.toLowerCase().includes(lowercasedQuery) || s.email.toLowerCase().includes(lowercasedQuery));
         }
 
+        // Color Filter
         if (colorFilter !== 'all') {
             finalStats = finalStats.filter(s => {
                 const rate = s.completionRate;
@@ -168,6 +217,22 @@ const PostDashboard: React.FC = () => {
                 return true;
             });
         }
+
+        // Numeric Filters
+        const checkRange = (val: number, minStr: string, maxStr: string) => {
+            const min = minStr !== '' ? parseInt(minStr, 10) : -Infinity;
+            const max = maxStr !== '' ? parseInt(maxStr, 10) : Infinity;
+            return val >= min && val <= max;
+        };
+
+        finalStats = finalStats.filter(s => {
+            if (!checkRange(s.assigned, numFilters.assigned.min, numFilters.assigned.max)) return false;
+            if (!checkRange(s.completed, numFilters.completed.min, numFilters.completed.max)) return false;
+            if (!checkRange(s.missed, numFilters.missed.min, numFilters.missed.max)) return false;
+            if (!checkRange(s.justifications, numFilters.justifications.min, numFilters.justifications.max)) return false;
+            if (!checkRange(s.completionRate, numFilters.rate.min, numFilters.rate.max)) return false;
+            return true;
+        });
 
         // Sorting
         finalStats.sort((a, b) => {
@@ -182,7 +247,7 @@ const PostDashboard: React.FC = () => {
 
         return finalStats;
 
-    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig, colorFilter, groupFilterStatus]);
+    }, [promoters, assignments, filterCampaign, searchQuery, sortConfig, colorFilter, groupFilterStatus, numFilters]);
 
     const requestSort = (key: SortKey) => {
         let direction: SortDirection = 'asc';
@@ -198,6 +263,45 @@ const PostDashboard: React.FC = () => {
         if (sortConfig.key !== key) return '↕';
         if (sortConfig.direction === 'asc') return '↑';
         return '↓';
+    };
+
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const allIds = processedStats.map(s => s.id);
+            setSelectedPromoterIds(new Set(allIds));
+        } else {
+            setSelectedPromoterIds(new Set());
+        }
+    };
+
+    const handleToggleSelect = (id: string) => {
+        setSelectedPromoterIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    };
+
+    const handleBulkRemove = async () => {
+        if (selectedPromoterIds.size === 0) return;
+        if (!window.confirm(`Tem certeza que deseja remover ${selectedPromoterIds.size} divulgadoras da equipe? Esta ação é irreversível.`)) return;
+
+        setIsBulkProcessing(true);
+        try {
+            const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
+            const promises = Array.from(selectedPromoterIds).map(id => setPromoterStatusToRemoved({ promoterId: id }));
+            await Promise.all(promises);
+            
+            alert(`${selectedPromoterIds.size} divulgadoras foram removidas com sucesso.`);
+            setSelectedPromoterIds(new Set());
+            await fetchData();
+        } catch (err: any) {
+            console.error(err);
+            alert('Erro ao remover algumas divulgadoras. Atualize a página e tente novamente.');
+        } finally {
+            setIsBulkProcessing(false);
+        }
     };
 
      const handleRemovePromoter = async (promoter: Promoter) => {
@@ -229,23 +333,37 @@ const PostDashboard: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                 <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                    <select
-                        value={filterCampaign}
-                        onChange={e => setFilterCampaign(e.target.value)}
-                        className="w-full sm:w-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                    >
-                        <option value="all">Todos Eventos</option>
-                        {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome ou email..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                    />
-                    <div className="flex items-center gap-4 flex-shrink-0">
+                 {/* Main Toolbar */}
+                 <div className="flex flex-col gap-4 mb-6">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="flex flex-col sm:flex-row gap-4 w-full">
+                            <select
+                                value={filterCampaign}
+                                onChange={e => setFilterCampaign(e.target.value)}
+                                className="w-full sm:w-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            >
+                                <option value="all">Todos Eventos</option>
+                                {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                            </select>
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome ou email..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                            />
+                        </div>
+                        <button 
+                            onClick={() => setShowFilters(!showFilters)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${showFilters ? 'bg-primary text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                        >
+                            <FilterIcon className="w-4 h-4" />
+                            <span>Filtros</span>
+                        </button>
+                    </div>
+
+                    {/* Checkbox Group Filter */}
+                    <div className="flex items-center gap-4 flex-wrap">
                         <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -265,7 +383,63 @@ const PostDashboard: React.FC = () => {
                             <span>Apenas fora do grupo</span>
                         </label>
                     </div>
+
+                    {/* Numeric Filters (Collapsible) */}
+                    {showFilters && (
+                        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 grid grid-cols-2 md:grid-cols-5 gap-4 animate-fadeIn">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Designadas</label>
+                                <div className="flex gap-1">
+                                    <input type="number" placeholder="Min" value={numFilters.assigned.min} onChange={e => handleNumFilterChange('assigned', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                    <input type="number" placeholder="Max" value={numFilters.assigned.max} onChange={e => handleNumFilterChange('assigned', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Concluídas</label>
+                                <div className="flex gap-1">
+                                    <input type="number" placeholder="Min" value={numFilters.completed.min} onChange={e => handleNumFilterChange('completed', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                    <input type="number" placeholder="Max" value={numFilters.completed.max} onChange={e => handleNumFilterChange('completed', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Justificativas</label>
+                                <div className="flex gap-1">
+                                    <input type="number" placeholder="Min" value={numFilters.justifications.min} onChange={e => handleNumFilterChange('justifications', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                    <input type="number" placeholder="Max" value={numFilters.justifications.max} onChange={e => handleNumFilterChange('justifications', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Perdidas</label>
+                                <div className="flex gap-1">
+                                    <input type="number" placeholder="Min" value={numFilters.missed.min} onChange={e => handleNumFilterChange('missed', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                    <input type="number" placeholder="Max" value={numFilters.missed.max} onChange={e => handleNumFilterChange('missed', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Aproveitamento (%)</label>
+                                <div className="flex gap-1">
+                                    <input type="number" placeholder="Min" value={numFilters.rate.min} onChange={e => handleNumFilterChange('rate', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                    <input type="number" placeholder="Max" value={numFilters.rate.max} onChange={e => handleNumFilterChange('rate', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                  </div>
+
+                 {/* Bulk Action Bar */}
+                 {selectedPromoterIds.size > 0 && (
+                    <div className="sticky top-2 z-20 bg-blue-900/90 backdrop-blur-sm border-l-4 border-blue-500 text-white p-3 rounded-md shadow-lg flex items-center justify-between gap-4 mb-4">
+                        <div className="font-semibold">{selectedPromoterIds.size} selecionadas</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setSelectedPromoterIds(new Set())} className="px-3 py-1.5 text-sm hover:underline">Cancelar</button>
+                            <button onClick={handleBulkRemove} disabled={isBulkProcessing} className="px-4 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold flex items-center gap-2">
+                                <TrashIcon className="w-4 h-4"/> {isBulkProcessing ? 'Removendo...' : 'Remover Selecionadas'}
+                            </button>
+                        </div>
+                    </div>
+                 )}
+
+                 {/* Stats Legend */}
                  <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
                     <div className="flex items-center gap-x-4">
                         <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
@@ -286,12 +460,21 @@ const PostDashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
                  {error && <p className="text-red-400 mb-4">{error}</p>}
                  {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-700">
                             <thead className="bg-gray-700/50">
                                 <tr>
+                                    <th className="px-4 py-3 w-10">
+                                        <input 
+                                            type="checkbox" 
+                                            onChange={handleSelectAll} 
+                                            checked={processedStats.length > 0 && selectedPromoterIds.size === processedStats.length}
+                                            className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                        />
+                                    </th>
                                     { (
                                         [
                                             {key: 'name', label: 'Divulgadora'},
@@ -302,7 +485,7 @@ const PostDashboard: React.FC = () => {
                                             {key: 'completionRate', label: 'Aproveitamento'},
                                         ] as {key: SortKey, label: string}[]
                                     ).map(({key, label}) => (
-                                        <th key={key} onClick={() => requestSort(key)} className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer">
+                                        <th key={key} onClick={() => requestSort(key)} className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-white">
                                             {label} {getSortIndicator(key)}
                                         </th>
                                     ))}
@@ -312,6 +495,14 @@ const PostDashboard: React.FC = () => {
                             <tbody className="divide-y divide-gray-700">
                                 {processedStats.map(stat => (
                                     <tr key={stat.id} className="hover:bg-gray-700/40">
+                                        <td className="px-4 py-3">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedPromoterIds.has(stat.id)} 
+                                                onChange={() => handleToggleSelect(stat.id)}
+                                                className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div>
                                             <div className="text-xs text-gray-400">{stat.email}</div>
@@ -324,6 +515,10 @@ const PostDashboard: React.FC = () => {
                                                     <InstagramIcon className="w-4 h-4" />
                                                     <span>Instagram</span>
                                                 </a>
+                                            </div>
+                                            <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                                                <ClockIcon className="w-3 h-3" />
+                                                {calculateTimeInGroup(stat.createdAt)}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-center font-semibold">{stat.assigned}</td>
