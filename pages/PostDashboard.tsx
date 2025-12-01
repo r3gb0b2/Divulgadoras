@@ -8,7 +8,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { PostAssignment, Promoter, Campaign, PromoterStats } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon } from '../components/Icons';
+import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon, TrashIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
 type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'state' | 'campaignName' | 'associatedCampaigns' | 'allCampaigns' | 'organizationId' | 'rejectionReason' | 'hasJoinedGroup' | 'actionTakenByUid' | 'actionTakenByEmail' | 'statusChangedAt' | 'observation' | 'lastManualNotificationAt' | 'status' | 'tiktok' | 'dateOfBirth'> | 'name';
@@ -60,6 +60,10 @@ const PostDashboard: React.FC = () => {
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
     const [groupFilterStatus, setGroupFilterStatus] = useState<'all' | 'inGroup' | 'notInGroup'>('all');
 
+    // Bulk Action State
+    const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
     const fetchData = useCallback(async () => {
         if (!selectedOrgId) {
             setError("Nenhuma organização selecionada.");
@@ -68,6 +72,7 @@ const PostDashboard: React.FC = () => {
         }
         setIsLoading(true);
         setError('');
+        setSelectedPromoterIds(new Set()); // Reset selection on reload
         try {
             const [promotersData, assignmentsData, campaignsData] = await Promise.all([
                 getAllPromoters({ organizationId: selectedOrgId, status: 'approved', selectedCampaign: 'all', filterOrgId: 'all', filterState: 'all' }),
@@ -200,6 +205,49 @@ const PostDashboard: React.FC = () => {
         return '↓';
     };
 
+    // Bulk selection handlers
+    const handleToggleSelect = (id: string) => {
+        setSelectedPromoterIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const allIds = processedStats.map(s => s.id);
+            setSelectedPromoterIds(new Set(allIds));
+        } else {
+            setSelectedPromoterIds(new Set());
+        }
+    };
+
+    const handleBulkRemove = async () => {
+        if (selectedPromoterIds.size === 0) return;
+        if (!window.confirm(`Tem certeza que deseja remover ${selectedPromoterIds.size} divulgadoras da equipe? Esta ação mudará o status para 'Removida'.`)) return;
+
+        setIsBulkProcessing(true);
+        try {
+            const idsToRemove = Array.from(selectedPromoterIds);
+            const removePromises = idsToRemove.map(id => {
+                const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
+                return setPromoterStatusToRemoved({ promoterId: id });
+            });
+
+            await Promise.all(removePromises);
+            alert(`${selectedPromoterIds.size} divulgadoras foram removidas com sucesso.`);
+            setSelectedPromoterIds(new Set());
+            await fetchData();
+        } catch (err: any) {
+            console.error("Bulk remove failed", err);
+            alert("Houve um erro ao remover algumas divulgadoras. Tente novamente.");
+        } finally {
+            setIsBulkProcessing(false);
+        }
+    };
+
      const handleRemovePromoter = async (promoter: Promoter) => {
         if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
             setIsProcessing(promoter.id);
@@ -286,12 +334,35 @@ const PostDashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Bulk Actions Toolbar */}
+                {selectedPromoterIds.size > 0 && (
+                    <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm border-l-4 border-blue-500 text-white p-4 rounded-md shadow-lg flex flex-wrap items-center justify-between gap-4 mb-4">
+                        <div className="flex items-center gap-4">
+                            <span className="font-bold text-lg">{selectedPromoterIds.size} selecionadas</span>
+                            <button onClick={() => setSelectedPromoterIds(new Set())} className="text-sm text-blue-200 hover:text-white underline">Cancelar Seleção</button>
+                        </div>
+                        <button onClick={handleBulkRemove} disabled={isBulkProcessing} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md font-semibold disabled:opacity-50 flex items-center gap-2">
+                            <TrashIcon className="w-4 h-4" />
+                            {isBulkProcessing ? 'Removendo...' : 'Remover Selecionadas'}
+                        </button>
+                    </div>
+                )}
+
                  {error && <p className="text-red-400 mb-4">{error}</p>}
                  {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-700">
                             <thead className="bg-gray-700/50">
                                 <tr>
+                                    <th className="px-4 py-3 w-10">
+                                        <input 
+                                            type="checkbox" 
+                                            onChange={handleSelectAll} 
+                                            checked={processedStats.length > 0 && selectedPromoterIds.size === processedStats.length}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded focus:ring-primary"
+                                        />
+                                    </th>
                                     { (
                                         [
                                             {key: 'name', label: 'Divulgadora'},
@@ -312,6 +383,14 @@ const PostDashboard: React.FC = () => {
                             <tbody className="divide-y divide-gray-700">
                                 {processedStats.map(stat => (
                                     <tr key={stat.id} className="hover:bg-gray-700/40">
+                                        <td className="px-4 py-3">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedPromoterIds.has(stat.id)} 
+                                                onChange={() => handleToggleSelect(stat.id)}
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-600 rounded focus:ring-primary"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div>
                                             <div className="text-xs text-gray-400">{stat.email}</div>
