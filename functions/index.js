@@ -156,8 +156,10 @@ exports.onPromoterStatusChange = functions
             console.error(`[Notification Trigger] Failed to send email for ${promoterId}:`, error);
         }
 
-        // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado - Isolado
-        if (newValue.status === "approved" && newValue.whatsapp) {
+        // 2. Tenta enviar WhatsApp (Z-API) se estiver aprovado OU com correção pendente
+        const shouldSendWhatsApp = (newValue.status === "approved" || newValue.status === "rejected_editable") && newValue.whatsapp;
+        
+        if (shouldSendWhatsApp) {
             try {
                 // Check organization config first
                 const orgRef = db.collection("organizations").doc(newValue.organizationId);
@@ -476,7 +478,7 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
 }
 
 
-// --- Função de Envio de WhatsApp de Aprovação (Z-API) ---
+// --- Função de Envio de WhatsApp de Aprovação/Correção (Z-API) ---
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
     console.log(`[Z-API] >>> Iniciando envio para ${promoterId}`);
     
@@ -512,11 +514,22 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
         promoterData.campaignName,
     );
 
-    const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
     const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
     const campaignDisplay = promoterData.campaignName || orgName;
+    
+    let message = "";
 
-    const message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro para *${campaignDisplay}* foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
+    if (promoterData.status === 'approved') {
+        const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
+        message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro para *${campaignDisplay}* foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
+    } else if (promoterData.status === 'rejected_editable') {
+        const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ''}?edit_id=${promoterId}`;
+        const reasonText = promoterData.rejectionReason ? `\n\n📝 *Motivo:* ${promoterData.rejectionReason}` : "";
+        message = `Olá ${firstName}! 👋\n\nIdentificamos que seu cadastro para *${campaignDisplay}* precisa de um ajuste.${reasonText}\n\nLiberamos a edição para você! Clique no link abaixo para corrigir e reenviar:\n${editLink}`;
+    } else {
+        // Unknown status for WhatsApp notification
+        return;
+    }
 
     const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
     
