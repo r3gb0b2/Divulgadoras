@@ -445,21 +445,6 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
   }
 };
 
-// New function for public re-submissions
-export const resubmitPromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
-  try {
-    const publicResubmit = functions.httpsCallable('publicResubmitPromoter');
-    await publicResubmit({ promoterId: id, updateData: data });
-  } catch (error) {
-    console.error("Error resubmitting promoter: ", error);
-    if (error instanceof Error) {
-        const details = (error as any).details?.message || error.message;
-        throw new Error(`Não foi possível reenviar o cadastro. Detalhes: ${details}`);
-    }
-    throw new Error("Não foi possível reenviar o cadastro.");
-  }
-};
-
 // **NEW FUNCTION**: Updates group status directly in Firestore (bypassing Admin Cloud Function)
 export const confirmPromoterGroupEntry = async (promoterId: string): Promise<void> => {
   try {
