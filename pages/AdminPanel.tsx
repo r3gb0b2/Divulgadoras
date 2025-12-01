@@ -14,7 +14,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon } from '../components/Icons';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon, CheckCircleIcon, XIcon, TrashIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -185,6 +185,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [notifyingId, setNotifyingId] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
+    // Bulk Actions State
+    const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+    const [isBulkRejection, setIsBulkRejection] = useState(false);
+
     // Pagination state (client-side)
     const [currentPage, setCurrentPage] = useState(1);
     const PROMOTERS_PER_PAGE = 20;
@@ -288,6 +293,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const fetchAllData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        setSelectedPromoterIds(new Set()); // Clear selection on refresh/filter change
         
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) {
@@ -351,6 +357,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     // Reset page number whenever filters or search query change
     useEffect(() => {
         setCurrentPage(1);
+        setSelectedPromoterIds(new Set()); // Clear selection when filters change
     }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery, colorFilter, minAge, maxAge]);
 
     const campaignsForFilter = useMemo(() => {
@@ -464,6 +471,133 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
+    // --- Bulk Action Handlers ---
+
+    const handleToggleSelect = (id: string) => {
+        setSelectedPromoterIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = (visibleIds: string[]) => {
+        if (selectedPromoterIds.size === visibleIds.length) {
+            setSelectedPromoterIds(new Set()); // Deselect all if all visible are selected
+        } else {
+            setSelectedPromoterIds(new Set(visibleIds)); // Select all visible
+        }
+    };
+
+    const handleBulkUpdate = async (updateData: Partial<Omit<Promoter, 'id'>>, actionType: 'approve' | 'reject' | 'remove') => {
+        if (!canManage || selectedPromoterIds.size === 0) return;
+        
+        setIsBulkProcessing(true);
+        const idsToUpdate = Array.from(selectedPromoterIds);
+        
+        // 1. Store previous state for rollback
+        const previousPromoters = [...allPromoters];
+
+        // 2. Prepare Optimistic Update
+        const optimisticUpdate = { ...updateData };
+        if (updateData.status) {
+            Object.assign(optimisticUpdate, {
+                actionTakenByUid: adminData.uid,
+                actionTakenByEmail: adminData.email,
+                statusChangedAt: { seconds: Date.now() / 1000 } as any
+            });
+        }
+
+        // 3. Optimistic UI Update
+        setAllPromoters(prev => prev.map(p => {
+            if (idsToUpdate.includes(p.id)) {
+                return { ...p, ...optimisticUpdate };
+            }
+            return p;
+        }));
+
+        // 4. Optimistic Stats Update
+        setStats(prev => {
+            const newStats = { ...prev };
+            idsToUpdate.forEach(id => {
+                const currentPromoter = previousPromoters.find(p => p.id === id);
+                if (currentPromoter) {
+                    const oldStatus = currentPromoter.status;
+                    const newStatus = updateData.status;
+                    
+                    if (oldStatus !== newStatus && newStatus) {
+                        // Decrement
+                        if (oldStatus === 'pending') newStats.pending--;
+                        else if (oldStatus === 'approved') newStats.approved--;
+                        else if (oldStatus === 'rejected' || oldStatus === 'rejected_editable') newStats.rejected--;
+                        else if (oldStatus === 'removed') newStats.removed--;
+                        // Increment
+                        if (newStatus === 'pending') newStats.pending++;
+                        else if (newStatus === 'approved') newStats.approved++;
+                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
+                        else if (newStatus === 'removed') newStats.removed++;
+                    }
+                }
+            });
+            return newStats;
+        });
+
+        // Clear Selection & Close Modals
+        setSelectedPromoterIds(new Set());
+        setIsRejectionModalOpen(false);
+        setIsBulkRejection(false);
+
+        // 5. API Calls in Background
+        try {
+            const updatePayload = { ...updateData };
+            if (updateData.status) {
+                Object.assign(updatePayload, {
+                    actionTakenByUid: adminData.uid,
+                    actionTakenByEmail: adminData.email,
+                    statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            // Using separate calls for better error handling/retry logic if needed, or batching.
+            // Since `updatePromoter` handles cloud function triggers individually, we loop.
+            const promises = idsToUpdate.map(id => updatePromoter(id, updatePayload));
+            
+            // If action is remove, we also need to call the specific remove function
+            if (actionType === 'remove') {
+                const removePromises = idsToUpdate.map(id => {
+                    const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
+                    return setPromoterStatusToRemoved({ promoterId: id });
+                });
+                await Promise.all(removePromises);
+            } else {
+                await Promise.all(promises);
+            }
+
+        } catch (error) {
+            console.error("Bulk update failed partially or fully", error);
+            // In a real robust app, we'd handle partial failures. For now, revert all on catastrophic failure or warn.
+            // setAllPromoters(previousPromoters); // Revert is risky if some succeeded.
+            alert("Houve um erro ao processar alguns itens. Por favor, atualize a página para ver o estado real.");
+        } finally {
+            setIsBulkProcessing(false);
+        }
+    };
+
+    const handleBulkRejectClick = () => {
+        setIsBulkRejection(true);
+        // We pass a dummy promoter or null, but the modal needs reasons.
+        // If we are superadmin, we might need to fetch reasons if mixed orgs, but for bulk rejection usually we provide a generic reason or the modal handles it.
+        // RejectionModal expects a `reasons` prop which is already loaded.
+        setIsRejectionModalOpen(true);
+    };
+
+    const handleBulkRemoveClick = () => {
+        if (window.confirm(`Tem certeza que deseja remover ${selectedPromoterIds.size} divulgadoras da equipe? Esta ação é irreversível.`)) {
+            handleBulkUpdate({ status: 'removed' }, 'remove');
+        }
+    };
+
     const handleGroupStatusChange = async (promoter: Promoter, hasJoined: boolean) => {
         if (hasJoined) {
             // If they are joining, just update the flag.
@@ -488,12 +622,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
-        if (rejectingPromoter && canManage) {
+        if (isBulkRejection) {
             const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
-            // handleUpdatePromoter handles the optimistic update
+            await handleBulkUpdate({ status: newStatus, rejectionReason: reason }, 'reject');
+        } else if (rejectingPromoter && canManage) {
+            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
             await handleUpdatePromoter(rejectingPromoter.id, { status: newStatus, rejectionReason: reason });
         }
-        setRejectingPromoter(null); // Ensure cleaned up
+        setRejectingPromoter(null);
+        setIsBulkRejection(false);
     };
 
     const handleManualNotify = async (promoter: Promoter) => {
@@ -624,7 +761,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (err: any) {
-            setLookupError(err.message);
+            // FIX: Explicitly handle error type to avoid unknown assignment error
+            const errorMessage = err instanceof Error ? err.message : String(err?.message || err);
+            setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
         }
@@ -961,11 +1100,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 )}
             </div>
             
+            {/* Bulk Actions Toolbar */}
+            {selectedPromoterIds.size > 0 && canManage && (
+                <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm border-l-4 border-blue-500 text-white p-4 rounded-md shadow-lg flex flex-wrap items-center justify-between gap-4 animate-fadeIn">
+                    <div className="flex items-center gap-4">
+                        <span className="font-bold text-lg">{selectedPromoterIds.size} selecionadas</span>
+                        <button onClick={() => setSelectedPromoterIds(new Set())} className="text-sm text-blue-200 hover:text-white underline">Cancelar Seleção</button>
+                    </div>
+                    <div className="flex gap-2">
+                        {filter === 'pending' || filter === 'rejected_editable' || filter === 'rejected' ? (
+                            <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} disabled={isBulkProcessing} className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-md font-semibold disabled:opacity-50">
+                                {isBulkProcessing ? '...' : 'Aprovar Selecionadas'}
+                            </button>
+                        ) : null}
+                        
+                        {(filter === 'pending' || filter === 'rejected_editable' || filter === 'approved') ? (
+                            <button onClick={handleBulkRejectClick} disabled={isBulkProcessing} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md font-semibold disabled:opacity-50">
+                                {isBulkProcessing ? '...' : 'Rejeitar Selecionadas'}
+                            </button>
+                        ) : null}
+
+                        {filter === 'approved' && (
+                             <button onClick={handleBulkRemoveClick} disabled={isBulkProcessing} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md font-semibold disabled:opacity-50 flex items-center gap-2">
+                                <TrashIcon className="w-4 h-4" /> Remover da Equipe
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+            
             {error && <div className="text-red-400 p-2 text-center">{error}</div>}
+
+            <div className="flex justify-between items-center mb-2 px-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        checked={displayPromoters.length > 0 && selectedPromoterIds.size === displayPromoters.length} 
+                        onChange={(e) => {
+                            if (e.target.checked) {
+                                handleSelectAll(displayPromoters.map(p => p.id));
+                            } else {
+                                handleSelectAll([]); // Unselect all
+                            }
+                        }}
+                        className="h-5 w-5 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                    />
+                    <span className="text-sm font-semibold text-gray-300">Selecionar Todas Visíveis ({displayPromoters.length})</span>
+                </label>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {displayPromoters.map(promoter => (
-                    <div key={promoter.id} className="bg-secondary rounded-lg shadow-lg flex flex-col border border-gray-700/50 overflow-hidden">
+                    <div key={promoter.id} className={`bg-secondary rounded-lg shadow-lg flex flex-col border ${selectedPromoterIds.has(promoter.id) ? 'border-primary ring-2 ring-primary ring-opacity-50' : 'border-gray-700/50'} overflow-hidden relative transition-all duration-200`}>
+                        {/* Selection Checkbox Overlay */}
+                        <div className="absolute top-2 left-2 z-10">
+                            <input 
+                                type="checkbox" 
+                                checked={selectedPromoterIds.has(promoter.id)} 
+                                onChange={() => handleToggleSelect(promoter.id)}
+                                className="h-6 w-6 text-primary bg-gray-800 border-gray-400 rounded focus:ring-primary cursor-pointer shadow-sm"
+                            />
+                        </div>
+
                         <div className="relative">
                             <img
                                 src={promoter.photoUrls[0]}
