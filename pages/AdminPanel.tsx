@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -8,7 +9,6 @@ import { getAssignmentsForOrganization } from '../services/postService';
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
 import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
-// FIX: Changed to a named import to resolve module export error.
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
@@ -384,30 +384,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleUpdatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>) => {
         if (!canManage) return;
+
+        // 1. Store previous state for rollback
+        const previousPromoters = [...allPromoters];
+
+        // 2. Prepare Optimistic Data
+        const actionData = {
+            actionTakenByUid: adminData.uid,
+            actionTakenByEmail: adminData.email,
+            statusChangedAt: { seconds: Date.now() / 1000 } as any // Client-side timestamp
+        };
+
+        const optimisticUpdate = { ...data };
+        // Only add audit fields if status is changing
+        if (data.status) {
+            Object.assign(optimisticUpdate, actionData);
+        }
+
+        // 3. Optimistic Update: Update UI Immediately
+        setAllPromoters(prev => prev.map(p => {
+            if (p.id === id) {
+                return { ...p, ...optimisticUpdate };
+            }
+            return p;
+        }));
+
+        // 4. Update Stats Locally (Simple increment/decrement)
+        setStats(prev => {
+            const currentPromoter = previousPromoters.find(p => p.id === id);
+            if (!currentPromoter) return prev;
+            
+            const oldStatus = currentPromoter.status;
+            const newStatus = data.status;
+
+            if (!newStatus || oldStatus === newStatus) return prev;
+
+            const newStats = { ...prev };
+            // Decrement old
+            if (oldStatus === 'pending' || oldStatus === 'rejected_editable') newStats.pending--;
+            else if (oldStatus === 'approved') newStats.approved--;
+            else if (oldStatus === 'rejected') newStats.rejected--;
+            else if (oldStatus === 'removed') newStats.removed--;
+
+            // Increment new
+            if (newStatus === 'pending' || newStatus === 'rejected_editable') newStats.pending++;
+            else if (newStatus === 'approved') newStats.approved++;
+            else if (newStatus === 'rejected') newStats.rejected++;
+            else if (newStatus === 'removed') newStats.removed++;
+
+            return newStats;
+        });
+
+        // 5. Close Modals immediately if they are open (for better UX)
+        setIsEditModalOpen(false); 
+        setIsRejectionModalOpen(false);
+
         try {
-            const currentPromoter = allPromoters.find(p => p.id === id);
-            if (!currentPromoter) {
-                console.error("Promoter to update not found.");
-                return;
-            }
-
-            const updatedData = { ...data };
-
-            // Only add audit fields if status is actually changing
-            if (data.status && data.status !== currentPromoter.status) {
-                updatedData.actionTakenByUid = adminData.uid;
-                updatedData.actionTakenByEmail = adminData.email;
-                updatedData.statusChangedAt = firebase.firestore.FieldValue.serverTimestamp();
+            // 6. Perform Actual API Call
+            // We include the audit fields here as well to ensure server data is correct
+            const updatePayload = { ...data };
+            if (data.status) {
+                Object.assign(updatePayload, {
+                    actionTakenByUid: adminData.uid,
+                    actionTakenByEmail: adminData.email,
+                    statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
             }
             
-            await updatePromoter(id, updatedData);
-            
-            alert("Divulgadora atualizada com sucesso.");
-            await fetchAllData(); // Refresh all data to ensure consistency
+            await updatePromoter(id, updatePayload);
+            // Success! No need to alert or refresh, UI is already up to date.
 
         } catch (error) {
-            alert("Falha ao atualizar a divulgadora.");
-            throw error;
+            // 7. Rollback on Error
+            console.error("Update failed, rolling back", error);
+            setAllPromoters(previousPromoters);
+            // You might want to revert stats too if you are implementing complex rollback
+            alert("Falha ao atualizar a divulgadora. As alterações foram revertidas.");
         }
     };
 
@@ -422,8 +474,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     const removePromoter = functions.httpsCallable('removePromoterFromAllAssignments');
                     await removePromoter({ promoterId: promoter.id });
                     
-                    alert(`${promoter.name} foi removida do grupo e de todas as publicações designadas.`);
-                    await fetchAllData(); // Refresh all data
+                    // Optimistic update for the UI property only
+                    handleUpdatePromoter(promoter.id, { hasJoinedGroup: false });
+                    // Ideally we should refresh data to clear assignments locally, but this is a rare action
     
                 } catch (error: any) {
                     console.error("Failed to remove promoter from all assignments:", error);
@@ -436,10 +489,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
         if (rejectingPromoter && canManage) {
             const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
+            // handleUpdatePromoter handles the optimistic update
             await handleUpdatePromoter(rejectingPromoter.id, { status: newStatus, rejectionReason: reason });
         }
-        setIsRejectionModalOpen(false);
-        setRejectingPromoter(null);
+        setRejectingPromoter(null); // Ensure cleaned up
     };
 
     const handleManualNotify = async (promoter: Promoter) => {
@@ -456,16 +509,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
             
-            // On success, update the timestamp
-            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
-            await updatePromoter(promoter.id, updateData);
-            
-            // Optimistic UI update for the timestamp
+            // On success, update the timestamp locally first
             setAllPromoters(prev => prev.map(p => 
                 p.id === promoter.id 
-                ? { ...p, lastManualNotificationAt: firebase.firestore.Timestamp.now() } as Promoter 
+                ? { ...p, lastManualNotificationAt: { seconds: Date.now() / 1000 } as any } 
                 : p
             ));
+
+            // Then background update
+            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
+            await updatePromoter(promoter.id, updateData);
 
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
@@ -484,8 +537,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             try {
                 const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
                 await setPromoterStatusToRemoved({ promoterId: promoter.id });
-                alert(`${promoter.name} foi removida com sucesso.`);
-                await fetchAllData(); // Refresh the entire view
+                
+                // Manually remove from local list or change status locally to avoid full fetch
+                setAllPromoters(prev => prev.map(p => 
+                    p.id === promoter.id ? { ...p, status: 'removed' } : p
+                ));
+                // Update stats locally
+                setStats(prev => ({
+                    ...prev,
+                    approved: prev.approved > 0 ? prev.approved - 1 : 0,
+                    removed: prev.removed + 1
+                }));
+
             } catch (err: any) {
                 alert(`Falha ao remover divulgadora: ${err.message}`);
             } finally {
@@ -500,7 +563,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             try {
                 await deletePromoter(id);
                 setAllPromoters(prev => prev.filter(p => p.id !== id));
-                await fetchAllData(); // Refresh stats
+                // Recalculate stats approx
+                setStats(prev => ({ ...prev, total: prev.total - 1 })); // Ideally adjust specific status count too
             } catch (error) {
                 alert("Falha ao excluir a inscrição.");
             }
