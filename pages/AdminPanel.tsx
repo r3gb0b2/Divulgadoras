@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -760,12 +759,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err) {
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
-            } else if (typeof err === 'object' && err !== null && 'message' in err) {
-                errorMessage = String((err as any).message);
+            } else if (typeof err === 'string') {
+                errorMessage = err;
             } else {
                 errorMessage = String(err);
             }

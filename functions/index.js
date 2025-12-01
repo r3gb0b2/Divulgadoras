@@ -893,6 +893,94 @@ exports.updatePromoterAndSync = functions
       }
     });
 
+exports.publicResubmitPromoter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // No auth check required, this is for public re-submissions
+    const { promoterId, updateData } = data;
+    if (!promoterId || !updateData) throw new functions.https.HttpsError("invalid-argument", "Dados inválidos.");
+
+    const promoterRef = db.collection("promoters").doc(promoterId);
+
+    try {
+        const promoterSnap = await promoterRef.get();
+        if (!promoterSnap.exists) throw new functions.https.HttpsError("not-found", "Cadastro não encontrado.");
+        
+        const currentData = promoterSnap.data();
+        if (currentData.status !== 'rejected_editable') {
+            throw new functions.https.HttpsError('permission-denied', 'Este cadastro não está liberado para edição.');
+        }
+
+        // Prepare update
+        const cleanData = { ...updateData };
+        
+        // Critical: Force status reset and clear rejection reason
+        cleanData.status = 'pending';
+        cleanData.rejectionReason = admin.firestore.FieldValue.delete();
+        
+        // Protect sensitive fields from being overwritten by user
+        delete cleanData.id;
+        delete cleanData.createdAt;
+        delete cleanData.organizationId; // Prevent changing org
+        delete cleanData.actionTakenByUid;
+        delete cleanData.actionTakenByEmail;
+        delete cleanData.statusChangedAt;
+
+        // Perform the update
+        await promoterRef.update(cleanData);
+
+        // --- SYNC LOGIC (Same as updatePromoterAndSync) ---
+        // If name or email changed, we should sync across collections to keep data consistent
+        const newEmail = cleanData.email !== undefined ? safeLower(cleanData.email) : currentData.email;
+        const newName = cleanData.name !== undefined ? safeTrim(cleanData.name) : currentData.name;
+        const newInstagram = cleanData.instagram !== undefined ? safeTrim(cleanData.instagram) : currentData.instagram;
+
+        const emailHasChanged = newEmail !== currentData.email;
+        const nameHasChanged = newName !== currentData.name;
+        const instagramHasChanged = newInstagram !== currentData.instagram;
+
+        if (emailHasChanged || nameHasChanged || instagramHasChanged) {
+             const fieldsToSync = {};
+             if (emailHasChanged) fieldsToSync.promoterEmail = newEmail;
+             if (nameHasChanged) fieldsToSync.promoterName = newName;
+
+             if (Object.keys(fieldsToSync).length > 0) {
+                 const collectionsToSync = ["postAssignments", "guestListConfirmations", "groupRemovalRequests", "guestListChangeRequests"];
+                 for (const collectionName of collectionsToSync) {
+                     const query = db.collection(collectionName).where("promoterId", "==", promoterId);
+                     const snapshot = await query.get();
+                     if (!snapshot.empty) {
+                         const batch = db.batch();
+                         snapshot.forEach((doc) => batch.update(doc.ref, fieldsToSync));
+                         await batch.commit();
+                     }
+                 }
+             }
+             
+             // Sync Follow Loop
+             if (nameHasChanged || instagramHasChanged) {
+                const participantRef = db.collection("followLoopParticipants").doc(promoterId);
+                const participantSnap = await participantRef.get();
+                if (participantSnap.exists) {
+                    const pUpdate = {};
+                    if (nameHasChanged) pUpdate.promoterName = newName;
+                    if (instagramHasChanged) pUpdate.instagram = newInstagram;
+                    await participantRef.update(pUpdate);
+                }
+                
+                // Note: Not syncing interactions here for public resubmit to keep it lighter/faster. 
+                // Admin can trigger sync later if needed via admin edit.
+             }
+        }
+
+        return { success: true };
+
+    } catch (error) {
+        console.error(`Error resubmitting promoter ${promoterId}:`, error);
+        // Pass through HttpsErrors, wrap others
+        if (error.code && error.details) throw error; 
+        throw new functions.https.HttpsError("internal", "Erro ao reenviar cadastro.", error.message);
+    }
+});
+
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { postData, assignedPromoters } = data;
     const batch = db.batch();

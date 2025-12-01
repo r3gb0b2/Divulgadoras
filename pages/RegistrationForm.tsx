@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
+import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoter } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
@@ -256,7 +256,7 @@ const PromoterForm: React.FC = () => {
       const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
       
       if (editId) {
-        // Update existing promoter
+        // Update existing promoter (Public Re-submission)
         let finalPhotoUrls = originalPhotoUrls;
         if (photoFiles.length > 0) {
             finalPhotoUrls = await Promise.all(
@@ -270,11 +270,11 @@ const PromoterForm: React.FC = () => {
             );
         }
 
-        await updatePromoter(editId, {
+        // Use the new public resubmit function instead of the admin update function
+        await resubmitPromoter(editId, {
             ...formData,
             photoUrls: finalPhotoUrls,
-            status: 'pending', // Reset status to pending for re-evaluation
-            rejectionReason: '', // Clear previous rejection reason
+            // Status update to 'pending' is handled by the cloud function for security
         });
       } else {
         // Create new promoter
