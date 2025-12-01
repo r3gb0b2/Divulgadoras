@@ -5,8 +5,8 @@ import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { submitAdminApplication } from '../services/adminService';
-// FIX: Changed to a named import to resolve module export error.
-import { AdminPanel } from './AdminPanel';
+// FIX: Changed to a default import to match the export in AdminPanel.tsx
+import AdminPanel from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import AdminDashboard from './AdminDashboard'; // Import the new dashboard
 import StatesListPage from './StatesListPage';
