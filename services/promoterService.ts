@@ -206,8 +206,9 @@ export const getPromotersPage = async (options: {
     }
 
     if (options.status !== 'all') {
-      if (options.status === 'pending') {
-        query = query.where("status", "in", ["pending", "rejected_editable"]);
+      if (options.status === 'rejected') {
+        // Now 'rejected' filter includes both 'rejected' and 'rejected_editable'
+        query = query.where("status", "in", ["rejected", "rejected_editable"]);
       } else {
         query = query.where("status", "==", options.status);
       }
@@ -292,8 +293,13 @@ export const getAllPromoters = async (options: {
     if (options.filterOrgId !== 'all') { // Superadmin filter override
         baseQuery = firestore.collection("promoters").where("organizationId", "==", options.filterOrgId);
     }
+    
     if (options.status !== 'all') {
-        baseQuery = baseQuery.where("status", "in", options.status === 'pending' ? ["pending", "rejected_editable"] : [options.status]);
+        if (options.status === 'rejected') {
+            baseQuery = baseQuery.where("status", "in", ["rejected", "rejected_editable"]);
+        } else {
+            baseQuery = baseQuery.where("status", "==", options.status);
+        }
     }
 
     let statesToQuery: string[] | null = null;
@@ -397,9 +403,11 @@ export const getPromoterStats = async (options: {
             query = query.where("campaignName", "==", options.selectedCampaign);
         }
 
-        const pendingQuery = query.where("status", "in", ["pending", "rejected_editable"]);
+        // Modified: "pending" only counts 'pending' status
+        const pendingQuery = query.where("status", "==", "pending");
+        // Modified: "rejected" counts 'rejected' AND 'rejected_editable' status
+        const rejectedQuery = query.where("status", "in", ["rejected", "rejected_editable"]);
         const approvedQuery = query.where("status", "==", "approved");
-        const rejectedQuery = query.where("status", "==", "rejected");
         const removedQuery = query.where("status", "==", "removed");
 
         const [totalSnap, pendingSnap, approvedSnap, rejectedSnap, removedSnap] = await Promise.all([

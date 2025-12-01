@@ -420,16 +420,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (!newStatus || oldStatus === newStatus) return prev;
 
             const newStats = { ...prev };
-            // Decrement old
-            if (oldStatus === 'pending' || oldStatus === 'rejected_editable') newStats.pending--;
+            
+            // Decrement old logic (Updated)
+            if (oldStatus === 'pending') newStats.pending--;
             else if (oldStatus === 'approved') newStats.approved--;
-            else if (oldStatus === 'rejected') newStats.rejected--;
+            else if (oldStatus === 'rejected' || oldStatus === 'rejected_editable') newStats.rejected--;
             else if (oldStatus === 'removed') newStats.removed--;
 
-            // Increment new
-            if (newStatus === 'pending' || newStatus === 'rejected_editable') newStats.pending++;
+            // Increment new logic (Updated)
+            if (newStatus === 'pending') newStats.pending++;
             else if (newStatus === 'approved') newStats.approved++;
-            else if (newStatus === 'rejected') newStats.rejected++;
+            else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
             else if (newStatus === 'removed') newStats.removed++;
 
             return newStats;
@@ -1009,7 +1010,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     
                             {canManage && (
                                 <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap items-center justify-end gap-2">
-                                    {promoter.status === 'pending' || promoter.status === 'rejected_editable' ? (
+                                    {promoter.status === 'pending' ? (
+                                        <>
+                                            <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Aprovar</button>
+                                            <button onClick={() => openRejectionModal(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-md">Rejeitar</button>
+                                        </>
+                                    ) : promoter.status === 'rejected_editable' ? (
+                                        // Correction requested logic - treated visually as rejected in this new model, but allows actions
                                         <>
                                             <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md">Aprovar</button>
                                             <button onClick={() => openRejectionModal(promoter)} disabled={processingId === promoter.id} className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-md">Rejeitar</button>
