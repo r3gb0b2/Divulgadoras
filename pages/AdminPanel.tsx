@@ -341,7 +341,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setAllAssignments(assignmentsResult || []);
 
         } catch(err: any) {
-            setError(err.message);
+            setError(err.message || "Erro desconhecido.");
         } finally {
             setIsLoading(false);
         }
@@ -760,7 +760,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err) {
+        } catch (err: any) {
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
