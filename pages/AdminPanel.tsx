@@ -711,6 +711,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return timeB - timeA;
         });
 
+        // Filter by Status (Client-side enforcement for Optimistic UI)
+        if (filter !== 'all') {
+            if (filter === 'rejected') {
+                sorted = sorted.filter(p => p.status === 'rejected' || p.status === 'rejected_editable');
+            } else {
+                sorted = sorted.filter(p => p.status === filter);
+            }
+        }
+
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         if (lowercasedQuery !== '') {
             sorted = sorted.filter(p => {
