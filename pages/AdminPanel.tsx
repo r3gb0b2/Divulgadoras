@@ -258,9 +258,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 }
                 const campaignsData = await campaignsPromise;
                 setAllCampaigns(campaignsData);
-            } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                setError(message || 'Não foi possível carregar dados de suporte.');
+            } catch (err: any) {
+                setError(err.message || 'Não foi possível carregar dados de suporte.');
             }
         };
         fetchStaticData();
@@ -341,9 +340,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setStats(statsResult);
             setAllAssignments(assignmentsResult || []);
 
-        } catch(err) {
-            const message = err instanceof Error ? err.message : String(err);
-            setError(message || "Erro desconhecido.");
+        } catch(err: any) {
+            setError(err.message || "Erro desconhecido.");
         } finally {
             setIsLoading(false);
         }
@@ -739,7 +737,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err) {
+        } catch (err: any) { // FIX: Changed error type to 'any' to allow accessing properties like 'message'.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
@@ -817,4 +815,317 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const stats = statsMap.get(p.id);
             const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
             const completionRate = stats && stats.assigned > 0
-                ? Math.round((successfulOutcomes / stats.assigned) * 1
+                ? Math.round((successfulOutcomes / stats.assigned) * 100)
+                : -1;
+            return { ...p, completionRate };
+        });
+    }, [filteredPromotersFromSource, allAssignments]);
+
+
+    // Memoized calculation for filtering and pagination
+    const processedPromoters = useMemo(() => {
+        // Sort all promoters by date first
+        let sorted = [...promotersWithStats].sort((a, b) => {
+            const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+            const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+            return timeB - timeA;
+        });
+
+        // Filter by Status (Client-side enforcement for Optimistic UI)
+        if (filter !== 'all') {
+            if (filter === 'rejected') {
+                sorted = sorted.filter(p => p.status === 'rejected' || p.status === 'rejected_editable');
+            } else {
+                sorted = sorted.filter(p => p.status === filter);
+            }
+        }
+
+        const lowercasedQuery = searchQuery.toLowerCase().trim();
+        if (lowercasedQuery !== '') {
+            sorted = sorted.filter(p => {
+                // Standard text search on name, email, campaign
+                const textSearch =
+                    (p.name && String(p.name).toLowerCase().includes(lowercasedQuery)) ||
+                    (p.email && String(p.email).toLowerCase().includes(lowercasedQuery)) ||
+                    (p.campaignName && String(p.campaignName).toLowerCase().includes(lowercasedQuery));
+
+                // Phone number search, only triggered if the search query contains digits
+                const searchDigits = lowercasedQuery.replace(/\D/g, '');
+                const phoneSearch =
+                    searchDigits.length > 0 &&
+                    p.whatsapp &&
+                    String(p.whatsapp).replace(/\D/g, '').includes(searchDigits);
+
+                return textSearch || phoneSearch;
+            });
+        }
+        
+        if (colorFilter !== 'all' && filter === 'approved') {
+            sorted = sorted.filter(p => {
+                const rate = (p as any).completionRate;
+                if (rate < 0) return false;
+                if (colorFilter === 'green') return rate === 100;
+                if (colorFilter === 'blue') return rate >= 60 && rate < 100;
+                if (colorFilter === 'yellow') return rate >= 31 && rate < 60;
+                if (colorFilter === 'red') return rate >= 0 && rate <= 30;
+                return true;
+            });
+        }
+
+        const min = minAge ? parseInt(minAge, 10) : null;
+        const max = maxAge ? parseInt(maxAge, 10) : null;
+
+        if (min !== null || max !== null) {
+            sorted = sorted.filter(p => {
+                const age = getAgeAsNumber(p.dateOfBirth);
+                if (age === null) return false; // Don't show promoters without a valid age if filtering
+
+                const minCondition = min !== null ? age >= min : true;
+                const maxCondition = max !== null ? age <= max : true;
+
+                return minCondition && maxCondition;
+            });
+        }
+
+        // Apply pagination to the filtered results
+        const startIndex = (currentPage - 1) * PROMOTERS_PER_PAGE;
+        const paginated = sorted.slice(startIndex, startIndex + PROMOTERS_PER_PAGE);
+
+        return {
+            displayPromoters: paginated,
+            totalFilteredCount: sorted.length,
+        };
+    }, [promotersWithStats, searchQuery, currentPage, colorFilter, filter, minAge, maxAge]);
+    
+    const { displayPromoters, totalFilteredCount } = processedPromoters;
+    
+    // Pagination Calculations
+    const pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
+
+    const handleNextPage = () => {
+        if (currentPage < pageCount) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+        }
+    };
+
+    const getStatusBadge = (status: PromoterStatus) => {
+        const styles = {
+            pending: "bg-yellow-900 bg-opacity-50 text-yellow-300",
+            approved: "bg-green-900 bg-opacity-50 text-green-300",
+            rejected: "bg-red-900 bg-opacity-50 text-red-300",
+            rejected_editable: "bg-orange-900 bg-opacity-50 text-orange-300",
+            removed: "bg-gray-700 text-gray-400",
+        };
+        const text = { pending: "Pendente", approved: "Aprovado", rejected: "Rejeitado", rejected_editable: "Correção Solicitada", removed: "Removida" };
+        return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
+    };
+
+
+    if (isLoading && allPromoters.length === 0) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <button onClick={() => navigate('/admin')} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-2">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar ao Painel</span>
+                    </button>
+                    <h1 className="text-3xl font-bold mt-1">Painel de Divulgadoras</h1>
+                </div>
+                <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center justify-center gap-2">
+                    <LogoutIcon className="w-5 h-5" />
+                    <span>Sair</span>
+                </button>
+            </div>
+            
+            <div className="bg-secondary p-4 rounded-lg shadow-lg">
+                <div className="flex flex-col md:flex-row gap-4">
+                    {/* Stats section */}
+                    <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                        <button onClick={() => setFilter('pending')} className={`p-3 rounded-lg ${filter === 'pending' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Pendentes</h4>
+                            <p className="text-2xl font-bold">{stats.pending}</p>
+                        </button>
+                        <button onClick={() => setFilter('approved')} className={`p-3 rounded-lg ${filter === 'approved' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Aprovadas</h4>
+                            <p className="text-2xl font-bold">{stats.approved}</p>
+                        </button>
+                        <button onClick={() => setFilter('rejected')} className={`p-3 rounded-lg ${filter === 'rejected' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Rejeitadas</h4>
+                            <p className="text-2xl font-bold">{stats.rejected}</p>
+                        </button>
+                         <button onClick={() => setFilter('removed')} className={`p-3 rounded-lg ${filter === 'removed' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Removidas</h4>
+                            <p className="text-2xl font-bold">{stats.removed}</p>
+                        </button>
+                        <button onClick={() => setFilter('all')} className={`p-3 rounded-lg ${filter === 'all' ? 'bg-primary' : 'bg-dark'}`}>
+                            <h4 className="text-sm font-semibold text-gray-300">Total</h4>
+                            <p className="text-2xl font-bold">{stats.total}</p>
+                        </button>
+                    </div>
+                    {/* Search and Manage section */}
+                    <div className="flex-grow space-y-3">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, e-mail, telefone ou evento..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                            />
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                                type="email"
+                                placeholder="Buscar todos os cadastros por e-mail..."
+                                value={lookupEmail}
+                                onChange={(e) => setLookupEmail(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                            />
+                            <button onClick={() => handleLookupPromoter()} disabled={isLookingUp} className="px-4 py-2 bg-indigo-600 text-white rounded-md whitespace-nowrap">
+                                {isLookingUp ? 'Buscando...' : 'Buscar Global'}
+                            </button>
+                            {canManage && (
+                                adminData.role === 'superadmin' ? (
+                                    <Link to="/admin" className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2" title="Voltar ao painel principal">
+                                        <BuildingOfficeIcon className="w-5 h-5"/>
+                                        <span>Painel Principal</span>
+                                    </Link>
+                                ) : (
+                                    <Link to="/admin/settings" className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
+                                        <CogIcon className="w-5 h-5"/>
+                                        <span>Configurações</span>
+                                    </Link>
+                                )
+                            )}
+                            {canManage && organizationIdForReasons && (
+                                <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-600 text-white rounded-md whitespace-nowrap flex items-center justify-center gap-2">
+                                    <CogIcon className="w-5 h-5"/>
+                                    <span>Gerenciar Motivos</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2 border-t border-gray-700 pt-3">
+                    {isSuperAdmin && (
+                        <select value={selectedOrg} onChange={(e) => setSelectedOrg(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                            <option value="all">Todas as Organizações</option>
+                            {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                        </select>
+                    )}
+                    <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                        <option value="all">Todos os Estados</option>
+                        {(isSuperAdmin ? states.map(s => s.abbr) : (getStatesForScope() || [])).map(abbr => <option key={abbr} value={abbr}>{stateMap[abbr]}</option>)}
+                    </select>
+                    <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                        <option value="all">Todos os Eventos</option>
+                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                    </select>
+                </div>
+            </div>
+
+            {/* Bulk Action Bar */}
+            {selectedPromoterIds.size > 0 && (
+                <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm p-3 rounded-md flex flex-col sm:flex-row justify-between items-center my-4 gap-3">
+                    <span className="font-semibold text-white">{selectedPromoterIds.size} selecionadas</span>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} disabled={isBulkProcessing} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-md text-sm font-semibold">Aprovar</button>
+                        <button onClick={handleBulkRejectClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-sm font-semibold">Rejeitar</button>
+                        <button onClick={handleBulkRemoveClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold">Remover da Equipe</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Promoters List */}
+            {error && <p className="text-red-400 mt-4">{error}</p>}
+            <div className="mt-6 space-y-4">
+                {displayPromoters.map(promoter => (
+                    <div key={promoter.id} className="bg-secondary shadow-md rounded-lg p-4 flex flex-col md:flex-row items-start gap-4">
+                        <div className="flex-shrink-0 flex items-center gap-3">
+                            {canManage && filter === 'pending' && (
+                                <input type="checkbox" checked={selectedPromoterIds.has(promoter.id)} onChange={() => handleToggleSelect(promoter.id)} className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary" />
+                            )}
+                            <div className="relative">
+                                <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
+                                <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth)}</div>
+                            </div>
+                        </div>
+                        <div className="flex-grow">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
+                                    <p className="text-sm text-gray-400">{promoter.email}</p>
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
+                                </div>
+                                {getStatusBadge(promoter.status)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
+                                <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                <span>{promoter.campaignName} ({promoter.state})</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
+                            </div>
+                            {promoter.observation && (
+                                <p className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded-md mt-2 italic"><strong>Obs:</strong> {promoter.observation}</p>
+                            )}
+                            {promoter.actionTakenByEmail && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {getActionLabel(promoter.status)} {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt as Timestamp)}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
+                            {filter === 'pending' && canManage && (
+                                <>
+                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold">Aprovar</button>
+                                    <button onClick={() => openRejectionModal(promoter)} className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-semibold">Rejeitar</button>
+                                </>
+                            )}
+                            {filter === 'approved' && canManage && (
+                                <>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                        {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
+                                    </button>
+                                    <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
+                                </>
+                            )}
+                             {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="w-full px-4 py-2 bg-gray-800 text-red-400 border border-red-900/50 rounded-md hover:bg-red-900/30 text-xs">Excluir Inscrição</button>}
+                            <button onClick={() => openEditModal(promoter)} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">Detalhes</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-6 flex justify-between items-center">
+                <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                <div className="flex gap-2">
+                    <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Anterior</button>
+                    <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Próxima</button>
+                </div>
+            </div>
+
+            {/* Modals */}
+            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
+        </div>
+    );
+};
