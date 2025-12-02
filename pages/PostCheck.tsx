@@ -111,7 +111,8 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
         const confirmationTime = toDateSafe(assignment.confirmedAt);
         if (!confirmationTime) return;
         
-        const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+        // Use 6 hours for the deadline as requested
+        const expireTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
 
         const timer = setInterval(() => {
             const now = new Date();
@@ -261,7 +262,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         const styles = { pending: "bg-yellow-900/50 text-yellow-300", accepted: "bg-green-900/50 text-green-300", rejected: "bg-red-900/50 text-red-300" }; 
         const text = { pending: "Pendente", accepted: "Aceita", rejected: "Rejeitada" }; 
         const effectiveStatus = status || 'pending';
-// FIX: Access object properties with square brackets instead of calling as a function.
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[effectiveStatus]}`}>{text[effectiveStatus]}</span>; 
     };
     
