@@ -727,8 +727,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const email = emailToSearch || lookupEmail;
+    const handleLookupPromoter = async (emailToSearch?: string | any) => {
+        const email = (typeof emailToSearch === 'string' ? emailToSearch : '') || lookupEmail;
         if (!email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);
@@ -741,8 +741,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
-            } else if (typeof err === 'object' && err !== null && 'message' in err) {
-                errorMessage = String((err as any).message);
             } else {
                 errorMessage = String(err);
             }

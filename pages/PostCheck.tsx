@@ -26,6 +26,10 @@ const extractGoogleDriveId = (url: string): string | null => {
     return id;
 };
 
+const formatDateForICS = (date: Date) => {
+    return date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+};
+
 const isAssignmentActive = (assignment: PostAssignment): boolean => {
     // 1. Proof Submitted -> History (Done)
     if (assignment.proofSubmittedAt) return false;
@@ -158,16 +162,37 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
     const handleAddToCalendar = () => {
         if (!enableTimeDate) return;
         
-        const title = encodeURIComponent(`Enviar Print - ${assignment.post.campaignName}`);
-        const details = encodeURIComponent(`Está na hora de enviar o print da sua publicação!\n\nAcesse o link para enviar: ${window.location.href}`);
-        
-        // Format dates as YYYYMMDDTHHmmSSZ
-        const start = enableTimeDate.toISOString().replace(/-|:|\.\d\d\d/g, "");
+        const title = `Enviar Print - ${assignment.post.campaignName}`;
+        const description = `Está na hora de enviar o print da sua publicação!\\n\\nAcesse o link para enviar: ${window.location.href}`;
         const endDate = new Date(enableTimeDate.getTime() + 60 * 60 * 1000); // 1 hour duration
-        const end = endDate.toISOString().replace(/-|:|\.\d\d\d/g, "");
 
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
-        window.open(url, '_blank');
+        const now = formatDateForICS(new Date());
+        const start = formatDateForICS(enableTimeDate);
+        const end = formatDateForICS(endDate);
+
+        const icsContent = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Equipe Certa//NONSGML v1.0//EN',
+            'BEGIN:VEVENT',
+            `UID:${now}-${Math.random().toString(36).substring(2)}@equipecerta.com`,
+            `DTSTAMP:${now}`,
+            `DTSTART:${start}`,
+            `DTEND:${end}`,
+            `SUMMARY:${title}`,
+            `DESCRIPTION:${description}`,
+            `URL:${window.location.href}`,
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.setAttribute('download', 'lembrete_post.ics');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
