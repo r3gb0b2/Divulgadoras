@@ -737,11 +737,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: unknown) {
-// FIX: The error is reported on line 564, which is inside this function.
-// The error "Argument of type 'unknown' is not assignable to parameter of type 'string'"
-// often happens with unhandled 'unknown' types from catch blocks in strict mode.
-// This block is changed to safely handle an 'unknown' error type.
+        } catch (err: any) { // FIX: Changed error type to 'any' to allow accessing properties like 'message'.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
@@ -1039,159 +1035,97 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
                 </div>
-```
-  </change>
-  <change>
-    <file>components/ErrorBoundary.tsx</file>
-    <description>Refactored the ErrorBoundary class component to a more standard implementation. This resolves TypeScript errors where `setState` and `props` were not being recognized. The redundant constructor was removed, and state lifecycle methods were adjusted for clarity and correctness.</description>
-    <content><![CDATA[
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+            </div>
 
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-  errorInfo: ErrorInfo | null;
-}
-
-// FIX: Correctly extend Component and manage state lifecycle methods.
-// The previous implementation was a class, but TypeScript was not recognizing
-// it as a React.Component, leading to errors about missing `setState` and `props`.
-// Extending from the named `Component` import and simplifying state management.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
-
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // You can also log the error to an error reporting service
-    console.error("Uncaught error:", error, errorInfo);
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
-            <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
-            <p className="mb-4 text-gray-300">
-              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
-            </p>
-            {this.state.error && (
-              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                <p className="text-red-400">{this.state.error.toString()}</p>
-              </div>
+            {/* Bulk Action Bar */}
+            {selectedPromoterIds.size > 0 && (
+                <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm p-3 rounded-md flex flex-col sm:flex-row justify-between items-center my-4 gap-3">
+                    <span className="font-semibold text-white">{selectedPromoterIds.size} selecionadas</span>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} disabled={isBulkProcessing} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-md text-sm font-semibold">Aprovar</button>
+                        <button onClick={handleBulkRejectClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-sm font-semibold">Rejeitar</button>
+                        <button onClick={handleBulkRemoveClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold">Remover da Equipe</button>
+                    </div>
+                </div>
             )}
-             <button
-              onClick={() => window.location.reload()}
-              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
-            >
-              Recarregar Página
-            </button>
-             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
-                Voltar para a Página Inicial
-            </a>
-          </div>
+
+            {/* Promoters List */}
+            {error && <p className="text-red-400 mt-4">{error}</p>}
+            <div className="mt-6 space-y-4">
+                {displayPromoters.map(promoter => (
+                    <div key={promoter.id} className="bg-secondary shadow-md rounded-lg p-4 flex flex-col md:flex-row items-start gap-4">
+                        <div className="flex-shrink-0 flex items-center gap-3">
+                            {canManage && filter === 'pending' && (
+                                <input type="checkbox" checked={selectedPromoterIds.has(promoter.id)} onChange={() => handleToggleSelect(promoter.id)} className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary" />
+                            )}
+                            <div className="relative">
+                                <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
+                                <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth)}</div>
+                            </div>
+                        </div>
+                        <div className="flex-grow">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
+                                    <p className="text-sm text-gray-400">{promoter.email}</p>
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
+                                </div>
+                                {getStatusBadge(promoter.status)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
+                                <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                <span>{promoter.campaignName} ({promoter.state})</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
+                            </div>
+                            {promoter.observation && (
+                                <p className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded-md mt-2 italic"><strong>Obs:</strong> {promoter.observation}</p>
+                            )}
+                            {promoter.actionTakenByEmail && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {getActionLabel(promoter.status)} {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt as Timestamp)}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
+                            {filter === 'pending' && canManage && (
+                                <>
+                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold">Aprovar</button>
+                                    <button onClick={() => openRejectionModal(promoter)} className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-semibold">Rejeitar</button>
+                                </>
+                            )}
+                            {filter === 'approved' && canManage && (
+                                <>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                        {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
+                                    </button>
+                                    <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
+                                </>
+                            )}
+                             {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="w-full px-4 py-2 bg-gray-800 text-red-400 border border-red-900/50 rounded-md hover:bg-red-900/30 text-xs">Excluir Inscrição</button>}
+                            <button onClick={() => openEditModal(promoter)} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">Detalhes</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-6 flex justify-between items-center">
+                <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                <div className="flex gap-2">
+                    <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Anterior</button>
+                    <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Próxima</button>
+                </div>
+            </div>
+
+            {/* Modals */}
+            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
         </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-export default ErrorBoundary;
-]]></content>
-  </change>
-  <change>
-    <file>src/components/ErrorBoundary.tsx</file>
-    <description>Refactored the ErrorBoundary class component to a more standard implementation. This resolves TypeScript errors where `setState` and `props` were not being recognized. The redundant constructor was removed, and state lifecycle methods were adjusted for clarity and correctness.</description>
-    <content><![CDATA[
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-  errorInfo: ErrorInfo | null;
-}
-
-// FIX: Correctly extend Component and manage state lifecycle methods.
-// The previous implementation was a class, but TypeScript was not recognizing
-// it as a React.Component, leading to errors about missing `setState` and `props`.
-// Extending from the named `Component` import and simplifying state management.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
-
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // You can also log the error to an error reporting service
-    console.error("Uncaught error:", error, errorInfo);
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
-            <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
-            <p className="mb-4 text-gray-300">
-              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
-            </p>
-            {this.state.error && (
-              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                <p className="text-red-400">{this.state.error.toString()}</p>
-              </div>
-            )}
-             <button
-              onClick={() => window.location.reload()}
-              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
-            >
-              Recarregar Página
-            </button>
-             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
-                Voltar para a Página Inicial
-            </a>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-export default ErrorBoundary;
-]]></content>
-  </change>
-</changes>
-```
+    );
+};
