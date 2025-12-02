@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
@@ -233,15 +234,6 @@ const SuperAdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Campanha WhatsApp</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Envie mensagens em massa via WhatsApp para as divulgadoras.</p>
-                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/whatsapp-reminders" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <WhatsAppIcon className="w-8 h-8 text-green-500" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos WhatsApp</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Monitore a fila de lembretes automáticos de comprovação.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
 

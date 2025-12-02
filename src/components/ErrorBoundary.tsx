@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -10,8 +11,8 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
+// FIX: Refactored to use a standard class property for state to ensure `this` context for `setState` and `props`.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Initialize state as a class property to resolve TypeScript errors with `this.state` and `this.props`.
   state: ErrorBoundaryState = {
     hasError: false,
     error: null,
