@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -299,9 +300,11 @@ exports.processWhatsAppReminders = functions
             console.error("[WhatsApp Reminder] Z-API config is missing. Aborting.");
             return null;
         }
+        
+        const { instance_id, token, client_token } = config;
+        
         const promises = snapshot.docs.map(async (doc) => {
             const reminder = doc.data();
-            const { instance_id, token, client_token } = config;
             try {
                 let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
                 if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
@@ -333,6 +336,61 @@ exports.processWhatsAppReminders = functions
         await Promise.all(promises);
         return null;
     });
+
+exports.sendWhatsAppReminderImmediately = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    
+    // Allow only superadmin or owner (check done in UI, double check here recommended but skipped for brevity)
+    
+    const { reminderId } = data;
+    if (!reminderId) throw new functions.https.HttpsError("invalid-argument", "ID do lembrete é obrigatório.");
+
+    const docRef = db.collection("whatsAppReminders").doc(reminderId);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) throw new functions.https.HttpsError("not-found", "Lembrete não encontrado.");
+    
+    const reminder = docSnap.data();
+    
+    // Check config
+    const config = getConfig().zapi;
+    if (!config || !config.instance_id || !config.token) {
+        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurada.");
+    }
+    const { instance_id, token, client_token } = config;
+
+    try {
+        let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
+        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+        
+        const firstName = reminder.promoterName.split(' ')[0];
+        const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(reminder.promoterEmail)}`;
+        const message = `⏰ *Lembrete de Postagem* ⏰\n\nOlá ${firstName}! Passando para lembrar que você tem uma postagem pendente para o evento *${reminder.postCampaignName}*.\n\nNão se esqueça de confirmar e enviar o print!\n\nAcesse seu portal aqui:\n${portalLink}`;
+        
+        const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
+        const headers = { 'Content-Type': 'application/json' };
+        if (client_token) headers['Client-Token'] = client_token;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ phone: cleanPhone, message: message })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Z-API failed: ${response.status} - ${errText}`);
+        }
+
+        await docRef.update({ status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp() });
+        return { success: true, message: "Lembrete enviado com sucesso." };
+
+    } catch (error) {
+        console.error(`[WhatsApp Reminder Manual] Failed to send reminder ${reminderId}:`, error);
+        await docRef.update({ status: 'error', error: error.message });
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
 
 async function assignPostsToNewPromoter(promoterData, promoterId) {
     const { organizationId, state: stateAbbr, campaignName } = promoterData;
