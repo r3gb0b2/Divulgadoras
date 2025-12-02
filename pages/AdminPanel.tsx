@@ -736,7 +736,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (error: unknown) {
-// FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'. Explicitly handle 'unknown' error type before passing to state setter.
+// Fix: Handle 'unknown' error type before setting state.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (error instanceof Error) {
                 errorMessage = error.message;

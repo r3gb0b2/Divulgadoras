@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -326,8 +327,9 @@ exports.createPostAndAssignments = functions
 exports.sendScheduledPostImmediately = functions
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
-        if (!context.auth || context.auth.token.role !== 'superadmin') {
-            throw new functions.https.HttpsError('permission-denied', 'Apenas superadmins podem realizar esta ação.');
+        const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+        if (!adminDoc.exists || !['superadmin', 'admin'].includes(adminDoc.data().role)) {
+            throw new functions.https.HttpsError('permission-denied', 'Apenas administradores podem realizar esta ação.');
         }
 
         const { scheduledPostId } = data;

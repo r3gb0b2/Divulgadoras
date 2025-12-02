@@ -14,6 +14,10 @@ type SystemStatus = {
     configured: boolean;
     message: string;
     log?: SystemStatusLogEntry[];
+    zapi?: {
+        configured: boolean;
+        message: string;
+    }
 } | null;
 
 const FRONTEND_VERSION = "19.0"; // Must match version in AdminAuth.tsx
@@ -39,7 +43,8 @@ const SuperAdminDashboard: React.FC = () => {
                 emailProvider: 'Erro Crítico',
                 configured: false,
                 message: 'Falha ao comunicar com a função do servidor. A função pode não existir ou estar com erro grave.',
-                log: [{ level: 'ERROR', message: String(error) }]
+                log: [{ level: 'ERROR', message: String(error) }],
+                zapi: { configured: false, message: "Não foi possível verificar." }
             });
         } finally {
             setIsCheckingStatus(false);
@@ -174,6 +179,68 @@ const SuperAdminDashboard: React.FC = () => {
                     <div className="border-t border-yellow-700/50 pt-4">
                          <strong>Passo 3: Verifique a configuração</strong>
                          <p className="text-gray-300">Após o deploy ser concluído, clique no botão abaixo para verificar a configuração sem precisar recarregar a página.</p>
+                          <button 
+                            onClick={checkSystemStatus}
+                            disabled={isCheckingStatus}
+                            className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 font-semibold disabled:opacity-50 text-sm"
+                        >
+                            {isCheckingStatus ? 'Verificando...' : 'Verificar Novamente'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderZapiGuide = () => {
+        if (isCheckingStatus || !systemStatus?.zapi) {
+            return (
+                 <div className="bg-gray-700/50 p-4 rounded-lg flex items-center gap-4">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    <p className="font-semibold text-gray-300">Verificando Z-API...</p>
+                 </div>
+            );
+        }
+        
+        if (systemStatus.zapi.configured) {
+             return (
+                 <div className="bg-green-900/50 border border-green-700 text-green-300 p-4 rounded-lg">
+                    <h3 className="font-bold flex items-center gap-2">
+                        <WhatsAppIcon className="h-6 w-6" />
+                        Sistema de WhatsApp Operacional
+                    </h3>
+                    <p className="mt-2 text-sm">{systemStatus.zapi.message}</p>
+                 </div>
+             );
+        }
+    
+        return (
+            <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 p-6 rounded-lg">
+                <h3 className="font-bold text-xl mb-3">⚠️ Ação Necessária: Configurar Z-API</h3>
+                <p className="mb-4">{systemStatus.zapi.message}</p>
+                <div className="space-y-4 text-sm mt-4">
+                    <div>
+                        <strong>Passo 1: Obtenha suas credenciais no Z-API</strong>
+                        <p className="text-gray-300">Acesse seu painel Z-API para obter o "Endpoint" e o "Token".</p>
+                    </div>
+                    <div>
+                        <strong>Passo 2: Configure as variáveis no Firebase</strong>
+                        <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
+                            <code>
+                                {`firebase functions:config:set zapi.endpoint="SEU_ENDPOINT" zapi.token="SEU_TOKEN"`}
+                            </code>
+                        </pre>
+                    </div>
+                    <div>
+                        <strong>Passo 3: Faça o deploy das alterações</strong>
+                         <pre className="bg-black/50 p-3 rounded-md text-white mt-2 overflow-x-auto">
+                            <code>
+                                firebase deploy --only functions
+                            </code>
+                        </pre>
+                    </div>
+                    <div className="border-t border-yellow-700/50 pt-4">
+                         <p className="text-gray-300">Após o deploy, clique no botão para verificar a configuração.</p>
                           <button 
                             onClick={checkSystemStatus}
                             disabled={isCheckingStatus}
@@ -338,8 +405,11 @@ const SuperAdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6">
-                <h2 className="text-2xl font-bold mb-4 text-white">Diagnóstico e Ações</h2>
+            <div className="mt-8 bg-secondary shadow-lg rounded-lg p-6 space-y-6">
+                <h2 className="text-2xl font-bold mb-4 text-white">Diagnóstico e Ações do Sistema</h2>
+                
+                {renderZapiGuide()}
+
                 <div className="mb-6">
                    {renderConfigurationGuide()}
                    {testStatuses.generic.type !== 'idle' && testStatuses.generic.type !== 'loading' && (
