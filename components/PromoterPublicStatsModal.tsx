@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { PostAssignment, Promoter } from '../types';
+import { PostAssignment, Promoter, Timestamp } from '../types';
 import { getStatsForPromoterByEmail } from '../services/postService';
-import { Timestamp } from 'firebase/firestore';
 
 interface PromoterPublicStatsModalProps {
     isOpen: boolean;
@@ -53,14 +51,14 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
 
-    // 2. Handle justifications - Check status FIRST
-    if (assignment.justificationStatus === 'accepted') {
-        return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
-    }
-    if (assignment.justificationStatus === 'rejected') {
-        return { text: 'Perdido (Justificativa Rejeitada)', color: 'bg-red-900/50 text-red-300' };
-    }
-    if (assignment.justificationStatus === 'pending' || assignment.justification) {
+    // 2. Handle justifications
+    if (assignment.justification) {
+        if (assignment.justificationStatus === 'accepted') {
+            return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
+        }
+        if (assignment.justificationStatus === 'rejected') {
+            return { text: 'Perdido (Justificativa Rejeitada)', color: 'bg-red-900/50 text-red-300' };
+        }
         return { text: 'Justificativa Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
     }
     

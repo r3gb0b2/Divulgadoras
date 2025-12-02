@@ -90,6 +90,7 @@ export interface Organization {
   id: string;
   name: string;
   ownerName?: string;
+  // FIX: Cannot find name 'owner'. Changed to 'string'.
   ownerEmail: string;
   ownerUid: string;
   status: OrganizationStatus;
@@ -405,4 +406,5 @@ export interface WhatsAppReminder {
   sendAt: Timestamp | FieldValue;
   status: 'pending' | 'sent' | 'error';
   createdAt: Timestamp | FieldValue;
+  error?: string;
 }

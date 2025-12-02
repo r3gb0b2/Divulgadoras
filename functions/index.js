@@ -238,102 +238,6 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
         }
     });
 
-
-exports.onWhatsAppReminderRequested = functions
-    .region("southamerica-east1")
-    .firestore.document("postAssignments/{assignmentId}")
-    .onUpdate(async (change, context) => {
-        const newValue = change.after.data();
-        const oldValue = change.before.data();
-        const assignmentId = context.params.assignmentId;
-
-        if (newValue.whatsAppReminderRequestedAt && !oldValue.whatsAppReminderRequestedAt) {
-            console.log(`[WhatsApp Reminder] Request received for assignment: ${assignmentId}`);
-            try {
-                const promoterDoc = await db.collection("promoters").doc(newValue.promoterId).get();
-                if (!promoterDoc.exists || !promoterDoc.data().whatsapp) {
-                    console.warn(`[WhatsApp Reminder] Promoter ${newValue.promoterId} has no WhatsApp number.`);
-                    return;
-                }
-                const promoter = promoterDoc.data();
-                const sendAt = new Date();
-                sendAt.setHours(sendAt.getHours() + 6);
-                const reminder = {
-                    promoterId: newValue.promoterId,
-                    promoterName: promoter.name,
-                    promoterEmail: promoter.email,
-                    promoterWhatsapp: promoter.whatsapp,
-                    assignmentId: assignmentId,
-                    postId: newValue.postId,
-                    postCampaignName: newValue.post.campaignName,
-                    organizationId: newValue.organizationId,
-                    sendAt: admin.firestore.Timestamp.fromDate(sendAt),
-                    status: 'pending',
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
-                };
-                await db.collection("whatsAppReminders").add(reminder);
-                console.log(`[WhatsApp Reminder] Reminder scheduled for promoter ${promoter.name} at ${sendAt.toISOString()}`);
-            } catch (error) {
-                console.error(`[WhatsApp Reminder] Error scheduling reminder for assignment ${assignmentId}:`, error);
-            }
-        }
-    });
-
-exports.processWhatsAppReminders = functions
-    .region("southamerica-east1")
-    .pubsub.schedule("every 15 minutes")
-    .onRun(async (context) => {
-        console.log("[WhatsApp Reminder] Running scheduled job to process reminders.");
-        const now = admin.firestore.Timestamp.now();
-        const query = db.collection("whatsAppReminders")
-            .where("status", "==", "pending")
-            .where("sendAt", "<=", now);
-        const snapshot = await query.get();
-        if (snapshot.empty) {
-            console.log("[WhatsApp Reminder] No pending reminders to send.");
-            return null;
-        }
-        console.log(`[WhatsApp Reminder] Found ${snapshot.size} reminders to process.`);
-        const config = getConfig().zapi;
-        if (!config || !config.instance_id || !config.token) {
-            console.error("[WhatsApp Reminder] Z-API config is missing. Aborting.");
-            return null;
-        }
-        const promises = snapshot.docs.map(async (doc) => {
-            const reminder = doc.data();
-            const { instance_id, token, client_token } = config;
-            try {
-                let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
-                if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-                if (cleanPhone.length < 12) {
-                    throw new Error(`Invalid phone number: ${cleanPhone}`);
-                }
-                const firstName = reminder.promoterName.split(' ')[0];
-                const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(reminder.promoterEmail)}`;
-                const message = `⏰ *Lembrete de Postagem* ⏰\n\nOlá ${firstName}! Passando para lembrar que você tem uma postagem pendente para o evento *${reminder.postCampaignName}*.\n\nNão se esqueça de confirmar e enviar o print!\n\nAcesse seu portal aqui:\n${portalLink}`;
-                const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
-                const headers = { 'Content-Type': 'application/json' };
-                if (client_token) headers['Client-Token'] = client_token;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({ phone: cleanPhone, message: message })
-                });
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`Z-API failed: ${response.status} - ${errText}`);
-                }
-                await doc.ref.update({ status: 'sent' });
-                console.log(`[WhatsApp Reminder] Sent reminder to ${reminder.promoterName}.`);
-            } catch (error) {
-                console.error(`[WhatsApp Reminder] Failed to send reminder for doc ${doc.id}:`, error);
-                await doc.ref.update({ status: 'error', error: error.message });
-            }
-        });
-        await Promise.all(promises);
-        return null;
-    });
-
 async function assignPostsToNewPromoter(promoterData, promoterId) {
     const { organizationId, state: stateAbbr, campaignName } = promoterData;
     if (!organizationId || !stateAbbr) return;
@@ -663,7 +567,7 @@ exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCa
     // Check Config
     const config = getConfig().zapi;
     if (!config || !config.instance_id || !config.token) {
-        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurada.");
+        throw new functions.https.HttpsError("failed-precondition", "Z-API not configured.");
     }
 
     const { messageTemplate, filters, organizationId } = data;
@@ -988,8 +892,7 @@ exports.updatePromoterAndSync = functions
       }
     });
 
-exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { postData, assignedPromoters } = data;
+async function createPostAndAssignmentsHelper(postData, assignedPromoters) {
     const batch = db.batch();
     const postRef = db.collection("posts").doc();
     batch.set(postRef, { ...postData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -1015,6 +918,15 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
 
     await batch.commit();
     return { success: true, postId: postRef.id };
+}
+
+exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // Basic auth check
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    }
+    const { postData, assignedPromoters } = data;
+    return await createPostAndAssignmentsHelper(postData, assignedPromoters);
 });
 
 exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
@@ -1541,4 +1453,188 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
         console.error("Gemini Error:", error);
         throw new functions.https.HttpsError("internal", "Gemini failed: " + error.message);
     }
+});
+
+// --- Scheduled Post Functions ---
+
+exports.sendScheduledPostImmediately = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const adminDoc = await db.collection("admins").doc(context.auth.uid).get();
+    if (!adminDoc.exists || adminDoc.data().role !== 'superadmin') {
+        throw new functions.https.HttpsError("permission-denied", "Apenas Super Admins podem usar esta função.");
+    }
+
+    const { postId } = data;
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "ID do agendamento é obrigatório.");
+
+    const scheduledPostRef = db.collection('scheduledPosts').doc(postId);
+    const doc = await scheduledPostRef.get();
+
+    if (!doc.exists) {
+        throw new functions.https.HttpsError("not-found", "Agendamento não encontrado.");
+    }
+    
+    const post = doc.data();
+    if (post.status !== 'pending') {
+        return { success: false, message: "Este post não está mais pendente." };
+    }
+
+    try {
+        await createPostAndAssignmentsHelper(post.postData, post.assignedPromoters);
+        await scheduledPostRef.update({ status: 'sent' });
+        return { success: true };
+    } catch (error) {
+        console.error(`Error sending scheduled post ${postId} immediately:`, error);
+        await scheduledPostRef.update({ status: 'error', error: error.message });
+        throw new functions.https.HttpsError("internal", "Falha ao enviar o post agendado.", error.message);
+    }
+});
+
+exports.processScheduledPosts = functions.region("southamerica-east1").pubsub.schedule("every 15 minutes").onRun(async (context) => {
+    console.log("Running scheduled posts job...");
+    const now = admin.firestore.Timestamp.now();
+    const query = db.collection("scheduledPosts").where("status", "==", "pending").where("scheduledAt", "<=", now);
+    
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+        console.log("No scheduled posts to send at this time.");
+        return null;
+    }
+    
+    console.log(`Found ${snapshot.size} posts to process.`);
+
+    const promises = snapshot.docs.map(async (doc) => {
+        const post = doc.data();
+        try {
+            await createPostAndAssignmentsHelper(post.postData, post.assignedPromoters);
+            await doc.ref.update({ status: 'sent' });
+            console.log(`Successfully sent scheduled post ${doc.id}`);
+        } catch (error) {
+            console.error(`Failed to send scheduled post ${doc.id}:`, error);
+            await doc.ref.update({ status: 'error', error: error.message });
+        }
+    });
+
+    await Promise.all(promises);
+    return null;
+});
+
+// --- WhatsApp Reminder Functions ---
+
+exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) { // This is called by the promoter, so no auth check
+        // We could add some sort of light auth/validation if needed
+    }
+    const { assignmentId } = data;
+    if (!assignmentId) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da tarefa é obrigatório.");
+    }
+    try {
+        const assignmentDoc = await db.collection("postAssignments").doc(assignmentId).get();
+        if (!assignmentDoc.exists) throw new Error("Tarefa não encontrada.");
+        const assignment = assignmentDoc.data();
+        const promoterDoc = await db.collection("promoters").doc(assignment.promoterId).get();
+        if (!promoterDoc.exists || !promoterDoc.data().whatsapp) {
+            throw new Error("Divulgadora não encontrada ou sem WhatsApp cadastrado.");
+        }
+        const promoter = promoterDoc.data();
+        const sendAt = new Date();
+        sendAt.setHours(sendAt.getHours() + 6);
+
+        const reminder = {
+            promoterId: assignment.promoterId,
+            promoterName: promoter.name,
+            promoterEmail: promoter.email,
+            promoterWhatsapp: promoter.whatsapp,
+            assignmentId: assignmentId,
+            postId: assignment.postId,
+            postCampaignName: assignment.post.campaignName,
+            organizationId: assignment.organizationId,
+            sendAt: admin.firestore.Timestamp.fromDate(sendAt),
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db.collection("whatsAppReminders").add(reminder);
+        return { success: true, message: "Lembrete agendado com sucesso para daqui a 6 horas." };
+    } catch (error) {
+        console.error(`Error scheduling reminder for assignment ${assignmentId}:`, error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+async function sendWhatsAppReminder(reminder) {
+    const config = getConfig().zapi;
+    if (!config || !config.instance_id || !config.token) {
+        throw new Error("Z-API not configured.");
+    }
+    const { instance_id, token, client_token } = config;
+    let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
+    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+    if (cleanPhone.length < 12) {
+        throw new Error(`Invalid phone number: ${cleanPhone}`);
+    }
+    const firstName = reminder.promoterName.split(' ')[0];
+    const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(reminder.promoterEmail)}`;
+    const message = `⏰ *Lembrete de Postagem* ⏰\n\nOlá ${firstName}! Passando para lembrar que você tem uma postagem pendente para o evento *${reminder.postCampaignName}*.\n\nNão se esqueça de confirmar e enviar o print!\n\nAcesse seu portal aqui:\n${portalLink}`;
+    
+    const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
+    const headers = { 'Content-Type': 'application/json' };
+    if (client_token) headers['Client-Token'] = client_token;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ phone: cleanPhone, message: message })
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Z-API failed: ${response.status} - ${errText}`);
+    }
+}
+
+exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { reminderId } = data;
+    if (!reminderId) throw new functions.https.HttpsError("invalid-argument", "ID do lembrete é obrigatório.");
+    
+    const reminderRef = db.collection('whatsAppReminders').doc(reminderId);
+    const doc = await reminderRef.get();
+    if (!doc.exists) throw new functions.https.HttpsError("not-found", "Lembrete não encontrado.");
+
+    try {
+        const reminder = doc.data();
+        await sendWhatsAppReminder(reminder);
+        await reminderRef.update({ status: 'sent' });
+        return { success: true };
+    } catch (error) {
+        await reminderRef.update({ status: 'error', error: error.message });
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+exports.processWhatsAppReminders = functions.region("southamerica-east1").pubsub.schedule("every 15 minutes").onRun(async (context) => {
+    console.log("[WhatsApp Reminder] Running scheduled job.");
+    const now = admin.firestore.Timestamp.now();
+    const query = db.collection("whatsAppReminders").where("status", "==", "pending").where("sendAt", "<=", now);
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+        console.log("[WhatsApp Reminder] No pending reminders.");
+        return null;
+    }
+    console.log(`[WhatsApp Reminder] Found ${snapshot.size} reminders.`);
+
+    const promises = snapshot.docs.map(async (doc) => {
+        const reminder = doc.data();
+        try {
+            await sendWhatsAppReminder(reminder);
+            await doc.ref.update({ status: 'sent' });
+            console.log(`[WhatsApp Reminder] Sent to ${reminder.promoterName}.`);
+        } catch (error) {
+            console.error(`[WhatsApp Reminder] Failed for doc ${doc.id}:`, error);
+            await doc.ref.update({ status: 'error', error: error.message });
+        }
+    });
+    await Promise.all(promises);
+    return null;
 });

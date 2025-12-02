@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, requestWhatsAppReminder } from '../services/postService';
+// FIX: Renamed function import from 'requestWhatsAppReminder' to 'scheduleWhatsAppReminder' to match the exported function name in the service file.
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon } from '../components/Icons';
@@ -100,12 +101,14 @@ const CountdownTimer: React.FC<{ targetDate: any, onEnd?: () => void }> = ({ tar
     return <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-green-900/50 text-green-300' : 'bg-blue-900/50 text-blue-300'}`}><ClockIcon className="h-4 w-4" /><span>{timeLeft}</span></div>;
 };
 
-const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onJustify }) => {
+const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignment: PostAssignment) => void, onReminderRequested: () => void }> = ({ assignment, onJustify, onReminderRequested }) => {
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
     const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
     const allowJustification = assignment.post.allowJustification !== false;
+    const [isRequestingReminder, setIsRequestingReminder] = useState(false);
+
 
     useEffect(() => {
         if (!assignment.confirmedAt) return;
@@ -193,6 +196,18 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
         link.click();
         document.body.removeChild(link);
     };
+    
+    const handleRequestReminder = async () => {
+        setIsRequestingReminder(true);
+        try {
+          await scheduleWhatsAppReminder(assignment.id);
+          onReminderRequested();
+        } catch (err: any) {
+          alert(err.message || "Erro ao agendar lembrete.");
+          setIsRequestingReminder(false);
+        }
+    };
+
 
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
         return (<div className="mt-4 text-center"><p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p><div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, index) => (<a key={index} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div></div>);
@@ -212,9 +227,17 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
                             className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-900/30 text-indigo-300 text-xs font-semibold rounded-full border border-indigo-500/30 hover:bg-indigo-900/50 transition-colors"
                         >
                             <CalendarIcon className="w-3 h-3" />
-                            Agendar Lembrete
+                            Agendar Lembrete no Calendário
                         </button>
                     )}
+                    <button
+                        onClick={handleRequestReminder}
+                        disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt}
+                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-lg hover:bg-green-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <WhatsAppIcon className="w-4 h-4" />
+                        {isRequestingReminder ? 'Agendando...' : (assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Agendar lembrete no WhatsApp')}
+                    </button>
                 </div>
             )}
             <p className={`text-xs mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
@@ -226,7 +249,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
-    const [isRequestingReminder, setIsRequestingReminder] = useState(false);
     const allowJustification = assignment.post.allowJustification !== false;
 
     if (!assignment.promoterHasJoinedGroup) return (<div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500"><h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>{assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}<p className="mt-2 text-yellow-300">Você tem uma nova publicação para este evento!</p><p className="mt-2 text-gray-300 text-sm">Para visualizar, primeiro você precisa confirmar a leitura das regras e entrar no grupo do WhatsApp.</p><div className="mt-4 text-center"><Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors">Verificar Status e Aceitar Regras</Link></div></div>);
@@ -248,17 +270,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         } catch (error: any) { console.error('Failed to download from Firebase:', error); alert(`Não foi possível baixar a mídia do Link 1: ${error.message}`); } finally { setIsMediaProcessing(false); }
     };
     const handleGoogleDriveDownload = () => { if (!isPostDownloadable || !assignment.post.googleDriveUrl) return; const { googleDriveUrl, type } = assignment.post; let urlToOpen = googleDriveUrl; if (type === 'video') { const fileId = extractGoogleDriveId(googleDriveUrl); if (fileId) { urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`; } } window.open(urlToOpen, '_blank'); };
-    
-    const handleRequestReminder = async () => {
-        setIsRequestingReminder(true);
-        try {
-          await requestWhatsAppReminder(assignment.id);
-          onReminderRequested();
-        } catch (err: any) {
-          alert(err.message || "Erro ao agendar lembrete.");
-          setIsRequestingReminder(false);
-        }
-    };
     
     const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => { 
         const styles = { pending: "bg-yellow-900/50 text-yellow-300", accepted: "bg-green-900/50 text-green-300", rejected: "bg-red-900/50 text-red-300" }; 
@@ -285,23 +296,12 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         }
 
         if (assignment.status === 'pending') {
-            const reminderButton = (
-                <button
-                    onClick={handleRequestReminder}
-                    disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-lg hover:bg-green-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <WhatsAppIcon className="w-4 h-4" />
-                    {isRequestingReminder ? 'Agendando...' : (assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrar via WhatsApp em 6h')}
-                </button>
-            );
-
             if (!assignment.post.isActive || isExpired) {
-                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}{reminderButton}</div>);
+                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}</div>);
             }
-            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button>{reminderButton}</div>);
+            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button></div>);
         }
-        if (assignment.status === 'confirmed') return <ProofSection assignment={assignment} onJustify={onJustify} />;
+        if (assignment.status === 'confirmed') return <ProofSection assignment={assignment} onJustify={onJustify} onReminderRequested={onReminderRequested} />;
         return null;
     };
 
@@ -399,7 +399,11 @@ const PostCheck: React.FC = () => {
     };
     
     const handleReminderRequested = () => {
-        performSearch(email); // Re-fetch to update the UI state
+        // Optimistically update the UI to show the button as disabled
+        setAssignments(prev => prev.map(a => 
+            a.id === a.id ? { ...a, whatsAppReminderRequestedAt: firebase.firestore.Timestamp.now() } : a
+        ));
+        alert("Lembrete agendado com sucesso para daqui a 6 horas!");
     };
 
     const handleOpenJustification = (assignment: PostAssignment) => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -636,8 +635,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             await updatePromoter(promoter.id, updateData);
 
         } catch (error: unknown) {
-            // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
-            // Safely handle unknown error type from catch block.
+            // FIX: Safely handle unknown error type from catch block.
             console.error("Failed to send manual notification:", error);
             let detailedError: string = 'Ocorreu um erro desconhecido.';
             let providerName: string = 'Brevo (v9.2)';
