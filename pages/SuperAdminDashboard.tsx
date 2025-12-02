@@ -218,6 +218,15 @@ const SuperAdminDashboard: React.FC = () => {
                         <p className="mt-2 text-gray-400">Ativar, ocultar, excluir e gerenciar os planos das organizações clientes.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
+
+                    <Link to="/admin/scheduled-posts" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-gray-600 hover:border-primary">
+                        <div className="flex items-center">
+                            <ClockIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Ver todas as publicações agendadas e enviá-las imediatamente.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
                     
                      <Link to="/admin/users" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
@@ -270,15 +279,6 @@ const SuperAdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Gerenciamento de Posts</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Criar e acompanhar publicações para as divulgadoras.</p>
-                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
-                    </Link>
-                    
-                    <Link to="/admin/scheduled-posts" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <ClockIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Ver todas as publicações agendadas e enviá-las imediatamente.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                     
