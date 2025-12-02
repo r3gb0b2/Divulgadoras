@@ -13,8 +13,8 @@ import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
-import PromoterLookupModal from '../components/PromoterLookupModal'; // Import the new modal
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon, CheckCircleIcon, XIcon, TrashIcon } from '../components/Icons';
+import PromoterLookupModal from '../components/PromoterLookupModal';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon, CheckCircleIcon, XIcon, TrashIcon, SearchIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -55,7 +55,6 @@ const formatRelativeTime = (timestamp: any): string => {
 const calculateAge = (dateString: string | undefined): string => {
     if (!dateString) return 'N/A';
     const birthDate = new Date(dateString);
-    // Adjust for timezone offset if the date is parsed as UTC but entered as local
     birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -107,14 +106,13 @@ const formatDate = (timestamp: any): string => {
 };
 
 const getPerformanceColor = (rate: number): string => {
-    if (rate < 0) return 'text-white'; // Default for no data
+    if (rate < 0) return 'text-white';
     if (rate === 100) return 'text-green-400';
     if (rate >= 60) return 'text-blue-400';
-    if (rate >= 31) return 'text-yellow-400'; // Laranja
+    if (rate >= 31) return 'text-yellow-400';
     return 'text-red-400';
 };
 
-// Helper to safely convert various date formats to a Date object, needed for stats calculation
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
     if (typeof timestamp.toDate === 'function') return timestamp.toDate();
@@ -737,7 +735,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        // FIX: The 'err' object in a catch block is of type 'unknown'. It must be type-checked before its properties can be accessed.
         } catch (err: any) {
             const errorMessage = err.message || String(err) || "Ocorreu um erro desconhecido";
             setLookupError(errorMessage);
@@ -988,4 +985,291 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 placeholder="Buscar todos os cadastros por e-mail..."
                                 value={lookupEmail}
                                 onChange={(e) => setLookupEmail(e.target.value)}
-                                className="
+                                className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                            />
+                            <button onClick={() => handleLookupPromoter()} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white whitespace-nowrap">
+                                <SearchIcon className="w-5 h-5 inline-block mr-1" />
+                                Buscar Email
+                            </button>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 flex items-center gap-2">
+                                <CogIcon className="w-5 h-5" />
+                                Motivos de Rejeição
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Filters Row */}
+                <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-700 pt-4">
+                    {/* Filter by Organization (Super Admin only) */}
+                    {isSuperAdmin && (
+                        <select
+                            value={selectedOrg}
+                            onChange={(e) => setSelectedOrg(e.target.value)}
+                            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2"
+                        >
+                            <option value="all">Todas as Organizações</option>
+                            {allOrganizations.map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {/* Filter by State */}
+                    <select
+                        value={selectedState}
+                        onChange={(e) => setSelectedState(e.target.value)}
+                        className="bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2"
+                    >
+                        <option value="all">Todas as Regiões</option>
+                        {states.map(state => (
+                            <option key={state.abbr} value={state.abbr}>{state.name}</option>
+                        ))}
+                    </select>
+
+                    {/* Filter by Campaign */}
+                    <select
+                        value={selectedCampaign}
+                        onChange={(e) => setSelectedCampaign(e.target.value)}
+                        className="bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2 max-w-xs truncate"
+                    >
+                        <option value="all">Todos os Eventos</option>
+                        {campaignsForFilter.map(campaign => (
+                            <option key={campaign.id} value={campaign.name}>{campaign.name}</option>
+                        ))}
+                    </select>
+                    
+                    {/* Filter by Performance (only for Approved) */}
+                    {filter === 'approved' && (
+                        <select 
+                            value={colorFilter}
+                            onChange={(e) => setColorFilter(e.target.value as any)}
+                            className="bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2"
+                        >
+                            <option value="all">Todas as Cores (Desempenho)</option>
+                            <option value="green">Verde (100%)</option>
+                            <option value="blue">Azul (60-99%)</option>
+                            <option value="yellow">Laranja (31-59%)</option>
+                            <option value="red">Vermelho (0-30%)</option>
+                        </select>
+                    )}
+
+                    {/* Filter by Age */}
+                    <div className="flex items-center gap-2">
+                        <input 
+                            type="number" 
+                            placeholder="Idade Mín" 
+                            value={minAge} 
+                            onChange={(e) => setMinAge(e.target.value)} 
+                            className="w-24 bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2"
+                        />
+                        <input 
+                            type="number" 
+                            placeholder="Idade Máx" 
+                            value={maxAge} 
+                            onChange={(e) => setMaxAge(e.target.value)} 
+                            className="w-24 bg-gray-700 border border-gray-600 text-white text-sm rounded-md px-3 py-2"
+                        />
+                    </div>
+                </div>
+                
+                {/* Bulk Actions Bar */}
+                {selectedPromoterIds.size > 0 && canManage && (
+                    <div className="mt-4 p-2 bg-blue-900/50 border border-blue-500 rounded-md flex flex-wrap items-center gap-4">
+                        <span className="font-semibold text-white">{selectedPromoterIds.size} selecionadas</span>
+                        
+                        <div className="h-6 w-px bg-blue-500/50"></div>
+                        
+                        <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700">Aprovar</button>
+                        <button onClick={handleBulkRejectClick} className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">Rejeitar</button>
+                        <button onClick={handleBulkRemoveClick} className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-500 flex items-center gap-1"><TrashIcon className="w-4 h-4"/> Remover</button>
+                        
+                        <div className="flex-grow"></div>
+                        <button onClick={() => setSelectedPromoterIds(new Set())} className="text-sm text-blue-300 hover:text-white">Cancelar Seleção</button>
+                    </div>
+                )}
+
+                {/* Table */}
+                <div className="mt-6 overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                        <thead className="bg-gray-700/50">
+                            <tr>
+                                <th className="px-6 py-3 w-10">
+                                    <input 
+                                        type="checkbox" 
+                                        onChange={(e) => handleSelectAll(displayPromoters.map(p => p.id))}
+                                        checked={displayPromoters.length > 0 && displayPromoters.every(p => selectedPromoterIds.has(p.id))}
+                                        className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                    />
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Candidata</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Contato</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Evento / Região</th>
+                                {filter === 'approved' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Desempenho</th>}
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-secondary divide-y divide-gray-700">
+                            {displayPromoters.map((promoter) => (
+                                <tr key={promoter.id} className={`hover:bg-gray-700/40 transition-colors ${selectedPromoterIds.has(promoter.id) ? 'bg-blue-900/20' : ''}`}>
+                                    <td className="px-6 py-4">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedPromoterIds.has(promoter.id)} 
+                                            onChange={() => handleToggleSelect(promoter.id)}
+                                            className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                            <div className="flex-shrink-0 h-10 w-10">
+                                                {promoter.facePhotoUrl ? (
+                                                    <img className="h-10 w-10 rounded-full object-cover cursor-pointer border border-gray-600" src={promoter.facePhotoUrl} alt="" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
+                                                ) : (
+                                                    <div className="h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center">
+                                                        <UsersIcon className="h-6 w-6 text-gray-400" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="ml-4">
+                                                <div className="text-sm font-medium text-white flex items-center gap-2">
+                                                    {promoter.name}
+                                                    {promoter.hasJoinedGroup && <span className="text-green-400" title="Entrou no grupo"><CheckCircleIcon className="w-4 h-4"/></span>}
+                                                </div>
+                                                <div className="text-sm text-gray-400">{calculateAge(promoter.dateOfBirth)}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-gray-300">{promoter.email}</div>
+                                        <div className="text-sm text-gray-400 flex items-center gap-2">
+                                            <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center gap-1">
+                                                <WhatsAppIcon className="w-3 h-3" />
+                                                {promoter.whatsapp}
+                                            </a>
+                                        </div>
+                                        <div className="text-sm text-gray-400">
+                                            <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:underline flex items-center gap-1">
+                                                <InstagramIcon className="w-3 h-3" />
+                                                {promoter.instagram}
+                                            </a>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        {getStatusBadge(promoter.status)}
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {formatRelativeTime(promoter.createdAt)}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-white">{promoter.campaignName || 'Geral'}</div>
+                                        <div className="text-sm text-gray-400">{stateMap[promoter.state] || promoter.state}</div>
+                                        <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
+                                    </td>
+                                    {filter === 'approved' && (
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <span className={`text-lg font-bold ${(promoter as any).completionRate >= 0 ? getPerformanceColor((promoter as any).completionRate) : 'text-gray-500'}`}>
+                                                {(promoter as any).completionRate >= 0 ? `${(promoter as any).completionRate}%` : 'N/A'}
+                                            </span>
+                                        </td>
+                                    )}
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => openPhotoViewer(promoter.photoUrls, 0)} className="text-blue-400 hover:text-blue-300">Fotos</button>
+                                            {canManage && (
+                                                <>
+                                                    <button onClick={() => openEditModal(promoter)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
+                                                    {promoter.status === 'pending' && (
+                                                        <>
+                                                            <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} className="text-green-400 hover:text-green-300">Aprovar</button>
+                                                            <button onClick={() => openRejectionModal(promoter)} className="text-red-400 hover:text-red-300">Rejeitar</button>
+                                                        </>
+                                                    )}
+                                                    {promoter.status === 'approved' && (
+                                                        <>
+                                                            <button onClick={() => handleManualNotify(promoter)} className="text-yellow-400 hover:text-yellow-300" title="Reenviar Email de Aprovação">Notificar</button>
+                                                            <button onClick={() => handleRemoveFromTeam(promoter)} className="text-red-400 hover:text-red-300" title="Remover da Equipe">Remover</button>
+                                                        </>
+                                                    )}
+                                                    {isSuperAdmin && (
+                                                        <button onClick={() => handleDeletePromoter(promoter.id)} className="text-gray-500 hover:text-gray-300" title="Deletar permanentemente">Excluir</button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                        {promoter.actionTakenByEmail && (
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                {getActionLabel(promoter.status)}: {promoter.actionTakenByEmail.split('@')[0]}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="mt-4 flex justify-between items-center border-t border-gray-700 pt-4">
+                    <span className="text-sm text-gray-400">
+                        Mostrando {Math.min(displayPromoters.length, PROMOTERS_PER_PAGE)} de {totalFilteredCount} resultados
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handlePrevPage}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 bg-gray-700 text-white rounded-md hover:bg-gray-600 disabled:opacity-50"
+                        >
+                            Anterior
+                        </button>
+                        <button
+                            onClick={handleNextPage}
+                            disabled={currentPage >= pageCount}
+                            className="px-3 py-1 bg-gray-700 text-white rounded-md hover:bg-gray-600 disabled:opacity-50"
+                        >
+                            Próxima
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Modals */}
+            <PhotoViewerModal
+                isOpen={isPhotoViewerOpen}
+                onClose={() => setIsPhotoViewerOpen(false)}
+                imageUrls={photoViewerUrls}
+                startIndex={photoViewerStartIndex}
+            />
+            <EditPromoterModal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                promoter={editingPromoter}
+                onSave={handleUpdatePromoter}
+            />
+            <RejectionModal
+                isOpen={isRejectionModalOpen}
+                onClose={() => setIsRejectionModalOpen(false)}
+                onConfirm={handleConfirmReject}
+                reasons={rejectionReasons}
+            />
+            <ManageReasonsModal
+                isOpen={isReasonsModalOpen}
+                onClose={() => setIsReasonsModalOpen(false)}
+                onReasonsUpdated={refreshReasons}
+                organizationId={organizationIdForReasons || ''}
+            />
+            <PromoterLookupModal
+                isOpen={isLookupModalOpen}
+                onClose={() => setIsLookupModalOpen(false)}
+                isLoading={isLookingUp}
+                error={lookupError}
+                results={lookupResults}
+                onGoToPromoter={handleGoToPromoter}
+                organizationsMap={organizationsMap}
+            />
+        </div>
+    );
+};

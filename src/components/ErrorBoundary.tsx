@@ -11,8 +11,8 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: The methods 'setState' and 'props' are part of the React.Component instance context (`this`). Using a standard class component structure with state as a class property ensures `this` is correctly bound when React calls lifecycle methods like `componentDidCatch` and `render`.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Extend React.Component explicitly to ensure 'setState' and 'props' are correctly typed
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -20,6 +20,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   };
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
