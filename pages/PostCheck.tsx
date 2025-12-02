@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
@@ -105,7 +104,6 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
-    const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
     const allowJustification = assignment.post.allowJustification !== false;
 
     useEffect(() => {
@@ -113,11 +111,7 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
         const confirmationTime = toDateSafe(assignment.confirmedAt);
         if (!confirmationTime) return;
         
-        // Calculate expiration and enablement times
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
-        const calculatedEnableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
-        
-        setEnableTimeDate(calculatedEnableTime);
 
         const timer = setInterval(() => {
             const now = new Date();
@@ -132,42 +126,31 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
                 clearInterval(timer); 
                 return;
             }
-            if (assignment.post.allowImmediateProof) {
-                const diff = expireTime.getTime() - now.getTime();
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                setTimeLeft(`Envio liberado! Expira em: ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
-                setIsButtonEnabled(true); return;
-            }
             
-            if (now < calculatedEnableTime) {
-                const diff = calculatedEnableTime.getTime() - now.getTime();
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                setTimeLeft(`liberação para envio de print em ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-                setIsButtonEnabled(false);
-            } else {
-                const diff = expireTime.getTime() - now.getTime();
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                setTimeLeft(`Expira em: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-                setIsButtonEnabled(true);
-            }
+            const diff = expireTime.getTime() - now.getTime();
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            setTimeLeft(`Prazo final para envio em: ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+            setIsButtonEnabled(true);
+
         }, 1000);
         return () => clearInterval(timer);
-    }, [assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof]);
+    }, [assignment.confirmedAt, assignment.post.allowLateSubmissions]);
 
     const handleAddToCalendar = () => {
-        if (!enableTimeDate) return;
+        if (!assignment.confirmedAt) return;
+        const confirmationTime = toDateSafe(assignment.confirmedAt);
+        if (!confirmationTime) return;
+
+        const reminderTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
         
         const title = `Enviar Print - ${assignment.post.campaignName}`;
-        const description = `Está na hora de enviar o print da sua publicação!\\n\\nAcesse o link para enviar: ${window.location.href}`;
-        const endDate = new Date(enableTimeDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+        const description = `Lembrete para enviar o print da sua publicação!\\n\\nAcesse o link para enviar: ${window.location.href}`;
+        const endDate = new Date(reminderTime.getTime() + 30 * 60 * 1000); // 30 min duration
 
         const now = formatDateForICS(new Date());
-        const start = formatDateForICS(enableTimeDate);
+        const start = formatDateForICS(reminderTime);
         const end = formatDateForICS(endDate);
 
         const icsContent = [
@@ -195,6 +178,14 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
         document.body.removeChild(link);
     };
 
+    const handleWhatsAppReminder = () => {
+        if (!assignment?.post?.campaignName) return;
+        const promoterName = assignment.promoterName.split(' ')[0];
+        const text = `Oi ${promoterName}! Lembrete para enviar o print de comprovação do evento ${assignment.post.campaignName}. O prazo está acabando! Acesse seu portal para enviar.`;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+    };
+
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
         return (<div className="mt-4 text-center"><p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p><div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, index) => (<a key={index} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div></div>);
     }
@@ -205,20 +196,37 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
             {isExpired ? (
                 allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full sm:w-auto px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)
             ) : (
-                <div className="flex flex-col items-center gap-3">
-                    <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isButtonEnabled} className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Comprovação de Postagem</button>
-                    {!isButtonEnabled && enableTimeDate && (
-                        <button 
-                            onClick={handleAddToCalendar}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-900/30 text-indigo-300 text-xs font-semibold rounded-full border border-indigo-500/30 hover:bg-indigo-900/50 transition-colors"
-                        >
-                            <CalendarIcon className="w-3 h-3" />
-                            Agendar Lembrete
-                        </button>
-                    )}
+                <div className="flex flex-col items-center gap-4">
+                    <button 
+                        onClick={() => navigate(`/proof/${assignment.id}`)} 
+                        disabled={!isButtonEnabled} 
+                        className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Comprovação de Postagem
+                    </button>
+                    <p className={`text-sm font-semibold -mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
+                    
+                    <div className="border-t border-gray-700 w-full pt-4 mt-2 flex flex-col items-center gap-3">
+                        <p className="text-xs text-gray-400">Não se esqueça! Agende um lembrete:</p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <button 
+                                onClick={handleAddToCalendar}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-900/30 text-indigo-300 text-xs font-semibold rounded-full border border-indigo-500/30 hover:bg-indigo-900/50 transition-colors"
+                            >
+                                <CalendarIcon className="w-4 h-4" />
+                                Lembrete (Celular)
+                            </button>
+                            <button 
+                                onClick={handleWhatsAppReminder}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 text-xs font-semibold rounded-full border border-green-500/30 hover:bg-green-900/50 transition-colors"
+                            >
+                                <WhatsAppIcon className="w-4 h-4" />
+                                Lembrete (WhatsApp)
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
-            <p className={`text-xs mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
         </div>
     );
 };

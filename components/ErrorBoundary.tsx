@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -11,7 +10,6 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-// FIX: Refactored to use a constructor for state initialization to ensure `this` context is correctly established, resolving errors where `this.setState` and `this.props` might not be found.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
