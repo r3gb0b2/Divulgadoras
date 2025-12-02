@@ -1,6 +1,6 @@
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
-import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder } from '../types';
 import { findPromotersByEmail } from './promoterService';
 
 // Helper to safely convert various date formats to a Date object
@@ -177,16 +177,22 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
     }
 }
 
-export const requestWhatsAppReminder = async (assignmentId: string): Promise<void> => {
-  try {
-    const docRef = firestore.collection('postAssignments').doc(assignmentId);
-    await docRef.update({
-      whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-  } catch (error) {
-    console.error("Error requesting WhatsApp reminder: ", error);
-    throw new Error("Não foi possível agendar o lembrete.");
-  }
+export const scheduleWhatsAppReminder = async (assignmentId: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('scheduleWhatsAppReminder');
+        const result = await func({ assignmentId });
+        const data = result.data as { success: boolean; message?: string };
+        if (!data.success) {
+            throw new Error(data.message || "Falha ao agendar lembrete no servidor.");
+        }
+    } catch (error) {
+        console.error("Error scheduling WhatsApp reminder:", error);
+        if (error instanceof Error) {
+            if ((error as any).code) throw error;
+            throw new Error(error.message);
+        }
+        throw new Error("Não foi possível agendar o lembrete.");
+    }
 };
 
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
@@ -828,4 +834,28 @@ export const deleteOneTimePost = async (postId: string): Promise<void> => {
       console.error("Error deleting one-time post and submissions: ", error);
       throw new Error("Não foi possível deletar o post e suas submissões.");
   }
+};
+
+// --- WhatsApp Reminder Admin Functions ---
+
+export const getAllWhatsAppReminders = async (): Promise<WhatsAppReminder[]> => {
+    try {
+        const q = firestore.collection("whatsAppReminders").orderBy("sendAt", "desc");
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+    } catch (error) {
+        console.error("Error fetching all WhatsApp reminders: ", error);
+        throw new Error("Não foi possível buscar os lembretes agendados.");
+    }
+};
+
+export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('sendWhatsAppReminderNow');
+        await func({ reminderId });
+    } catch (error) {
+        console.error("Error sending WhatsApp reminder immediately: ", error);
+        if (error instanceof Error) throw error;
+        throw new Error("Não foi possível enviar o lembrete imediatamente.");
+    }
 };

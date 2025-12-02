@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, requestWhatsAppReminder } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon } from '../components/Icons';
@@ -270,7 +270,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const handleRequestReminder = async () => {
         setIsRequestingReminder(true);
         try {
-          await requestWhatsAppReminder(assignment.id);
+          await scheduleWhatsAppReminder(assignment.id);
           onReminderRequested();
         } catch (err: any) {
           alert(err.message || "Erro ao agendar lembrete.");
