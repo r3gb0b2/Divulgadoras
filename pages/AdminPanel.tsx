@@ -635,10 +635,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
+            // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+            // Safely handle unknown error type from catch block.
             console.error("Failed to send manual notification:", error);
-            const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
-            const providerName = error?.details?.provider || 'Brevo (v9.2)';
+            let detailedError: string = 'Ocorreu um erro desconhecido.';
+            let providerName: string = 'Brevo (v9.2)';
+
+            if (error instanceof Error) {
+                const firebaseError = error as any; // Cast to access custom 'details' property
+                detailedError = firebaseError.details?.originalError?.message || firebaseError.message;
+                providerName = firebaseError.details?.provider || 'Brevo (v9.2)';
+            } else {
+                detailedError = String(error);
+            }
+            
             alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
         } finally {
             setNotifyingId(null);
@@ -737,13 +748,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) { // FIX: Changed error type to 'any' to allow accessing properties like 'message'.
-            let errorMessage = "Ocorreu um erro desconhecido";
-            if (err instanceof Error) {
-                errorMessage = err.message;
-            } else {
-                errorMessage = String(err);
-            }
+        } catch (err: unknown) {
+            const errorMessage = (err instanceof Error) ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

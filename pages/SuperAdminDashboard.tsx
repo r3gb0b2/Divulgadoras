@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -219,12 +219,12 @@ const SuperAdminDashboard: React.FC = () => {
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                     
-                     <Link to="/admin/users" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                     <Link to="/admin/scheduled-posts" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
-                            <KeyIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Usuários Admin</h2>
+                            <ClockIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Gerenciar todos os usuários administradores da plataforma.</p>
+                        <p className="mt-2 text-gray-400">Visualizar posts agendados e enviar imediatamente.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                     
@@ -324,6 +324,15 @@ const SuperAdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Assistente Gemini</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Gerar textos criativos, ideias, e auxiliar em tarefas administrativas.</p>
+                         <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
+
+                     <Link to="/admin/users" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <KeyIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Usuários Admin</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Gerenciar todos os usuários administradores da plataforma.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
                 </div>
