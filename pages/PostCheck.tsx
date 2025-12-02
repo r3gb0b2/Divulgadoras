@@ -231,6 +231,7 @@ const ProofSection: React.FC<{
                             Agendar Lembrete
                         </button>
                     )}
+                    {/* Render WhatsApp Reminder button here, inside ProofSection (confirmed state) */}
                     {reminderButton}
                 </div>
             )}
@@ -524,16 +525,17 @@ const PostCheck: React.FC = () => {
                         <p className="text-gray-300 text-sm mb-4">Explique por que você não pôde realizar esta publicação ({justificationAssignment.post.campaignName}).</p>
                         <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Motivo..." rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 mb-4" />
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-300 mb-1">Anexar Print/Foto (Opcional)</label>
-                            <input type="file" onChange={handleJustificationFileChange} multiple accept="image/*" className="text-sm text-gray-400" />
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Comprovação (opcional, máx 2)</label>
+                            <input type="file" multiple accept="image/*" onChange={handleJustificationFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark"/>
                         </div>
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-3">
                             <button onClick={() => setJustificationAssignment(null)} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
                             <button onClick={handleSubmitJustification} disabled={isSubmittingJustification} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">{isSubmittingJustification ? 'Enviando...' : 'Enviar'}</button>
                         </div>
                     </div>
                 </div>
             )}
+            
             <PromoterPublicStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={promoter} />
         </div>
     );
