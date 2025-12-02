@@ -737,11 +737,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: unknown) {
-// FIX: Removed duplicate catch block causing a syntax error. The logic inside is correct for handling `unknown`.
+        } catch (err: any) { // FIX: Changed error type to 'any' to allow accessing properties like 'message'.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
+            } else {
+                errorMessage = String(err);
             }
             setLookupError(errorMessage);
         } finally {

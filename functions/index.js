@@ -239,7 +239,7 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
     });
 
 
-exports.onPostAssignmentUpdate = functions
+exports.onWhatsAppReminderRequested = functions
     .region("southamerica-east1")
     .firestore.document("postAssignments/{assignmentId}")
     .onUpdate(async (change, context) => {
@@ -247,34 +247,17 @@ exports.onPostAssignmentUpdate = functions
         const oldValue = change.before.data();
         const assignmentId = context.params.assignmentId;
 
-        // --- Logic to schedule reminder on confirmation ---
-        const wasJustConfirmed = !oldValue.confirmedAt && newValue.confirmedAt;
-
-        if (wasJustConfirmed) {
-            console.log(`[WhatsApp Reminder] Post confirmed, scheduling proof reminder for assignment: ${assignmentId}`);
+        if (newValue.whatsAppReminderRequestedAt && !oldValue.whatsAppReminderRequestedAt) {
+            console.log(`[WhatsApp Reminder] Request received for assignment: ${assignmentId}`);
             try {
-                // Check if org has notifications enabled
-                const orgRef = db.collection("organizations").doc(newValue.organizationId);
-                const orgSnap = await orgRef.get();
-                const orgData = orgSnap.exists ? orgSnap.data() : {};
-
-                if (orgData.whatsappNotificationsEnabled === false) {
-                    console.log(`[WhatsApp Reminder] Skipped for assignment ${assignmentId} because it's disabled for organization ${newValue.organizationId}.`);
-                    return;
-                }
-                
-                // Fetch promoter to get their WhatsApp number
                 const promoterDoc = await db.collection("promoters").doc(newValue.promoterId).get();
                 if (!promoterDoc.exists || !promoterDoc.data().whatsapp) {
-                    console.warn(`[WhatsApp Reminder] Promoter ${newValue.promoterId} has no WhatsApp number. Reminder skipped.`);
+                    console.warn(`[WhatsApp Reminder] Promoter ${newValue.promoterId} has no WhatsApp number.`);
                     return;
                 }
                 const promoter = promoterDoc.data();
-                
-                // Set reminder for 6 hours from now
                 const sendAt = new Date();
                 sendAt.setHours(sendAt.getHours() + 6);
-
                 const reminder = {
                     promoterId: newValue.promoterId,
                     promoterName: promoter.name,
@@ -288,11 +271,10 @@ exports.onPostAssignmentUpdate = functions
                     status: 'pending',
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 };
-
                 await db.collection("whatsAppReminders").add(reminder);
-                console.log(`[WhatsApp Reminder] Proof reminder scheduled for promoter ${promoter.name} at ${sendAt.toISOString()}`);
+                console.log(`[WhatsApp Reminder] Reminder scheduled for promoter ${promoter.name} at ${sendAt.toISOString()}`);
             } catch (error) {
-                console.error(`[WhatsApp Reminder] Error scheduling proof reminder for assignment ${assignmentId}:`, error);
+                console.error(`[WhatsApp Reminder] Error scheduling reminder for assignment ${assignmentId}:`, error);
             }
         }
     });
@@ -307,69 +289,47 @@ exports.processWhatsAppReminders = functions
             .where("status", "==", "pending")
             .where("sendAt", "<=", now);
         const snapshot = await query.get();
-
         if (snapshot.empty) {
             console.log("[WhatsApp Reminder] No pending reminders to send.");
             return null;
         }
-
         console.log(`[WhatsApp Reminder] Found ${snapshot.size} reminders to process.`);
         const config = getConfig().zapi;
         if (!config || !config.instance_id || !config.token) {
             console.error("[WhatsApp Reminder] Z-API config is missing. Aborting.");
-            // Mark reminders as error so they don't run again
-            const batch = db.batch();
-            snapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { status: 'error', error: 'Z-API config missing in server.' });
-            });
-            await batch.commit();
             return null;
         }
-
         const promises = snapshot.docs.map(async (doc) => {
             const reminder = doc.data();
             const { instance_id, token, client_token } = config;
-            
             try {
                 let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
                 if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
                 if (cleanPhone.length < 12) {
-                    throw new Error(`Invalid phone number format after cleaning: ${reminder.promoterWhatsapp}`);
+                    throw new Error(`Invalid phone number: ${cleanPhone}`);
                 }
-
                 const firstName = reminder.promoterName.split(' ')[0];
-                const portalLink = `https://divulgadoras.vercel.app/#/proof/${reminder.assignmentId}`;
-                
-                // ** NEW MESSAGE **
-                const message = `⏰ *Lembrete de Comprovação* ⏰\n\nOlá ${firstName}! Passando para lembrar que você confirmou a postagem para o evento *${reminder.postCampaignName}*.\n\nNão se esqueça de enviar o print para validar sua tarefa!\n\nAcesse seu portal aqui:\n${portalLink}`;
-                
+                const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(reminder.promoterEmail)}`;
+                const message = `⏰ *Lembrete de Postagem* ⏰\n\nOlá ${firstName}! Passando para lembrar que você tem uma postagem pendente para o evento *${reminder.postCampaignName}*.\n\nNão se esqueça de confirmar e enviar o print!\n\nAcesse seu portal aqui:\n${portalLink}`;
                 const url = `https://api.z-api.io/instances/${instance_id}/token/${token}/send-text`;
                 const headers = { 'Content-Type': 'application/json' };
                 if (client_token) headers['Client-Token'] = client_token;
-
-                console.log(`[WhatsApp Reminder] Sending to ${cleanPhone} for assignment ${reminder.assignmentId}`);
-
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({ phone: cleanPhone, message: message })
                 });
-
                 if (!response.ok) {
                     const errText = await response.text();
-                    // Log the detailed error for debugging
-                    console.error(`[WhatsApp Reminder] Z-API failed for doc ${doc.id}. Status: ${response.status}. Body: ${errText}`);
                     throw new Error(`Z-API failed: ${response.status} - ${errText}`);
                 }
-
                 await doc.ref.update({ status: 'sent' });
-                console.log(`[WhatsApp Reminder] Successfully sent reminder to ${reminder.promoterName}.`);
+                console.log(`[WhatsApp Reminder] Sent reminder to ${reminder.promoterName}.`);
             } catch (error) {
-                console.error(`[WhatsApp Reminder] CRITICAL: Failed to send reminder for doc ${doc.id}:`, error);
+                console.error(`[WhatsApp Reminder] Failed to send reminder for doc ${doc.id}:`, error);
                 await doc.ref.update({ status: 'error', error: error.message });
             }
         });
-
         await Promise.all(promises);
         return null;
     });

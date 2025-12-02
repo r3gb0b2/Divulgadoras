@@ -198,6 +198,7 @@ export interface PostAssignment {
   justificationSubmittedAt?: Timestamp | FieldValue | null;
   justificationImageUrls?: string[];
   justificationResponse?: string;
+  whatsAppReminderRequestedAt?: Timestamp | FieldValue | null;
 }
 
 export interface GuestList {
