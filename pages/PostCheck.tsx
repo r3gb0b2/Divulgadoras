@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, requestWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon } from '../components/Icons';
@@ -100,12 +100,7 @@ const CountdownTimer: React.FC<{ targetDate: any, onEnd?: () => void }> = ({ tar
     return <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-green-900/50 text-green-300' : 'bg-blue-900/50 text-blue-300'}`}><ClockIcon className="h-4 w-4" /><span>{timeLeft}</span></div>;
 };
 
-const ProofSection: React.FC<{
-    assignment: PostAssignment,
-    onJustify: (assignment: PostAssignment) => void,
-    onReminderRequested: () => void,
-    isRequestingReminder: boolean
-}> = ({ assignment, onJustify, onReminderRequested, isRequestingReminder }) => {
+const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onJustify }) => {
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
@@ -203,17 +198,6 @@ const ProofSection: React.FC<{
         return (<div className="mt-4 text-center"><p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p><div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, index) => (<a key={index} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div></div>);
     }
     const isExpired = timeLeft === 'Tempo esgotado';
-
-    const reminderButton = (
-        <button
-            onClick={onReminderRequested}
-            disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-lg hover:bg-green-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-            <WhatsAppIcon className="w-4 h-4" />
-            {isRequestingReminder ? 'Agendando...' : (assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Agendar lembrete no WhatsApp')}
-        </button>
-    );
     
     return (
         <div className="mt-4 text-center">
@@ -231,8 +215,6 @@ const ProofSection: React.FC<{
                             Agendar Lembrete
                         </button>
                     )}
-                    {/* Render WhatsApp Reminder button here, inside ProofSection (confirmed state) */}
-                    {reminderButton}
                 </div>
             )}
             <p className={`text-xs mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
@@ -270,12 +252,11 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const handleRequestReminder = async () => {
         setIsRequestingReminder(true);
         try {
-          await scheduleWhatsAppReminder(assignment.id);
+          await requestWhatsAppReminder(assignment.id);
           onReminderRequested();
         } catch (err: any) {
           alert(err.message || "Erro ao agendar lembrete.");
-        } finally {
-            setIsRequestingReminder(false);
+          setIsRequestingReminder(false);
         }
     };
     
@@ -304,12 +285,23 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         }
 
         if (assignment.status === 'pending') {
+            const reminderButton = (
+                <button
+                    onClick={handleRequestReminder}
+                    disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-lg hover:bg-green-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <WhatsAppIcon className="w-4 h-4" />
+                    {isRequestingReminder ? 'Agendando...' : (assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrar via WhatsApp em 6h')}
+                </button>
+            );
+
             if (!assignment.post.isActive || isExpired) {
-                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}</div>);
+                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}{reminderButton}</div>);
             }
-            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button></div>);
+            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button>{reminderButton}</div>);
         }
-        if (assignment.status === 'confirmed') return <ProofSection assignment={assignment} onJustify={onJustify} onReminderRequested={handleRequestReminder} isRequestingReminder={isRequestingReminder} />;
+        if (assignment.status === 'confirmed') return <ProofSection assignment={assignment} onJustify={onJustify} />;
         return null;
     };
 
@@ -525,17 +517,16 @@ const PostCheck: React.FC = () => {
                         <p className="text-gray-300 text-sm mb-4">Explique por que você não pôde realizar esta publicação ({justificationAssignment.post.campaignName}).</p>
                         <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Motivo..." rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 mb-4" />
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Comprovação (opcional, máx 2)</label>
-                            <input type="file" multiple accept="image/*" onChange={handleJustificationFileChange} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark"/>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Anexar Print/Foto (Opcional)</label>
+                            <input type="file" onChange={handleJustificationFileChange} multiple accept="image/*" className="text-sm text-gray-400" />
                         </div>
-                        <div className="flex justify-end gap-3">
+                        <div className="flex justify-end gap-2">
                             <button onClick={() => setJustificationAssignment(null)} className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500">Cancelar</button>
                             <button onClick={handleSubmitJustification} disabled={isSubmittingJustification} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">{isSubmittingJustification ? 'Enviando...' : 'Enviar'}</button>
                         </div>
                     </div>
                 </div>
             )}
-            
             <PromoterPublicStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={promoter} />
         </div>
     );

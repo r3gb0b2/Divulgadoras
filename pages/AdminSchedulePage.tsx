@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getScheduledPosts, deleteScheduledPost, getAllScheduledPosts, sendScheduledPostImmediately } from '../services/postService';
-import { getOrganizations } from '../services/organizationService';
-import { ScheduledPost, Organization } from '../types';
+import { getScheduledPosts, updateScheduledPost, deleteScheduledPost } from '../services/postService';
+import { ScheduledPost } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 
@@ -37,42 +36,28 @@ const formatScheduledDate = (ts: any): string => {
 
 const AdminSchedulePage: React.FC = () => {
     const navigate = useNavigate();
-    const { adminData, selectedOrgId } = useAdminAuth();
+    const { selectedOrgId } = useAdminAuth();
     const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
-    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [processingId, setProcessingId] = useState<string | null>(null);
-
-    const isSuperAdmin = adminData?.role === 'superadmin';
-    const orgsMap = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
 
     const fetchData = useCallback(async () => {
+        if (!selectedOrgId) {
+            setError("Nenhuma organização selecionada.");
+            setIsLoading(false);
+            return;
+        }
         setIsLoading(true);
         setError('');
         try {
-            if (isSuperAdmin) {
-                const [postsData, orgsData] = await Promise.all([
-                    getAllScheduledPosts(),
-                    getOrganizations()
-                ]);
-                setScheduledPosts(postsData);
-                setOrganizations(orgsData);
-            } else {
-                if (!selectedOrgId) {
-                    setError("Nenhuma organização selecionada.");
-                    setIsLoading(false);
-                    return;
-                }
-                const data = await getScheduledPosts(selectedOrgId);
-                setScheduledPosts(data);
-            }
+            const data = await getScheduledPosts(selectedOrgId);
+            setScheduledPosts(data);
         } catch (err: any) {
             setError(err.message || "Falha ao carregar agendamentos.");
         } finally {
             setIsLoading(false);
         }
-    }, [selectedOrgId, isSuperAdmin]);
+    }, [selectedOrgId]);
 
     useEffect(() => {
         fetchData();
@@ -85,22 +70,6 @@ const AdminSchedulePage: React.FC = () => {
                 await fetchData();
             } catch (err: any) {
                 setError(err.message || "Falha ao cancelar agendamento.");
-            }
-        }
-    };
-
-    const handleSendNow = async (id: string) => {
-        if (window.confirm("Tem certeza que deseja enviar esta publicação agora? A ação não pode ser desfeita.")) {
-            setProcessingId(id);
-            setError('');
-            try {
-                await sendScheduledPostImmediately(id);
-                alert("Publicação enviada para a fila de processamento!");
-                await fetchData();
-            } catch (err: any) {
-                setError(err.message || 'Falha ao enviar.');
-            } finally {
-                setProcessingId(null);
             }
         }
     };
@@ -136,7 +105,6 @@ const AdminSchedulePage: React.FC = () => {
                                     <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
                                         <div>
                                             <p className="font-bold text-lg text-primary">{post.postData.campaignName}</p>
-                                            {isSuperAdmin && <p className="text-xs text-gray-400 font-semibold">{orgsMap.get(post.organizationId)}</p>}
                                             <p className="text-sm text-gray-300">
                                                 Agendado para: <span className="font-semibold">{formatScheduledDate(post.scheduledAt)}</span>
                                             </p>
@@ -151,11 +119,6 @@ const AdminSchedulePage: React.FC = () => {
                                     )}
                                     {post.status === 'pending' && (
                                         <div className="border-t border-gray-700 mt-3 pt-3 flex flex-wrap gap-2 justify-end text-sm">
-                                            {isSuperAdmin && (
-                                                <button onClick={() => handleSendNow(post.id)} disabled={processingId === post.id} className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50">
-                                                    {processingId === post.id ? 'Enviando...' : 'Enviar Agora'}
-                                                </button>
-                                            )}
                                             <button onClick={() => navigate(`/admin/posts/new?editScheduled=${post.id}`)} className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Editar Agendamento</button>
                                             <button onClick={() => handleCancel(post.id)} className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700">Cancelar</button>
                                         </div>
