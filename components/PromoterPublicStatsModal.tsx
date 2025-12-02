@@ -143,4 +143,47 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
                         <>
                             {/* Stats Cards */}
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
-                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Designadas</h3><p className="text-2xl font-bold text-white">{stats.assigned}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Concluídas</h3><p className="text-2xl font-bold text-green-400">{stats.completed}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Justificativas</h3><p className="text-2xl font-bold text-yellow-400">{stats.justifications}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Perdidas</h3><p className="text-2xl font-bold text-red-400">{stats.missed}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Pendentes</h3><p className="text-2xl font-bold text-yellow-400">{stats.pending}</p></div>
+                                <div className="bg-dark/70 p-4 rounded-lg text-center"><h3 className="text-gray-400 text-sm">Aproveitamento</h3><p className="text-2xl font-bold text-blue-400">{completionPercentage}%</p></div>
+                            </div>
+                            
+                            {/* Assignments List */}
+                            <h3 className="text-xl font-semibold text-white mb-3">Histórico de Publicações</h3>
+                            <div className="space-y-3">
+                                {assignments.map(assignment => {
+                                    const statusInfo = getStatusInfo(assignment);
+                                    return (
+                                        <div key={assignment.id} className="bg-gray-800/50 p-3 rounded-md flex justify-between items-center">
+                                            <div>
+                                                <p className="font-semibold text-gray-200">{assignment.post?.campaignName}</p>
+                                                {assignment.post?.eventName && <p className="text-sm text-gray-300 -mt-1">{assignment.post.eventName}</p>}
+                                                <p className="text-xs text-gray-500">Criado em: {formatDate(assignment.post?.createdAt)}</p>
+                                            </div>
+                                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>
+                                                {statusInfo.text}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                                {assignments.length === 0 && (
+                                    <p className="text-gray-400 text-center py-4">Nenhuma publicação encontrada.</p>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+                 <div className="mt-6 flex justify-end border-t border-gray-700 pt-4">
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default PromoterPublicStatsModal;

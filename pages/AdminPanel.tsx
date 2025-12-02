@@ -746,6 +746,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
+// FIX: Safely handle the 'unknown' type from the catch block by converting it to a string.
         } catch (err: unknown) {
             const errorMessage = (err instanceof Error) ? err.message : String(err);
             setLookupError(errorMessage);
@@ -913,7 +914,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     const handlePrevPage = () => {
         if (currentPage > 1) {
-            setCurrentPage(currentPage - 1);
+            setCurrentPage(currentPage + 1);
         }
     };
 
