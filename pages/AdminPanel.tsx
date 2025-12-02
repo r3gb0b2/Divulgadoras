@@ -598,29 +598,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
-    const handleGroupStatusChange = async (promoter: Promoter, hasJoined: boolean) => {
-        if (hasJoined) {
-            // If they are joining, just update the flag.
-            await handleUpdatePromoter(promoter.id, { hasJoinedGroup: true });
-        } else {
-            // If they are leaving, confirm and then call the cloud function.
-            if (window.confirm(`Tem certeza que deseja marcar "${promoter.name}" como fora do grupo? Isso a removerá de TODAS as publicações ativas para este evento.`)) {
-                try {
-                    const removePromoter = functions.httpsCallable('removePromoterFromAllAssignments');
-                    await removePromoter({ promoterId: promoter.id });
-                    
-                    // Optimistic update for the UI property only
-                    handleUpdatePromoter(promoter.id, { hasJoinedGroup: false });
-                    // Ideally we should refresh data to clear assignments locally, but this is a rare action
-    
-                } catch (error: any) {
-                    console.error("Failed to remove promoter from all assignments:", error);
-                    alert(`Falha ao remover a divulgadora: ${error.message}`);
-                }
-            }
-        }
-    };
-    
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
         if (isBulkRejection) {
             const newStatus = allowEdit ? 'rejected_editable' : 'rejected';

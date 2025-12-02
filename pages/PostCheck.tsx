@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -101,18 +101,32 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
     const navigate = useNavigate();
     const [timeLeft, setTimeLeft] = useState('');
     const [isButtonEnabled, setIsButtonEnabled] = useState(false);
+    const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
     const allowJustification = assignment.post.allowJustification !== false;
 
     useEffect(() => {
         if (!assignment.confirmedAt) return;
         const confirmationTime = toDateSafe(assignment.confirmedAt);
         if (!confirmationTime) return;
+        
+        // Calculate expiration and enablement times
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
+        const calculatedEnableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
+        
+        setEnableTimeDate(calculatedEnableTime);
+
         const timer = setInterval(() => {
             const now = new Date();
             if (now > expireTime) {
-                if (assignment.post.allowLateSubmissions) { setTimeLeft('Envio fora do prazo liberado pelo organizador.'); setIsButtonEnabled(true); } else { setTimeLeft('Tempo esgotado'); setIsButtonEnabled(false); }
-                clearInterval(timer); return;
+                if (assignment.post.allowLateSubmissions) { 
+                    setTimeLeft('Envio fora do prazo liberado pelo organizador.'); 
+                    setIsButtonEnabled(true); 
+                } else { 
+                    setTimeLeft('Tempo esgotado'); 
+                    setIsButtonEnabled(false); 
+                }
+                clearInterval(timer); 
+                return;
             }
             if (assignment.post.allowImmediateProof) {
                 const diff = expireTime.getTime() - now.getTime();
@@ -121,9 +135,9 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
                 setTimeLeft(`Envio liberado! Expira em: ${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
                 setIsButtonEnabled(true); return;
             }
-            const enableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
-            if (now < enableTime) {
-                const diff = enableTime.getTime() - now.getTime();
+            
+            if (now < calculatedEnableTime) {
+                const diff = calculatedEnableTime.getTime() - now.getTime();
                 const hours = Math.floor(diff / (1000 * 60 * 60));
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -141,15 +155,44 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
         return () => clearInterval(timer);
     }, [assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof]);
 
+    const handleAddToCalendar = () => {
+        if (!enableTimeDate) return;
+        
+        const title = encodeURIComponent(`Enviar Print - ${assignment.post.campaignName}`);
+        const details = encodeURIComponent(`Está na hora de enviar o print da sua publicação!\n\nAcesse o link para enviar: ${window.location.href}`);
+        
+        // Format dates as YYYYMMDDTHHmmSSZ
+        const start = enableTimeDate.toISOString().replace(/-|:|\.\d\d\d/g, "");
+        const endDate = new Date(enableTimeDate.getTime() + 60 * 60 * 1000); // 1 hour duration
+        const end = endDate.toISOString().replace(/-|:|\.\d\d\d/g, "");
+
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
+        window.open(url, '_blank');
+    };
+
     if (assignment.proofImageUrls && assignment.proofImageUrls.length > 0) {
         return (<div className="mt-4 text-center"><p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p><div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, index) => (<a key={index} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Comprovação ${index + 1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div></div>);
     }
     const isExpired = timeLeft === 'Tempo esgotado';
+    
     return (
         <div className="mt-4 text-center">
             {isExpired ? (
                 allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full sm:w-auto px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)
-            ) : (<button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isButtonEnabled} className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Comprovação de Postagem</button>)}
+            ) : (
+                <div className="flex flex-col items-center gap-3">
+                    <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isButtonEnabled} className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Comprovação de Postagem</button>
+                    {!isButtonEnabled && enableTimeDate && (
+                        <button 
+                            onClick={handleAddToCalendar}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-900/30 text-indigo-300 text-xs font-semibold rounded-full border border-indigo-500/30 hover:bg-indigo-900/50 transition-colors"
+                        >
+                            <CalendarIcon className="w-3 h-3" />
+                            Agendar Lembrete
+                        </button>
+                    )}
+                </div>
+            )}
             <p className={`text-xs mt-2 ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>{timeLeft}</p>
         </div>
     );
