@@ -558,6 +558,35 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
     }
 };
 
+export const getAllScheduledPosts = async (): Promise<ScheduledPost[]> => {
+    try {
+        const q = firestore.collection("scheduledPosts");
+        const snapshot = await q.get();
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+        posts.sort((a, b) => 
+            ((b.scheduledAt as Timestamp)?.toMillis() || 0) - ((a.scheduledAt as Timestamp)?.toMillis() || 0)
+        );
+        return posts;
+    } catch (error) {
+        console.error("Error fetching all scheduled posts: ", error);
+        throw new Error("Não foi possível buscar todas as publicações agendadas.");
+    }
+};
+
+export const sendScheduledPostImmediately = async (scheduledPostId: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('sendScheduledPostImmediately');
+        await func({ scheduledPostId });
+    } catch (error) {
+        console.error("Error sending scheduled post immediately: ", error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("Não foi possível enviar a publicação agendada imediatamente.");
+    }
+};
+
+
 export const getScheduledPostById = async (id: string): Promise<ScheduledPost | null> => {
     try {
         const docRef = firestore.collection('scheduledPosts').doc(id);

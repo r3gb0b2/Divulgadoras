@@ -737,7 +737,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) { // FIX: Changed error type to 'any' to allow accessing properties like 'message'.
+        // FIX: The 'err' object in a catch block is of type 'unknown'. It must be type-checked before its properties can be accessed.
+        } catch (err) {
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
