@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission } from '../types';
@@ -177,6 +176,18 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
         throw new Error("Não foi possível confirmar a publicação.");
     }
 }
+
+export const requestWhatsAppReminder = async (assignmentId: string): Promise<void> => {
+  try {
+    const docRef = firestore.collection('postAssignments').doc(assignmentId);
+    await docRef.update({
+      whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error requesting WhatsApp reminder: ", error);
+    throw new Error("Não foi possível agendar o lembrete.");
+  }
+};
 
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
     try {

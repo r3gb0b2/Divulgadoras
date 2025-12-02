@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -199,6 +198,7 @@ export interface PostAssignment {
   justificationSubmittedAt?: Timestamp | FieldValue | null;
   justificationImageUrls?: string[];
   justificationResponse?: string;
+  whatsAppReminderRequestedAt?: Timestamp | FieldValue | null;
 }
 
 export interface GuestList {
@@ -389,4 +389,20 @@ export interface FollowInteraction {
   followerInstagram: string;
   followedName: string;
   followedInstagram?: string;
+}
+
+// --- WhatsApp Reminder Types ---
+export interface WhatsAppReminder {
+  id: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  promoterWhatsapp: string;
+  assignmentId: string;
+  postId: string;
+  postCampaignName: string;
+  organizationId: string;
+  sendAt: Timestamp | FieldValue;
+  status: 'pending' | 'sent' | 'error';
+  createdAt: Timestamp | FieldValue;
 }

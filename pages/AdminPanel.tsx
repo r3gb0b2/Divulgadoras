@@ -737,7 +737,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err: unknown) {
+// FIX: The error is reported on line 564, which is inside this function.
+// The error "Argument of type 'unknown' is not assignable to parameter of type 'string'"
+// often happens with unhandled 'unknown' types from catch blocks in strict mode.
+// This block is changed to safely handle an 'unknown' error type.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
@@ -1035,3 +1039,159 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
                 </div>
+```
+  </change>
+  <change>
+    <file>components/ErrorBoundary.tsx</file>
+    <description>Refactored the ErrorBoundary class component to a more standard implementation. This resolves TypeScript errors where `setState` and `props` were not being recognized. The redundant constructor was removed, and state lifecycle methods were adjusted for clarity and correctness.</description>
+    <content><![CDATA[
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
+}
+
+// FIX: Correctly extend Component and manage state lifecycle methods.
+// The previous implementation was a class, but TypeScript was not recognizing
+// it as a React.Component, leading to errors about missing `setState` and `props`.
+// Extending from the named `Component` import and simplifying state management.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // You can also log the error to an error reporting service
+    console.error("Uncaught error:", error, errorInfo);
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
+            <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
+            <p className="mb-4 text-gray-300">
+              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
+            </p>
+            {this.state.error && (
+              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
+                <p className="text-red-400">{this.state.error.toString()}</p>
+              </div>
+            )}
+             <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
+            >
+              Recarregar Página
+            </button>
+             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
+                Voltar para a Página Inicial
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+]]></content>
+  </change>
+  <change>
+    <file>src/components/ErrorBoundary.tsx</file>
+    <description>Refactored the ErrorBoundary class component to a more standard implementation. This resolves TypeScript errors where `setState` and `props` were not being recognized. The redundant constructor was removed, and state lifecycle methods were adjusted for clarity and correctness.</description>
+    <content><![CDATA[
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
+}
+
+// FIX: Correctly extend Component and manage state lifecycle methods.
+// The previous implementation was a class, but TypeScript was not recognizing
+// it as a React.Component, leading to errors about missing `setState` and `props`.
+// Extending from the named `Component` import and simplifying state management.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
+
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // You can also log the error to an error reporting service
+    console.error("Uncaught error:", error, errorInfo);
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
+            <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
+            <p className="mb-4 text-gray-300">
+              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
+            </p>
+            {this.state.error && (
+              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
+                <p className="text-red-400">{this.state.error.toString()}</p>
+              </div>
+            )}
+             <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
+            >
+              Recarregar Página
+            </button>
+             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
+                Voltar para a Página Inicial
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export default ErrorBoundary;
+]]></content>
+  </change>
+</changes>
+```
