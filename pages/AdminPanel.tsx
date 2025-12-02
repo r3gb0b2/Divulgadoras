@@ -742,8 +742,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
-            } else {
-                errorMessage = String(err);
             }
             setLookupError(errorMessage);
         } finally {

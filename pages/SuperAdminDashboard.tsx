@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon } from '../components/Icons';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -235,6 +234,15 @@ const SuperAdminDashboard: React.FC = () => {
                         </div>
                         <p className="mt-2 text-gray-400">Envie mensagens em massa via WhatsApp para as divulgadoras.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
+                    </Link>
+
+                    <Link to="/admin/whatsapp-reminders" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <ClockIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos WhatsApp</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Verificar o status de todos os lembretes de WhatsApp agendados.</p>
+                        <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Ver Fila &rarr;</div>
                     </Link>
 
                     <Link to="/admin/applications" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
