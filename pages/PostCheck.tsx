@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, requestWhatsAppReminder } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon } from '../components/Icons';
@@ -222,11 +222,10 @@ const ProofSection: React.FC<{ assignment: PostAssignment, onJustify: (assignmen
     );
 };
 
-const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void, onReminderRequested: () => void }> = ({ assignment, onConfirm, onJustify, onReminderRequested }) => {
+const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onConfirm, onJustify }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
-    const [isRequestingReminder, setIsRequestingReminder] = useState(false);
     const allowJustification = assignment.post.allowJustification !== false;
 
     if (!assignment.promoterHasJoinedGroup) return (<div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500"><h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>{assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}<p className="mt-2 text-yellow-300">Você tem uma nova publicação para este evento!</p><p className="mt-2 text-gray-300 text-sm">Para visualizar, primeiro você precisa confirmar a leitura das regras e entrar no grupo do WhatsApp.</p><div className="mt-4 text-center"><Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors">Verificar Status e Aceitar Regras</Link></div></div>);
@@ -248,17 +247,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         } catch (error: any) { console.error('Failed to download from Firebase:', error); alert(`Não foi possível baixar a mídia do Link 1: ${error.message}`); } finally { setIsMediaProcessing(false); }
     };
     const handleGoogleDriveDownload = () => { if (!isPostDownloadable || !assignment.post.googleDriveUrl) return; const { googleDriveUrl, type } = assignment.post; let urlToOpen = googleDriveUrl; if (type === 'video') { const fileId = extractGoogleDriveId(googleDriveUrl); if (fileId) { urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`; } } window.open(urlToOpen, '_blank'); };
-    
-    const handleRequestReminder = async () => {
-        setIsRequestingReminder(true);
-        try {
-          await requestWhatsAppReminder(assignment.id);
-          onReminderRequested();
-        } catch (err: any) {
-          alert(err.message || "Erro ao agendar lembrete.");
-          setIsRequestingReminder(false);
-        }
-    };
     
     const renderJustificationStatus = (status: 'pending' | 'accepted' | 'rejected' | null | undefined) => { 
         const styles = { pending: "bg-yellow-900/50 text-yellow-300", accepted: "bg-green-900/50 text-green-300", rejected: "bg-red-900/50 text-red-300" }; 
@@ -285,21 +273,10 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         }
 
         if (assignment.status === 'pending') {
-            const reminderButton = (
-                <button
-                    onClick={handleRequestReminder}
-                    disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-lg hover:bg-green-900/50 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <WhatsAppIcon className="w-4 h-4" />
-                    {isRequestingReminder ? 'Agendando...' : (assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrar via WhatsApp em 6h')}
-                </button>
-            );
-
             if (!assignment.post.isActive || isExpired) {
-                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}{reminderButton}</div>);
+                return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada. Por favor, procure o administrador.")} className="w-full px-6 py-3 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}</div>);
             }
-            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button>{reminderButton}</div>);
+            return (<div className="w-full flex flex-col sm:flex-row gap-2">{allowJustification ? (<button onClick={() => onJustify(assignment)} className="w-full px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 transition-colors">Justificar Ausência</button>) : (<button onClick={() => alert("A justificativa para esta publicação está encerrada ou não é permitida. Por favor, procure o administrador.")} className="w-full px-4 py-2 bg-gray-800 text-gray-500 font-bold rounded-lg border border-gray-700 cursor-not-allowed opacity-70">Justificar Ausência</button>)}<button onClick={handleConfirm} disabled={isConfirming} className="w-full px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">{isConfirming ? 'Confirmando...' : 'Eu Publiquei!'}</button></div>);
         }
         if (assignment.status === 'confirmed') return <ProofSection assignment={assignment} onJustify={onJustify} />;
         return null;
@@ -398,10 +375,6 @@ const PostCheck: React.FC = () => {
         }
     };
     
-    const handleReminderRequested = () => {
-        performSearch(email); // Re-fetch to update the UI state
-    };
-
     const handleOpenJustification = (assignment: PostAssignment) => {
         setJustificationAssignment(assignment);
         setJustificationText('');
@@ -480,7 +453,7 @@ const PostCheck: React.FC = () => {
                         </h2>
                         {activeAssignments.length > 0 ? (
                             activeAssignments.map(assignment => (
-                                <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} onReminderRequested={handleReminderRequested} />
+                                <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />
                             ))
                         ) : (
                             <p className="text-center text-gray-400 py-4 border border-gray-700 rounded-lg bg-dark/50">Nenhuma tarefa pendente no momento! 🎉</p>
@@ -501,7 +474,7 @@ const PostCheck: React.FC = () => {
                             {showHistory && (
                                 <div className="space-y-6 animate-fadeIn">
                                     {historyAssignments.map(assignment => (
-                                        <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} onReminderRequested={handleReminderRequested} />
+                                        <PostCard key={assignment.id} assignment={assignment} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />
                                     ))}
                                 </div>
                             )}

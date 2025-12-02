@@ -8,30 +8,26 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
-// FIX: Refactored to use a standard class property for state to ensure `this` context for `setState` and `props`.
+// FIX: Rewrote as a standard class component to ensure correct `this` context for `setState` and `props`.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
-    errorInfo: null,
   };
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

@@ -177,18 +177,6 @@ export const confirmAssignment = async (assignmentId: string): Promise<void> => 
     }
 }
 
-export const requestWhatsAppReminder = async (assignmentId: string): Promise<void> => {
-  try {
-    const docRef = firestore.collection('postAssignments').doc(assignmentId);
-    await docRef.update({
-      whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-  } catch (error) {
-    console.error("Error requesting WhatsApp reminder: ", error);
-    throw new Error("Não foi possível agendar o lembrete.");
-  }
-};
-
 export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
     try {
         const docRef = firestore.collection('postAssignments').doc(assignmentId);
