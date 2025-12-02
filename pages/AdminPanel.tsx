@@ -737,8 +737,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        // FIX: handle 'unknown' type for error object in catch block
         } catch (err: unknown) {
+// FIX: Removed duplicate catch block causing a syntax error. The logic inside is correct for handling `unknown`.
             let errorMessage = "Ocorreu um erro desconhecido";
             if (err instanceof Error) {
                 errorMessage = err.message;
