@@ -314,7 +314,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 getAllPromoters({
                     organizationId: orgId,
                     statesForScope,
-                    status: filter,
+                    status: 'all', // Fetch ALL promoters for client-side filtering
                     assignedCampaignsForScope: isSuperAdmin ? undefined : adminData.assignedCampaigns,
                     selectedCampaign: selectedCampaign,
                     filterOrgId: selectedOrg,
@@ -344,7 +344,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [adminData, organization, isSuperAdmin, filter, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
+    }, [adminData, organization, isSuperAdmin, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
 
 
     // Fetch all promoters and stats based on filters
@@ -564,10 +564,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             
             // If action is remove, we also need to call the specific remove function
             if (actionType === 'remove') {
-                const removePromises = idsToUpdate.map(id => {
-                    const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
-                    return setPromoterStatusToRemoved({ promoterId: id });
-                });
+                const removePromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
+                const removePromises = idsToUpdate.map(id => removePromoterStatusToRemoved({ promoterId: id }));
                 await Promise.all(removePromises);
             } else {
                 await Promise.all(promises);
@@ -635,15 +633,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             await updatePromoter(promoter.id, updateData);
 
         } catch (error: unknown) {
-            // FIX: Safely handle unknown error type from catch block.
             console.error("Failed to send manual notification:", error);
+            // FIX: Safely handle 'unknown' error type before passing it to the alert.
             let detailedError: string = 'Ocorreu um erro desconhecido.';
             let providerName: string = 'Brevo (v9.2)';
 
-            if (error instanceof Error) {
-                const firebaseError = error as any; // Cast to access custom 'details' property
-                detailedError = firebaseError.details?.originalError?.message || firebaseError.message;
-                providerName = firebaseError.details?.provider || 'Brevo (v9.2)';
+            if (typeof error === 'object' && error !== null) {
+                const err = error as { message?: string, details?: any };
+                if (err.details) {
+                    detailedError = err.details.detailedError || err.details.originalError?.message || err.message || detailedError;
+                    providerName = err.details.provider || providerName;
+                } else if (err.message) {
+                    detailedError = err.message;
+                }
             } else {
                 detailedError = String(error);
             }
@@ -746,8 +748,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-// FIX: Safely handle the 'unknown' type from the catch block by converting it to a string.
         } catch (err: unknown) {
+            // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
             const errorMessage = (err instanceof Error) ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
@@ -914,7 +916,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
     const handlePrevPage = () => {
         if (currentPage > 1) {
-            setCurrentPage(currentPage + 1);
+            setCurrentPage(currentPage - 1);
         }
     };
 
@@ -1039,6 +1041,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         <option value="all">Todos os Eventos</option>
                         {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
+                    <div className="flex gap-2 items-center flex-grow">
+                        <input
+                            type="number"
+                            placeholder="Idade Mín."
+                            value={minAge}
+                            onChange={(e) => setMinAge(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                        />
+                        <input
+                            type="number"
+                            placeholder="Idade Máx."
+                            value={maxAge}
+                            onChange={(e) => setMaxAge(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                        />
+                    </div>
                 </div>
             </div>
 
