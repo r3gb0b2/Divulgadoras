@@ -22,10 +22,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     this.setState({
       error: error,

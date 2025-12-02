@@ -373,9 +373,291 @@ const CreatePost: React.FC = () => {
                         setScheduleDate(localScheduledDate.toISOString().split('T')[0]);
                         setScheduleTime(localScheduledDate.toTimeString().split(' ')[0].substring(0, 5));
                         
-                        // Handle single campaign from edit
                         const campaign = allCampaigns.find(c => c.name === postData.campaignName && c.stateAbbr === postData.stateAbbr);
-                        if (campaign) setSelectedCampaigns(new Set([campaign.id]));
-                        else {
-                            // Try to handle combined names if possible, but for simplicity just leave empty or try to match parts
-                            // For now, if we can't find exact match, we might need a workaround or accept it won't pre-select in UI correctly if it was
+                        if (campaign) {
+                            setSelectedCampaigns(new Set([campaign.id]));
+                        } else {
+                            // Could not find a matching campaign, this can happen if the campaign was deleted or renamed.
+                            // The user will have to manually select a new campaign.
+                            setError("O evento/gênero original deste agendamento não foi encontrado. Por favor, selecione um novo evento.");
+                        }
+                    }
+                } else if (fromPostId) { // Duplicating a post
+                    const { post: postToDuplicate } = await getPostWithAssignments(fromPostId);
+                    if (postToDuplicate.organizationId === selectedOrgId) {
+                        setEventName(postToDuplicate.eventName || '');
+                        setPostType(postToDuplicate.type);
+                        setTextContent(postToDuplicate.textContent || '');
+                        setGoogleDriveUrl(postToDuplicate.googleDriveUrl || '');
+                        setInstructions(postToDuplicate.instructions || '');
+                        setPostLink(postToDuplicate.postLink || '');
+                        if (postToDuplicate.mediaUrl) {
+                             setOriginalMediaPath(postToDuplicate.mediaUrl);
+                             if (postToDuplicate.mediaUrl.startsWith('http')) {
+                                setMediaPreview(postToDuplicate.mediaUrl);
+                             } else {
+                                storage.ref(postToDuplicate.mediaUrl).getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
+                             }
+                        }
+                    }
+                }
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadInitialData();
+    }, [location.search, selectedOrgId, adminData]);
+
+    const handleCampaignChange = (campaignId: string) => {
+        setSelectedCampaigns(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(campaignId)) {
+                newSet.delete(campaignId);
+            } else {
+                newSet.add(campaignId);
+            }
+            return newSet;
+        });
+        setSelectedPromoters(new Set());
+    };
+
+    const handleSelectAllPromoters = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedPromoters(new Set(promoters.map(p => p.id)));
+        } else {
+            setSelectedPromoters(new Set());
+        }
+    };
+    
+    const handlePromoterToggle = (id: string) => {
+        setSelectedPromoters(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
+        if (selectedCampaigns.size !== 1) { setError("Selecione exatamente um evento/gênero."); return; }
+        if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
+        if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
+        if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
+        if (postType === 'text' && !textContent.trim()) { setError("Escreva o conteúdo do post de texto."); return; }
+        if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
+
+        setIsSubmitting(true);
+        setError('');
+
+        try {
+            const selectedCampaignId = Array.from(selectedCampaigns)[0];
+            const campaign = campaigns.find(c => c.id === selectedCampaignId);
+            if (!campaign) throw new Error("Evento selecionado é inválido.");
+
+            const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
+            let expiryTimestamp: Date | null = null;
+            if (expiresAt) {
+                const [year, month, day] = expiresAt.split('-').map(Number);
+                expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
+            }
+
+            const postPayload: ScheduledPostData = {
+                campaignName: campaign.name,
+                eventName: eventName.trim() || undefined,
+                stateAbbr: campaign.stateAbbr,
+                type: postType,
+                textContent: textContent || undefined,
+                instructions,
+                postLink: postLink.trim() || undefined,
+                isActive,
+                // FIX: Changed `expiresAt: expiryTimestamp || null` to `expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null` to correctly convert a JavaScript Date object into a Firestore Timestamp, resolving a type mismatch error during data submission.
+                expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
+                autoAssignToNewPromoters: autoAssign,
+                allowLateSubmissions,
+                allowImmediateProof,
+                postFormats,
+                skipProofRequirement,
+                allowJustification,
+                googleDriveUrl: googleDriveUrl.trim() || undefined,
+            };
+
+            if (isScheduling) {
+                const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                const scheduledData = {
+                    organizationId: selectedOrgId,
+                    postData: postPayload,
+                    assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
+                    scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
+                    status: 'pending' as 'pending',
+                    createdByEmail: adminData.email,
+                };
+                if (editingScheduledPostId) {
+                    await updateScheduledPost(editingScheduledPostId, scheduledData);
+                    alert("Agendamento atualizado com sucesso!");
+                } else {
+                    await schedulePost(scheduledData);
+                    alert("Publicação agendada com sucesso!");
+                }
+                navigate('/admin/scheduled-posts');
+            } else {
+                const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
+                await createPost(finalPostData, mediaFile, promotersToAssign);
+                alert("Publicação criada e atribuída com sucesso!");
+                navigate('/admin/posts');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    useEffect(() => {
+        const fetchPromotersForCampaign = async () => {
+            if (selectedCampaigns.size === 0 || !selectedState) { setPromoters([]); return; }
+            try {
+                const campaignNames = Array.from(selectedCampaigns).map(id => campaigns.find(c => c.id === id)?.name).filter(Boolean) as string[];
+                const approvedPromoters = await Promise.all(
+                    campaignNames.map(name => getApprovedPromoters(selectedOrgId!, selectedState, name))
+                );
+                const flattened = approvedPromoters.flat();
+                const unique = Array.from(new Map(flattened.map(p => [p.id, p])).values());
+                unique.sort((a,b) => a.name.localeCompare(b.name));
+                setPromoters(unique);
+            } catch (err) { console.error(err); }
+        };
+        fetchPromotersForCampaign();
+    }, [selectedCampaigns, selectedState, selectedOrgId, campaigns]);
+    
+    const filteredPromoters = useMemo(() => {
+        if (selectedCampaigns.size === 0) return [];
+        const campaignNames = new Set(Array.from(selectedCampaigns).map(id => campaigns.find(c => c.id === id)?.name));
+        return promoters.filter(p => p.campaignName && campaignNames.has(p.campaignName));
+    }, [promoters, selectedCampaigns, campaigns]);
+    
+    const campaignsForSelectedState = campaigns.filter(c => c.stateAbbr === selectedState);
+
+    // FIX: Add missing handleFileChange function definition.
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
+        }
+    };
+
+    return (
+        <div>
+            {/* Modal Components */}
+            {selectedOrgId && <ManageInstructionsModal isOpen={isInstructionsModalOpen} onClose={() => setIsInstructionsModalOpen(false)} onTemplatesUpdated={async () => setInstructionTemplates(await getInstructionTemplates(selectedOrgId))} organizationId={selectedOrgId} />}
+            {selectedOrgId && <ManageLinksModal isOpen={isLinksModalOpen} onClose={() => setIsLinksModalOpen(false)} onTemplatesUpdated={async () => setLinkTemplates(await getLinkTemplates(selectedOrgId))} organizationId={selectedOrgId} />}
+
+            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4"><ArrowLeftIcon className="w-5 h-5" /><span>Voltar</span></button>
+            <h1 className="text-3xl font-bold mb-6">{editingScheduledPostId ? "Editar Agendamento" : "Nova Publicação"}</h1>
+            {isLoading ? <p>Carregando...</p> : (
+                <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
+                    {/* ... Rest of the form JSX ... */}
+                     <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
+                        <legend className="px-2 font-semibold text-primary">Informações Básicas</legend>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-1">Estado</label>
+                            <select value={selectedState} onChange={e => { setSelectedState(e.target.value); setSelectedCampaigns(new Set()); }} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
+                                <option value="" disabled>Selecione o Estado</option>
+                                {assignedStates.map(abbr => <option key={abbr} value={abbr}>{abbr}</option>)}
+                            </select>
+                        </div>
+                        {selectedState && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Evento / Gênero</label>
+                                {campaignsForSelectedState.map(c => (
+                                    <label key={c.id} className="flex items-center space-x-2"><input type="radio" name="campaign" value={c.id} checked={selectedCampaigns.has(c.id)} onChange={() => setSelectedCampaigns(new Set([c.id]))} /><span>{c.name}</span></label>
+                                ))}
+                            </div>
+                        )}
+                        <div>
+                             <label className="block text-sm font-medium text-gray-300 mb-1">Nome do Evento (Opcional)</label>
+                             <input type="text" placeholder="Ex: After Secreto, Lançamento de Coleção" value={eventName} onChange={e => setEventName(e.target.value)} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />
+                        </div>
+                    </fieldset>
+
+                     <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
+                        <legend className="px-2 font-semibold text-primary">Conteúdo do Post</legend>
+                        <div className="flex gap-4"><label><input type="radio" name="type" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /> Texto</label><label><input type="radio" name="type" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /> Imagem</label><label><input type="radio" name="type" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /> Vídeo</label></div>
+                        {postType === 'text' && <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Texto da publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />}
+                        {postType === 'image' && (
+                            <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-gray-300">Opção 1: Upload para Servidor</label><input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />{mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}</div>
+                                <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
+                                <div><label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} /></div>
+                            </div>
+                        )}
+                        {postType === 'video' && <div><label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label><p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required /></div>}
+                        
+                        <div>
+                            <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-300">Instruções</label><button type="button" onClick={() => setIsInstructionsModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button></div>
+                            <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
+                            <select onChange={e => setInstructions(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de instrução...</option>{instructionTemplates.map(t => <option key={t.id} value={t.text}>{t.text.substring(0, 50)}...</option>)}</select>
+                        </div>
+                        <div>
+                            <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-300">Link da Postagem</label><button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button></div>
+                            <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                            <select onChange={e => setPostLink(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de link...</option>{linkTemplates.map(t => <option key={t.id} value={t.url}>{t.name}</option>)}</select>
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
+                        <legend className="px-2 font-semibold text-primary">Atribuir Divulgadoras ({selectedPromoters.size})</legend>
+                        {filteredPromoters.length > 0 ? (
+                            <div className="max-h-60 overflow-y-auto border border-gray-600 rounded-md p-2 space-y-1">
+                                <label className="flex items-center space-x-2 p-1 font-semibold cursor-pointer"><input type="checkbox" onChange={handleSelectAllPromoters} checked={selectedPromoters.size === promoters.length} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Selecionar Todas</span></label>
+                                {filteredPromoters.map(p => <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>{p.name} ({p.instagram})</span></label>)}
+                            </div>
+                        ) : <p className="text-sm text-gray-400">Selecione um evento para ver as divulgadoras aprovadas.</p>}
+                    </fieldset>
+
+                    <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
+                        <legend className="px-2 font-semibold text-primary">Opções da Publicação</legend>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Post Ativo</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={autoAssign} onChange={e => setAutoAssign(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Atribuir para novas divulgadoras</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={allowLateSubmissions} onChange={e => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Permitir comprovação fora do prazo</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={allowImmediateProof} onChange={e => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Liberar comprovação imediata</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={skipProofRequirement} onChange={e => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Não exigir envio de print</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={allowJustification} onChange={e => setAllowJustification(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Permitir justificativas</span></label>
+                            <div><label className="block text-sm font-medium text-gray-400 mb-1">Data Limite (opcional)</label><input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700" style={{colorScheme: 'dark'}}/></div>
+                        </div>
+                        <div><label className="block text-sm font-medium text-gray-300 mb-2">Formato (informativo):</label><div className="flex gap-6"><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('story')} onChange={() => setPostFormats(prev => prev.includes('story') ? prev.filter(f=>f!=='story') : [...prev, 'story'])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Story</span></label><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('reels')} onChange={() => setPostFormats(prev => prev.includes('reels') ? prev.filter(f=>f!=='reels') : [...prev, 'reels'])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Reels</span></label></div></div>
+                    </fieldset>
+
+                    <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
+                        <legend className="px-2 font-semibold text-primary">Agendamento</legend>
+                        <label className="flex items-center space-x-2"><input type="checkbox" checked={isScheduling} onChange={e => setIsScheduling(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Agendar esta publicação</span></label>
+                        {isScheduling && (
+                            <div className="flex flex-col sm:flex-row gap-4 items-center">
+                                <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} required className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" style={{colorScheme: 'dark'}} />
+                                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} required className="flex-grow w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" style={{colorScheme: 'dark'}} />
+                            </div>
+                        )}
+                        {utcDisplayTime && <p className="text-xs text-yellow-400 text-center">{utcDisplayTime}</p>}
+                    </fieldset>
+                    
+                    {error && <p className="text-red-400 text-sm">{error}</p>}
+                    <div className="flex justify-end">
+                        <button type="submit" disabled={isSubmitting} className="px-6 py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                            {isSubmitting ? 'Salvando...' : (isScheduling ? (editingScheduledPostId ? "Atualizar Agendamento" : "Agendar Publicação") : "Criar e Atribuir")}
+                        </button>
+                    </div>
+                </form>
+            )}
+        </div>
+    );
+};
+
+export default CreatePost;

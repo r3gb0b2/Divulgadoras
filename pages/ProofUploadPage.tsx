@@ -146,7 +146,7 @@ const ProofUploadPage: React.FC = () => {
                                        <img key={index} className="h-20 w-20 rounded-lg object-cover" src={preview} alt={`Prévia ${index + 1}`} />
                                     ))
                                 ) : (
-                                    <p className="text-sm text-gray-400">Nenhum print selecionado.</p>
+                                    <p className="text-sm text-gray-400">Nenhuma foto selecionada.</p>
                                 )}
                             </div>
                         </div>
