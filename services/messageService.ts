@@ -1,5 +1,8 @@
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import firebase from 'firebase/compat/app';
+import { firestore } from '../firebase/config';
+import { WhatsAppReminder, Timestamp } from '../types';
 
 export interface WhatsAppCampaignFilters {
     state?: string;
@@ -20,6 +23,40 @@ export const sendWhatsAppCampaign = async (
     } catch (error: any) {
         console.error("Error sending WhatsApp campaign:", error);
         const errorMessage = error.details?.message || error.message || 'Falha ao enviar campanha.';
+        throw new Error(errorMessage);
+    }
+};
+
+// --- New Functions for Reminder Management ---
+
+export const getWhatsAppReminders = async (): Promise<WhatsAppReminder[]> => {
+    try {
+        const q = firestore.collection('whatsAppReminders').orderBy('sendAt', 'desc');
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+    } catch (error) {
+        console.error("Error fetching WhatsApp reminders:", error);
+        throw new Error("Não foi possível buscar a fila de agendamentos.");
+    }
+};
+
+export const deleteWhatsAppReminder = async (reminderId: string): Promise<void> => {
+    try {
+        await firestore.collection('whatsAppReminders').doc(reminderId).delete();
+    } catch (error) {
+        console.error("Error deleting WhatsApp reminder:", error);
+        throw new Error("Não foi possível deletar o agendamento.");
+    }
+};
+
+export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<{ success: boolean; message: string; }> => {
+    try {
+        const sendFunc = httpsCallable(functions, 'sendWhatsAppReminderImmediately');
+        const result = await sendFunc({ reminderId });
+        return result.data as { success: boolean; message: string };
+    } catch (error: any) {
+        console.error("Error sending WhatsApp reminder immediately:", error);
+        const errorMessage = error.details?.message || error.message || 'Falha ao forçar o envio.';
         throw new Error(errorMessage);
     }
 };
