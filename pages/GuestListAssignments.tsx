@@ -48,6 +48,7 @@ const GuestListAssignments: React.FC = () => {
     
     const [searchQuery, setSearchQuery] = useState('');
     const [colorFilter, setColorFilter] = useState<'all' | 'green' | 'blue' | 'yellow' | 'red'>('all');
+    const [filterInGroup, setFilterInGroup] = useState(false);
     const [bulkAllowance, setBulkAllowance] = useState<number>(0);
     const [bulkInfo, setBulkInfo] = useState<string>('');
     const [bulkClosesAt, setBulkClosesAt] = useState<string>('');
@@ -127,6 +128,11 @@ const GuestListAssignments: React.FC = () => {
 
     const filteredPromoters = useMemo(() => {
         let results = promotersWithStats;
+
+        if (filterInGroup) {
+            results = results.filter(p => p.hasJoinedGroup === true);
+        }
+
         if (searchQuery.trim()) {
             const lowerQuery = searchQuery.toLowerCase();
             results = results.filter(p => p.name.toLowerCase().includes(lowerQuery) || (p.instagram && p.instagram.toLowerCase().includes(lowerQuery)));
@@ -143,7 +149,7 @@ const GuestListAssignments: React.FC = () => {
             });
         }
         return results;
-    }, [promotersWithStats, searchQuery, colorFilter]);
+    }, [promotersWithStats, searchQuery, colorFilter, filterInGroup]);
 
     const handleToggle = (promoterId: string) => {
         setAssignments(prev => {
@@ -289,10 +295,21 @@ const GuestListAssignments: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
-                     <label className="flex items-center space-x-2 font-semibold cursor-pointer">
-                        <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                        <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
-                    </label>
+                     <div className="flex flex-wrap justify-between items-center gap-4">
+                        <label className="flex items-center space-x-2 font-semibold cursor-pointer">
+                            <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                            <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
+                        </label>
+                         <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer flex-shrink-0">
+                            <input
+                                type="checkbox"
+                                checked={filterInGroup}
+                                onChange={(e) => setFilterInGroup(e.target.checked)}
+                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                            />
+                            <span>Mostrar somente quem está no grupo</span>
+                        </label>
+                    </div>
                     <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
                         <div className="flex items-center gap-2">
                             <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
@@ -326,7 +343,7 @@ const GuestListAssignments: React.FC = () => {
                             {filteredPromoters.map(p => (
                                 <tr key={p.id} className="hover:bg-gray-700/40">
                                     <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
-                                    <td className="p-3 whitespace-nowrap"><span className="font-medium text-white">{p.instagram || p.name}</span></td>
+                                    <td className="p-3 whitespace-nowrap"><span className={`font-medium ${p.hasJoinedGroup ? 'text-green-400' : 'text-white'}`}>{p.instagram || p.name}</span></td>
                                     <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
                                     <td className="p-3 whitespace-nowrap">
                                         <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>

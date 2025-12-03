@@ -377,8 +377,6 @@ const CreatePost: React.FC = () => {
                         if (campaign) {
                             setSelectedCampaigns(new Set([campaign.id]));
                         } else {
-                            // Could not find a matching campaign, this can happen if the campaign was deleted or renamed.
-                            // The user will have to manually select a new campaign.
                             setError("O evento/gênero original deste agendamento não foi encontrado. Por favor, selecione um novo evento.");
                         }
                     }
@@ -446,72 +444,90 @@ const CreatePost: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
-        if (selectedCampaigns.size !== 1) { setError("Selecione exatamente um evento/gênero."); return; }
+        if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
         if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
         if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
         if (postType === 'text' && !textContent.trim()) { setError("Escreva o conteúdo do post de texto."); return; }
         if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
-
+    
         setIsSubmitting(true);
         setError('');
-
+    
         try {
-            const selectedCampaignId = Array.from(selectedCampaigns)[0];
-            const campaign = campaigns.find(c => c.id === selectedCampaignId);
-            if (!campaign) throw new Error("Evento selecionado é inválido.");
-
-            const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
-            let expiryTimestamp: Date | null = null;
-            if (expiresAt) {
-                const [year, month, day] = expiresAt.split('-').map(Number);
-                expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
-            }
-
-            const postPayload: ScheduledPostData = {
-                campaignName: campaign.name,
-                eventName: eventName.trim() || undefined,
-                stateAbbr: campaign.stateAbbr,
-                type: postType,
-                textContent: textContent || undefined,
-                instructions,
-                postLink: postLink.trim() || undefined,
-                isActive,
-                // FIX: Changed `expiresAt: expiryTimestamp || null` to `expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null` to correctly convert a JavaScript Date object into a Firestore Timestamp, resolving a type mismatch error during data submission.
-                expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
-                autoAssignToNewPromoters: autoAssign,
-                allowLateSubmissions,
-                allowImmediateProof,
-                postFormats,
-                skipProofRequirement,
-                allowJustification,
-                googleDriveUrl: googleDriveUrl.trim() || undefined,
-            };
-
-            if (isScheduling) {
-                const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                const scheduledData = {
-                    organizationId: selectedOrgId,
-                    postData: postPayload,
-                    assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
-                    scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
-                    status: 'pending' as 'pending',
-                    createdByEmail: adminData.email,
-                };
-                if (editingScheduledPostId) {
-                    await updateScheduledPost(editingScheduledPostId, scheduledData);
-                    alert("Agendamento atualizado com sucesso!");
-                } else {
-                    await schedulePost(scheduledData);
-                    alert("Publicação agendada com sucesso!");
+            const creationPromises = [];
+    
+            for (const campaignId of selectedCampaigns) {
+                const campaign = campaigns.find(c => c.id === campaignId);
+                if (!campaign) continue;
+    
+                const promotersForThisCampaign = promoters.filter(p => p.campaignName === campaign.name);
+                const promotersToAssign = promotersForThisCampaign.filter(p => selectedPromoters.has(p.id));
+    
+                if (promotersToAssign.length === 0) continue;
+    
+                let expiryTimestamp: Date | null = null;
+                if (expiresAt) {
+                    const [year, month, day] = expiresAt.split('-').map(Number);
+                    expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
                 }
-                navigate('/admin/scheduled-posts');
-            } else {
-                const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                await createPost(finalPostData, mediaFile, promotersToAssign);
-                alert("Publicação criada e atribuída com sucesso!");
-                navigate('/admin/posts');
+    
+                const postPayload: ScheduledPostData = {
+                    campaignName: campaign.name,
+                    eventName: eventName.trim() || undefined,
+                    stateAbbr: campaign.stateAbbr,
+                    type: postType,
+                    textContent: textContent || undefined,
+                    instructions,
+                    postLink: postLink.trim() || undefined,
+                    isActive,
+                    expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
+                    autoAssignToNewPromoters: autoAssign,
+                    allowLateSubmissions,
+                    allowImmediateProof,
+                    postFormats,
+                    skipProofRequirement,
+                    allowJustification,
+                    googleDriveUrl: googleDriveUrl.trim() || undefined,
+                };
+    
+                if (isScheduling) {
+                    const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                    const scheduledData = {
+                        organizationId: selectedOrgId,
+                        postData: postPayload,
+                        assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
+                        scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
+                        status: 'pending' as 'pending',
+                        createdByEmail: adminData.email,
+                    };
+
+                    if (editingScheduledPostId) {
+                         // When editing a schedule, we assume it's for one event, so just update.
+                         creationPromises.push(updateScheduledPost(editingScheduledPostId, scheduledData));
+                    } else {
+                        creationPromises.push(schedulePost(scheduledData));
+                    }
+                } else {
+                    const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
+                    creationPromises.push(createPost(finalPostData, mediaFile, promotersToAssign));
+                }
             }
+
+            if(creationPromises.length === 0){
+                throw new Error("Nenhuma divulgadora selecionada pertence aos eventos escolhidos.");
+            }
+    
+            await Promise.all(creationPromises);
+    
+            if (isScheduling) {
+                 alert(`${creationPromises.length} publicação(ões) agendada(s) com sucesso!`);
+                 navigate('/admin/scheduled-posts');
+            } else {
+                 alert(`${creationPromises.length} publicação(ões) criada(s) e atribuída(s) com sucesso!`);
+                 navigate('/admin/posts');
+            }
+    
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -544,7 +560,6 @@ const CreatePost: React.FC = () => {
     
     const campaignsForSelectedState = campaigns.filter(c => c.stateAbbr === selectedState);
 
-    // FIX: Add missing handleFileChange function definition.
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -563,7 +578,6 @@ const CreatePost: React.FC = () => {
             <h1 className="text-3xl font-bold mb-6">{editingScheduledPostId ? "Editar Agendamento" : "Nova Publicação"}</h1>
             {isLoading ? <p>Carregando...</p> : (
                 <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
-                    {/* ... Rest of the form JSX ... */}
                      <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
                         <legend className="px-2 font-semibold text-primary">Informações Básicas</legend>
                         <div>
@@ -575,10 +589,22 @@ const CreatePost: React.FC = () => {
                         </div>
                         {selectedState && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Evento / Gênero</label>
-                                {campaignsForSelectedState.map(c => (
-                                    <label key={c.id} className="flex items-center space-x-2"><input type="radio" name="campaign" value={c.id} checked={selectedCampaigns.has(c.id)} onChange={() => setSelectedCampaigns(new Set([c.id]))} /><span>{c.name}</span></label>
-                                ))}
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Evento / Gênero (pode selecionar mais de um)</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {campaignsForSelectedState.map(c => (
+                                        <label key={c.id} className="flex items-center space-x-2 p-2 bg-gray-800 rounded-md">
+                                            <input 
+                                                type="checkbox" 
+                                                name="campaign" 
+                                                value={c.id} 
+                                                checked={selectedCampaigns.has(c.id)} 
+                                                onChange={() => handleCampaignChange(c.id)}
+                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                            />
+                                            <span>{c.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         <div>
@@ -614,10 +640,10 @@ const CreatePost: React.FC = () => {
 
                     <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
                         <legend className="px-2 font-semibold text-primary">Atribuir Divulgadoras ({selectedPromoters.size})</legend>
-                        {filteredPromoters.length > 0 ? (
+                        {promoters.length > 0 ? (
                             <div className="max-h-60 overflow-y-auto border border-gray-600 rounded-md p-2 space-y-1">
-                                <label className="flex items-center space-x-2 p-1 font-semibold cursor-pointer"><input type="checkbox" onChange={handleSelectAllPromoters} checked={selectedPromoters.size === promoters.length} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Selecionar Todas</span></label>
-                                {filteredPromoters.map(p => <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>{p.name} ({p.instagram})</span></label>)}
+                                <label className="flex items-center space-x-2 p-1 font-semibold cursor-pointer"><input type="checkbox" onChange={handleSelectAllPromoters} checked={selectedPromoters.size === promoters.length && promoters.length > 0} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>Selecionar Todas</span></label>
+                                {promoters.map(p => <label key={p.id} className="flex items-center space-x-2 p-1 rounded hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" checked={selectedPromoters.has(p.id)} onChange={() => handlePromoterToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" /><span>{p.name} ({p.instagram})</span></label>)}
                             </div>
                         ) : <p className="text-sm text-gray-400">Selecione um evento para ver as divulgadoras aprovadas.</p>}
                     </fieldset>
