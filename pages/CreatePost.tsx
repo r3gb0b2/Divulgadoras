@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -8,7 +7,7 @@ import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
 import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, LinkTemplate, Timestamp } from '../types';
 import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
-import { auth, functions } from '../firebase/config';
+import { auth } from '../firebase/config';
 import { storage } from '../firebase/config';
 import firebase from 'firebase/compat/app';
 
@@ -447,128 +446,72 @@ const CreatePost: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
+        if (selectedCampaigns.size !== 1) { setError("Selecione exatamente um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
         if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
         if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
         if (postType === 'text' && !textContent.trim()) { setError("Escreva o conteúdo do post de texto."); return; }
         if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
-    
+
         setIsSubmitting(true);
         setError('');
-    
+
         try {
-            // Logic for editing a single scheduled post
-            if (editingScheduledPostId) {
-                if (selectedCampaigns.size !== 1) {
-                    throw new Error("Ao editar um agendamento, apenas um evento pode ser selecionado.");
-                }
-                const campaignId = Array.from(selectedCampaigns)[0];
-                const campaign = campaigns.find(c => c.id === campaignId);
-                if (!campaign) throw new Error("Evento selecionado para edição é inválido.");
-                
-                // (The rest of the single-post update logic will go here, adapted)
-                // For now, this is a simplified version. The main request is for multi-create.
-                 const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
-                 let expiryTimestamp: Date | null = null;
-                if (expiresAt) {
-                    const [year, month, day] = expiresAt.split('-').map(Number);
-                    expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
-                }
-                 const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+            const selectedCampaignId = Array.from(selectedCampaigns)[0];
+            const campaign = campaigns.find(c => c.id === selectedCampaignId);
+            if (!campaign) throw new Error("Evento selecionado é inválido.");
 
-                const postPayload: ScheduledPostData = {
-                    campaignName: campaign.name,
-                    eventName: eventName.trim() || undefined,
-                    stateAbbr: campaign.stateAbbr, type: postType, textContent: textContent || undefined, instructions,
-                    postLink: postLink.trim() || undefined, isActive, expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
-                    autoAssignToNewPromoters: autoAssign, allowLateSubmissions, allowImmediateProof, postFormats,
-                    skipProofRequirement, allowJustification, googleDriveUrl: googleDriveUrl.trim() || undefined,
-                };
-
-                const scheduledData = {
-                    organizationId: selectedOrgId, postData: postPayload,
-                    assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
-                    scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
-                    status: 'pending' as 'pending', createdByEmail: adminData.email,
-                };
-                
-                await updateScheduledPost(editingScheduledPostId, scheduledData);
-                alert("Agendamento atualizado com sucesso!");
-                navigate('/admin/scheduled-posts');
-                return; 
-            }
-    
-            // Logic for creating new posts (potentially multiple)
-            if (selectedCampaigns.size === 0) {
-                throw new Error("Selecione pelo menos um evento/gênero.");
-            }
-    
-            let finalMediaUrl: string | undefined = originalMediaPath || undefined;
-            if (mediaFile) {
-                const fileExtension = mediaFile.name.split('.').pop();
-                const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = storage.ref(fileName);
-                await storageRef.put(mediaFile);
-                finalMediaUrl = storageRef.fullPath;
-            }
-    
+            const promotersToAssign = promoters.filter(p => selectedPromoters.has(p.id));
             let expiryTimestamp: Date | null = null;
             if (expiresAt) {
                 const [year, month, day] = expiresAt.split('-').map(Number);
                 expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
             }
-    
-            const creationPromises = [];
-            const createPostAndAssignments = functions.httpsCallable('createPostAndAssignments');
-    
-            for (const campaignId of selectedCampaigns) {
-                const campaign = campaigns.find(c => c.id === campaignId);
-                if (!campaign) continue;
-    
-                const promotersForThisCampaign = promoters.filter(p =>
-                    selectedPromoters.has(p.id) && p.campaignName === campaign.name
-                );
-    
-                if (promotersForThisCampaign.length === 0) continue;
-    
-                const postPayload: ScheduledPostData = {
-                    campaignName: campaign.name,
-                    eventName: eventName.trim() || undefined,
-                    stateAbbr: campaign.stateAbbr, type: postType, textContent: textContent || undefined,
-                    instructions, postLink: postLink.trim() || undefined, isActive,
-                    expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
-                    autoAssignToNewPromoters: autoAssign, allowLateSubmissions, allowImmediateProof,
-                    postFormats, skipProofRequirement, allowJustification,
-                    googleDriveUrl: googleDriveUrl.trim() || undefined, mediaUrl: finalMediaUrl
+
+            const postPayload: ScheduledPostData = {
+                campaignName: campaign.name,
+                eventName: eventName.trim() || undefined,
+                stateAbbr: campaign.stateAbbr,
+                type: postType,
+                textContent: textContent || undefined,
+                instructions,
+                postLink: postLink.trim() || undefined,
+                isActive,
+                // FIX: Changed `expiresAt: expiryTimestamp || null` to `expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null` to correctly convert a JavaScript Date object into a Firestore Timestamp, resolving a type mismatch error during data submission.
+                expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
+                autoAssignToNewPromoters: autoAssign,
+                allowLateSubmissions,
+                allowImmediateProof,
+                postFormats,
+                skipProofRequirement,
+                allowJustification,
+                googleDriveUrl: googleDriveUrl.trim() || undefined,
+            };
+
+            if (isScheduling) {
+                const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+                const scheduledData = {
+                    organizationId: selectedOrgId,
+                    postData: postPayload,
+                    assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
+                    scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
+                    status: 'pending' as 'pending',
+                    createdByEmail: adminData.email,
                 };
-    
-                if (isScheduling) {
-                    const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                    const scheduledData = {
-                        organizationId: selectedOrgId, postData: postPayload,
-                        assignedPromoters: promotersForThisCampaign.map(p => ({ id: p.id, email: p.email, name:p.name })),
-                        scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
-                        status: 'pending' as 'pending', createdByEmail: adminData.email,
-                    };
-                    creationPromises.push(schedulePost(scheduledData));
+                if (editingScheduledPostId) {
+                    await updateScheduledPost(editingScheduledPostId, scheduledData);
+                    alert("Agendamento atualizado com sucesso!");
                 } else {
-                    const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                    creationPromises.push(createPostAndAssignments({ postData: finalPostData, assignedPromoters: promotersForThisCampaign }));
+                    await schedulePost(scheduledData);
+                    alert("Publicação agendada com sucesso!");
                 }
+                navigate('/admin/scheduled-posts');
+            } else {
+                const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
+                await createPost(finalPostData, mediaFile, promotersToAssign);
+                alert("Publicação criada e atribuída com sucesso!");
+                navigate('/admin/posts');
             }
-    
-            if (creationPromises.length === 0) {
-                throw new Error("Nenhuma divulgadora válida encontrada para os eventos selecionados.");
-            }
-    
-            await Promise.all(creationPromises);
-    
-            const action = isScheduling ? "agendadas" : "criadas e atribuídas";
-            alert(`Publicações ${action} com sucesso para ${selectedCampaigns.size} evento(s)!`);
-    
-            const navigateTo = isScheduling ? '/admin/scheduled-posts' : '/admin/posts';
-            navigate(navigateTo);
-    
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -634,10 +577,7 @@ const CreatePost: React.FC = () => {
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Evento / Gênero</label>
                                 {campaignsForSelectedState.map(c => (
-                                    <label key={c.id} className="flex items-center space-x-2">
-                                        <input type="checkbox" name="campaign" value={c.id} checked={selectedCampaigns.has(c.id)} onChange={() => handleCampaignChange(c.id)} />
-                                        <span>{c.name}</span>
-                                    </label>
+                                    <label key={c.id} className="flex items-center space-x-2"><input type="radio" name="campaign" value={c.id} checked={selectedCampaigns.has(c.id)} onChange={() => setSelectedCampaigns(new Set([c.id]))} /><span>{c.name}</span></label>
                                 ))}
                             </div>
                         )}

@@ -632,11 +632,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
 
-// FIX: Safely handle 'unknown' error type before passing it to the alert.
         } catch (error: unknown) {
             console.error("Failed to send manual notification:", error);
-            const errorMessage = (error instanceof Error) ? error.message : String(error);
-            alert(`Falha ao enviar notificação: ${errorMessage}`);
+            // FIX: Safely handle 'unknown' error type before passing it to the alert.
+            let detailedError: string = 'Ocorreu um erro desconhecido.';
+            let providerName: string = 'Brevo (v9.2)';
+
+            if (typeof error === 'object' && error !== null) {
+                const err = error as { message?: string, details?: any };
+                if (err.details) {
+                    detailedError = err.details.detailedError || err.details.originalError?.message || err.message || detailedError;
+                    providerName = err.details.provider || providerName;
+                } else if (err.message) {
+                    detailedError = err.message;
+                }
+            } else {
+                detailedError = String(error);
+            }
+            
+            alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
         } finally {
             setNotifyingId(null);
         }
