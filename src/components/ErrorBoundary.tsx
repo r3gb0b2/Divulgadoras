@@ -11,15 +11,12 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Replaced the class property initializer with a constructor to properly initialize state and component context.
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // FIX: Using a class property initializer for state, as the constructor-based approach was causing context issues.
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.

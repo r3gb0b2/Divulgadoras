@@ -635,7 +635,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         } catch (error: unknown) {
             console.error("Failed to send manual notification:", error);
-            // FIX: Safely handle 'unknown' error type before passing it to the alert.
             let detailedError: string = 'Ocorreu um erro desconhecido.';
             let providerName: string = 'Brevo (v9.2)';
 
