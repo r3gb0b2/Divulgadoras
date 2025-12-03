@@ -677,12 +677,27 @@ export const getScheduledPostsForPromoter = async (email: string): Promise<Sched
 
 // --- WhatsApp Reminder Functions ---
 
-export const getAllWhatsAppReminders = async (): Promise<WhatsAppReminder[]> => {
+export const getWhatsAppRemindersPage = async (
+  limitPerPage: number,
+  cursor?: firebase.firestore.QueryDocumentSnapshot
+): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
     try {
-        const snapshot = await firestore.collection("whatsAppReminders").orderBy('createdAt', 'desc').get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+        let query = firestore.collection("whatsAppReminders")
+            .orderBy('createdAt', 'desc')
+            .limit(limitPerPage);
+        
+        if (cursor) {
+            query = query.startAfter(cursor);
+        }
+
+        const snapshot = await query.get();
+        const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+        const lastVisible = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+
+        return { reminders, lastVisible };
+
     } catch (error) {
-        console.error("Error fetching all WhatsApp reminders: ", error);
+        console.error("Error fetching WhatsApp reminders page: ", error);
         throw new Error("Não foi possível buscar os lembretes do WhatsApp.");
     }
 };
