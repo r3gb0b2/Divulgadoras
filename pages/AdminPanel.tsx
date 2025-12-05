@@ -749,7 +749,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (err: unknown) {
-            // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'. Safely handle the unknown error type by checking if it's an Error instance before accessing .message.
+            // FIX: Safely handle the 'unknown' error type by checking if it's an instance of Error before accessing the .message property.
             const errorMessage = (err instanceof Error) ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

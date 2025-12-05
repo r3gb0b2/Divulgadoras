@@ -1638,3 +1638,148 @@ exports.processWhatsAppReminders = functions.region("southamerica-east1").pubsub
     await Promise.all(promises);
     return null;
 });
+
+// --- Accept All Justifications & Reminders (Manual Action) ---
+
+exports.acceptAllJustifications = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "ID do post é obrigatório.");
+
+    try {
+        const query = db.collection("postAssignments").where("postId", "==", postId);
+        const snapshot = await query.get();
+        const batch = db.batch();
+        let count = 0;
+
+        snapshot.forEach((doc) => {
+            const assignment = doc.data();
+            // Justifications are identified by having a 'justification' field.
+            // Only update those that are not already accepted/rejected.
+            if (assignment.justification && assignment.justificationStatus !== 'accepted' && assignment.justificationStatus !== 'rejected') {
+                batch.update(doc.ref, { justificationStatus: 'accepted' });
+                count++;
+            }
+        });
+
+        if (count > 0) {
+            await batch.commit();
+        }
+
+        return { success: true, count, message: `${count} justificativas aceitas.` };
+    } catch (error) {
+        console.error("Error accepting all justifications:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+exports.sendPostReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "ID do post é obrigatório.");
+
+    if (!brevoApiInstance) throw new functions.https.HttpsError("failed-precondition", "Serviço de e-mail não configurado.");
+
+    try {
+        const postDoc = await db.collection("posts").doc(postId).get();
+        if (!postDoc.exists) throw new Error("Post não encontrado.");
+        const post = postDoc.data();
+
+        // Get assignments: Confirmed AND No Proof
+        const query = db.collection("postAssignments")
+            .where("postId", "==", postId)
+            .where("status", "==", "confirmed");
+        
+        const snapshot = await query.get();
+        const assignments = snapshot.docs.map(d => d.data()).filter(a => !a.proofSubmittedAt);
+
+        if (assignments.length === 0) return { success: true, count: 0, message: "Nenhum lembrete necessário." };
+
+        let sentCount = 0;
+        const BATCH_SIZE = 500;
+
+        for (let i = 0; i < assignments.length; i += BATCH_SIZE) {
+            const batch = assignments.slice(i, i + BATCH_SIZE);
+            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            sendSmtpEmail.sender = { name: "Equipe Certa", email: brevoConfig.sender_email };
+            sendSmtpEmail.subject = `Lembrete: Envie seu print para ${post.campaignName}`;
+            
+            // Standard generic reminder body
+            const portalLink = "https://divulgadoras.vercel.app/#/status"; 
+            sendSmtpEmail.htmlContent = `<p>Olá {{params.promoterName}},</p><p>Este é um lembrete para enviar a comprovação da sua postagem para o evento <strong>${post.campaignName}</strong>.</p><p><a href="${portalLink}">Clique aqui para acessar o portal</a></p>`;
+
+            sendSmtpEmail.messageVersions = batch.map(a => ({
+                to: [{ email: a.promoterEmail, name: a.promoterName }],
+                params: { promoterName: a.promoterName }
+            }));
+
+            try {
+                await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+                sentCount += batch.length;
+            } catch (e) {
+                console.error("Batch email failed:", e);
+            }
+        }
+
+        return { success: true, count: sentCount, message: `${sentCount} lembretes enviados.` };
+
+    } catch (error) {
+        console.error("Error sending post reminders:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+exports.sendPendingReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "ID do post é obrigatório.");
+
+    if (!brevoApiInstance) throw new functions.https.HttpsError("failed-precondition", "Serviço de e-mail não configurado.");
+
+    try {
+        const postDoc = await db.collection("posts").doc(postId).get();
+        if (!postDoc.exists) throw new Error("Post não encontrado.");
+        const post = postDoc.data();
+
+        // Get assignments: Pending status
+        const query = db.collection("postAssignments")
+            .where("postId", "==", postId)
+            .where("status", "==", "pending");
+        
+        const snapshot = await query.get();
+        const assignments = snapshot.docs.map(d => d.data());
+
+        if (assignments.length === 0) return { success: true, count: 0, message: "Nenhum lembrete necessário." };
+
+        let sentCount = 0;
+        const BATCH_SIZE = 500;
+
+        for (let i = 0; i < assignments.length; i += BATCH_SIZE) {
+            const batch = assignments.slice(i, i + BATCH_SIZE);
+            const sendSmtpEmail = new Brevo.SendSmtpEmail();
+            sendSmtpEmail.sender = { name: "Equipe Certa", email: brevoConfig.sender_email };
+            sendSmtpEmail.subject = `Nova Tarefa Pendente: ${post.campaignName}`;
+            
+            const portalLink = "https://divulgadoras.vercel.app/#/status";
+            sendSmtpEmail.htmlContent = `<p>Olá {{params.promoterName}},</p><p>Você tem uma nova tarefa de postagem pendente para <strong>${post.campaignName}</strong>. Por favor, acesse o portal para confirmar e realizar a postagem.</p><p><a href="${portalLink}">Acessar Portal</a></p>`;
+
+            sendSmtpEmail.messageVersions = batch.map(a => ({
+                to: [{ email: a.promoterEmail, name: a.promoterName }],
+                params: { promoterName: a.promoterName }
+            }));
+
+            try {
+                await brevoApiInstance.sendTransacEmail(sendSmtpEmail);
+                sentCount += batch.length;
+            } catch (e) {
+                console.error("Batch email failed:", e);
+            }
+        }
+
+        return { success: true, count: sentCount, message: `${sentCount} lembretes enviados.` };
+
+    } catch (error) {
+        console.error("Error sending pending reminders:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});

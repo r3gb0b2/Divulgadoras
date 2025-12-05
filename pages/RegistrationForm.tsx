@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, updatePromoter } from '../services/promoterService';
+import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
@@ -270,7 +270,7 @@ const PromoterForm: React.FC = () => {
             );
         }
 
-        await updatePromoter(editId, {
+        await resubmitPromoterApplication(editId, {
             ...formData,
             photoUrls: finalPhotoUrls,
             status: 'pending', // Reset status to pending for re-evaluation

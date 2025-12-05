@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -11,7 +12,6 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Using a class property initializer for state, as the constructor-based approach was causing context issues.
   state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -26,6 +26,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
+    // FIX: 'this' keyword is required to call setState on a class component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -60,6 +61,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    // FIX: Component props must be accessed via 'this.props' in a class component.
     return this.props.children;
   }
 }
