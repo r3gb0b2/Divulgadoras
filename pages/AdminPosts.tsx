@@ -137,6 +137,21 @@ const AdminPosts: React.FC = () => {
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, allowJustification: post.allowJustification } : p));
         }
     }
+
+    const handleToggleAutoAssign = async (post: Post) => {
+        try {
+            const newVal = !post.autoAssignToNewPromoters;
+            // Optimistic update locally
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, autoAssignToNewPromoters: newVal } : p));
+            
+            // Call API
+            await updatePost(post.id, { autoAssignToNewPromoters: newVal });
+        } catch (e: any) {
+            alert("Erro ao atualizar atribuição automática: " + e.message);
+            // Revert on error
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, autoAssignToNewPromoters: post.autoAssignToNewPromoters } : p));
+        }
+    }
     
     const renderContent = () => {
         if (isLoading) {
@@ -200,6 +215,17 @@ const AdminPosts: React.FC = () => {
                                 <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
                                 <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4 space-y-3">
+                                     {/* Toggle for Auto Assign */}
+                                     <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={!!post.autoAssignToNewPromoters} 
+                                            onChange={() => handleToggleAutoAssign(post)}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                        />
+                                        <span>Atribuir a novas divulgadoras</span>
+                                     </label>
+
                                      {/* Toggle for Justifications */}
                                      <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
                                         <input 

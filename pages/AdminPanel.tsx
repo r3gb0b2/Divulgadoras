@@ -633,7 +633,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
 
-        } catch (error: unknown) {
+        } catch (error: any) {
             console.error("Failed to send manual notification:", error);
             let detailedError: string = 'Ocorreu um erro desconhecido.';
             let providerName: string = 'Brevo (v9.2)';
@@ -748,9 +748,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Safely handle the 'unknown' error type by checking if it's an instance of Error before accessing the .message property.
-            const errorMessage = (err instanceof Error) ? err.message : String(err);
+        } catch (err: any) {
+            const errorMessage = err.message || String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
