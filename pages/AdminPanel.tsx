@@ -1090,7 +1090,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email) => handleLookupPromoter(email)} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>

@@ -123,6 +123,33 @@ const AdminPosts: React.FC = () => {
         }
     }, [posts, activePosts, inactivePosts, statusFilter]);
 
+    const handleToggleActive = async (post: Post) => {
+        try {
+            const newActiveState = !post.isActive;
+            const updateData: Partial<Post> = { isActive: newActiveState };
+
+            // If deactivating, force auto-assign to false
+            if (!newActiveState) {
+                updateData.autoAssignToNewPromoters = false;
+            }
+
+            // Optimistic update locally
+            setPosts(prev => prev.map(p => {
+                if (p.id === post.id) {
+                    return { ...p, ...updateData };
+                }
+                return p;
+            }));
+            
+            // Call API
+            await updatePost(post.id, updateData);
+        } catch (e: any) {
+            alert("Erro ao atualizar status do post: " + e.message);
+            // Revert on error
+            setPosts(prev => prev.map(p => p.id === post.id ? post : p));
+        }
+    }
+
     const handleToggleJustification = async (post: Post) => {
         try {
             const newVal = post.allowJustification === false ? true : false;
@@ -140,6 +167,12 @@ const AdminPosts: React.FC = () => {
 
     const handleToggleAutoAssign = async (post: Post) => {
         try {
+            // Cannot enable auto-assign if post is inactive
+            if (!post.isActive && !post.autoAssignToNewPromoters) {
+                alert("Você precisa ativar a postagem antes de habilitar a atribuição automática.");
+                return;
+            }
+
             const newVal = !post.autoAssignToNewPromoters;
             // Optimistic update locally
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, autoAssignToNewPromoters: newVal } : p));
@@ -215,13 +248,25 @@ const AdminPosts: React.FC = () => {
                                 <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
                                 <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4 space-y-3">
-                                     {/* Toggle for Auto Assign */}
+                                     {/* Toggle for Active Status */}
                                      <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={post.isActive} 
+                                            onChange={() => handleToggleActive(post)}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                        />
+                                        <span className={post.isActive ? 'text-green-400 font-medium' : ''}>Postagem Ativa</span>
+                                     </label>
+
+                                     {/* Toggle for Auto Assign */}
+                                     <label className={`flex items-center space-x-2 text-sm cursor-pointer ${!post.isActive ? 'opacity-50' : 'text-gray-300 hover:text-white'}`}>
                                         <input 
                                             type="checkbox" 
                                             checked={!!post.autoAssignToNewPromoters} 
                                             onChange={() => handleToggleAutoAssign(post)}
-                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                            disabled={!post.isActive}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:cursor-not-allowed"
                                         />
                                         <span>Atribuir a novas divulgadoras</span>
                                      </label>
