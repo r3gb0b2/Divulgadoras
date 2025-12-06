@@ -748,8 +748,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) {
-            const errorMessage = err.message || String(err);
+// FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+// The error type in a catch block defaults to 'unknown'. We need to safely
+// extract the message string before passing it to the state setter.
+        } catch (err: unknown) {
+            let errorMessage = "Ocorreu um erro na busca.";
+            if (err instanceof Error) {
+                errorMessage = err.message;
+            } else if (typeof err === 'string') {
+                errorMessage = err;
+            }
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
