@@ -27,7 +27,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     // FIX: 'this' keyword is required to call setState on a class component.
-// FIX: 'this' keyword is required to call setState on a class component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -63,7 +62,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     }
 
     // FIX: Component props must be accessed via 'this.props' in a class component.
-// FIX: Component props must be accessed via 'this.props' in a class component.
     return this.props.children;
   }
 }

@@ -27,7 +27,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-// FIX: In a class component, 'this' is required to access 'setState'.
+    // FIX: In a class component, 'this' is required to access 'setState'.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -62,7 +62,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-// FIX: In a class component, 'this' is required to access 'props'.
+    // FIX: In a class component, 'this' is required to access 'props'.
     return this.props.children;
   }
 }

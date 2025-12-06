@@ -192,7 +192,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
             return (
                 <div className="flex flex-col sm:flex-row gap-2 p-4">
                     {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
-                    <button onClick={handleConfirm} disabled={isConfirming} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">Eu vou postar!</button>
+                    <button onClick={handleConfirm} disabled={isConfirming} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">Eu postei!</button>
                 </div>
             );
         }
@@ -285,8 +285,40 @@ const PostCheck: React.FC = () => {
 
     useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
     const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); };
-    const handleConfirmAssignment = async (assignment: PostAssignment) => { try { await confirmAssignment(assignment.id); performSearch(email); } catch (err: any) { alert(err.message); } };
-    const handleReminderRequested = () => { setAssignments(prev => prev.map(a => ({ ...a, whatsAppReminderRequestedAt: firebase.firestore.Timestamp.now() }))); alert("Lembrete agendado com sucesso para daqui a 6 horas!"); };
+    const handleConfirmAssignment = async (assignment: PostAssignment) => {
+        const wantsReminder = window.confirm(
+            "Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?"
+        );
+
+        try {
+            if (wantsReminder) {
+                await scheduleWhatsAppReminder(assignment.id);
+                // The assignment is updated below, no need to update state twice
+                alert("Lembrete agendado com sucesso! Você receberá uma mensagem no WhatsApp.");
+            }
+            
+            // Always confirm after handling the reminder part
+            await confirmAssignment(assignment.id);
+            if (wantsReminder) {
+                // Manually update assignment to show reminder was set, as `confirmAssignment` doesn't do this
+                await updateAssignment(assignment.id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            }
+
+            performSearch(email); // This will refresh the entire list state
+
+        } catch (err: any) {
+            alert((err as Error).message); // This will catch errors from both schedule and confirm
+        }
+    };
+    const handleReminderRequested = async () => { 
+        try {
+            await updateAssignment(assignments[0].id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            setAssignments(prev => prev.map(a => ({ ...a, whatsAppReminderRequestedAt: firebase.firestore.Timestamp.now() })));
+            alert("Lembrete agendado com sucesso para daqui a 6 horas!"); 
+        } catch (err: any) {
+             alert((err as Error).message);
+        }
+    };
     const handleOpenJustification = (assignment: PostAssignment) => { setJustificationAssignment(assignment); setJustificationText(''); setJustificationFiles([]); };
     const handleJustificationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) setJustificationFiles(Array.from(e.target.files)); };
     const handleSubmitJustification = async () => { if (!justificationAssignment || !justificationText.trim()) return; setIsSubmittingJustification(true); try { await submitJustification(justificationAssignment.id, justificationText, justificationFiles); setJustificationAssignment(null); performSearch(email); } catch (err: any) { alert(err.message); } finally { setIsSubmittingJustification(false); } };
