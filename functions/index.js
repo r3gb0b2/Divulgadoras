@@ -1,100 +1,22 @@
 
-/**
- * Import and initialize the Firebase Admin SDK.
- */
-const admin = require("firebase-admin");
-const functions = require("firebase-functions");
-const Brevo = require("@getbrevo/brevo");
-
-// Initialize Firebase Admin SDK
-admin.initializeApp();
-const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
-
-// --- Safe Initialization of Third-Party Services ---
-
-const getConfig = () => {
-    return functions.config() || {};
-};
-
-// --- Firestore Triggers ---
-
-exports.onPromoterStatusChange = functions
-    .region("southamerica-east1")
-    .firestore.document("promoters/{promoterId}")
-    .onUpdate(async (change, context) => {
-      const newValue = change.after.data();
-      const oldValue = change.before.data();
-      const promoterId = context.params.promoterId;
-
-      // Logic to assign posts if newly approved and joined group
-      const justJoinedGroup = oldValue.hasJoinedGroup !== true && newValue.hasJoinedGroup === true;
-      const isApproved = newValue.status === "approved";
-
-      if (isApproved && justJoinedGroup) {
-        // Implement assignment logic or call helper
-        // Simplified for restoration
-      }
-
-      // WhatsApp Notification Logic
-      const statusChanged = newValue.status !== oldValue.status;
-      const isNotificationStatus =
-        newValue.status === "approved" ||
-        newValue.status === "rejected" ||
-        newValue.status === "rejected_editable";
-
-      if (statusChanged && isNotificationStatus) {
-        const shouldSendWhatsApp = (newValue.status === "approved" || newValue.status === "rejected_editable") && newValue.whatsapp;
-        
-        if (shouldSendWhatsApp) {
-            try {
-                await sendWhatsAppStatusChange(newValue, promoterId);
-            } catch (waError) {
-                console.error(`[Z-API Trigger Error] Failed to send WhatsApp for ${promoterId}:`, waError);
-            }
-        }
-      }
-    });
-
-exports.onPostAssignmentCreated = functions.region("southamerica-east1").firestore
-    .document("postAssignments/{assignmentId}")
-    .onCreate(async (snap, context) => {
-        const assignmentData = snap.data();
-        if (!assignmentData) return;
-
-        const { organizationId, promoterId, post } = assignmentData;
-        
-        try {
-            const orgDoc = await db.collection("organizations").doc(organizationId).get();
-            const orgData = orgDoc.exists ? orgDoc.data() : {};
-
-            if (orgData.whatsappNotificationsEnabled !== false) {
-                const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-                if (promoterDoc.exists) {
-                    const promoterData = promoterDoc.data();
-                    if (promoterData.whatsapp) {
-                        await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData, promoterId);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error(`Failed to process notification for assignment ${context.params.assignmentId}:`, error);
-        }
-    });
-
-// --- Callable Functions ---
-
-// Função de Teste do Z-API
+// --- Função de Teste do Z-API (Para Debug) ---
 exports.testZapi = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    
     const config = getConfig().zapi;
+    const phoneToTest = data.phone || '5511999999999'; 
+
     return {
         configFound: !!config,
+        hasInstanceId: !!config?.instance_id,
+        hasToken: !!config?.token,
+        hasClientToken: !!config?.client_token,
+        attemptingSendTo: phoneToTest,
         timestamp: new Date().toISOString()
     };
 });
 
-// Agendar Lembrete de WhatsApp (Com Verificação de Duplicidade)
+// --- Agendar Lembrete de WhatsApp (Com Verificação de Duplicidade) ---
 exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { assignmentId } = data;
     if (!assignmentId) throw new functions.https.HttpsError("invalid-argument", "ID da tarefa obrigatório.");
@@ -106,7 +28,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
         
         const assignment = assignmentSnap.data();
 
-        // 1. Check for existing pending reminder to prevent duplicates
+        // 1. Check for existing pending reminder to prevent duplicates/overload
         const existingReminderQuery = await db.collection("whatsAppReminders")
             .where("assignmentId", "==", assignmentId)
             .where("status", "==", "pending")
@@ -127,7 +49,8 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
             throw new functions.https.HttpsError("failed-precondition", "Divulgadora sem WhatsApp cadastrado.");
         }
 
-        // 3. Create Reminder (6 hours from now)
+        // 3. Create Reminder
+        // Schedule for 6 hours from now
         const sendAt = admin.firestore.Timestamp.fromMillis(Date.now() + 6 * 60 * 60 * 1000); 
 
         const reminderData = {
@@ -148,6 +71,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
         const reminderRef = db.collection("whatsAppReminders").doc();
         batch.set(reminderRef, reminderData);
         
+        // Update assignment to show reminder was requested
         batch.update(assignmentRef, { 
             whatsAppReminderRequestedAt: admin.firestore.FieldValue.serverTimestamp() 
         });
@@ -162,8 +86,10 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
     }
 });
 
-// Enviar Lembrete Imediatamente (Novo Texto)
+// --- Enviar Lembrete Imediatamente (Admin ou Cron Job) ---
+// Atualizado com o texto focado apenas no envio do print
 exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // Auth check usually here, but allowed open for manual trigger from admin panel which handles auth
     const { reminderId } = data;
     if (!reminderId) throw new functions.https.HttpsError("invalid-argument", "ID do lembrete obrigatório.");
 
@@ -180,6 +106,7 @@ exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.o
         const reminder = reminderSnap.data();
         if (reminder.status === 'sent') return { success: true, message: "Já enviado." };
 
+        // Phone formatting
         let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
         if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
@@ -187,7 +114,8 @@ exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.o
         const firstName = reminder.promoterName.split(' ')[0];
         const portalLink = `https://divulgadoras.vercel.app/#/proof/${reminder.assignmentId}`;
 
-        // TEXTO ATUALIZADO: Foco apenas no envio do print
+        // --- NEW MESSAGE TEXT ---
+        // Focus only on sending proof, no "pending post" mention.
         const message = `Olá ${firstName}! 📸\n\nPassando para lembrar de enviar o *print* da sua publicação no evento *${reminder.postCampaignName}*.\n\nPara garantir sua presença na lista, clique no link abaixo e envie agora:\n${portalLink}`;
 
         const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
@@ -224,106 +152,4 @@ exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.o
         console.error("Error sending reminder:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
-});
-
-// Create Post and Assignments (Critical for Post Creation)
-exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    // Basic implementation to support functionality
-    const { postData, assignedPromoters } = data;
-    try {
-        const batch = db.batch();
-        const postRef = db.collection("posts").doc();
-        
-        batch.set(postRef, {
-            ...postData,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        assignedPromoters.forEach(promoter => {
-            const assignmentRef = db.collection("postAssignments").doc();
-            batch.set(assignmentRef, {
-                postId: postRef.id,
-                post: postData,
-                organizationId: postData.organizationId,
-                promoterId: promoter.id,
-                promoterEmail: promoter.email,
-                promoterName: promoter.name,
-                status: "pending",
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-        });
-
-        await batch.commit();
-        return { success: true, postId: postRef.id };
-    } catch (e) {
-        console.error("Error creating post:", e);
-        throw new functions.https.HttpsError("internal", "Failed to create post");
-    }
-});
-
-// Helper Functions
-async function sendWhatsAppStatusChange(promoterData, promoterId) {
-    const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) return;
-
-    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-    const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
-    let message = "";
-
-    if (promoterData.status === 'approved') {
-        const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
-        message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
-    } else if (promoterData.status === 'rejected_editable') {
-        const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ''}?edit_id=${promoterId}`;
-        message = `Olá ${firstName}! 👋\n\nSeu cadastro precisa de um ajuste.\n\nClique para corrigir:\n${editLink}`;
-    } else {
-        return;
-    }
-
-    const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-    const headers = { 'Content-Type': 'application/json' };
-    if (config.client_token) headers['Client-Token'] = config.client_token;
-
-    await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ phone: cleanPhone, message: message })
-    });
-}
-
-async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData, promoterId) {
-    const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) return;
-
-    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-    const firstName = promoterData.name.split(' ')[0];
-    const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
-    
-    let caption = `✨ *NOVA POSTAGEM* ✨\n\nOlá ${firstName}! Nova publicação disponível.\n\n`;
-    if (postData.instructions) caption += `📝 *Instruções:* ${postData.instructions.substring(0, 300)}...\n\n`;
-    caption += `👇 *CONFIRA AQUI:* 👇\n${portalLink}`;
-
-    const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-    const headers = { 'Content-Type': 'application/json' };
-    if (config.client_token) headers['Client-Token'] = config.client_token;
-
-    await fetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ phone: cleanPhone, message: caption })
-    });
-}
-
-// Campaign Sender
-exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { messageTemplate, filters, organizationId } = data;
-    // Implementation placeholder - actual logic would query promoters and send messages
-    return { success: true, count: 0, failures: 0, message: "Campaign sent (simulated)" };
 });

@@ -13,7 +13,6 @@ const PostCheck: React.FC = () => {
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [processingId, setProcessingId] = useState<string | null>(null); // Track which assignment is being processed
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
 
@@ -47,13 +46,9 @@ const PostCheck: React.FC = () => {
     };
 
     const handleConfirmAssignment = async (assignment: PostAssignment) => {
-        if (processingId) return; // Prevent double clicks globally
-
         const wantsReminder = window.confirm(
             "Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?"
         );
-
-        setProcessingId(assignment.id);
 
         try {
             // 1. First, confirm the assignment (Primary Action)
@@ -85,8 +80,6 @@ const PostCheck: React.FC = () => {
         } catch (err: any) {
             console.error(err);
             alert((err as Error).message);
-        } finally {
-            setProcessingId(null);
         }
     };
 
@@ -127,10 +120,9 @@ const PostCheck: React.FC = () => {
                                     ) : (
                                         <button 
                                             onClick={() => handleConfirmAssignment(assignment)} 
-                                            disabled={processingId === assignment.id}
-                                            className={`flex-1 px-4 py-2 text-white rounded-md font-semibold text-sm ${processingId === assignment.id ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                                            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-semibold text-sm"
                                         >
-                                            {processingId === assignment.id ? 'Processando...' : 'Já Postei'}
+                                            Já Postei
                                         </button>
                                     )}
                                 </div>
