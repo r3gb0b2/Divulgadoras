@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -399,7 +400,8 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
     }
 
     if (postData.postLink) {
-        caption += `🔗 *Link do Post:* ${postData.postLink}\n\n`;
+        const linkLabel = postData.type === 'text' ? 'Link para Interação' : 'Link do Post';
+        caption += `🔗 *${linkLabel}:* ${postData.postLink}\n\n`;
     }
 
     caption += `👇 *PARA CONFIRMAR E ENVIAR O PRINT:* 👇\n${portalLink}\n\n`;

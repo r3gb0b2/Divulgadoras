@@ -50,6 +50,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [mediaUrl, setMediaUrl] = useState(''); // For firebase path
     const [googleDriveUrl, setGoogleDriveUrl] = useState(''); // For GDrive link
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+    const [newMediaFile, setNewMediaFile] = useState<File | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
 
@@ -69,6 +70,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setTextContent(post.textContent || '');
             setPostLink(post.postLink || '');
             setPostFormats(post.postFormats || []);
+            setNewMediaFile(null); // Reset new file
             
             if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
                 setMediaUrl(post.mediaUrl);
@@ -108,6 +110,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             }
         });
     };
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setNewMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
+        }
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -140,7 +150,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         }
 
         try {
-            await onSave(updatedData, null); // Always null for file as upload is removed
+            await onSave(updatedData, newMediaFile);
             onClose();
         } catch(e) {
             // Error is handled by parent component
@@ -163,16 +173,28 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                     {post.type === 'image' && (
                          <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Link do Google Drive</label>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
+                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
                                 <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
                             </div>
                         </div>
                     )}
                     {post.type === 'video' && (
-                        <div>
-                             <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required />
-                             {googleDriveUrl && <div className="mt-2"><StorageMedia path={googleDriveUrl} type="video" className="w-full h-auto rounded-md" /></div>}
+                        <div className="space-y-4">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
+                                <input type="file" accept="video/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />}
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
+                                <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required={!newMediaFile && !mediaUrl} />
+                                {googleDriveUrl && <div className="mt-2"><StorageMedia path={googleDriveUrl} type="video" className="w-full h-auto rounded-md" /></div>}
+                             </div>
                         </div>
                     )}
 
