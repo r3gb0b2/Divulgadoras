@@ -484,13 +484,19 @@ const CreatePost: React.FC = () => {
                     const [year, month, day] = expiresAt.split('-').map(Number);
                     expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
                 }
+
+                // IMPORTANT: For text posts, clear mediaUrl and googleDriveUrl to avoid backend confusion.
+                const isText = postType === 'text';
+                const finalGoogleDriveUrl = isText ? undefined : (googleDriveUrl.trim() || undefined);
+                // If mediaFile exists, createPost handles it. If not, check originalMediaPath.
+                const finalMediaUrl = isText ? null : (originalMediaPath || null);
     
                 const postPayload: ScheduledPostData = {
                     campaignName: campaign.name,
                     eventName: eventName.trim() || undefined,
                     stateAbbr: campaign.stateAbbr,
                     type: postType,
-                    textContent: postType === 'text' ? undefined : (textContent || undefined), // Don't send textContent for interaction posts if we want to rely on link
+                    textContent: isText ? undefined : (textContent || undefined), 
                     instructions,
                     postLink: postLink.trim() || undefined,
                     isActive,
@@ -501,14 +507,14 @@ const CreatePost: React.FC = () => {
                     postFormats,
                     skipProofRequirement,
                     allowJustification,
-                    googleDriveUrl: googleDriveUrl.trim() || undefined,
-                    mediaUrl: originalMediaPath || null, // Will be updated inside createPost service if file provided
+                    googleDriveUrl: finalGoogleDriveUrl,
+                    mediaUrl: finalMediaUrl, // For scheduling or direct. If direct w/ file, createPost updates this.
                 };
     
                 if (isScheduling) {
                     // Logic for scheduling - upload if mediaFile exists.
-                    let scheduledMediaUrl = originalMediaPath;
-                    if (mediaFile) {
+                    let scheduledMediaUrl = finalMediaUrl;
+                    if (!isText && mediaFile) {
                         const fileExtension = mediaFile.name.split('.').pop();
                         const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
                         const storageRef = storage.ref(fileName);
@@ -519,7 +525,7 @@ const CreatePost: React.FC = () => {
                     const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
                     
                     // Update payload with real URL
-                    const scheduledPayload = { ...postPayload, mediaUrl: scheduledMediaUrl || null };
+                    const scheduledPayload = { ...postPayload, mediaUrl: scheduledMediaUrl };
 
                     const scheduledData = {
                         organizationId: selectedOrgId,
@@ -538,8 +544,9 @@ const CreatePost: React.FC = () => {
                     }
                 } else {
                     const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                    // Pass mediaFile to createPost service which handles upload
-                    creationPromises.push(createPost(finalPostData, promotersToAssign, mediaFile));
+                    // Pass mediaFile to createPost service which handles upload. Pass null if text type to be safe.
+                    const fileToUpload = isText ? null : mediaFile;
+                    creationPromises.push(createPost(finalPostData, promotersToAssign, fileToUpload));
                 }
             }
 
