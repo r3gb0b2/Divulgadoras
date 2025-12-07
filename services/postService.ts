@@ -27,29 +27,20 @@ const toDateSafe = (timestamp: any): Date | null => {
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
-  assignedPromoters: Promoter[],
-  mediaFile?: File | null
+  assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    // 1. Upload media if provided
-    let mediaUrl: string | null = (postData as any).mediaUrl || null;
+    // 1. Prepare data for the cloud function
+    // mediaUrl might be passed if duplicating a post with an existing Google Drive link or legacy URL
+    const existingMediaUrl = (postData as any).mediaUrl;
 
-    if (mediaFile) {
-        const fileExtension = mediaFile.name.split('.').pop();
-        const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-        const storageRef = storage.ref(fileName);
-        await storageRef.put(mediaFile);
-        mediaUrl = storageRef.fullPath;
-    }
-
-    // 2. Prepare data for the cloud function
     const finalPostData = {
         ...postData,
-        mediaUrl: mediaUrl,
+        mediaUrl: existingMediaUrl || null,
         // googleDriveUrl is already in postData from the form
     };
 
-    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    // 2. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
     const createPostAndAssignments = functions.httpsCallable('createPostAndAssignments');
     const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     

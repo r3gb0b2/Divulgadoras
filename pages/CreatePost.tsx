@@ -287,7 +287,6 @@ const CreatePost: React.FC = () => {
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
     const [textContent, setTextContent] = useState('');
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [googleDriveUrl, setGoogleDriveUrl] = useState('');
     const [instructions, setInstructions] = useState('');
@@ -433,22 +432,14 @@ const CreatePost: React.FC = () => {
             return newSet;
         });
     };
-    
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setMediaFile(file);
-            setMediaPreview(URL.createObjectURL(file));
-        }
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
         if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
-        if (postType === 'image' && !mediaPreview && !mediaFile && !googleDriveUrl) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
-        if (postType === 'video' && !mediaFile && !googleDriveUrl.trim()) { setError('Selecione um vídeo ou cole o link compartilhável do Google Drive.'); return; }
+        if (postType === 'image' && !mediaPreview && !googleDriveUrl) { setError("Forneça um link do Google Drive."); return; }
+        if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
         if (postType === 'text') {
             if (!postLink.trim()) {
                 setError("O link da interação é obrigatório.");
@@ -484,19 +475,13 @@ const CreatePost: React.FC = () => {
                     const [year, month, day] = expiresAt.split('-').map(Number);
                     expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
                 }
-
-                // IMPORTANT: For text posts, clear mediaUrl and googleDriveUrl to avoid backend confusion.
-                const isText = postType === 'text';
-                const finalGoogleDriveUrl = isText ? undefined : (googleDriveUrl.trim() || undefined);
-                // If mediaFile exists, createPost handles it. If not, check originalMediaPath.
-                const finalMediaUrl = isText ? null : (originalMediaPath || null);
     
                 const postPayload: ScheduledPostData = {
                     campaignName: campaign.name,
                     eventName: eventName.trim() || undefined,
                     stateAbbr: campaign.stateAbbr,
                     type: postType,
-                    textContent: isText ? undefined : (textContent || undefined), 
+                    textContent: postType === 'text' ? undefined : (textContent || undefined), // Don't send textContent for interaction posts if we want to rely on link
                     instructions,
                     postLink: postLink.trim() || undefined,
                     isActive,
@@ -507,29 +492,14 @@ const CreatePost: React.FC = () => {
                     postFormats,
                     skipProofRequirement,
                     allowJustification,
-                    googleDriveUrl: finalGoogleDriveUrl,
-                    mediaUrl: finalMediaUrl, // For scheduling or direct. If direct w/ file, createPost updates this.
+                    googleDriveUrl: googleDriveUrl.trim() || undefined,
                 };
     
                 if (isScheduling) {
-                    // Logic for scheduling - upload if mediaFile exists.
-                    let scheduledMediaUrl = finalMediaUrl;
-                    if (!isText && mediaFile) {
-                        const fileExtension = mediaFile.name.split('.').pop();
-                        const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                        const storageRef = storage.ref(fileName);
-                        await storageRef.put(mediaFile);
-                        scheduledMediaUrl = storageRef.fullPath;
-                    }
-
                     const scheduleDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-                    
-                    // Update payload with real URL
-                    const scheduledPayload = { ...postPayload, mediaUrl: scheduledMediaUrl };
-
                     const scheduledData = {
                         organizationId: selectedOrgId,
-                        postData: scheduledPayload,
+                        postData: postPayload,
                         assignedPromoters: promotersToAssign.map(p => ({ id: p.id, email: p.email, name: p.name })),
                         scheduledAt: firebase.firestore.Timestamp.fromDate(scheduleDateTime),
                         status: 'pending' as 'pending',
@@ -544,9 +514,7 @@ const CreatePost: React.FC = () => {
                     }
                 } else {
                     const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                    // Pass mediaFile to createPost service which handles upload. Pass null if text type to be safe.
-                    const fileToUpload = isText ? null : mediaFile;
-                    creationPromises.push(createPost(finalPostData, promotersToAssign, fileToUpload));
+                    creationPromises.push(createPost(finalPostData, promotersToAssign));
                 }
             }
 
@@ -657,32 +625,10 @@ const CreatePost: React.FC = () => {
                         
                         {postType === 'image' && (
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
-                                    <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                    {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                                </div>
-                                <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
-                                    <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-300">Link do Google Drive</label><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} /></div>
                             </div>
                         )}
-                        {postType === 'video' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
-                                    <input type="file" accept="video/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                    {mediaPreview && <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />}
-                                </div>
-                                <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
-                                <div>
-                                     <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
-                                    <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required={!mediaFile} />
-                                </div>
-                            </div>
-                        )}
+                        {postType === 'video' && <div><label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label><p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required /></div>}
                         
                         <div>
                             <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-300">Instruções</label><button type="button" onClick={() => setIsInstructionsModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button></div>

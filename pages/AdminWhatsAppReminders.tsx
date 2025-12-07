@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getWhatsAppRemindersPage, sendWhatsAppReminderImmediately } from '../services/postService';
 import { WhatsAppReminder, Timestamp } from '../types';
-import { ArrowLeftIcon, TrashIcon } from '../components/Icons';
+import { ArrowLeftIcon } from '../components/Icons';
 import { getOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
 import firebase from 'firebase/compat/app';
-import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
 
 const PAGE_SIZE = 15;
 
@@ -26,7 +24,6 @@ const AdminWhatsAppReminders: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const [isDeletingDuplicates, setIsDeletingDuplicates] = useState(false);
 
     const fetchReminders = useCallback(async (pageIndex: number) => {
         if (pageIndex < pages.length) {
@@ -97,25 +94,6 @@ const AdminWhatsAppReminders: React.FC = () => {
             setProcessingId(null);
         }
     };
-
-    const handleDeleteDuplicates = async () => {
-        if (!window.confirm("Isso apagará TODOS os lembretes duplicados pendentes no banco de dados, mantendo apenas o mais recente de cada tarefa. Deseja continuar?")) {
-            return;
-        }
-        setIsDeletingDuplicates(true);
-        setError('');
-        try {
-            const cleanupDuplicateReminders = httpsCallable(functions, 'cleanupDuplicateReminders');
-            const result = await cleanupDuplicateReminders();
-            const data = result.data as { count: number };
-            alert(`${data.count} lembretes duplicados foram removidos com sucesso.`);
-            window.location.reload(); // Refresh the whole page to reflect changes
-        } catch (err: any) {
-            setError(err.message || "Falha ao limpar duplicados.");
-        } finally {
-            setIsDeletingDuplicates(false);
-        }
-    };
     
     const formatDate = (ts: any) => {
         if (!ts) return "N/A";
@@ -151,21 +129,10 @@ const AdminWhatsAppReminders: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Lembretes de WhatsApp Agendados</h1>
-                <div className="flex gap-2">
-                    <button 
-                        onClick={handleDeleteDuplicates}
-                        disabled={isDeletingDuplicates}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-800 text-white rounded-md hover:bg-red-700 text-sm font-semibold disabled:opacity-50"
-                        title="Remove agendamentos extras para a mesma tarefa, mantendo apenas o mais recente."
-                    >
-                        <TrashIcon className="w-4 h-4" />
-                        <span>{isDeletingDuplicates ? 'Limpando...' : 'Limpar Duplicados'}</span>
-                    </button>
-                    <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                        <ArrowLeftIcon className="w-4 h-4" />
-                        <span>Voltar</span>
-                    </button>
-                </div>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    <span>Voltar</span>
+                </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
