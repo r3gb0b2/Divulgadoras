@@ -96,7 +96,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
-    const [isMediaProcessing, setIsMediaProcessing] = useState(false);
     
     // States from old ProofSection
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
@@ -148,10 +147,33 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         return (<div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500"><h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>{assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}<p className="mt-2 text-yellow-300">Você tem uma nova publicação para este evento!</p><p className="mt-2 text-gray-300 text-sm">Para visualizar, primeiro você precisa confirmar a leitura das regras e entrar no grupo do WhatsApp.</p><div className="mt-4 text-center"><Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors">Verificar Status e Aceitar Regras</Link></div></div>);
     }
 
-    const handleConfirm = async () => { setIsConfirming(true); try { await onConfirm(assignment); } finally { setIsConfirming(false); } };
+    const handleConfirm = async () => {
+        const wantsReminder = window.confirm(
+            "Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?"
+        );
+
+        try {
+            if (wantsReminder) {
+                await scheduleWhatsAppReminder(assignment.id);
+                // The assignment is updated below, no need to update state twice
+                alert("Lembrete agendado com sucesso! Você receberá uma mensagem no WhatsApp.");
+            }
+            
+            // Always confirm after handling the reminder part
+            await confirmAssignment(assignment.id);
+            if (wantsReminder) {
+                // Manually update assignment to show reminder was set, as `confirmAssignment` doesn't do this
+                await updateAssignment(assignment.id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            }
+
+            await onConfirm(assignment); // Refresh parent state
+
+        } catch (err: any) {
+            alert((err as Error).message); // This will catch errors from both schedule and confirm
+        }
+    };
     const handleCopyLink = () => { if (!assignment.post.postLink) return; navigator.clipboard.writeText(assignment.post.postLink).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }).catch(err => { console.error('Failed to copy link: ', err); alert('Falha ao copiar link.'); }); };
     
-    const handleFirebaseDownload = async () => { if (isMediaProcessing || !assignment.post.mediaUrl) return; setIsMediaProcessing(true); try { const path = assignment.post.mediaUrl; let finalUrl = path; if (!path.startsWith('http')) { const storageRef = storage.ref(path); finalUrl = await storageRef.getDownloadURL(); } const link = document.createElement('a'); link.href = finalUrl; const filename = finalUrl.split('/').pop()?.split('#')[0].split('?')[0] || 'download'; link.setAttribute('download', filename); link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer'); document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (error: any) { console.error('Failed to download from Firebase:', error); alert(`Não foi possível baixar a mídia do Link 1: ${error.message}`); } finally { setIsMediaProcessing(false); } };
     const handleGoogleDriveDownload = () => { if (!assignment.post.googleDriveUrl) return; const { googleDriveUrl, type } = assignment.post; let urlToOpen = googleDriveUrl; if (type === 'video') { const fileId = extractGoogleDriveId(googleDriveUrl); if (fileId) { urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`; } } window.open(urlToOpen, '_blank'); };
     
     const handleAddToCalendar = () => { if (!enableTimeDate) return; const title = `Enviar Print - ${assignment.post.campaignName}`; const description = `Está na hora de enviar o print da sua publicação!\\n\\nAcesse o link para enviar: ${window.location.href}`; const endDate = new Date(enableTimeDate.getTime() + 60 * 60 * 1000); const now = formatDateForICS(new Date()); const start = formatDateForICS(enableTimeDate); const end = formatDateForICS(endDate); const icsContent = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Equipe Certa//NONSGML v1.0//EN', 'BEGIN:VEVENT', `UID:${now}-${Math.random().toString(36).substring(2)}@equipecerta.com`, `DTSTAMP:${now}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${title}`, `DESCRIPTION:${description}`, `URL:${window.location.href}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'); const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' }); const link = document.createElement('a'); link.href = window.URL.createObjectURL(blob); link.setAttribute('download', 'lembrete_post.ics'); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
@@ -237,16 +259,25 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                      {(assignment.post.type === 'image' || assignment.post.type === 'video') && (assignment.post.mediaUrl || assignment.post.googleDriveUrl) && (
                         <div><StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full h-auto object-contain rounded-md bg-dark" />
                             <div className="flex justify-center gap-4 mt-2">
-                                {assignment.post.mediaUrl && <button onClick={handleFirebaseDownload} disabled={isMediaProcessing} className="flex items-center gap-2 px-3 py-1 bg-gray-600 text-white rounded-md text-xs font-semibold hover:bg-gray-500"><DownloadIcon className="w-4 h-4"/>Link 1</button>}
                                 {assignment.post.googleDriveUrl && <button onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-semibold hover:bg-blue-500"><DownloadIcon className="w-4 h-4"/>Link 2</button>}
                             </div>
                         </div>
                     )}
-                    {assignment.post.type === 'text' && <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm bg-gray-800 p-3 rounded-md">{assignment.post.textContent}</pre>}
+                    {assignment.post.type === 'text' && (
+                        <div className="flex flex-col items-center justify-center p-6 bg-gray-800 rounded-md">
+                            <p className="text-gray-300 mb-4 text-center">Esta é uma tarefa de interação. Clique no link abaixo para acessar.</p>
+                            {assignment.post.postLink && (
+                                <a href={assignment.post.postLink} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2">
+                                    <ExternalLinkIcon className="w-5 h-5"/>
+                                    Acessar Interação
+                                </a>
+                            )}
+                        </div>
+                    )}
                 </div>
                 <div className="space-y-4">
                     <div><h4 className="font-semibold text-gray-200 text-sm mb-1">Instruções:</h4><div className="bg-gray-800/50 p-3 rounded-md text-gray-300 text-sm whitespace-pre-wrap">{assignment.post.instructions}</div></div>
-                    {assignment.post.postLink && <div><h4 className="font-semibold text-gray-200 text-sm mb-1">Link para Postagem:</h4><div className="bg-gray-800/50 p-2 rounded-md flex items-center gap-2"><input type="text" readOnly value={assignment.post.postLink} className="flex-grow w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-900 text-gray-400 text-xs"/><button onClick={handleCopyLink} className="flex-shrink-0 px-2 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-xs w-20">{linkCopied ? 'Copiado!' : 'Copiar'}</button><a href={assignment.post.postLink} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-500 text-xs"><ExternalLinkIcon className="w-4 h-4"/></a></div></div>}
+                    {assignment.post.postLink && <div><h4 className="font-semibold text-gray-200 text-sm mb-1">{assignment.post.type === 'text' ? 'Link da Interação' : 'Link para Postagem'}:</h4><div className="bg-gray-800/50 p-2 rounded-md flex items-center gap-2"><input type="text" readOnly value={assignment.post.postLink} className="flex-grow w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-900 text-gray-400 text-xs"/><button onClick={handleCopyLink} className="flex-shrink-0 px-2 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-xs w-20">{linkCopied ? 'Copiado!' : 'Copiar'}</button><a href={assignment.post.postLink} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-500 text-xs"><ExternalLinkIcon className="w-4 h-4"/></a></div></div>}
                 </div>
             </div>
             <div className="border-t border-gray-700/50">{renderActionFooter()}</div>
@@ -286,29 +317,8 @@ const PostCheck: React.FC = () => {
     useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
     const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); };
     const handleConfirmAssignment = async (assignment: PostAssignment) => {
-        const wantsReminder = window.confirm(
-            "Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?"
-        );
-
-        try {
-            if (wantsReminder) {
-                await scheduleWhatsAppReminder(assignment.id);
-                // The assignment is updated below, no need to update state twice
-                alert("Lembrete agendado com sucesso! Você receberá uma mensagem no WhatsApp.");
-            }
-            
-            // Always confirm after handling the reminder part
-            await confirmAssignment(assignment.id);
-            if (wantsReminder) {
-                // Manually update assignment to show reminder was set, as `confirmAssignment` doesn't do this
-                await updateAssignment(assignment.id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            }
-
-            performSearch(email); // This will refresh the entire list state
-
-        } catch (err: any) {
-            alert((err as Error).message); // This will catch errors from both schedule and confirm
-        }
+        // Refresh full list after confirming to update UI
+        performSearch(email);
     };
     const handleReminderRequested = async () => { 
         try {

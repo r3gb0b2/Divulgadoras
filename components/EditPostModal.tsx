@@ -49,7 +49,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [postLink, setPostLink] = useState('');
     const [mediaUrl, setMediaUrl] = useState(''); // For firebase path
     const [googleDriveUrl, setGoogleDriveUrl] = useState(''); // For GDrive link
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
@@ -95,8 +94,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             setAllowImmediateProof(post.allowImmediateProof || false);
             setSkipProofRequirement(post.skipProofRequirement || false);
             setAllowJustification(post.allowJustification !== false);
-
-            setMediaFile(null); // Reset file input on open
         }
     }, [post, isOpen]);
 
@@ -110,15 +107,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 return [...prev, format];
             }
         });
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setMediaFile(file);
-            const tempPreviewUrl = URL.createObjectURL(file);
-            setMediaPreview(tempPreviewUrl);
-        }
     };
 
     const handleSave = async () => {
@@ -146,12 +134,13 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             googleDriveUrl: googleDriveUrl.trim() ? googleDriveUrl.trim() : undefined,
         };
         
+        // Only set textContent if explicitly needed, although interactions rely on link now
         if (post.type === 'text') {
             updatedData.textContent = textContent;
         }
 
         try {
-            await onSave(updatedData, mediaFile);
+            await onSave(updatedData, null); // Always null for file as upload is removed
             onClose();
         } catch(e) {
             // Error is handled by parent component
@@ -170,24 +159,11 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                         <label className="block text-sm font-medium text-gray-300">Nome do Evento (Opcional)</label>
                         <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"/>
                     </div>
-                    {post.type === 'text' && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300">Texto do Post</label>
-                            <textarea value={textContent} onChange={e => setTextContent(e.target.value)} rows={5} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
-                        </div>
-                    )}
+                    {/* Removed explicit text area for interaction type as requested */}
                     {post.type === 'image' && (
                          <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
-                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
+                                <label className="block text-sm font-medium text-gray-300">Link do Google Drive</label>
                                 <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
                             </div>
                         </div>
@@ -205,8 +181,8 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                         <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
-                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                        <label className="block text-sm font-medium text-gray-300">{post.type === 'text' ? 'Link da Interação' : 'Link da Postagem'}</label>
+                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder={post.type === 'text' ? "Link para o conteúdo de interação" : "Link da Postagem (Ex: instagram)"} value={postLink} onChange={e => setPostLink(e.target.value)} />
                     </div>
 
                     <div className="border-t border-gray-700 pt-4 space-y-4">

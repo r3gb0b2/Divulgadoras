@@ -287,7 +287,6 @@ const CreatePost: React.FC = () => {
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
     const [textContent, setTextContent] = useState('');
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [googleDriveUrl, setGoogleDriveUrl] = useState('');
     const [instructions, setInstructions] = useState('');
@@ -439,9 +438,21 @@ const CreatePost: React.FC = () => {
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
         if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
-        if (postType === 'image' && !mediaFile && !mediaPreview && !googleDriveUrl) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
+        if (postType === 'image' && !mediaPreview && !googleDriveUrl) { setError("Forneça um link do Google Drive."); return; }
         if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
-        if (postType === 'text' && !textContent.trim()) { setError("Escreva o conteúdo do post de texto."); return; }
+        if (postType === 'text') {
+            if (!postLink.trim()) {
+                setError("O link da interação é obrigatório.");
+                return;
+            }
+            // For interaction type, textContent is not used, but we can set a descriptive default
+            setTextContent("Interação"); 
+        } else if (postType !== 'text' && !textContent.trim()) {
+            // For image/video, if user wants text, it's optional but if provided it should be there?
+            // Actually previous logic was: if text type, content required.
+            // We relaxed it for image/video.
+        }
+        
         if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
     
         setIsSubmitting(true);
@@ -470,7 +481,7 @@ const CreatePost: React.FC = () => {
                     eventName: eventName.trim() || undefined,
                     stateAbbr: campaign.stateAbbr,
                     type: postType,
-                    textContent: textContent || undefined,
+                    textContent: postType === 'text' ? undefined : (textContent || undefined), // Don't send textContent for interaction posts if we want to rely on link
                     instructions,
                     postLink: postLink.trim() || undefined,
                     isActive,
@@ -503,7 +514,7 @@ const CreatePost: React.FC = () => {
                     }
                 } else {
                     const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                    creationPromises.push(createPost(finalPostData, mediaFile, promotersToAssign));
+                    creationPromises.push(createPost(finalPostData, promotersToAssign));
                 }
             }
 
@@ -546,15 +557,6 @@ const CreatePost: React.FC = () => {
     }, [selectedCampaigns, selectedState, selectedOrgId, campaigns]);
     
     const campaignsForSelectedState = campaigns.filter(c => c.stateAbbr === selectedState);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // FIX: Added handleFileChange function
-        const file = e.target.files?.[0];
-        if (file) {
-            setMediaFile(file);
-            setMediaPreview(URL.createObjectURL(file));
-        }
-    };
 
     const selectablePromoters = useMemo(() => {
         return promoters.filter(p => p.hasJoinedGroup);
@@ -615,13 +617,15 @@ const CreatePost: React.FC = () => {
 
                      <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
                         <legend className="px-2 font-semibold text-primary">Conteúdo do Post</legend>
-                        <div className="flex gap-4"><label><input type="radio" name="type" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /> Texto</label><label><input type="radio" name="type" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /> Imagem</label><label><input type="radio" name="type" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /> Vídeo</label></div>
-                        {postType === 'text' && <textarea value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Texto da publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />}
+                        <div className="flex gap-4">
+                            <label><input type="radio" name="type" value="text" checked={postType === 'text'} onChange={() => setPostType('text')} /> Interação</label>
+                            <label><input type="radio" name="type" value="image" checked={postType === 'image'} onChange={() => setPostType('image')} /> Imagem</label>
+                            <label><input type="radio" name="type" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /> Vídeo</label>
+                        </div>
+                        
                         {postType === 'image' && (
                             <div className="space-y-4">
-                                <div><label className="block text-sm font-medium text-gray-300">Opção 1: Upload para Servidor</label><input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />{mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}</div>
-                                <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
-                                <div><label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} /></div>
+                                <div><label className="block text-sm font-medium text-gray-300">Link do Google Drive</label><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} /></div>
                             </div>
                         )}
                         {postType === 'video' && <div><label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label><p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required /></div>}
@@ -631,9 +635,23 @@ const CreatePost: React.FC = () => {
                             <textarea value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="Instruções para a publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                             <select onChange={e => setInstructions(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de instrução...</option>{instructionTemplates.map(t => <option key={t.id} value={t.text}>{t.text.substring(0, 50)}...</option>)}</select>
                         </div>
+                        
                         <div>
-                            <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-300">Link da Postagem</label><button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button></div>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: link do post no instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-sm font-medium text-gray-300">
+                                    {postType === 'text' ? 'Link da Interação (Obrigatório)' : 'Link da Postagem'}
+                                </label>
+                                <button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button>
+                            </div>
+                            <InputWithIcon 
+                                Icon={LinkIcon} 
+                                type="url" 
+                                name="postLink" 
+                                placeholder={postType === 'text' ? "Link para o conteúdo de interação" : "Link da Postagem (Ex: instagram)"} 
+                                value={postLink} 
+                                onChange={e => setPostLink(e.target.value)} 
+                                required={postType === 'text'}
+                            />
                             <select onChange={e => setPostLink(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de link...</option>{linkTemplates.map(t => <option key={t.id} value={t.url}>{t.name}</option>)}</select>
                         </div>
                     </fieldset>

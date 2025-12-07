@@ -239,7 +239,7 @@ const AdminPosts: React.FC = () => {
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-3 text-sm text-gray-400 mt-2">
-                                    <span className="capitalize">{post.type}</span>
+                                    <span className="capitalize">{post.type === 'text' ? 'Interação' : post.type}</span>
                                     <span>-</span>
                                     <span className={`text-xs px-2 py-0.5 rounded-full ${post.isActive ? 'bg-green-900/50 text-green-300' : 'bg-gray-600 text-gray-400'}`}>
                                         {post.isActive ? 'Ativo' : 'Inativo'}

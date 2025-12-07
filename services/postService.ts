@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder } from '../types';
@@ -26,32 +27,20 @@ const toDateSafe = (timestamp: any): Date | null => {
 
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
-  mediaFile: File | null,
   assignedPromoters: Promoter[]
 ): Promise<string> => {
   try {
-    let finalMediaUrl: string | undefined = undefined;
-
-    // 1. Upload media file to Firebase Storage if provided
-    if (mediaFile) {
-      const fileExtension = mediaFile.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-      const storageRef = storage.ref(`posts-media/${fileName}`);
-      await storageRef.put(mediaFile);
-      finalMediaUrl = storageRef.fullPath;
-    }
-
-    // 2. Prepare data for the cloud function
-    // Check if there's an existing mediaUrl in postData (from duplication) if no new file
+    // 1. Prepare data for the cloud function
+    // mediaUrl might be passed if duplicating a post with an existing Google Drive link or legacy URL
     const existingMediaUrl = (postData as any).mediaUrl;
 
     const finalPostData = {
         ...postData,
-        mediaUrl: finalMediaUrl || existingMediaUrl || null,
+        mediaUrl: existingMediaUrl || null,
         // googleDriveUrl is already in postData from the form
     };
 
-    // 3. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
+    // 2. Call the cloud function to create docs. Emails will be sent by a Firestore trigger.
     const createPostAndAssignments = functions.httpsCallable('createPostAndAssignments');
     const result = await createPostAndAssignments({ postData: finalPostData, assignedPromoters });
     
