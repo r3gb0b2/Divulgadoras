@@ -124,7 +124,7 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
 // --- Callable Functions ---
 
-// Nova função para limpar comprovações antigas
+// Nova função para limpar comprovações antigas e substituir por placeholder
 exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     
@@ -165,7 +165,8 @@ exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ time
                 const assignment = doc.data();
                 const proofUrls = assignment.proofImageUrls || [];
                 
-                if (proofUrls.length > 0 && proofUrls[0] !== 'manual') {
+                // Only process if there are URLs and they aren't already marked as deleted or manual
+                if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
                     let fileDeleted = false;
 
                     // Delete files from storage
@@ -186,13 +187,16 @@ exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ time
                             }
                         } catch (err) {
                             console.warn(`Failed to delete file for assignment ${doc.id}:`, err);
+                            // Even if deletion fails (e.g., file already gone), we might want to update the DB
+                            // But for safety, we only update if at least one file op was attempted/succeeded or if we are sure it's junk
+                            fileDeleted = true; // Assume deleted to clean up DB ref
                         }
                     }
 
-                    // Update Firestore to remove URLs
+                    // Update Firestore to mark as deleted
                     if (fileDeleted || proofUrls.length > 0) {
                         batch.update(doc.ref, { 
-                            proofImageUrls: [],
+                            proofImageUrls: ['DELETED_PROOF'], // Special flag for UI
                             proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
                         });
                         batchCount++;

@@ -274,14 +274,14 @@ const SettingsPage: React.FC = () => {
         </button>
       </div>
       
-      {isOwner && (
+      {adminData?.role === 'superadmin' && (
           <div className="bg-red-900/30 border border-red-800 rounded-lg p-6 mb-6">
               <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
                   <TrashIcon className="w-6 h-6 text-red-400" />
                   Manutenção de Armazenamento
               </h2>
               <p className="text-gray-300 text-sm mb-4">
-                  Seu banco de dados pode acumular muitas imagens antigas. Use esta ferramenta para limpar automaticamente as comprovações (prints) de eventos que já foram desativados.
+                  Seu banco de dados pode acumular muitas imagens antigas. Use esta ferramenta para limpar automaticamente as comprovações (prints) de eventos que já foram desativados. As imagens serão substituídas por um aviso visual.
               </p>
               <button 
                   onClick={handleCleanup} 

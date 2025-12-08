@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { PostAssignment } from '../types';
 import { serverTimestamp } from 'firebase/firestore';
 import PhotoViewerModal from './PhotoViewerModal';
+import { TrashIcon } from './Icons';
 
 interface ChangeAssignmentStatusModalProps {
     isOpen: boolean;
@@ -107,6 +109,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
     };
 
     const openPhotoViewer = (index: number) => {
+        if (assignment.proofImageUrls && assignment.proofImageUrls[index] === 'DELETED_PROOF') return;
         setPhotoViewerStartIndex(index);
         setIsPhotoViewerOpen(true);
     };
@@ -208,13 +211,20 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                             <h3 className="text-lg font-semibold text-white">Comprovação Enviada</h3>
                             <div className="flex gap-2 mt-2">
                                 {assignment.proofImageUrls!.map((url, index) => (
-                                    <img
-                                        key={index}
-                                        src={url}
-                                        alt={`Comprovação ${index + 1}`}
-                                        onClick={() => openPhotoViewer(index)}
-                                        className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary"
-                                    />
+                                    url === 'DELETED_PROOF' ? (
+                                        <div key={index} className="w-24 h-24 bg-gray-800 rounded-md border-2 border-gray-600 flex flex-col items-center justify-center text-gray-500">
+                                            <TrashIcon className="w-8 h-8 mb-1" />
+                                            <span className="text-[10px] uppercase font-bold">Imagem Removida</span>
+                                        </div>
+                                    ) : (
+                                        <img
+                                            key={index}
+                                            src={url}
+                                            alt={`Comprovação ${index + 1}`}
+                                            onClick={() => openPhotoViewer(index)}
+                                            className="w-24 h-24 object-cover rounded-md cursor-pointer border-2 border-gray-600 hover:border-primary"
+                                        />
+                                    )
                                 ))}
                             </div>
                         </div>
@@ -244,7 +254,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                 <PhotoViewerModal
                     isOpen={isPhotoViewerOpen}
                     onClose={() => setIsPhotoViewerOpen(false)}
-                    imageUrls={assignment.proofImageUrls || []}
+                    imageUrls={assignment.proofImageUrls ? assignment.proofImageUrls.filter(u => u !== 'DELETED_PROOF') : []}
                     startIndex={photoViewerStartIndex}
                 />
             )}

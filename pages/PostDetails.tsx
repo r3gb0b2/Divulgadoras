@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp, Organization } from '../types';
@@ -460,7 +461,13 @@ export const PostDetails: React.FC = () => {
                                             <div onClick={() => handleOpenStatusModal(assignment)} className="bg-gray-800/50 p-2 rounded-md flex items-center gap-3 cursor-pointer hover:bg-gray-800/80">
                                                 {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && assignment.proofImageUrls[0] !== 'manual' ? (
                                                     assignment.proofImageUrls.map((url, i) => (
-                                                        <img key={i} src={url} className="w-12 h-12 object-cover rounded-md" alt={`Prova ${i + 1}`} />
+                                                        url === 'DELETED_PROOF' ? (
+                                                            <div key={i} className="w-12 h-12 bg-gray-700 rounded-md flex items-center justify-center border border-gray-600" title="Imagem apagada da Storage">
+                                                                <TrashIcon className="w-6 h-6 text-gray-500" />
+                                                            </div>
+                                                        ) : (
+                                                            <img key={i} src={url} className="w-12 h-12 object-cover rounded-md" alt={`Prova ${i + 1}`} />
+                                                        )
                                                     ))
                                                 ) : assignment.justification ? (
                                                     <>
