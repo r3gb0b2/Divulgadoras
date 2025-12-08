@@ -1,9 +1,12 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon, TrashIcon } from '../components/Icons';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { cleanupOldProofs } from '../services/postService';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -18,12 +21,14 @@ type SystemStatus = {
 const FRONTEND_VERSION = "19.0"; // Must match version in AdminAuth.tsx
 
 const SuperAdminDashboard: React.FC = () => {
+    const { selectedOrgId } = useAdminAuth();
     const [testStatuses, setTestStatuses] = useState<Record<string, TestStatus>>({
         generic: { type: 'idle', message: '' },
         approved: { type: 'idle', message: '' },
     });
     const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+    const [isCleaning, setIsCleaning] = useState(false);
 
     const checkSystemStatus = useCallback(async () => {
         setIsCheckingStatus(true);
@@ -75,6 +80,27 @@ const SuperAdminDashboard: React.FC = () => {
             console.error("Test email failed", error);
             const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
             setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${detailedError}` } }));
+        }
+    };
+
+    const handleCleanup = async () => {
+        if (!selectedOrgId) {
+            alert("Selecione uma organização no menu superior para executar a limpeza.");
+            return;
+        }
+        
+        const confirmMessage = "Tem certeza que deseja apagar PERMANENTEMENTE todas as imagens de comprovação de eventos marcados como 'Inativos' da organização selecionada?\n\nIsso liberará espaço no banco de dados. As imagens serão substituídas por um aviso visual.\n\nEsta ação não pode ser desfeita.";
+        
+        if (window.confirm(confirmMessage)) {
+            setIsCleaning(true);
+            try {
+                const result = await cleanupOldProofs(selectedOrgId);
+                alert(result.message);
+            } catch (err: any) {
+                alert(err.message);
+            } finally {
+                setIsCleaning(false);
+            }
         }
     };
     
@@ -192,6 +218,33 @@ const SuperAdminDashboard: React.FC = () => {
                 <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
                  <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
                     Sair
+                </button>
+            </div>
+
+            <div className="bg-red-900/30 border border-red-800 rounded-lg p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                        <TrashIcon className="w-6 h-6 text-red-400" />
+                        Manutenção de Armazenamento
+                    </h2>
+                    <p className="text-gray-300 text-sm">
+                        Limpar prints antigos de eventos inativos da organização selecionada ({selectedOrgId || 'Nenhuma selecionada'}). 
+                        Isso ajuda a reduzir custos de armazenamento.
+                    </p>
+                </div>
+                <button 
+                    onClick={handleCleanup} 
+                    disabled={isCleaning || !selectedOrgId}
+                    className="px-6 py-3 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                >
+                    {isCleaning ? (
+                        <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Limpando...
+                        </>
+                    ) : (
+                        'Executar Limpeza'
+                    )}
                 </button>
             </div>
 
