@@ -641,7 +641,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (typeof error === 'object' && error !== null) {
                 const err = error as { message?: string, details?: any };
                 if (err.details) {
-                    detailedError = err.details.detailedError || err.details.originalError?.message || err.message || detailedError;
+                    const rawError = err.details.detailedError || err.details.originalError?.message || err.message;
+                    if (rawError) {
+                        detailedError = String(rawError);
+                    }
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {
                     detailedError = err.message;

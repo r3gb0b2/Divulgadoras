@@ -287,6 +287,7 @@ const CreatePost: React.FC = () => {
     const [postType, setPostType] = useState<'text' | 'image' | 'video'>('text');
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
     const [textContent, setTextContent] = useState('');
+    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [googleDriveUrl, setGoogleDriveUrl] = useState('');
     const [instructions, setInstructions] = useState('');
@@ -433,12 +434,20 @@ const CreatePost: React.FC = () => {
         });
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
         if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
-        if (postType === 'image' && !mediaPreview && !googleDriveUrl) { setError("Forneça um link do Google Drive."); return; }
+        if (postType === 'image' && !mediaFile && !googleDriveUrl && !originalMediaPath) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
         if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
         if (postType === 'text') {
             if (!postLink.trim()) {
@@ -447,10 +456,6 @@ const CreatePost: React.FC = () => {
             }
             // For interaction type, textContent is not used, but we can set a descriptive default
             setTextContent("Interação"); 
-        } else if (postType !== 'text' && !textContent.trim()) {
-            // For image/video, if user wants text, it's optional but if provided it should be there?
-            // Actually previous logic was: if text type, content required.
-            // We relaxed it for image/video.
         }
         
         if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
@@ -459,6 +464,15 @@ const CreatePost: React.FC = () => {
         setError('');
     
         try {
+            let uploadedMediaPath: string | undefined = originalMediaPath || undefined;
+            if (mediaFile) {
+                const fileExtension = mediaFile.name.split('.').pop();
+                const fileName = `posts-media/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                const storageRef = storage.ref(fileName);
+                await storageRef.put(mediaFile);
+                uploadedMediaPath = storageRef.fullPath;
+            }
+
             const creationPromises = [];
     
             for (const campaignId of selectedCampaigns) {
@@ -481,7 +495,7 @@ const CreatePost: React.FC = () => {
                     eventName: eventName.trim() || undefined,
                     stateAbbr: campaign.stateAbbr,
                     type: postType,
-                    textContent: postType === 'text' ? undefined : (textContent || undefined), // Don't send textContent for interaction posts if we want to rely on link
+                    textContent: postType === 'text' ? undefined : (textContent || undefined), 
                     instructions,
                     postLink: postLink.trim() || undefined,
                     isActive,
@@ -493,6 +507,7 @@ const CreatePost: React.FC = () => {
                     skipProofRequirement,
                     allowJustification,
                     googleDriveUrl: googleDriveUrl.trim() || undefined,
+                    mediaUrl: uploadedMediaPath || undefined,
                 };
     
                 if (isScheduling) {
@@ -625,7 +640,18 @@ const CreatePost: React.FC = () => {
                         
                         {postType === 'image' && (
                             <div className="space-y-4">
-                                <div><label className="block text-sm font-medium text-gray-300">Link do Google Drive</label><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} /></div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (Servidor)</label>
+                                    <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                    {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
+                                    <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
+                                </div>
                             </div>
                         )}
                         {postType === 'video' && <div><label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label><p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required /></div>}

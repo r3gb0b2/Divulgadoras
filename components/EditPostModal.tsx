@@ -52,6 +52,9 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
+    
+    // New media file state
+    const [newMediaFile, setNewMediaFile] = useState<File | null>(null);
 
     // All post options
     const [isActive, setIsActive] = useState(true);
@@ -85,6 +88,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
             }
 
             setGoogleDriveUrl(post.googleDriveUrl || '');
+            setNewMediaFile(null); // Reset new file
             
             // Set all options from post data
             setIsActive(post.isActive);
@@ -107,6 +111,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 return [...prev, format];
             }
         });
+    };
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setNewMediaFile(file);
+            setMediaPreview(URL.createObjectURL(file));
+        }
     };
 
     const handleSave = async () => {
@@ -140,7 +152,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         }
 
         try {
-            await onSave(updatedData, null); // Always null for file as upload is removed
+            await onSave(updatedData, newMediaFile);
             onClose();
         } catch(e) {
             // Error is handled by parent component
@@ -163,7 +175,13 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                     {post.type === 'image' && (
                          <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-300">Link do Google Drive</label>
+                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (Substituir)</label>
+                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-40 rounded-md object-contain" />}
+                            </div>
+                            <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
                                 <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
                             </div>
                         </div>
