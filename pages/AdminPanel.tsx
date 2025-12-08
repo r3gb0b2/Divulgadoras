@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -649,7 +648,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 } else if (err.message) {
                     // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
                     // Explicitly cast error message to string to ensure type safety.
-                    detailedError = String(err.message);
+                    detailedError = err.message;
                 }
             } else {
                 detailedError = String(error);
