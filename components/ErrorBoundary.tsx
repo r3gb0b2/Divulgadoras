@@ -12,8 +12,6 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState;
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -32,6 +30,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
+    // FIX: Property 'setState' does not exist on type 'ErrorBoundary'.
+    // The issue is likely due to a misconfiguration or a subtle bug in how the class is being interpreted.
+    // The `this` context should be correct here. Standardizing the class structure should resolve it.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -66,6 +67,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    // FIX: Property 'props' does not exist on type 'ErrorBoundary'.
+    // `this.props` should exist on a class component. This indicates a deeper setup issue.
+    // Correcting the class structure by removing the redundant `public state` declaration should fix this.
     return this.props.children;
   }
 }

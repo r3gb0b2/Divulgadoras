@@ -104,6 +104,11 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const [isRequestingReminder, setIsRequestingReminder] = useState(false);
     const allowJustification = assignment.post.allowJustification !== false;
     
+    const isPostExpired = useMemo(() => {
+        const expiresAt = toDateSafe(assignment.post.expiresAt);
+        return (expiresAt && new Date() > expiresAt) || !assignment.post.isActive;
+    }, [assignment.post.expiresAt, assignment.post.isActive]);
+    
     // This effect replaces the old ProofSection logic
     useEffect(() => {
         if (assignment.status !== 'confirmed' || !assignment.confirmedAt) return;
@@ -148,6 +153,11 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     }
 
     const handleConfirm = async () => {
+        if (isPostExpired) {
+            alert("O tempo para esta postagem foi encerrado.");
+            return;
+        }
+
         const wantsReminder = window.confirm(
             "Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?"
         );
@@ -212,9 +222,26 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         }
         if (assignment.status === 'pending') {
             return (
-                <div className="flex flex-col sm:flex-row gap-2 p-4">
-                    {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
-                    <button onClick={handleConfirm} disabled={isConfirming} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">Eu postei!</button>
+                <div className="p-4 text-center">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        {allowJustification && (
+                            <button 
+                                onClick={() => onJustify(assignment)}
+                                disabled={isPostExpired}
+                                className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 disabled:opacity-50"
+                            >
+                                Justificar Ausência
+                            </button>
+                        )}
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={isConfirming || isPostExpired}
+                            className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg"
+                        >
+                            Eu postei!
+                        </button>
+                    </div>
+                     {isPostExpired && <p className="text-xs text-red-400 mt-2">O tempo para esta postagem foi encerrado.</p>}
                 </div>
             );
         }

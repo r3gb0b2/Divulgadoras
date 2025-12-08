@@ -647,7 +647,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     }
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {
-                    detailedError = err.message;
+                    // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+                    // Explicitly cast error message to string to ensure type safety.
+                    detailedError = String(err.message);
                 }
             } else {
                 detailedError = String(error);

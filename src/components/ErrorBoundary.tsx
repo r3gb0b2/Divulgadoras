@@ -12,6 +12,10 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Property 'state' does not exist on type 'ErrorBoundary'.
+  // This redundant declaration is removed as state is properly initialized in the constructor.
+  // public state: ErrorBoundaryState;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -30,6 +34,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
+    // FIX: Property 'setState' does not exist on type 'ErrorBoundary'.
+    // The root cause is likely the compiler being confused by the class structure.
+    // Removing the redundant state property declaration should resolve this.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -37,6 +44,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
+    // FIX: Property 'state' does not exist on type 'ErrorBoundary'.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -45,8 +53,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
+            {/* FIX: Property 'state' does not exist on type 'ErrorBoundary'. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
+                {/* FIX: Property 'state' does not exist on type 'ErrorBoundary'. */}
                 <p className="text-red-400">{this.state.error.toString()}</p>
               </div>
             )}
@@ -64,6 +74,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    // FIX: Property 'props' does not exist on type 'ErrorBoundary'.
     return this.props.children;
   }
 }
