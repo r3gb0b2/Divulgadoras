@@ -534,6 +534,30 @@ export const cleanupOldProofs = async (organizationId: string): Promise<{ count:
     }
 };
 
+export const analyzeCampaignProofs = async (organizationId: string, campaignName: string): Promise<{ count: number, sizeBytes: number, formattedSize: string }> => {
+    try {
+        const func = functions.httpsCallable('analyzeCampaignProofs');
+        const result = await func({ organizationId, campaignName });
+        return result.data as { count: number, sizeBytes: number, formattedSize: string };
+    } catch (error: any) {
+        console.error("Error analyzing campaign proofs:", error);
+        const detail = error.details?.message || error.message;
+        throw new Error(`Falha na análise: ${detail}`);
+    }
+};
+
+export const deleteCampaignProofs = async (organizationId: string, campaignName: string): Promise<{ success: boolean, deletedFiles: number, updatedDocs: number, message: string }> => {
+    try {
+        const func = functions.httpsCallable('deleteCampaignProofs');
+        const result = await func({ organizationId, campaignName });
+        return result.data as { success: boolean, deletedFiles: number, updatedDocs: number, message: string };
+    } catch (error: any) {
+        console.error("Error deleting campaign proofs:", error);
+        const detail = error.details?.message || error.message;
+        throw new Error(`Falha na limpeza do evento: ${detail}`);
+    }
+};
+
 // --- Scheduled Post Functions ---
 
 export const schedulePost = async (

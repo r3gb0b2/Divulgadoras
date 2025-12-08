@@ -6,7 +6,9 @@ import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon, TrashIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { cleanupOldProofs } from '../services/postService';
+import { cleanupOldProofs, analyzeCampaignProofs, deleteCampaignProofs } from '../services/postService';
+import { getAllCampaigns } from '../services/settingsService';
+import { Campaign } from '../types';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -29,6 +31,25 @@ const SuperAdminDashboard: React.FC = () => {
     const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [isCleaning, setIsCleaning] = useState(false);
+    
+    // State for Campaign Specific Cleanup
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [selectedCampaignName, setSelectedCampaignName] = useState('');
+    const [analysisResult, setAnalysisResult] = useState<{ count: number, formattedSize: string } | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isDeletingSpecific, setIsDeletingSpecific] = useState(false);
+
+    useEffect(() => {
+        if (selectedOrgId) {
+            // Load campaigns for the selected org
+            getAllCampaigns(selectedOrgId)
+                .then(data => setCampaigns(data))
+                .catch(console.error);
+            // Reset selection when org changes
+            setSelectedCampaignName('');
+            setAnalysisResult(null);
+        }
+    }, [selectedOrgId]);
 
     const checkSystemStatus = useCallback(async () => {
         setIsCheckingStatus(true);
@@ -101,6 +122,36 @@ const SuperAdminDashboard: React.FC = () => {
             } finally {
                 setIsCleaning(false);
             }
+        }
+    };
+    
+    const handleAnalyze = async () => {
+        if (!selectedOrgId || !selectedCampaignName) return;
+        setIsAnalyzing(true);
+        setAnalysisResult(null);
+        try {
+            const result = await analyzeCampaignProofs(selectedOrgId, selectedCampaignName);
+            setAnalysisResult(result);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleDeleteSpecific = async () => {
+        if (!selectedOrgId || !selectedCampaignName) return;
+        if (!window.confirm(`ATENÇÃO: Você está prestes a apagar ${analysisResult?.count} arquivos de imagem do evento "${selectedCampaignName}".\n\nIsso liberará cerca de ${analysisResult?.formattedSize}.\n\nEsta ação é irreversível. Deseja continuar?`)) return;
+
+        setIsDeletingSpecific(true);
+        try {
+            const result = await deleteCampaignProofs(selectedOrgId, selectedCampaignName);
+            alert(result.message);
+            setAnalysisResult(null); // Clear analysis after deletion
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsDeletingSpecific(false);
         }
     };
     
@@ -221,31 +272,68 @@ const SuperAdminDashboard: React.FC = () => {
                 </button>
             </div>
 
-            <div className="bg-red-900/30 border border-red-800 rounded-lg p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="bg-red-900/30 border border-red-800 rounded-lg p-6">
                     <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                         <TrashIcon className="w-6 h-6 text-red-400" />
-                        Manutenção de Armazenamento
+                        Limpeza Geral (Inativos)
                     </h2>
-                    <p className="text-gray-300 text-sm">
-                        Limpar prints antigos de eventos inativos da organização selecionada ({selectedOrgId || 'Nenhuma selecionada'}). 
-                        Isso ajuda a reduzir custos de armazenamento.
+                    <p className="text-gray-300 text-sm mb-4">
+                        Limpar prints de TODOS os eventos marcados como 'Inativos'. Ideal para faxina geral.
                     </p>
+                    <button 
+                        onClick={handleCleanup} 
+                        disabled={isCleaning || !selectedOrgId}
+                        className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                    >
+                        {isCleaning ? 'Limpando...' : 'Executar Limpeza Geral'}
+                    </button>
                 </div>
-                <button 
-                    onClick={handleCleanup} 
-                    disabled={isCleaning || !selectedOrgId}
-                    className="px-6 py-3 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
-                >
-                    {isCleaning ? (
-                        <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            Limpando...
-                        </>
-                    ) : (
-                        'Executar Limpeza'
-                    )}
-                </button>
+
+                <div className="bg-orange-900/30 border border-orange-800 rounded-lg p-6">
+                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                        <TrashIcon className="w-6 h-6 text-orange-400" />
+                        Limpeza Específica por Evento
+                    </h2>
+                    <p className="text-gray-300 text-sm mb-4">
+                        Selecione um evento para apagar suas comprovações, mesmo que esteja ativo.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <select 
+                            value={selectedCampaignName} 
+                            onChange={(e) => setSelectedCampaignName(e.target.value)}
+                            className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
+                            disabled={!selectedOrgId}
+                        >
+                            <option value="">Selecione o Evento...</option>
+                            {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                        
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleAnalyze} 
+                                disabled={isAnalyzing || !selectedCampaignName}
+                                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-md disabled:opacity-50 text-sm"
+                            >
+                                {isAnalyzing ? 'Analisando...' : 'Analisar Armazenamento'}
+                            </button>
+                            <button 
+                                onClick={handleDeleteSpecific} 
+                                disabled={isDeletingSpecific || !analysisResult}
+                                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-md disabled:opacity-50 text-sm"
+                            >
+                                {isDeletingSpecific ? 'Apagando...' : 'Limpar Arquivos'}
+                            </button>
+                        </div>
+                        
+                        {analysisResult && (
+                            <div className="mt-2 text-sm bg-black/40 p-2 rounded text-orange-200">
+                                <p><strong>Arquivos encontrados:</strong> {analysisResult.count}</p>
+                                <p><strong>Espaço ocupado:</strong> {analysisResult.formattedSize}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="bg-secondary shadow-lg rounded-lg p-6">

@@ -66,6 +66,19 @@ function convertDriveToDirectLink(url) {
     return url;
 }
 
+// Helper to extract storage path from URL
+function getStoragePathFromUrl(url) {
+    if (!url.includes('/o/')) return null;
+    try {
+        const decodedUrl = decodeURIComponent(url);
+        const startIndex = decodedUrl.indexOf('/o/') + 3;
+        const endIndex = decodedUrl.indexOf('?');
+        return decodedUrl.substring(startIndex, endIndex !== -1 ? endIndex : undefined);
+    } catch (e) {
+        return null;
+    }
+}
+
 // --- Firestore Triggers ---
 
 exports.onPromoterStatusChange = functions
@@ -124,7 +137,147 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
 // --- Callable Functions ---
 
-// Nova função para limpar comprovações antigas e substituir por placeholder
+// Analisar armazenamento de um evento específico
+exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 300, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { organizationId, campaignName } = data;
+    
+    if (!organizationId || !campaignName) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+
+    try {
+        const assignmentsSnap = await db.collection("postAssignments")
+            .where("organizationId", "==", organizationId)
+            .where("post.campaignName", "==", campaignName)
+            .get();
+
+        if (assignmentsSnap.empty) {
+            return { count: 0, sizeBytes: 0, message: "Nenhuma tarefa encontrada para este evento." };
+        }
+
+        const bucket = admin.storage().bucket();
+        let totalSize = 0;
+        let fileCount = 0;
+        const filePromises = [];
+
+        for (const doc of assignmentsSnap.docs) {
+            const assignment = doc.data();
+            const proofUrls = assignment.proofImageUrls || [];
+
+            if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
+                for (const url of proofUrls) {
+                    const storagePath = getStoragePathFromUrl(url);
+                    if (storagePath) {
+                        filePromises.push(
+                            bucket.file(storagePath).getMetadata()
+                                .then(([metadata]) => {
+                                    totalSize += parseInt(metadata.size, 10);
+                                    fileCount++;
+                                })
+                                .catch(e => console.warn(`Erro ao ler metadados de ${storagePath}:`, e.message))
+                        );
+                    }
+                }
+            }
+        }
+
+        // Process in chunks to avoid overwhelming API or memory
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < filePromises.length; i += CHUNK_SIZE) {
+            await Promise.all(filePromises.slice(i, i + CHUNK_SIZE));
+        }
+
+        return { 
+            count: fileCount, 
+            sizeBytes: totalSize,
+            formattedSize: (totalSize / (1024 * 1024)).toFixed(2) + ' MB'
+        };
+
+    } catch (error) {
+        console.error("Error analyzing proofs:", error);
+        throw new functions.https.HttpsError("internal", "Erro ao analisar armazenamento.");
+    }
+});
+
+// Deletar comprovações de um evento específico
+exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { organizationId, campaignName } = data;
+
+    if (!organizationId || !campaignName) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+
+    try {
+        const assignmentsSnap = await db.collection("postAssignments")
+            .where("organizationId", "==", organizationId)
+            .where("post.campaignName", "==", campaignName)
+            .get();
+
+        const bucket = admin.storage().bucket();
+        let deletedFilesCount = 0;
+        let updatedDocsCount = 0;
+        const batch = db.batch();
+        let batchOpCount = 0;
+
+        // Process files
+        const assignmentChunks = [];
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < assignmentsSnap.docs.length; i += CHUNK_SIZE) {
+            assignmentChunks.push(assignmentsSnap.docs.slice(i, i + CHUNK_SIZE));
+        }
+
+        for (const chunk of assignmentChunks) {
+            for (const doc of chunk) {
+                const assignment = doc.data();
+                const proofUrls = assignment.proofImageUrls || [];
+                
+                if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
+                    let fileDeleted = false;
+
+                    for (const url of proofUrls) {
+                        const storagePath = getStoragePathFromUrl(url);
+                        if (storagePath) {
+                            try {
+                                await bucket.file(storagePath).delete();
+                                deletedFilesCount++;
+                                fileDeleted = true;
+                            } catch (e) {
+                                console.warn(`Erro ao deletar ${storagePath}:`, e.message);
+                                // If file not found (404), consider it deleted effectively
+                                if (e.code === 404) fileDeleted = true;
+                            }
+                        }
+                    }
+
+                    if (fileDeleted || proofUrls.length > 0) {
+                        batch.update(doc.ref, { 
+                            proofImageUrls: ['DELETED_PROOF'], 
+                            proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                        batchOpCount++;
+                        updatedDocsCount++;
+                    }
+                }
+            }
+            
+            if (batchOpCount > 0) {
+                await batch.commit();
+                batchOpCount = 0; // Reset for next batch logic if we were using a single batch, but here we commit per chunk loop implicitly via logic flow or new batch re-init
+            }
+        }
+
+        return { 
+            success: true, 
+            deletedFiles: deletedFilesCount, 
+            updatedDocs: updatedDocsCount,
+            message: `Sucesso! ${deletedFilesCount} arquivos apagados em ${updatedDocsCount} tarefas.`
+        };
+
+    } catch (error) {
+        console.error("Error deleting campaign proofs:", error);
+        throw new functions.https.HttpsError("internal", "Erro ao apagar arquivos.");
+    }
+});
+
+// Limpeza geral (mantida)
 exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
     
@@ -172,23 +325,18 @@ exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ time
                     // Delete files from storage
                     for (const url of proofUrls) {
                         try {
-                            // Extract path from URL. Format: .../o/folder%2Ffilename?alt...
-                            const decodedUrl = decodeURIComponent(url);
-                            const startIndex = decodedUrl.indexOf('/o/') + 3;
-                            const endIndex = decodedUrl.indexOf('?');
-                            const storagePath = decodedUrl.substring(startIndex, endIndex);
-
-                            const file = bucket.file(storagePath);
-                            const [exists] = await file.exists();
-                            if (exists) {
-                                await file.delete();
-                                deletedFilesCount++;
-                                fileDeleted = true;
+                            const storagePath = getStoragePathFromUrl(url);
+                            if (storagePath) {
+                                const file = bucket.file(storagePath);
+                                const [exists] = await file.exists();
+                                if (exists) {
+                                    await file.delete();
+                                    deletedFilesCount++;
+                                    fileDeleted = true;
+                                }
                             }
                         } catch (err) {
                             console.warn(`Failed to delete file for assignment ${doc.id}:`, err);
-                            // Even if deletion fails (e.g., file already gone), we might want to update the DB
-                            // But for safety, we only update if at least one file op was attempted/succeeded or if we are sure it's junk
                             fileDeleted = true; // Assume deleted to clean up DB ref
                         }
                     }
