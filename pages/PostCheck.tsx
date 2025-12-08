@@ -227,7 +227,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                         {allowJustification && (
                             <button 
                                 onClick={() => onJustify(assignment)}
-                                className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500 disabled:opacity-50"
+                                className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500"
                             >
                                 Justificar Ausência
                             </button>
