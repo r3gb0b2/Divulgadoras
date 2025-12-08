@@ -752,12 +752,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err: unknown) {
             let errorMessage = "Ocorreu um erro na busca.";
             if (err instanceof Error) {
                 errorMessage = err.message;
             } else if (typeof err === 'string') {
                 errorMessage = err;
+            } else {
+                errorMessage = String(err);
             }
             setLookupError(errorMessage);
         } finally {
