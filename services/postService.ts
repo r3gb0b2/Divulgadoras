@@ -522,6 +522,18 @@ export const updateAssignment = async (assignmentId: string, data: Partial<Omit<
     }
 };
 
+export const cleanupOldProofs = async (organizationId: string): Promise<{ count: number, message: string }> => {
+    try {
+        const func = functions.httpsCallable('cleanupOldProofs');
+        const result = await func({ organizationId });
+        return result.data as { count: number, message: string };
+    } catch (error: any) {
+        console.error("Error cleaning up proofs:", error);
+        const detail = error.details?.message || error.message;
+        throw new Error(`Falha na limpeza: ${detail}`);
+    }
+};
+
 // --- Scheduled Post Functions ---
 
 export const schedulePost = async (

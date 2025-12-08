@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon, TrashIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
+import { cleanupOldProofs } from '../services/postService';
 
 interface SettingItem {
   id: string;
@@ -21,6 +22,7 @@ const SettingsPage: React.FC = () => {
   const [isOwner, setIsOwner] = useState(false);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [orderedItems, setOrderedItems] = useState<SettingItem[]>([]);
+  const [isCleaning, setIsCleaning] = useState(false);
   
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -243,6 +245,24 @@ const SettingsPage: React.FC = () => {
     }, 0);
   };
 
+  const handleCleanup = async () => {
+      if (!selectedOrgId) return;
+      
+      const confirmMessage = "Tem certeza que deseja apagar PERMANENTEMENTE todas as imagens de comprovação de eventos marcados como 'Inativos'?\n\nIsso liberará espaço no banco de dados, mas os prints não poderão mais ser visualizados no histórico.\n\nEsta ação não pode ser desfeita.";
+      
+      if (window.confirm(confirmMessage)) {
+          setIsCleaning(true);
+          try {
+              const result = await cleanupOldProofs(selectedOrgId);
+              alert(result.message);
+          } catch (err: any) {
+              alert(err.message);
+          } finally {
+              setIsCleaning(false);
+          }
+      }
+  };
+
 
   return (
     <div>
@@ -253,6 +273,33 @@ const SettingsPage: React.FC = () => {
           <span>Voltar ao Painel</span>
         </button>
       </div>
+      
+      {isOwner && (
+          <div className="bg-red-900/30 border border-red-800 rounded-lg p-6 mb-6">
+              <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <TrashIcon className="w-6 h-6 text-red-400" />
+                  Manutenção de Armazenamento
+              </h2>
+              <p className="text-gray-300 text-sm mb-4">
+                  Seu banco de dados pode acumular muitas imagens antigas. Use esta ferramenta para limpar automaticamente as comprovações (prints) de eventos que já foram desativados.
+              </p>
+              <button 
+                  onClick={handleCleanup} 
+                  disabled={isCleaning}
+                  className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2"
+              >
+                  {isCleaning ? (
+                      <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Limpando...
+                      </>
+                  ) : (
+                      'Limpar Comprovações Antigas'
+                  )}
+              </button>
+          </div>
+      )}
+
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
           Gerencie os usuários, regiões, eventos e sua assinatura na plataforma. Você pode arrastar os cards pela alça (:::) para organizá-los como preferir.

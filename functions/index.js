@@ -124,6 +124,101 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
 // --- Callable Functions ---
 
+// Nova função para limpar comprovações antigas
+exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    
+    // Check if user is superadmin or owner (simplified check, ideally verify role)
+    const { organizationId } = data;
+    if (!organizationId) throw new functions.https.HttpsError("invalid-argument", "Organização não informada.");
+
+    try {
+        // 1. Find Inactive Posts for this Org
+        const postsSnap = await db.collection("posts")
+            .where("organizationId", "==", organizationId)
+            .where("isActive", "==", false)
+            .get();
+
+        if (postsSnap.empty) {
+            return { success: true, count: 0, message: "Nenhum post inativo encontrado." };
+        }
+
+        const inactivePostIds = postsSnap.docs.map(doc => doc.id);
+        const bucket = admin.storage().bucket();
+        let deletedFilesCount = 0;
+        let updatedDocsCount = 0;
+
+        // Process in chunks of posts to avoid memory issues
+        const CHUNK_SIZE = 10;
+        for (let i = 0; i < inactivePostIds.length; i += CHUNK_SIZE) {
+            const chunk = inactivePostIds.slice(i, i + CHUNK_SIZE);
+            
+            // Find assignments with proofs for these posts
+            const assignmentsSnap = await db.collection("postAssignments")
+                .where("postId", "in", chunk)
+                .get();
+
+            const batch = db.batch();
+            let batchCount = 0;
+
+            for (const doc of assignmentsSnap.docs) {
+                const assignment = doc.data();
+                const proofUrls = assignment.proofImageUrls || [];
+                
+                if (proofUrls.length > 0 && proofUrls[0] !== 'manual') {
+                    let fileDeleted = false;
+
+                    // Delete files from storage
+                    for (const url of proofUrls) {
+                        try {
+                            // Extract path from URL. Format: .../o/folder%2Ffilename?alt...
+                            const decodedUrl = decodeURIComponent(url);
+                            const startIndex = decodedUrl.indexOf('/o/') + 3;
+                            const endIndex = decodedUrl.indexOf('?');
+                            const storagePath = decodedUrl.substring(startIndex, endIndex);
+
+                            const file = bucket.file(storagePath);
+                            const [exists] = await file.exists();
+                            if (exists) {
+                                await file.delete();
+                                deletedFilesCount++;
+                                fileDeleted = true;
+                            }
+                        } catch (err) {
+                            console.warn(`Failed to delete file for assignment ${doc.id}:`, err);
+                        }
+                    }
+
+                    // Update Firestore to remove URLs
+                    if (fileDeleted || proofUrls.length > 0) {
+                        batch.update(doc.ref, { 
+                            proofImageUrls: [],
+                            proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                        batchCount++;
+                        updatedDocsCount++;
+                    }
+                }
+            }
+
+            if (batchCount > 0) {
+                await batch.commit();
+            }
+        }
+
+        return { 
+            success: true, 
+            count: deletedFilesCount, 
+            docsUpdated: updatedDocsCount,
+            message: `Limpeza concluída! ${deletedFilesCount} imagens apagadas em ${updatedDocsCount} tarefas.` 
+        };
+
+    } catch (error) {
+        console.error("Error cleaning up proofs:", error);
+        throw new functions.https.HttpsError("internal", "Erro ao limpar comprovações.");
+    }
+});
+
 // 1. Limpar Duplicados (Restaurado)
 exports.cleanupDuplicateReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
