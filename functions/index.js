@@ -137,21 +137,27 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
 // --- Callable Functions ---
 
-// Analisar armazenamento de um evento específico
+// Analisar armazenamento de um evento ou post específico
 exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 300, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { organizationId, campaignName } = data;
+    const { organizationId, campaignName, postId } = data;
     
-    if (!organizationId || !campaignName) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+    if (!organizationId || (!campaignName && !postId)) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
 
     try {
-        const assignmentsSnap = await db.collection("postAssignments")
-            .where("organizationId", "==", organizationId)
-            .where("post.campaignName", "==", campaignName)
-            .get();
+        let query = db.collection("postAssignments")
+            .where("organizationId", "==", organizationId);
+
+        if (postId) {
+            query = query.where("postId", "==", postId);
+        } else {
+            query = query.where("post.campaignName", "==", campaignName);
+        }
+
+        const assignmentsSnap = await query.get();
 
         if (assignmentsSnap.empty) {
-            return { count: 0, sizeBytes: 0, message: "Nenhuma tarefa encontrada para este evento." };
+            return { count: 0, sizeBytes: 0, message: "Nenhuma tarefa encontrada." };
         }
 
         const bucket = admin.storage().bucket();
@@ -173,14 +179,16 @@ exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({
                                     totalSize += parseInt(metadata.size, 10);
                                     fileCount++;
                                 })
-                                .catch(e => console.warn(`Erro ao ler metadados de ${storagePath}:`, e.message))
+                                .catch(e => {
+                                    // Ignore if file doesn't exist, just means 0 bytes
+                                })
                         );
                     }
                 }
             }
         }
 
-        // Process in chunks to avoid overwhelming API or memory
+        // Process in chunks
         const CHUNK_SIZE = 50;
         for (let i = 0; i < filePromises.length; i += CHUNK_SIZE) {
             await Promise.all(filePromises.slice(i, i + CHUNK_SIZE));
@@ -198,77 +206,93 @@ exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({
     }
 });
 
-// Deletar comprovações de um evento específico
+// Deletar comprovações de um evento ou post específico (EM LOTES)
 exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { organizationId, campaignName } = data;
+    const { organizationId, campaignName, postId } = data;
 
-    if (!organizationId || !campaignName) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+    if (!organizationId || (!campaignName && !postId)) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+
+    const BATCH_LIMIT = 50; // Process 50 assignments per call to allow progress bar
 
     try {
-        const assignmentsSnap = await db.collection("postAssignments")
-            .where("organizationId", "==", organizationId)
-            .where("post.campaignName", "==", campaignName)
-            .get();
+        let query = db.collection("postAssignments")
+            .where("organizationId", "==", organizationId);
+
+        if (postId) {
+            query = query.where("postId", "==", postId);
+        } else {
+            query = query.where("post.campaignName", "==", campaignName);
+        }
+
+        // We filter manually for 'DELETED_PROOF' because we can't easily chain complex not-equals with other where clauses without composite indexes sometimes
+        // But to optimize reading, we just get a batch and process.
+        // A better approach if index exists: query.where("proofImageUrls", "!=", ["DELETED_PROOF"]).limit(BATCH_LIMIT)
+        // Since array inequality is tricky, we fetch a bit more and filter in memory, or just iterate.
+        // Let's assume we fetch, check if needs deletion, and process.
+        
+        // To make this "continuable", we rely on the client knowing we aren't done.
+        // We will fetch documents that DO NOT have the flag yet. 
+        // NOTE: Firestore doesn't support array-contains-any for negation easily. 
+        // We will fetch normally, but since we update the doc to 'DELETED_PROOF', subsequent queries won't process the same file if we check the data.
+        
+        const assignmentsSnap = await query.limit(200).get(); // Fetch potential candidates
 
         const bucket = admin.storage().bucket();
         let deletedFilesCount = 0;
         let updatedDocsCount = 0;
         const batch = db.batch();
-        let batchOpCount = 0;
+        
+        let processedDocs = 0;
 
-        // Process files
-        const assignmentChunks = [];
-        const CHUNK_SIZE = 50;
-        for (let i = 0; i < assignmentsSnap.docs.length; i += CHUNK_SIZE) {
-            assignmentChunks.push(assignmentsSnap.docs.slice(i, i + CHUNK_SIZE));
-        }
+        for (const doc of assignmentsSnap.docs) {
+            if (updatedDocsCount >= BATCH_LIMIT) break; // Hard stop for this execution
 
-        for (const chunk of assignmentChunks) {
-            for (const doc of chunk) {
-                const assignment = doc.data();
-                const proofUrls = assignment.proofImageUrls || [];
-                
-                if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
-                    let fileDeleted = false;
+            const assignment = doc.data();
+            const proofUrls = assignment.proofImageUrls || [];
+            
+            // Skip if already processed or manual
+            if (proofUrls.length === 0 || proofUrls[0] === 'manual' || proofUrls[0] === 'DELETED_PROOF') {
+                continue;
+            }
 
-                    for (const url of proofUrls) {
-                        const storagePath = getStoragePathFromUrl(url);
-                        if (storagePath) {
-                            try {
-                                await bucket.file(storagePath).delete();
-                                deletedFilesCount++;
-                                fileDeleted = true;
-                            } catch (e) {
-                                console.warn(`Erro ao deletar ${storagePath}:`, e.message);
-                                // If file not found (404), consider it deleted effectively
-                                if (e.code === 404) fileDeleted = true;
-                            }
-                        }
-                    }
+            let fileDeleted = false;
 
-                    if (fileDeleted || proofUrls.length > 0) {
-                        batch.update(doc.ref, { 
-                            proofImageUrls: ['DELETED_PROOF'], 
-                            proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
-                        });
-                        batchOpCount++;
-                        updatedDocsCount++;
+            for (const url of proofUrls) {
+                const storagePath = getStoragePathFromUrl(url);
+                if (storagePath) {
+                    try {
+                        await bucket.file(storagePath).delete();
+                        deletedFilesCount++;
+                        fileDeleted = true;
+                    } catch (e) {
+                        console.warn(`Erro ao deletar ${storagePath}:`, e.message);
+                        if (e.code === 404) fileDeleted = true; // File already gone
                     }
                 }
             }
-            
-            if (batchOpCount > 0) {
-                await batch.commit();
-                batchOpCount = 0; // Reset for next batch logic if we were using a single batch, but here we commit per chunk loop implicitly via logic flow or new batch re-init
-            }
+
+            // Always update doc even if files were missing (to prevent re-processing)
+            batch.update(doc.ref, { 
+                proofImageUrls: ['DELETED_PROOF'], 
+                proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            updatedDocsCount++;
+        }
+        
+        if (updatedDocsCount > 0) {
+            await batch.commit();
         }
 
+        // Check if there might be more
+        // We fetched 200. If we processed (updated) fewer than what we fetched (excluding those already done), maybe we are done.
+        // A simple heuristic: if we updated > 0, assume there might be more. The client loop continues until 0 updates.
+        
         return { 
             success: true, 
             deletedFiles: deletedFilesCount, 
             updatedDocs: updatedDocsCount,
-            message: `Sucesso! ${deletedFilesCount} arquivos apagados em ${updatedDocsCount} tarefas.`
+            hasMore: updatedDocsCount > 0
         };
 
     } catch (error) {

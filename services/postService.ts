@@ -534,27 +534,27 @@ export const cleanupOldProofs = async (organizationId: string): Promise<{ count:
     }
 };
 
-export const analyzeCampaignProofs = async (organizationId: string, campaignName: string): Promise<{ count: number, sizeBytes: number, formattedSize: string }> => {
+export const analyzeCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ count: number, sizeBytes: number, formattedSize: string }> => {
     try {
         const func = functions.httpsCallable('analyzeCampaignProofs');
-        const result = await func({ organizationId, campaignName });
+        const result = await func({ organizationId, campaignName, postId });
         return result.data as { count: number, sizeBytes: number, formattedSize: string };
     } catch (error: any) {
-        console.error("Error analyzing campaign proofs:", error);
+        console.error("Error analyzing proofs:", error);
         const detail = error.details?.message || error.message;
         throw new Error(`Falha na análise: ${detail}`);
     }
 };
 
-export const deleteCampaignProofs = async (organizationId: string, campaignName: string): Promise<{ success: boolean, deletedFiles: number, updatedDocs: number, message: string }> => {
+export const deleteCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ success: boolean, deletedFiles: number, updatedDocs: number, hasMore: boolean }> => {
     try {
         const func = functions.httpsCallable('deleteCampaignProofs');
-        const result = await func({ organizationId, campaignName });
-        return result.data as { success: boolean, deletedFiles: number, updatedDocs: number, message: string };
+        const result = await func({ organizationId, campaignName, postId });
+        return result.data as { success: boolean, deletedFiles: number, updatedDocs: number, hasMore: boolean };
     } catch (error: any) {
-        console.error("Error deleting campaign proofs:", error);
+        console.error("Error deleting proofs:", error);
         const detail = error.details?.message || error.message;
-        throw new Error(`Falha na limpeza do evento: ${detail}`);
+        throw new Error(`Falha na limpeza: ${detail}`);
     }
 };
 

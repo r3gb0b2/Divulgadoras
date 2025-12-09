@@ -462,7 +462,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             await updatePromoter(id, updatePayload);
             // Success! No need to alert or refresh, UI is already up to date.
 
-        } catch (error) {
+        } catch (error: any) {
             // 7. Rollback on Error
             console.error("Update failed, rolling back", error);
             setAllPromoters(previousPromoters);
@@ -572,7 +572,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 await Promise.all(promises);
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Bulk update failed partially or fully", error);
             // In a real robust app, we'd handle partial failures. For now, revert all on catastrophic failure or warn.
             // setAllPromoters(previousPromoters); // Revert is risky if some succeeded.
@@ -695,7 +695,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 setAllPromoters(prev => prev.filter(p => p.id !== id));
                 // Recalculate stats approx
                 setStats(prev => ({ ...prev, total: prev.total - 1 })); // Ideally adjust specific status count too
-            } catch (error) {
+            } catch (error: any) {
                 alert("Falha ao excluir a inscrição.");
             }
         }
@@ -783,23 +783,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             return filteredPromotersFromSource.map(p => ({ ...p, completionRate: -1 }));
         }
     
-        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number }>();
+        const statsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number; justifications: number }>();
         const now = new Date();
     
         allAssignments.forEach(a => {
             if (!a.post) return;
     
-            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 };
+            const stat = statsMap.get(a.promoterId) || { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0, justifications: 0 };
             stat.assigned++;
     
             if (a.proofSubmittedAt) {
                 stat.completed++;
             } else if (a.justification) {
+                stat.justifications++;
                 if (a.justificationStatus === 'accepted') {
                     stat.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
                     stat.missed++;
-                } else { // 'pending'
+                } else if (a.justificationStatus === 'pending' || a.justification) {
                     stat.pending++;
                 }
             } else {
@@ -833,7 +834,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
             const completionRate = stats && stats.assigned > 0
                 ? Math.round((successfulOutcomes / stats.assigned) * 100)
-                : -1;
+                : -1; // -1 for no data
             return { ...p, completionRate };
         });
     }, [filteredPromotersFromSource, allAssignments]);
