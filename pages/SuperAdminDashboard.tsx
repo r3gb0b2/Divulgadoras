@@ -4,12 +4,12 @@ import { Link } from 'react-router-dom';
 // FIX: Removed modular signOut import to use compat syntax.
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon, TrashIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon, TrashIcon, CheckCircleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { cleanupOldProofs, analyzeCampaignProofs, deleteCampaignProofs, getPostsForOrg } from '../services/postService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getOrganizations } from '../services/organizationService';
-import { Campaign, Post, Organization } from '../types';
+import { Campaign, Post, Organization, Timestamp } from '../types';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -41,7 +41,10 @@ const SuperAdminDashboard: React.FC = () => {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [posts, setPosts] = useState<Post[]>([]);
     const [selectedCampaignName, setSelectedCampaignName] = useState('');
-    const [selectedPostId, setSelectedPostId] = useState('');
+    
+    // Changed to Set for multi-selection
+    const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
+    
     const [isLoadingData, setIsLoadingData] = useState(false);
     
     // State for Progress Bar
@@ -79,7 +82,7 @@ const SuperAdminDashboard: React.FC = () => {
 
             // Reset selection when org changes
             setSelectedCampaignName('');
-            setSelectedPostId('');
+            setSelectedPostIds(new Set());
             setAnalysisResult(null);
             setDeletionProgress({ current: 0, total: 0 });
         } else {
@@ -90,6 +93,30 @@ const SuperAdminDashboard: React.FC = () => {
 
     // Filter posts based on selected campaign
     const filteredPosts = posts.filter(p => !selectedCampaignName || p.campaignName === selectedCampaignName);
+
+    // Handle checkboxes
+    const handleTogglePost = (postId: string) => {
+        setSelectedPostIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(postId)) {
+                newSet.delete(postId);
+            } else {
+                newSet.add(postId);
+            }
+            return newSet;
+        });
+        setAnalysisResult(null); // Clear analysis when selection changes
+    };
+
+    const handleSelectAllPosts = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const allIds = filteredPosts.map(p => p.id);
+            setSelectedPostIds(new Set(allIds));
+        } else {
+            setSelectedPostIds(new Set());
+        }
+        setAnalysisResult(null);
+    };
 
     const checkSystemStatus = useCallback(async () => {
         setIsCheckingStatus(true);
@@ -139,7 +166,7 @@ const SuperAdminDashboard: React.FC = () => {
             }
         } catch (error: any) {
             console.error("Test email failed", error);
-            const detailedError = error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.';
+            const detailedError = String(error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.');
             setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${detailedError}` } }));
         }
     };
@@ -158,7 +185,7 @@ const SuperAdminDashboard: React.FC = () => {
                 const result = await cleanupOldProofs(targetOrgId);
                 alert(result.message);
             } catch (err: any) {
-                alert(err.message);
+                alert(String(err.message));
             } finally {
                 setIsCleaning(false);
             }
@@ -167,25 +194,48 @@ const SuperAdminDashboard: React.FC = () => {
     
     const handleAnalyze = async () => {
         if (!targetOrgId) return;
-        if (!selectedCampaignName && !selectedPostId) {
-            alert("Selecione um evento ou uma postagem específica.");
+        
+        // Use selected posts if any, otherwise use campaign name (implies all in campaign)
+        // If posts are selected, we must iterate.
+        
+        const idsToAnalyze = Array.from(selectedPostIds);
+        
+        if (idsToAnalyze.length === 0 && !selectedCampaignName) {
+            alert("Selecione um evento ou marque postagens específicas.");
             return;
         }
 
         setIsAnalyzing(true);
         setAnalysisResult(null);
-        setDeletionProgress({ current: 0, total: 0 }); // Reset progress
+        setDeletionProgress({ current: 0, total: 0 });
 
         try {
-            // Pass postId if selected, otherwise pass campaignName
-            const result = await analyzeCampaignProofs(
-                targetOrgId, 
-                selectedPostId ? undefined : selectedCampaignName,
-                selectedPostId || undefined
-            );
-            setAnalysisResult(result);
+            let totalCount = 0;
+            let totalSizeBytes = 0;
+
+            if (idsToAnalyze.length > 0) {
+                // Loop through selected posts
+                for (const postId of idsToAnalyze) {
+                    const result = await analyzeCampaignProofs(targetOrgId, undefined, postId);
+                    totalCount += result.count;
+                    if ((result as any).sizeBytes) {
+                        totalSizeBytes += (result as any).sizeBytes;
+                    }
+                }
+            } else {
+                // Analyze whole campaign
+                const result = await analyzeCampaignProofs(targetOrgId, selectedCampaignName, undefined);
+                totalCount = result.count;
+                if ((result as any).sizeBytes) {
+                    totalSizeBytes = (result as any).sizeBytes;
+                }
+            }
+
+            const formattedSize = (totalSizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
+            setAnalysisResult({ count: totalCount, formattedSize });
+
         } catch (err: any) {
-            alert(err.message);
+            alert(String(err.message));
         } finally {
             setIsAnalyzing(false);
         }
@@ -194,11 +244,14 @@ const SuperAdminDashboard: React.FC = () => {
     const handleDeleteLoop = async () => {
         if (!targetOrgId || !analysisResult || analysisResult.count === 0) return;
         
-        const targetName = selectedPostId 
-            ? `a postagem "${posts.find(p=>p.id===selectedPostId)?.campaignName} - ${posts.find(p=>p.id===selectedPostId)?.type}"`
-            : `o evento "${selectedCampaignName}"`;
+        const idsToDelete = Array.from(selectedPostIds);
+        const mode = idsToDelete.length > 0 ? 'specific' : 'campaign';
+        
+        const targetName = mode === 'specific'
+            ? `${idsToDelete.length} postagens selecionadas`
+            : `o evento "${selectedCampaignName}" (todos os posts)`;
 
-        if (!window.confirm(`ATENÇÃO: Você está prestes a apagar ${analysisResult.count} arquivos de imagem para ${targetName}.\n\nIsso liberará cerca de ${analysisResult.formattedSize}.\n\nEsta ação é irreversível e ocorrerá em etapas. Não feche a página. Deseja continuar?`)) return;
+        if (!window.confirm(`ATENÇÃO: Você está prestes a apagar ${analysisResult.count} arquivos de imagem para ${targetName}.\n\nIsso liberará cerca de ${analysisResult.formattedSize}.\n\nEsta ação é irreversível. Deseja continuar?`)) return;
 
         setIsDeletingSpecific(true);
         let deletedTotal = 0;
@@ -207,29 +260,39 @@ const SuperAdminDashboard: React.FC = () => {
         setDeletionProgress({ current: 0, total: totalToDelete });
 
         try {
-            let hasMore = true;
-            while (hasMore) {
-                const result = await deleteCampaignProofs(
-                    targetOrgId, 
-                    selectedPostId ? undefined : selectedCampaignName,
-                    selectedPostId || undefined
-                );
-                
-                deletedTotal += result.updatedDocs;
-                setDeletionProgress({ current: deletedTotal, total: totalToDelete });
-                hasMore = result.hasMore;
-
-                // Safety break if we exceed total expected significantly (prevents infinite loop if logic fails)
-                if (deletedTotal > totalToDelete + 50) {
-                    hasMore = false; 
+            if (mode === 'specific') {
+                for (const postId of idsToDelete) {
+                    let hasMore = true;
+                    while (hasMore) {
+                        const result = await deleteCampaignProofs(targetOrgId, undefined, postId);
+                        deletedTotal += result.updatedDocs;
+                        setDeletionProgress({ current: deletedTotal, total: totalToDelete });
+                        hasMore = result.hasMore;
+                        
+                        if (result.updatedDocs === 0) hasMore = false; // Safety break
+                    }
+                }
+            } else {
+                // Campaign mode loop
+                let hasMore = true;
+                while (hasMore) {
+                    const result = await deleteCampaignProofs(targetOrgId, selectedCampaignName, undefined);
+                    deletedTotal += result.updatedDocs;
+                    setDeletionProgress({ current: deletedTotal, total: totalToDelete });
+                    hasMore = result.hasMore;
+                    if (result.updatedDocs === 0) hasMore = false;
                 }
             }
+
             alert(`Processo concluído! ${deletedTotal} arquivos foram apagados.`);
             setAnalysisResult(null); 
             setDeletionProgress({ current: 0, total: 0 });
+            // Optionally clear selection
+            // setSelectedPostIds(new Set()); 
+
         } catch (err: any) {
             console.error(err);
-            alert(`Ocorreu um erro durante a exclusão: ${err.message}. Alguns arquivos podem ter sido apagados.`);
+            alert(`Ocorreu um erro durante a exclusão: ${String(err.message)}. Alguns arquivos podem ter sido apagados.`);
         } finally {
             setIsDeletingSpecific(false);
         }
@@ -393,15 +456,15 @@ const SuperAdminDashboard: React.FC = () => {
                         Limpeza Específica
                     </h2>
                     <p className="text-gray-300 text-sm mb-4">
-                        Selecione um evento ou uma postagem específica para apagar as comprovações.
+                        Selecione um evento e marque as postagens que deseja limpar.
                     </p>
                     <div className="flex flex-col gap-3">
                         <select 
                             value={selectedCampaignName} 
                             onChange={(e) => {
                                 setSelectedCampaignName(e.target.value);
-                                setSelectedPostId(''); // Reset post selection when campaign changes
-                                setAnalysisResult(null); // Clear previous analysis so new selection is active
+                                setSelectedPostIds(new Set()); // Reset post selection
+                                setAnalysisResult(null); // Clear previous analysis
                             }}
                             className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
                             disabled={!targetOrgId || isAnalyzing || isDeletingSpecific}
@@ -410,31 +473,57 @@ const SuperAdminDashboard: React.FC = () => {
                             {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
 
-                        {/* Dropdown de Posts Específicos */}
-                        <select 
-                            value={selectedPostId} 
-                            onChange={(e) => {
-                                setSelectedPostId(e.target.value);
-                                setAnalysisResult(null); // Clear previous analysis
-                            }}
-                            className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
-                            disabled={!targetOrgId || isAnalyzing || isDeletingSpecific}
-                        >
-                            <option value="">(Opcional) Selecione uma Postagem ({filteredPosts.length})</option>
-                            {filteredPosts.map(p => (
-                                <option key={p.id} value={p.id}>
-                                    {p.type.toUpperCase()} - {p.instructions?.substring(0, 30)}... ({p.isActive ? 'Ativo' : 'Inativo'})
-                                </option>
-                            ))}
-                        </select>
+                        {/* Updated: Checkbox List for Posts */}
+                        <div className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm max-h-60 overflow-y-auto">
+                            {filteredPosts.length === 0 ? (
+                                <p className="text-gray-500 text-center py-2">{selectedCampaignName ? 'Nenhum post encontrado para este evento.' : 'Selecione um evento acima.'}</p>
+                            ) : (
+                                <div>
+                                    <label className="flex items-center space-x-2 p-2 border-b border-gray-700 mb-2 cursor-pointer sticky top-0 bg-gray-800 z-10">
+                                        <input 
+                                            type="checkbox"
+                                            onChange={handleSelectAllPosts}
+                                            checked={selectedPostIds.size === filteredPosts.length && filteredPosts.length > 0}
+                                            className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-primary focus:ring-primary"
+                                        />
+                                        <span className="font-bold text-white">Selecionar Todos ({filteredPosts.length})</span>
+                                    </label>
+                                    <div className="space-y-1">
+                                        {filteredPosts.map(p => (
+                                            <label key={p.id} className="flex items-center space-x-2 p-2 hover:bg-gray-700/50 rounded cursor-pointer">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={selectedPostIds.has(p.id)}
+                                                    onChange={() => handleTogglePost(p.id)}
+                                                    className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-primary focus:ring-primary"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-gray-200">
+                                                        {p.type.toUpperCase()} - {p.instructions?.substring(0, 30)}...
+                                                    </span>
+                                                    <div className="flex gap-2 text-xs">
+                                                        <span className={p.isActive ? 'text-green-400' : 'text-red-400'}>
+                                                            {p.isActive ? 'Ativo' : 'Inativo'}
+                                                        </span>
+                                                        <span className="text-gray-500">
+                                                            {((p.createdAt as Timestamp)?.toDate().toLocaleDateString('pt-BR'))}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         
                         <div className="flex gap-2">
                             <button 
                                 onClick={handleAnalyze} 
-                                disabled={isAnalyzing || isDeletingSpecific || (!selectedCampaignName && !selectedPostId)}
+                                disabled={isAnalyzing || isDeletingSpecific || (!selectedCampaignName && selectedPostIds.size === 0)}
                                 className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-md disabled:opacity-50 text-sm"
                             >
-                                {isAnalyzing ? 'Analisando...' : 'Analisar'}
+                                {isAnalyzing ? 'Analisando...' : `Analisar (${selectedPostIds.size > 0 ? selectedPostIds.size : 'Todos'})`}
                             </button>
                             <button 
                                 onClick={handleDeleteLoop} 
