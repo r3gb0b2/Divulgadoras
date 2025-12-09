@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -206,7 +206,18 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 <div className="text-center p-4">
                     <p className="text-sm text-green-400 font-semibold mb-2">Comprovação enviada!</p>
                     {assignment.proofImageUrls && assignment.proofImageUrls.length > 0 && assignment.proofImageUrls[0] !== 'manual' &&
-                        <div className="flex justify-center gap-2">{assignment.proofImageUrls.map((url, i) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Prova ${i+1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>))}</div>
+                        <div className="flex justify-center gap-2">
+                            {assignment.proofImageUrls.map((url, i) => (
+                                url === 'DELETED_PROOF' ? (
+                                    <div key={i} className="w-20 h-20 bg-gray-800 rounded-md border-2 border-gray-600 flex flex-col items-center justify-center text-gray-500" title="Imagem removida para economizar espaço">
+                                        <TrashIcon className="w-8 h-8 mb-1" />
+                                        <span className="text-[8px] uppercase font-bold">Apagado</span>
+                                    </div>
+                                ) : (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer"><img src={url} alt={`Prova ${i+1}`} className="w-20 h-20 object-cover rounded-md border-2 border-primary" /></a>
+                                )
+                            ))}
+                        </div>
                     }
                 </div>
             );
