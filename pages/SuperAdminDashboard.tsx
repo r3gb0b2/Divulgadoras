@@ -8,7 +8,8 @@ import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentLi
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { cleanupOldProofs, analyzeCampaignProofs, deleteCampaignProofs, getPostsForOrg } from '../services/postService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Campaign, Post } from '../types';
+import { getOrganizations } from '../services/organizationService';
+import { Campaign, Post, Organization } from '../types';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -32,6 +33,10 @@ const SuperAdminDashboard: React.FC = () => {
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [isCleaning, setIsCleaning] = useState(false);
     
+    // Org Selection for Super Admin
+    const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
+    const [targetOrgId, setTargetOrgId] = useState<string>('');
+
     // State for Campaign Specific Cleanup
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [posts, setPosts] = useState<Post[]>([]);
@@ -45,13 +50,27 @@ const SuperAdminDashboard: React.FC = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDeletingSpecific, setIsDeletingSpecific] = useState(false);
 
+    // Load Organizations
     useEffect(() => {
-        if (selectedOrgId) {
+        getOrganizations().then(orgs => {
+            const sorted = orgs.sort((a,b) => a.name.localeCompare(b.name));
+            setAllOrgs(sorted);
+            // Default to selectedOrgId from context if available, otherwise first org
+            if (selectedOrgId) {
+                setTargetOrgId(selectedOrgId);
+            } else if (sorted.length > 0) {
+                setTargetOrgId(sorted[0].id);
+            }
+        }).catch(console.error);
+    }, [selectedOrgId]);
+
+    useEffect(() => {
+        if (targetOrgId) {
             setIsLoadingData(true);
             // Load campaigns for the selected org
             Promise.all([
-                getAllCampaigns(selectedOrgId),
-                getPostsForOrg(selectedOrgId)
+                getAllCampaigns(targetOrgId),
+                getPostsForOrg(targetOrgId)
             ]).then(([campaignsData, postsData]) => {
                 setCampaigns(campaignsData);
                 setPosts(postsData);
@@ -67,7 +86,7 @@ const SuperAdminDashboard: React.FC = () => {
             setCampaigns([]);
             setPosts([]);
         }
-    }, [selectedOrgId]);
+    }, [targetOrgId]);
 
     // Filter posts based on selected campaign
     const filteredPosts = posts.filter(p => !selectedCampaignName || p.campaignName === selectedCampaignName);
@@ -126,8 +145,8 @@ const SuperAdminDashboard: React.FC = () => {
     };
 
     const handleCleanup = async () => {
-        if (!selectedOrgId) {
-            alert("Selecione uma organização no menu superior para executar a limpeza.");
+        if (!targetOrgId) {
+            alert("Selecione uma organização para executar a limpeza.");
             return;
         }
         
@@ -136,7 +155,7 @@ const SuperAdminDashboard: React.FC = () => {
         if (window.confirm(confirmMessage)) {
             setIsCleaning(true);
             try {
-                const result = await cleanupOldProofs(selectedOrgId);
+                const result = await cleanupOldProofs(targetOrgId);
                 alert(result.message);
             } catch (err: any) {
                 alert(err.message);
@@ -147,7 +166,7 @@ const SuperAdminDashboard: React.FC = () => {
     };
     
     const handleAnalyze = async () => {
-        if (!selectedOrgId) return;
+        if (!targetOrgId) return;
         if (!selectedCampaignName && !selectedPostId) {
             alert("Selecione um evento ou uma postagem específica.");
             return;
@@ -160,7 +179,7 @@ const SuperAdminDashboard: React.FC = () => {
         try {
             // Pass postId if selected, otherwise pass campaignName
             const result = await analyzeCampaignProofs(
-                selectedOrgId, 
+                targetOrgId, 
                 selectedPostId ? undefined : selectedCampaignName,
                 selectedPostId || undefined
             );
@@ -173,7 +192,7 @@ const SuperAdminDashboard: React.FC = () => {
     };
 
     const handleDeleteLoop = async () => {
-        if (!selectedOrgId || !analysisResult || analysisResult.count === 0) return;
+        if (!targetOrgId || !analysisResult || analysisResult.count === 0) return;
         
         const targetName = selectedPostId 
             ? `a postagem "${posts.find(p=>p.id===selectedPostId)?.campaignName} - ${posts.find(p=>p.id===selectedPostId)?.type}"`
@@ -191,7 +210,7 @@ const SuperAdminDashboard: React.FC = () => {
             let hasMore = true;
             while (hasMore) {
                 const result = await deleteCampaignProofs(
-                    selectedOrgId, 
+                    targetOrgId, 
                     selectedPostId ? undefined : selectedCampaignName,
                     selectedPostId || undefined
                 );
@@ -333,8 +352,25 @@ const SuperAdminDashboard: React.FC = () => {
                 </button>
             </div>
 
+            <div className="mb-6 bg-gray-800 p-4 rounded-lg flex flex-col sm:flex-row items-center gap-4">
+                <BuildingOfficeIcon className="w-6 h-6 text-gray-400 hidden sm:block" />
+                <div className="flex-grow w-full">
+                    <label className="block text-xs font-semibold text-gray-400 mb-1">ORGANIZAÇÃO ALVO PARA MANUTENÇÃO</label>
+                    <select 
+                        value={targetOrgId} 
+                        onChange={(e) => setTargetOrgId(e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm focus:ring-primary focus:border-primary"
+                    >
+                        <option value="">Selecione uma organização...</option>
+                        {allOrgs.map(org => (
+                            <option key={org.id} value={org.id}>{org.name}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="bg-red-900/30 border border-red-800 rounded-lg p-6">
+                <div className={`bg-red-900/30 border border-red-800 rounded-lg p-6 ${!targetOrgId ? 'opacity-50 pointer-events-none' : ''}`}>
                     <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                         <TrashIcon className="w-6 h-6 text-red-400" />
                         Limpeza Geral (Inativos)
@@ -344,14 +380,14 @@ const SuperAdminDashboard: React.FC = () => {
                     </p>
                     <button 
                         onClick={handleCleanup} 
-                        disabled={isCleaning || !selectedOrgId}
+                        disabled={isCleaning || !targetOrgId}
                         className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
                     >
                         {isCleaning ? 'Limpando...' : 'Executar Limpeza Geral'}
                     </button>
                 </div>
 
-                <div className="bg-orange-900/30 border border-orange-800 rounded-lg p-6">
+                <div className={`bg-orange-900/30 border border-orange-800 rounded-lg p-6 ${!targetOrgId ? 'opacity-50 pointer-events-none' : ''}`}>
                     <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                         <TrashIcon className="w-6 h-6 text-orange-400" />
                         Limpeza Específica
@@ -368,7 +404,7 @@ const SuperAdminDashboard: React.FC = () => {
                                 setAnalysisResult(null); // Clear previous analysis so new selection is active
                             }}
                             className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
-                            disabled={!selectedOrgId || isAnalyzing || isDeletingSpecific}
+                            disabled={!targetOrgId || isAnalyzing || isDeletingSpecific}
                         >
                             <option value="">Selecione o Evento ({campaigns.length})</option>
                             {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -382,7 +418,7 @@ const SuperAdminDashboard: React.FC = () => {
                                 setAnalysisResult(null); // Clear previous analysis
                             }}
                             className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
-                            disabled={!selectedOrgId || isAnalyzing || isDeletingSpecific}
+                            disabled={!targetOrgId || isAnalyzing || isDeletingSpecific}
                         >
                             <option value="">(Opcional) Selecione uma Postagem ({filteredPosts.length})</option>
                             {filteredPosts.map(p => (
