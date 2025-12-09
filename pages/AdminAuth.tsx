@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 // FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
@@ -44,6 +45,7 @@ import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 import AdminFollowLoopPage from './AdminFollowLoopPage';
 import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
+import AdminCleanupPage from './AdminCleanupPage'; // Import new page
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -268,6 +270,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
                     <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
+                    <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
                 </>
             )}
 

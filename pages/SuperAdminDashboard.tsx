@@ -6,10 +6,8 @@ import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { UsersIcon, MapPinIcon, KeyIcon, BuildingOfficeIcon, ClipboardDocumentListIcon, EnvelopeIcon, SparklesIcon, CreditCardIcon, MegaphoneIcon, SearchIcon, ChartBarIcon, WhatsAppIcon, ClockIcon, TrashIcon, CheckCircleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { cleanupOldProofs, analyzeCampaignProofs, deleteCampaignProofs, getPostsForOrg } from '../services/postService';
-import { getAllCampaigns } from '../services/settingsService';
 import { getOrganizations } from '../services/organizationService';
-import { Campaign, Post, Organization, Timestamp } from '../types';
+import { Organization } from '../types';
 
 type TestStatus = { type: 'idle' | 'loading' | 'success' | 'error', message: string };
 type SystemStatusLogEntry = { level: 'INFO' | 'SUCCESS' | 'ERROR'; message: string };
@@ -31,27 +29,9 @@ const SuperAdminDashboard: React.FC = () => {
     });
     const [systemStatus, setSystemStatus] = useState<SystemStatus>(null);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
-    const [isCleaning, setIsCleaning] = useState(false);
     
-    // Org Selection for Super Admin
     const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
     const [targetOrgId, setTargetOrgId] = useState<string>('');
-
-    // State for Campaign Specific Cleanup
-    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-    const [posts, setPosts] = useState<Post[]>([]);
-    const [selectedCampaignName, setSelectedCampaignName] = useState('');
-    
-    // Changed to Set for multi-selection
-    const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
-    
-    const [isLoadingData, setIsLoadingData] = useState(false);
-    
-    // State for Progress Bar
-    const [analysisResult, setAnalysisResult] = useState<{ count: number, formattedSize: string } | null>(null);
-    const [deletionProgress, setDeletionProgress] = useState<{ current: number, total: number }>({ current: 0, total: 0 });
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isDeletingSpecific, setIsDeletingSpecific] = useState(false);
 
     // Load Organizations
     useEffect(() => {
@@ -66,57 +46,6 @@ const SuperAdminDashboard: React.FC = () => {
             }
         }).catch(console.error);
     }, [selectedOrgId]);
-
-    useEffect(() => {
-        if (targetOrgId) {
-            setIsLoadingData(true);
-            // Load campaigns for the selected org
-            Promise.all([
-                getAllCampaigns(targetOrgId),
-                getPostsForOrg(targetOrgId)
-            ]).then(([campaignsData, postsData]) => {
-                setCampaigns(campaignsData);
-                setPosts(postsData);
-            }).catch(console.error)
-              .finally(() => setIsLoadingData(false));
-
-            // Reset selection when org changes
-            setSelectedCampaignName('');
-            setSelectedPostIds(new Set());
-            setAnalysisResult(null);
-            setDeletionProgress({ current: 0, total: 0 });
-        } else {
-            setCampaigns([]);
-            setPosts([]);
-        }
-    }, [targetOrgId]);
-
-    // Filter posts based on selected campaign
-    const filteredPosts = posts.filter(p => !selectedCampaignName || p.campaignName === selectedCampaignName);
-
-    // Handle checkboxes
-    const handleTogglePost = (postId: string) => {
-        setSelectedPostIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(postId)) {
-                newSet.delete(postId);
-            } else {
-                newSet.add(postId);
-            }
-            return newSet;
-        });
-        setAnalysisResult(null); // Clear analysis when selection changes
-    };
-
-    const handleSelectAllPosts = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            const allIds = filteredPosts.map(p => p.id);
-            setSelectedPostIds(new Set(allIds));
-        } else {
-            setSelectedPostIds(new Set());
-        }
-        setAnalysisResult(null);
-    };
 
     const checkSystemStatus = useCallback(async () => {
         setIsCheckingStatus(true);
@@ -138,11 +67,9 @@ const SuperAdminDashboard: React.FC = () => {
         }
     }, []);
 
-
     useEffect(() => {
         checkSystemStatus();
     }, [checkSystemStatus]);
-
 
     const handleLogout = async () => {
         try {
@@ -168,133 +95,6 @@ const SuperAdminDashboard: React.FC = () => {
             console.error("Test email failed", error);
             const detailedError = String(error?.details?.originalError || error.message || 'Ocorreu um erro desconhecido.');
             setTestStatuses(prev => ({ ...prev, [testType]: { type: 'error', message: `Falha no envio: ${detailedError}` } }));
-        }
-    };
-
-    const handleCleanup = async () => {
-        if (!targetOrgId) {
-            alert("Selecione uma organização para executar a limpeza.");
-            return;
-        }
-        
-        const confirmMessage = "Tem certeza que deseja apagar PERMANENTEMENTE todas as imagens de comprovação de eventos marcados como 'Inativos' da organização selecionada?\n\nIsso liberará espaço no banco de dados. As imagens serão substituídas por um aviso visual.\n\nEsta ação não pode ser desfeita.";
-        
-        if (window.confirm(confirmMessage)) {
-            setIsCleaning(true);
-            try {
-                const result = await cleanupOldProofs(targetOrgId);
-                alert(result.message);
-            } catch (err: any) {
-                alert(String(err.message));
-            } finally {
-                setIsCleaning(false);
-            }
-        }
-    };
-    
-    const handleAnalyze = async () => {
-        if (!targetOrgId) return;
-        
-        // Use selected posts if any, otherwise use campaign name (implies all in campaign)
-        // If posts are selected, we must iterate.
-        
-        const idsToAnalyze = Array.from(selectedPostIds);
-        
-        if (idsToAnalyze.length === 0 && !selectedCampaignName) {
-            alert("Selecione um evento ou marque postagens específicas.");
-            return;
-        }
-
-        setIsAnalyzing(true);
-        setAnalysisResult(null);
-        setDeletionProgress({ current: 0, total: 0 });
-
-        try {
-            let totalCount = 0;
-            let totalSizeBytes = 0;
-
-            if (idsToAnalyze.length > 0) {
-                // Loop through selected posts
-                for (const postId of idsToAnalyze) {
-                    const result = await analyzeCampaignProofs(targetOrgId, undefined, postId);
-                    totalCount += result.count;
-                    if ((result as any).sizeBytes) {
-                        totalSizeBytes += (result as any).sizeBytes;
-                    }
-                }
-            } else {
-                // Analyze whole campaign
-                const result = await analyzeCampaignProofs(targetOrgId, selectedCampaignName, undefined);
-                totalCount = result.count;
-                if ((result as any).sizeBytes) {
-                    totalSizeBytes = (result as any).sizeBytes;
-                }
-            }
-
-            const formattedSize = (totalSizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
-            setAnalysisResult({ count: totalCount, formattedSize });
-
-        } catch (err: any) {
-            alert(String(err.message));
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
-
-    const handleDeleteLoop = async () => {
-        if (!targetOrgId || !analysisResult || analysisResult.count === 0) return;
-        
-        const idsToDelete = Array.from(selectedPostIds);
-        const mode = idsToDelete.length > 0 ? 'specific' : 'campaign';
-        
-        const targetName = mode === 'specific'
-            ? `${idsToDelete.length} postagens selecionadas`
-            : `o evento "${selectedCampaignName}" (todos os posts)`;
-
-        if (!window.confirm(`ATENÇÃO: Você está prestes a apagar ${analysisResult.count} arquivos de imagem para ${targetName}.\n\nIsso liberará cerca de ${analysisResult.formattedSize}.\n\nEsta ação é irreversível. Deseja continuar?`)) return;
-
-        setIsDeletingSpecific(true);
-        let deletedTotal = 0;
-        const totalToDelete = analysisResult.count;
-        
-        setDeletionProgress({ current: 0, total: totalToDelete });
-
-        try {
-            if (mode === 'specific') {
-                for (const postId of idsToDelete) {
-                    let hasMore = true;
-                    while (hasMore) {
-                        const result = await deleteCampaignProofs(targetOrgId, undefined, postId);
-                        deletedTotal += result.updatedDocs;
-                        setDeletionProgress({ current: deletedTotal, total: totalToDelete });
-                        hasMore = result.hasMore;
-                        
-                        if (result.updatedDocs === 0) hasMore = false; // Safety break
-                    }
-                }
-            } else {
-                // Campaign mode loop
-                let hasMore = true;
-                while (hasMore) {
-                    const result = await deleteCampaignProofs(targetOrgId, selectedCampaignName, undefined);
-                    deletedTotal += result.updatedDocs;
-                    setDeletionProgress({ current: deletedTotal, total: totalToDelete });
-                    hasMore = result.hasMore;
-                    if (result.updatedDocs === 0) hasMore = false;
-                }
-            }
-
-            alert(`Processo concluído! ${deletedTotal} arquivos foram apagados.`);
-            setAnalysisResult(null); 
-            setDeletionProgress({ current: 0, total: 0 });
-            // Optionally clear selection
-            // setSelectedPostIds(new Set()); 
-
-        } catch (err: any) {
-            console.error(err);
-            alert(`Ocorreu um erro durante a exclusão: ${String(err.message)}. Alguns arquivos podem ter sido apagados.`);
-        } finally {
-            setIsDeletingSpecific(false);
         }
     };
     
@@ -415,150 +215,6 @@ const SuperAdminDashboard: React.FC = () => {
                 </button>
             </div>
 
-            <div className="mb-6 bg-gray-800 p-4 rounded-lg flex flex-col sm:flex-row items-center gap-4">
-                <BuildingOfficeIcon className="w-6 h-6 text-gray-400 hidden sm:block" />
-                <div className="flex-grow w-full">
-                    <label className="block text-xs font-semibold text-gray-400 mb-1">ORGANIZAÇÃO ALVO PARA MANUTENÇÃO</label>
-                    <select 
-                        value={targetOrgId} 
-                        onChange={(e) => setTargetOrgId(e.target.value)}
-                        className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm focus:ring-primary focus:border-primary"
-                    >
-                        <option value="">Selecione uma organização...</option>
-                        {allOrgs.map(org => (
-                            <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                    </select>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className={`bg-red-900/30 border border-red-800 rounded-lg p-6 ${!targetOrgId ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                        <TrashIcon className="w-6 h-6 text-red-400" />
-                        Limpeza Geral (Inativos)
-                    </h2>
-                    <p className="text-gray-300 text-sm mb-4">
-                        Limpar prints de TODOS os eventos marcados como 'Inativos'. Ideal para faxina geral.
-                    </p>
-                    <button 
-                        onClick={handleCleanup} 
-                        disabled={isCleaning || !targetOrgId}
-                        className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
-                    >
-                        {isCleaning ? 'Limpando...' : 'Executar Limpeza Geral'}
-                    </button>
-                </div>
-
-                <div className={`bg-orange-900/30 border border-orange-800 rounded-lg p-6 ${!targetOrgId ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                        <TrashIcon className="w-6 h-6 text-orange-400" />
-                        Limpeza Específica
-                    </h2>
-                    <p className="text-gray-300 text-sm mb-4">
-                        Selecione um evento e marque as postagens que deseja limpar.
-                    </p>
-                    <div className="flex flex-col gap-3">
-                        <select 
-                            value={selectedCampaignName} 
-                            onChange={(e) => {
-                                setSelectedCampaignName(e.target.value);
-                                setSelectedPostIds(new Set()); // Reset post selection
-                                setAnalysisResult(null); // Clear previous analysis
-                            }}
-                            className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
-                            disabled={!targetOrgId || isAnalyzing || isDeletingSpecific}
-                        >
-                            <option value="">Selecione o Evento ({campaigns.length})</option>
-                            {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        </select>
-
-                        {/* Updated: Checkbox List for Posts */}
-                        <div className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm max-h-60 overflow-y-auto">
-                            {filteredPosts.length === 0 ? (
-                                <p className="text-gray-500 text-center py-2">{selectedCampaignName ? 'Nenhum post encontrado para este evento.' : 'Selecione um evento acima.'}</p>
-                            ) : (
-                                <div>
-                                    <label className="flex items-center space-x-2 p-2 border-b border-gray-700 mb-2 cursor-pointer sticky top-0 bg-gray-800 z-10">
-                                        <input 
-                                            type="checkbox"
-                                            onChange={handleSelectAllPosts}
-                                            checked={selectedPostIds.size === filteredPosts.length && filteredPosts.length > 0}
-                                            className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-primary focus:ring-primary"
-                                        />
-                                        <span className="font-bold text-white">Selecionar Todos ({filteredPosts.length})</span>
-                                    </label>
-                                    <div className="space-y-1">
-                                        {filteredPosts.map(p => (
-                                            <label key={p.id} className="flex items-center space-x-2 p-2 hover:bg-gray-700/50 rounded cursor-pointer">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={selectedPostIds.has(p.id)}
-                                                    onChange={() => handleTogglePost(p.id)}
-                                                    className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-primary focus:ring-primary"
-                                                />
-                                                <div className="flex flex-col">
-                                                    <span className="font-semibold text-gray-200">
-                                                        {p.type.toUpperCase()} - {p.instructions?.substring(0, 30)}...
-                                                    </span>
-                                                    <div className="flex gap-2 text-xs">
-                                                        <span className={p.isActive ? 'text-green-400' : 'text-red-400'}>
-                                                            {p.isActive ? 'Ativo' : 'Inativo'}
-                                                        </span>
-                                                        <span className="text-gray-500">
-                                                            {((p.createdAt as Timestamp)?.toDate().toLocaleDateString('pt-BR'))}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={handleAnalyze} 
-                                disabled={isAnalyzing || isDeletingSpecific || (!selectedCampaignName && selectedPostIds.size === 0)}
-                                className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-md disabled:opacity-50 text-sm"
-                            >
-                                {isAnalyzing ? 'Analisando...' : `Analisar (${selectedPostIds.size > 0 ? selectedPostIds.size : 'Todos'})`}
-                            </button>
-                            <button 
-                                onClick={handleDeleteLoop} 
-                                disabled={isDeletingSpecific || !analysisResult}
-                                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-md disabled:opacity-50 text-sm"
-                            >
-                                {isDeletingSpecific ? 'Apagando...' : 'Limpar Arquivos'}
-                            </button>
-                        </div>
-                        
-                        {/* Status Area */}
-                        {isDeletingSpecific && (
-                            <div className="mt-2">
-                                <div className="w-full bg-gray-700 rounded-full h-2.5 dark:bg-gray-700 mb-1">
-                                    <div 
-                                        className="bg-red-600 h-2.5 rounded-full transition-all duration-300" 
-                                        style={{ width: `${Math.min(100, Math.round((deletionProgress.current / (deletionProgress.total || 1)) * 100))}%` }}
-                                    ></div>
-                                </div>
-                                <p className="text-xs text-center text-gray-300">
-                                    Apagando: {deletionProgress.current} / {deletionProgress.total}
-                                </p>
-                            </div>
-                        )}
-                        
-                        {analysisResult && !isDeletingSpecific && (
-                            <div className="mt-2 text-sm bg-black/40 p-2 rounded text-orange-200">
-                                <p><strong>Arquivos:</strong> {analysisResult.count}</p>
-                                <p><strong>Espaço:</strong> {analysisResult.formattedSize}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                  <p className="text-gray-400 mb-6">
                     Use os links abaixo para gerenciar a plataforma.
@@ -670,6 +326,15 @@ const SuperAdminDashboard: React.FC = () => {
                         </div>
                         <p className="mt-2 text-gray-400">Busque todos os dados de uma divulgadora por e-mail para investigar problemas.</p>
                          <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Investigar &rarr;</div>
+                    </Link>
+                    
+                    <Link to="/admin/cleanup" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-red-500/30 hover:border-red-500/50">
+                        <div className="flex items-center">
+                            <TrashIcon className="w-8 h-8 text-red-500" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Manutenção de Armazenamento</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Limpar prints e mídias antigas para liberar espaço no banco de dados.</p>
+                         <div className="text-sm text-red-400 mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Acessar &rarr;</div>
                     </Link>
 
                     <Link to="/admin/settings/stripe" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
