@@ -37,6 +37,7 @@ const SuperAdminDashboard: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [selectedCampaignName, setSelectedCampaignName] = useState('');
     const [selectedPostId, setSelectedPostId] = useState('');
+    const [isLoadingData, setIsLoadingData] = useState(false);
     
     // State for Progress Bar
     const [analysisResult, setAnalysisResult] = useState<{ count: number, formattedSize: string } | null>(null);
@@ -46,20 +47,25 @@ const SuperAdminDashboard: React.FC = () => {
 
     useEffect(() => {
         if (selectedOrgId) {
+            setIsLoadingData(true);
             // Load campaigns for the selected org
-            getAllCampaigns(selectedOrgId)
-                .then(data => setCampaigns(data))
-                .catch(console.error);
-            // Load posts for the selected org to allow filtering by specific post
-            getPostsForOrg(selectedOrgId)
-                .then(data => setPosts(data))
-                .catch(console.error);
+            Promise.all([
+                getAllCampaigns(selectedOrgId),
+                getPostsForOrg(selectedOrgId)
+            ]).then(([campaignsData, postsData]) => {
+                setCampaigns(campaignsData);
+                setPosts(postsData);
+            }).catch(console.error)
+              .finally(() => setIsLoadingData(false));
 
             // Reset selection when org changes
             setSelectedCampaignName('');
             setSelectedPostId('');
             setAnalysisResult(null);
             setDeletionProgress({ current: 0, total: 0 });
+        } else {
+            setCampaigns([]);
+            setPosts([]);
         }
     }, [selectedOrgId]);
 
@@ -359,22 +365,26 @@ const SuperAdminDashboard: React.FC = () => {
                             onChange={(e) => {
                                 setSelectedCampaignName(e.target.value);
                                 setSelectedPostId(''); // Reset post selection when campaign changes
+                                setAnalysisResult(null); // Clear previous analysis so new selection is active
                             }}
                             className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
                             disabled={!selectedOrgId || isAnalyzing || isDeletingSpecific}
                         >
-                            <option value="">Selecione o Evento...</option>
+                            <option value="">Selecione o Evento ({campaigns.length})</option>
                             {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
 
                         {/* Dropdown de Posts Específicos */}
                         <select 
                             value={selectedPostId} 
-                            onChange={(e) => setSelectedPostId(e.target.value)}
+                            onChange={(e) => {
+                                setSelectedPostId(e.target.value);
+                                setAnalysisResult(null); // Clear previous analysis
+                            }}
                             className="bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm"
                             disabled={!selectedOrgId || isAnalyzing || isDeletingSpecific}
                         >
-                            <option value="">(Opcional) Selecione uma Postagem...</option>
+                            <option value="">(Opcional) Selecione uma Postagem ({filteredPosts.length})</option>
                             {filteredPosts.map(p => (
                                 <option key={p.id} value={p.id}>
                                     {p.type.toUpperCase()} - {p.instructions?.substring(0, 30)}... ({p.isActive ? 'Ativo' : 'Inativo'})
