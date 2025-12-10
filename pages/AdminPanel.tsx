@@ -717,7 +717,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             try {
                 const reasons = await getRejectionReasons(promoter.organizationId);
                 setRejectionReasons(reasons);
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
                 setRejectionReasons([]);
             }

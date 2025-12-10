@@ -89,7 +89,66 @@ exports.onPromoterStatusChange = functions
       const oldValue = change.before.data();
       const promoterId = context.params.promoterId;
 
-      // WhatsApp Notification Logic
+      // 1. AUTO-ASSIGNMENT LOGIC
+      // If status changed to 'approved', check for posts that need auto-assignment
+      if (newValue.status === 'approved' && oldValue.status !== 'approved') {
+        try {
+            // Find posts that:
+            // 1. Belong to the same organization
+            // 2. Are Active
+            // 3. Have auto-assign enabled
+            // 4. Match the promoter's State and Campaign (Exact match required)
+            const postsQuery = db.collection('posts')
+                .where('organizationId', '==', newValue.organizationId)
+                .where('isActive', '==', true)
+                .where('autoAssignToNewPromoters', '==', true)
+                .where('stateAbbr', '==', newValue.state)
+                .where('campaignName', '==', newValue.campaignName);
+
+            const postsSnap = await postsQuery.get();
+
+            if (!postsSnap.empty) {
+                const batch = db.batch();
+                let assignCount = 0;
+
+                postsSnap.forEach(postDoc => {
+                    const postData = postDoc.data();
+                    
+                    // Double check expiration just in case
+                    const now = new Date();
+                    if (postData.expiresAt) {
+                        const expires = postData.expiresAt.toDate ? postData.expiresAt.toDate() : new Date(postData.expiresAt);
+                        if (now > expires) return; // Skip expired posts
+                    }
+
+                    const assignmentRef = db.collection('postAssignments').doc();
+                    
+                    batch.set(assignmentRef, {
+                        postId: postDoc.id,
+                        post: postData, // Denormalize post data for easy access
+                        organizationId: newValue.organizationId,
+                        promoterId: promoterId,
+                        promoterEmail: newValue.email,
+                        promoterName: newValue.name,
+                        status: 'pending',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    assignCount++;
+                });
+
+                if (assignCount > 0) {
+                    await batch.commit();
+                    console.log(`[Auto-Assign] Assigned ${assignCount} posts to new promoter ${promoterId}`);
+                    // Note: Creating these assignments will trigger 'onPostAssignmentCreated' below,
+                    // which will send the WhatsApp notifications for the new posts.
+                }
+            }
+        } catch (error) {
+            console.error("[Auto-Assign Error] Failed to assign posts:", error);
+        }
+      }
+
+      // 2. WHATSAPP NOTIFICATION LOGIC (Status Change)
       const statusChanged = newValue.status !== oldValue.status;
       const isNotificationStatus =
         newValue.status === "approved" ||
