@@ -353,11 +353,11 @@ const CreatePost: React.FC = () => {
                         setPostFormats(postData.postFormats || []);
                         setTextContent(postData.textContent || '');
                         setGoogleDriveUrl(postData.googleDriveUrl || '');
-                        if (postData.type === 'image' && postData.mediaUrl) {
+                        if ((postData.type === 'image' || postData.type === 'video') && postData.mediaUrl) {
                             setOriginalMediaPath(postData.mediaUrl);
                             if (postData.mediaUrl.startsWith('http')) setMediaPreview(postData.mediaUrl);
                             else storage.ref(postData.mediaUrl).getDownloadURL().then(url => setMediaPreview(url)).catch(console.error);
-                        } else if (postData.type === 'video' && postData.mediaUrl) setGoogleDriveUrl(postData.googleDriveUrl || postData.mediaUrl || '');
+                        }
                         setInstructions(postData.instructions || '');
                         setPostLink(postData.postLink || '');
                         setIsActive(postData.isActive);
@@ -447,8 +447,7 @@ const CreatePost: React.FC = () => {
         if (!selectedOrgId || !adminData?.email) { setError("Dados do administrador inválidos."); return; }
         if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
-        if (postType === 'image' && !mediaFile && !googleDriveUrl && !originalMediaPath) { setError("Selecione uma imagem ou forneça um link do Google Drive."); return; }
-        if (postType === 'video' && !googleDriveUrl.trim()) { setError('Cole o link compartilhável do Google Drive para o vídeo.'); return; }
+        if ((postType === 'image' || postType === 'video') && !mediaFile && !googleDriveUrl && !originalMediaPath) { setError("Selecione um arquivo de mídia (upload) ou forneça um link do Google Drive."); return; }
         if (postType === 'text') {
             if (!postLink.trim()) {
                 setError("O link da interação é obrigatório.");
@@ -638,12 +637,13 @@ const CreatePost: React.FC = () => {
                             <label><input type="radio" name="type" value="video" checked={postType === 'video'} onChange={() => setPostType('video')} /> Vídeo</label>
                         </div>
                         
-                        {postType === 'image' && (
+                        {(postType === 'image' || postType === 'video') && (
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (Servidor)</label>
-                                    <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                    {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                                    <input type="file" accept={postType === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                    {mediaPreview && postType === 'image' && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                                    {mediaPreview && postType === 'video' && <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" />
@@ -654,7 +654,6 @@ const CreatePost: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {postType === 'video' && <div><label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label><p className="text-xs text-gray-400 mb-2">No Google Drive: clique com o botão direito no vídeo &gt; Compartilhar &gt; Altere para "Qualquer pessoa com o link" &gt; Copiar link.</p><InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required /></div>}
                         
                         <div>
                             <div className="flex justify-between items-center mb-1"><label className="block text-sm font-medium text-gray-300">Instruções</label><button type="button" onClick={() => setIsInstructionsModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button></div>

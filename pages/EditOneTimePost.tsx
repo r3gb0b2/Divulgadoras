@@ -281,12 +281,13 @@ const EditOneTimePost: React.FC = () => {
                      
                      {formData.type === 'text' && <textarea name="textContent" value={formData.textContent} onChange={handleChange} placeholder="Texto da publicação" rows={6} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" />}
                      
-                     {formData.type === 'image' && (
+                     {(formData.type === 'image' || formData.type === 'video') && (
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (substitui existente)</label>
-                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                                <input type="file" accept={formData.type === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && formData.type === 'image' && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-60 rounded-md" />}
+                                {mediaPreview && formData.type === 'video' && <video src={mediaPreview} controls className="mt-4 max-h-60 rounded-md" />}
                             </div>
                             <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
                             <div>
@@ -295,7 +296,7 @@ const EditOneTimePost: React.FC = () => {
                             </div>
                         </div>
                      )}
-                     {formData.type === 'video' && <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive" value={formData.googleDriveUrl} onChange={handleChange} required />}
+                     
                      <textarea name="instructions" value={formData.instructions} onChange={handleChange} placeholder="Instruções para a publicação" rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200" required />
                      
                      <div>

@@ -742,8 +742,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const email = (typeof emailToSearch === 'string' ? emailToSearch : '') || lookupEmail;
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        const emailInput = typeof emailToSearch === 'string' ? emailToSearch : '';
+        const email: string = emailInput || lookupEmail;
         if (!email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);

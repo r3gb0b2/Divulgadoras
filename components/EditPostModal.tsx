@@ -84,7 +84,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                 }
             } else {
                  setMediaUrl('');
-                 setMediaPreview(post.mediaUrl || null); // For GDrive links
+                 setMediaPreview(post.mediaUrl || null); // For GDrive links, usually null unless specifically set
             }
 
             setGoogleDriveUrl(post.googleDriveUrl || '');
@@ -171,26 +171,20 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                         <label className="block text-sm font-medium text-gray-300">Nome do Evento (Opcional)</label>
                         <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"/>
                     </div>
-                    {/* Removed explicit text area for interaction type as requested */}
-                    {post.type === 'image' && (
+                    
+                    {(post.type === 'image' || post.type === 'video') && (
                          <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (Substituir)</label>
-                                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                {mediaPreview && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-40 rounded-md object-contain" />}
+                                <input type="file" accept={post.type === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
+                                {mediaPreview && post.type === 'image' && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-40 rounded-md object-contain" />}
+                                {mediaPreview && post.type === 'video' && <video src={mediaPreview} controls className="mt-4 max-h-40 rounded-md" />}
                             </div>
                             <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
                                 <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
                             </div>
-                        </div>
-                    )}
-                    {post.type === 'video' && (
-                        <div>
-                             <label className="block text-sm font-medium text-gray-300">Link do Vídeo (Google Drive)</label>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Link compartilhável do Google Drive para o vídeo" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} required />
-                             {googleDriveUrl && <div className="mt-2"><StorageMedia path={googleDriveUrl} type="video" className="w-full h-auto rounded-md" /></div>}
                         </div>
                     )}
 
