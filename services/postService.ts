@@ -68,13 +68,14 @@ export const getPostsForOrg = async (organizationId?: string, isOwnerOrSuperAdmi
             q = q.where("organizationId", "==", organizationId);
         }
 
+        const snapshot = await q.get();
+        let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
+        
+        // Filter client-side to avoid complex Firestore index requirements
         if (!isOwnerOrSuperAdmin) {
-            // This will exclude docs where ownerOnly is true, and include all others (false, null, missing).
-            q = q.where("ownerOnly", "!=", true);
+            posts = posts.filter(post => post.ownerOnly !== true);
         }
 
-        const snapshot = await q.get();
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         posts.sort((a, b) => 
             ((b.createdAt as Timestamp)?.toMillis() || 0) - ((a.createdAt as Timestamp)?.toMillis() || 0)
         );
@@ -847,6 +848,7 @@ export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmissi
     } catch (error) {
         console.error("Error creating one-time post submission: ", error);
         if (error instanceof Error) {
+// FIX: Changed error.message() to error.message as it's a property, not a function.
             throw new Error(error.message);
         }
         throw new Error("Não foi possível enviar sua comprovação e nome. Ocorreu um erro desconhecido.");

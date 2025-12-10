@@ -343,14 +343,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [filter, selectedOrg, selectedState, selectedCampaign, searchQuery, colorFilter, minAge, maxAge]);
 
     const campaignsForFilter = useMemo(() => {
+        const visibleCampaigns = allCampaigns.filter(c => c.status !== 'inactive');
         if (selectedState === 'all') {
-            return allCampaigns;
+            return visibleCampaigns;
         }
-        return allCampaigns.filter(c => c.stateAbbr === selectedState);
+        return visibleCampaigns.filter(c => c.stateAbbr === selectedState);
     }, [allCampaigns, selectedState]);
 
     const activeCampaignNames = useMemo(() => {
-        return new Set(allCampaigns.filter(c => c.status === 'active').map(c => c.name));
+        return new Set(allCampaigns.filter(c => c.status !== 'inactive').map(c => c.name));
     }, [allCampaigns]);
 
     const filteredPromotersFromSource = useMemo(() => {
@@ -584,9 +585,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     }
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {
-                    detailedError = err.message as string;
+// FIX: Explicitly cast `err.message` to a string to prevent a TypeScript error.
+                    detailedError = String(err.message);
                 }
             } else {
+// FIX: Explicitly cast `error` to a string to prevent a TypeScript error.
                 detailedError = String(error);
             }
             

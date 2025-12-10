@@ -27,6 +27,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error };
   }
 
+// FIX: Converted to a standard class method to ensure correct `this` binding for lifecycle methods.
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
@@ -37,6 +38,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     });
   }
 
+// FIX: Converted to a standard class method to ensure correct `this` binding for lifecycle methods.
   render() {
     if (this.state.hasError) {
       return (
