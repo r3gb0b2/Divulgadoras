@@ -20,6 +20,12 @@ const toDateSafe = (timestamp: any): Date | null => {
     return null;
 };
 
+const getProgressBarColor = (percentage: number) => {
+    if (percentage >= 80) return 'bg-green-500';
+    if (percentage >= 50) return 'bg-yellow-500';
+    return 'bg-red-500';
+};
+
 const AdminPosts: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -91,6 +97,20 @@ const AdminPosts: React.FC = () => {
             if (a.justificationStatus === 'pending') {
                 map.set(a.postId, (map.get(a.postId) || 0) + 1);
             }
+        });
+        return map;
+    }, [assignments]);
+
+    const postStatsMap = useMemo(() => {
+        const map = new Map<string, { total: number, completed: number }>();
+        assignments.forEach(a => {
+            const current = map.get(a.postId) || { total: 0, completed: 0 };
+            current.total++;
+            // Considera efetivo se enviou print OU teve justificativa aceita
+            if (a.proofSubmittedAt || a.justificationStatus === 'accepted') {
+                current.completed++;
+            }
+            map.set(a.postId, current);
         });
         return map;
     }, [assignments]);
@@ -207,6 +227,9 @@ const AdminPosts: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredPosts.map(post => {
                     const pendingCount = pendingJustificationsMap.get(post.id) || 0;
+                    const stats = postStatsMap.get(post.id) || { total: 0, completed: 0 };
+                    const percentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
                     return (
                         <div key={post.id} className="bg-dark/70 rounded-lg shadow-sm flex flex-col overflow-hidden border border-gray-700/50">
                             <div className="relative">
@@ -245,6 +268,21 @@ const AdminPosts: React.FC = () => {
                                         {post.isActive ? 'Ativo' : 'Inativo'}
                                     </span>
                                 </div>
+                                
+                                {/* Effectiveness Percentage Bar */}
+                                <div className="mt-3 mb-1">
+                                    <div className="flex justify-between text-xs text-gray-300 mb-1">
+                                        <span>Efetivação</span>
+                                        <span className="font-mono">{percentage}% ({stats.completed}/{stats.total})</span>
+                                    </div>
+                                    <div className="w-full bg-gray-700 rounded-full h-2">
+                                        <div 
+                                            className={`${getProgressBarColor(percentage)} h-2 rounded-full transition-all duration-500`} 
+                                            style={{ width: `${percentage}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+
                                 <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
                                 <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4 space-y-3">

@@ -648,7 +648,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {
                     // FIX: Explicitly cast error message to string to resolve type error.
-                    detailedError = String(err.message);
+                    detailedError = err.message as string;
                 }
             } else {
                 detailedError = String(error);
