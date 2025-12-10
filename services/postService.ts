@@ -1,7 +1,7 @@
 
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
-import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder, AdminUserData } from '../types';
 import { findPromotersByEmail } from './promoterService';
 
 // Helper to safely convert various date formats to a Date object
@@ -60,7 +60,7 @@ export const createPost = async (
   }
 };
 
-export const getPostsForOrg = async (organizationId?: string, isOwnerOrSuperAdmin?: boolean): Promise<Post[]> => {
+export const getPostsForOrg = async (organizationId?: string, admin?: AdminUserData): Promise<Post[]> => {
     try {
         const postsCollection = firestore.collection("posts");
         let q: firebase.firestore.Query = postsCollection;
@@ -71,9 +71,17 @@ export const getPostsForOrg = async (organizationId?: string, isOwnerOrSuperAdmi
         const snapshot = await q.get();
         let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
         
-        // Filter client-side to avoid complex Firestore index requirements
-        if (!isOwnerOrSuperAdmin) {
-            posts = posts.filter(post => post.ownerOnly !== true);
+        // Filter client-side based on admin role and post ownership
+        if (admin) {
+            posts = posts.filter(post => {
+                if (admin.role === 'superadmin') {
+                    return true; // Superadmin sees all
+                }
+                if (post.ownerOnly) {
+                    return post.createdByEmail === admin.email; // Owner sees their own hidden post
+                }
+                return true; // Everyone in the org sees non-hidden posts
+            });
         }
 
         posts.sort((a, b) => 

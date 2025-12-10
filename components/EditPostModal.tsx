@@ -1,258 +1,260 @@
 
-import React, { useState, useEffect } from 'react';
-import { Post, Timestamp } from '../types';
-import { LinkIcon } from './Icons';
-import { storage } from '../firebase/config';
-import StorageMedia from './StorageMedia';
-import firebase from 'firebase/compat/app';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Promoter, Campaign, Post } from '../types';
+import { getAllCampaigns } from '../services/settingsService';
+import { stateMap } from '../constants/states';
 
-const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
-    if (!ts) return '';
-    let date;
-    if (ts.toDate) {
-        date = ts.toDate();
-    }
-    else if (typeof ts === 'object' && (ts.seconds || ts._seconds)) {
-        const seconds = ts.seconds || ts._seconds;
-        date = new Date(seconds * 1000);
-    }
-    else {
-        date = new Date(ts);
-    }
-    if (isNaN(date.getTime())) return '';
-    return date.toISOString().split('T')[0];
-};
-
-interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
-    Icon: React.ElementType;
-}
-const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => (
-    <div className="relative">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-            <Icon className="h-5 w-5 text-gray-400" />
-        </span>
-        <input {...props} className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200" />
-    </div>
-);
-
-interface EditPostModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    post: Post | null;
-    onSave: (updatedData: Partial<Post>, newMediaFile: File | null) => Promise<void>;
+interface EditPromoterModalProps {
+  promoter: Promoter | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (id: string, data: Partial<Omit<Promoter, 'id'>>) => Promise<void>;
 }
 
-const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, onSave }) => {
-    const [eventName, setEventName] = useState('');
-    const [instructions, setInstructions] = useState('');
-    const [textContent, setTextContent] = useState('');
-    const [postLink, setPostLink] = useState('');
-    const [mediaUrl, setMediaUrl] = useState(''); // For firebase path
-    const [googleDriveUrl, setGoogleDriveUrl] = useState(''); // For GDrive link
-    const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
-    const [postFormats, setPostFormats] = useState<('story' | 'reels')[]>([]);
+const formInputStyle = "mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary";
+const formCheckboxStyle = "h-4 w-4 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary";
+
+const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState<Partial<Omit<Promoter, 'id'>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+
+  useEffect(() => {
+    if (promoter) {
+      setFormData({
+        name: promoter.name,
+        email: promoter.email,
+        whatsapp: promoter.whatsapp,
+        instagram: promoter.instagram,
+        tiktok: promoter.tiktok || '',
+        dateOfBirth: promoter.dateOfBirth,
+        status: promoter.status,
+        rejectionReason: promoter.rejectionReason || '',
+        hasJoinedGroup: promoter.hasJoinedGroup || false,
+        observation: promoter.observation || '',
+        associatedCampaigns: promoter.associatedCampaigns || [],
+      });
+      
+      if (isOpen) {
+        setIsLoadingCampaigns(true);
+        getAllCampaigns(promoter.organizationId)
+          .then(campaigns => setAvailableCampaigns(campaigns))
+          .catch(err => console.error("Failed to load campaigns", err))
+          .finally(() => setIsLoadingCampaigns(false));
+      }
+
+    }
+  }, [promoter, isOpen]);
+
+  const campaignsByState = useMemo(() => {
+    return availableCampaigns.reduce((acc, campaign) => {
+        if (!acc[campaign.stateAbbr]) {
+            acc[campaign.stateAbbr] = [];
+        }
+        acc[campaign.stateAbbr].push(campaign);
+        return acc;
+    }, {} as Record<string, Campaign[]>);
+  }, [availableCampaigns]);
+
+  if (!isOpen || !promoter) {
+    return null;
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const isCheckbox = type === 'checkbox';
     
-    // New media file state
-    const [newMediaFile, setNewMediaFile] = useState<File | null>(null);
+    setFormData(prev => ({ 
+        ...prev, 
+        [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value 
+    }));
+  };
+  
+  const handleCampaignToggle = (campaignName: string) => {
+    setFormData(prev => {
+        const currentAssociated = prev.associatedCampaigns || [];
+        const newAssociated = currentAssociated.includes(campaignName)
+            ? currentAssociated.filter(name => name !== campaignName)
+            : [...currentAssociated, campaignName];
+        return { ...prev, associatedCampaigns: newAssociated };
+    });
+  };
 
-    // All post options
-    const [isActive, setIsActive] = useState(true);
-    const [expiresAt, setExpiresAt] = useState('');
-    const [autoAssignToNewPromoters, setAutoAssignToNewPromoters] = useState(false);
-    const [allowLateSubmissions, setAllowLateSubmissions] = useState(false);
-    const [allowImmediateProof, setAllowImmediateProof] = useState(false);
-    const [skipProofRequirement, setSkipProofRequirement] = useState(false);
-    const [allowJustification, setAllowJustification] = useState(true);
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const dataToSave = { ...formData };
+      if (dataToSave.email) {
+        dataToSave.email = dataToSave.email.toLowerCase().trim();
+      }
+      if (dataToSave.status !== 'rejected') {
+        dataToSave.rejectionReason = ''; // Clear reason if not rejected
+      }
+      if (dataToSave.status !== 'approved') {
+        dataToSave.hasJoinedGroup = false; // Clear group status if not approved
+      }
+      
+      const allCampaigns = [
+        promoter.campaignName,
+        ...(dataToSave.associatedCampaigns || [])
+      ].filter((c, index, self) => c && self.indexOf(c) === index); // Filter out null/undefined and get unique
+      dataToSave.allCampaigns = allCampaigns;
 
-    useEffect(() => {
-        if (post) {
-            setEventName(post.eventName || '');
-            setInstructions(post.instructions || '');
-            setTextContent(post.textContent || '');
-            setPostLink(post.postLink || '');
-            setPostFormats(post.postFormats || []);
-            
-            if (post.mediaUrl && !post.mediaUrl.includes('drive.google.com')) {
-                setMediaUrl(post.mediaUrl);
-                if (post.mediaUrl.startsWith('http')) {
-                    setMediaPreview(post.mediaUrl);
-                } else {
-                    storage.ref(post.mediaUrl).getDownloadURL()
-                        .then(url => setMediaPreview(url))
-                        .catch(err => console.error("Error getting media preview URL:", err));
-                }
-            } else {
-                 setMediaUrl('');
-                 setMediaPreview(post.mediaUrl || null); // For GDrive links, usually null unless specifically set
-            }
+      await onSave(promoter.id, dataToSave);
+      onClose();
+    } catch (error) {
+      console.error("Failed to save promoter", error);
+      alert("Falha ao salvar. Tente novamente.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-            setGoogleDriveUrl(post.googleDriveUrl || '');
-            setNewMediaFile(null); // Reset new file
-            
-            // Set all options from post data
-            setIsActive(post.isActive);
-            setExpiresAt(timestampToInputDate(post.expiresAt));
-            setAutoAssignToNewPromoters(post.autoAssignToNewPromoters || false);
-            setAllowLateSubmissions(post.allowLateSubmissions || false);
-            setAllowImmediateProof(post.allowImmediateProof || false);
-            setSkipProofRequirement(post.skipProofRequirement || false);
-            setAllowJustification(post.allowJustification !== false);
-        }
-    }, [post, isOpen]);
-
-    if (!isOpen || !post) return null;
-
-    const handleFormatChange = (format: 'story' | 'reels') => {
-        setPostFormats(prev => {
-            if (prev.includes(format)) {
-                return prev.filter(f => f !== format);
-            } else {
-                return [...prev, format];
-            }
-        });
-    };
-    
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setNewMediaFile(file);
-            setMediaPreview(URL.createObjectURL(file));
-        }
-    };
-
-    const handleSave = async () => {
-        setIsSaving(true);
-        
-        let expiryTimestamp: Date | null = null;
-        if (expiresAt) {
-            const [year, month, day] = expiresAt.split('-').map(Number);
-            expiryTimestamp = new Date(year, month - 1, day, 23, 59, 59);
-        }
-
-        const updatedData: Partial<Post> = {
-            eventName: eventName.trim() || undefined,
-            instructions,
-            postLink,
-            isActive,
-            // FIX: Convert Date to Firestore Timestamp or null
-            expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
-            autoAssignToNewPromoters,
-            allowLateSubmissions,
-            allowImmediateProof,
-            postFormats,
-            skipProofRequirement,
-            allowJustification,
-            googleDriveUrl: googleDriveUrl.trim() ? googleDriveUrl.trim() : undefined,
-        };
-        
-        // Only set textContent if explicitly needed, although interactions rely on link now
-        if (post.type === 'text') {
-            updatedData.textContent = textContent;
-        }
-
-        try {
-            await onSave(updatedData, newMediaFile);
-            onClose();
-        } catch(e) {
-            // Error is handled by parent component
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
-            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <h2 className="text-2xl font-bold text-white mb-4">Editar Conteúdo da Publicação</h2>
-                
-                <div className="flex-grow overflow-y-auto space-y-4 pr-2">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Nome do Evento (Opcional)</label>
-                        <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"/>
-                    </div>
-                    
-                    {(post.type === 'image' || post.type === 'video') && (
-                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 1: Upload (Substituir)</label>
-                                <input type="file" accept={post.type === 'image' ? "image/*" : "video/*"} onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark" />
-                                {mediaPreview && post.type === 'image' && <img src={mediaPreview} alt="Preview" className="mt-4 max-h-40 rounded-md object-contain" />}
-                                {mediaPreview && post.type === 'video' && <video src={mediaPreview} controls className="mt-4 max-h-40 rounded-md" />}
-                            </div>
-                            <div className="flex items-center gap-2"><hr className="flex-grow border-gray-600" /><span className="text-xs text-gray-400">E/OU</span><hr className="flex-grow border-gray-600" /></div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300">Opção 2: Link do Google Drive</label>
-                                <InputWithIcon Icon={LinkIcon} type="url" name="googleDriveUrl" placeholder="Cole o link compartilhável do Google Drive" value={googleDriveUrl} onChange={e => setGoogleDriveUrl(e.target.value)} />
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">Instruções</label>
-                        <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
-                    </div>
-                     <div>
-                        <label className="block text-sm font-medium text-gray-300">{post.type === 'text' ? 'Link da Interação' : 'Link da Postagem'}</label>
-                        <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder={post.type === 'text' ? "Link para o conteúdo de interação" : "Link da Postagem (Ex: instagram)"} value={postLink} onChange={e => setPostLink(e.target.value)} />
-                    </div>
-
-                    <div className="border-t border-gray-700 pt-4 space-y-4">
-                        <h3 className="font-semibold text-lg">Opções da Publicação</h3>
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-                            <label className="flex items-center space-x-2 pt-2">
-                                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                                <span>Ativo</span>
-                            </label>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400">Data Limite</label>
-                                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-1 px-3 py-1 border border-gray-600 rounded-md bg-gray-700 text-gray-200" style={{ colorScheme: 'dark' }} />
-                            </div>
-                        </div>
-                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                            <input type="checkbox" checked={autoAssignToNewPromoters} onChange={(e) => setAutoAssignToNewPromoters(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Atribuir para novas divulgadoras</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                            <input type="checkbox" checked={allowLateSubmissions} onChange={(e) => setAllowLateSubmissions(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Permitir comprovação fora do prazo</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                            <input type="checkbox" checked={allowImmediateProof} onChange={(e) => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Liberar comprovação imediata</span>
-                        </label>
-                         <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                            <input type="checkbox" checked={skipProofRequirement} onChange={(e) => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Não exigir envio de print (conclusão automática)</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                            <input type="checkbox" checked={allowJustification} onChange={(e) => setAllowJustification(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
-                            <span>Permitir justificativas</span>
-                        </label>
-                        <div>
-                             <label className="block text-sm font-medium text-gray-300 mb-2">Formato (informativo):</label>
-                            <div className="flex gap-6">
-                                <label className="flex items-center space-x-2">
-                                    <input type="checkbox" checked={postFormats.includes('story')} onChange={() => handleFormatChange('story')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
-                                    <span>Story</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input type="checkbox" checked={postFormats.includes('reels')} onChange={() => handleFormatChange('reels')} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
-                                    <span>Reels</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
-                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
-                    <button type="button" onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">
-                        {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-                    </button>
-                </div>
-            </div>
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+            <h2 className="text-2xl font-bold text-white">Detalhes da Divulgadora</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
-    );
+
+        <form className="flex-grow overflow-y-auto pr-2 -mr-2 space-y-4" onSubmit={(e) => { e.preventDefault(); handleSave(); }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="md:col-span-2">
+                  <h3 className="font-bold text-lg mb-2 text-gray-200">Fotos</h3>
+                  <div className="flex gap-4 overflow-x-auto">
+                      {(promoter.photoUrls || []).map((url, index) => (
+                          <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
+                              <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg" />
+                          </a>
+                      ))}
+                  </div>
+              </div>
+          </div>
+          
+          {promoter.campaignName && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">Evento / Gênero</label>
+              <input type="text" value={promoter.campaignName} readOnly className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-400 cursor-not-allowed" />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Nome</label>
+            <input type="text" name="name" value={formData.name || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Email</label>
+            <input type="email" name="email" value={formData.email || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+           <div>
+            <label className="block text-sm font-medium text-gray-300">WhatsApp</label>
+            <input type="tel" name="whatsapp" value={formData.whatsapp || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+           <div>
+            <label className="block text-sm font-medium text-gray-300">Instagram</label>
+            <input type="text" name="instagram" value={formData.instagram || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300">TikTok</label>
+            <input type="text" name="tiktok" value={formData.tiktok || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Data de Nascimento</label>
+            <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleChange} className={formInputStyle} />
+          </div>
+           <div>
+            <label className="block text-sm font-medium text-gray-300">Observação (visível apenas para admins)</label>
+            <textarea
+                name="observation"
+                value={formData.observation || ''}
+                onChange={handleChange}
+                className={formInputStyle + ' min-h-[60px]'}
+                placeholder="Adicione uma nota rápida aqui..."
+            />
+          </div>
+
+          <div className="border-t border-gray-700 pt-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Eventos Associados</label>
+            <p className="text-xs text-gray-400 mb-2">Associe esta divulgadora a outros eventos. O evento original do cadastro é: <strong>{promoter.campaignName || 'N/A'}</strong></p>
+            {isLoadingCampaigns ? (
+                <p className="text-sm text-gray-400">Carregando eventos...</p>
+            ) : Object.keys(campaignsByState).length > 0 ? (
+                <div className="max-h-48 overflow-y-auto space-y-3 p-2 border border-gray-600 rounded-md">
+                    {Object.entries(campaignsByState).sort(([stateA], [stateB]) => (stateMap[stateA] || stateA).localeCompare(stateMap[stateB] || stateB)).map(([stateAbbr, campaigns]) => (
+                        <div key={stateAbbr}>
+                            <h4 className="font-semibold text-primary">{stateMap[stateAbbr] || stateAbbr}</h4>
+                            <div className="pl-2 space-y-1">
+                                {(campaigns as Campaign[]).map(campaign => (
+                                    <label key={campaign.id} className="flex items-center space-x-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={(formData.associatedCampaigns || []).includes(campaign.name)}
+                                            onChange={() => handleCampaignToggle(campaign.name)}
+                                            disabled={campaign.name === promoter.campaignName}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50"
+                                        />
+                                        <span className={`text-sm ${campaign.name === promoter.campaignName ? 'text-gray-500' : 'text-gray-200'}`}>{campaign.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-sm text-gray-400">Nenhum outro evento encontrado para esta organização.</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Status</label>
+            <select name="status" value={formData.status || 'pending'} onChange={handleChange} className={formInputStyle}>
+              <option value="pending">Pendente</option>
+              <option value="approved">Aprovado</option>
+              <option value="rejected">Rejeitado</option>
+            </select>
+          </div>
+          
+          {formData.status === 'approved' && (
+            <div className="mt-4">
+                 <label className="flex items-center text-sm font-medium text-gray-300">
+                    <input 
+                        type="checkbox" 
+                        name="hasJoinedGroup" 
+                        checked={!!formData.hasJoinedGroup} 
+                        onChange={handleChange}
+                        className={formCheckboxStyle}
+                    />
+                    <span className="ml-2">Confirmar que entrou no grupo</span>
+                 </label>
+            </div>
+          )}
+          
+          {formData.status === 'rejected' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300">Motivo da Rejeição</label>
+              <textarea
+                name="rejectionReason"
+                value={formData.rejectionReason || ''}
+                onChange={handleChange}
+                className={formInputStyle + ' min-h-[60px]'}
+                placeholder="Informe o motivo..."
+              />
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-700">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+              Cancelar
+            </button>
+            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
+              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
-export default EditPostModal;
+export default EditPromoterModal;

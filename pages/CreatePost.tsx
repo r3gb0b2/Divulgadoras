@@ -299,6 +299,7 @@ const CreatePost: React.FC = () => {
     const [allowImmediateProof, setAllowImmediateProof] = useState(false);
     const [skipProofRequirement, setSkipProofRequirement] = useState(false);
     const [allowJustification, setAllowJustification] = useState(true);
+    const [ownerOnly, setOwnerOnly] = useState(false);
     const [isScheduling, setIsScheduling] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
     const [scheduleTime, setScheduleTime] = useState('');
@@ -367,6 +368,7 @@ const CreatePost: React.FC = () => {
                         setAllowImmediateProof(postData.allowImmediateProof || false);
                         setSkipProofRequirement(postData.skipProofRequirement || false);
                         setAllowJustification(postData.allowJustification !== false);
+                        setOwnerOnly(postData.ownerOnly || false);
                         setSelectedPromoters(new Set(assignedPromoters.map(p => p.id)));
                         setIsScheduling(true);
                         const scheduledDate = (scheduledAt as Timestamp).toDate();
@@ -390,6 +392,7 @@ const CreatePost: React.FC = () => {
                         setGoogleDriveUrl(postToDuplicate.googleDriveUrl || '');
                         setInstructions(postToDuplicate.instructions || '');
                         setPostLink(postToDuplicate.postLink || '');
+                        setOwnerOnly(postToDuplicate.ownerOnly || false);
                         if (postToDuplicate.mediaUrl) {
                              setOriginalMediaPath(postToDuplicate.mediaUrl);
                              if (postToDuplicate.mediaUrl.startsWith('http')) {
@@ -505,6 +508,7 @@ const CreatePost: React.FC = () => {
                     postFormats,
                     skipProofRequirement,
                     allowJustification,
+                    ownerOnly,
                     googleDriveUrl: googleDriveUrl.trim() || undefined,
                     mediaUrl: uploadedMediaPath || undefined,
                 };
@@ -725,6 +729,7 @@ const CreatePost: React.FC = () => {
                             <label className="flex items-center space-x-2"><input type="checkbox" checked={allowImmediateProof} onChange={e => setAllowImmediateProof(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Liberar comprovação imediata</span></label>
                             <label className="flex items-center space-x-2"><input type="checkbox" checked={skipProofRequirement} onChange={e => setSkipProofRequirement(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Não exigir envio de print</span></label>
                             <label className="flex items-center space-x-2"><input type="checkbox" checked={allowJustification} onChange={e => setAllowJustification(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Permitir justificativas</span></label>
+                            <label className="flex items-center space-x-2"><input type="checkbox" checked={ownerOnly} onChange={e => setOwnerOnly(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Visível apenas para mim (e Super Admins)</span></label>
                             <div><label className="block text-sm font-medium text-gray-400 mb-1">Data Limite (opcional)</label><input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="w-full px-3 py-1 border border-gray-600 rounded-md bg-gray-700" style={{colorScheme: 'dark'}}/></div>
                         </div>
                         <div><label className="block text-sm font-medium text-gray-300 mb-2">Formato (informativo):</label><div className="flex gap-6"><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('story')} onChange={() => setPostFormats(prev => prev.includes('story') ? prev.filter(f=>f!=='story') : [...prev, 'story'])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Story</span></label><label className="flex items-center space-x-2"><input type="checkbox" checked={postFormats.includes('reels')} onChange={() => setPostFormats(prev => prev.includes('reels') ? prev.filter(f=>f!=='reels') : [...prev, 'reels'])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/><span>Reels</span></label></div></div>

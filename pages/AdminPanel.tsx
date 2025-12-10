@@ -589,7 +589,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     detailedError = String(err.message);
                 }
             } else {
-// FIX: Explicitly cast `error` to a string to prevent a TypeScript error.
+// FIX: Explicitly cast `error` of type 'unknown' to a string to prevent a TypeScript error.
                 detailedError = String(error);
             }
             

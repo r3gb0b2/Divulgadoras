@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost } from '../services/postService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
-import { Post, Organization, PostAssignment } from '../types';
+import { Post, Organization, PostAssignment, AdminUserData } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
@@ -53,15 +54,7 @@ const AdminPosts: React.FC = () => {
             }
 
             try {
-                let isOwner = false;
-                if (orgId) {
-                    const orgData = (await getOrganization(orgId));
-                    if (orgData?.ownerUid === adminData.uid) {
-                        isOwner = true;
-                    }
-                }
-
-                const postPromise = getPostsForOrg(orgId, isOwner || isSuperAdmin);
+                const postPromise = getPostsForOrg(orgId, adminData);
                 const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
                 const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
                 
@@ -213,6 +206,18 @@ const AdminPosts: React.FC = () => {
         }
     }
     
+    const handleToggleOwnerOnly = async (post: Post) => {
+        try {
+            const newVal = !post.ownerOnly;
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, ownerOnly: newVal } : p));
+            await updatePost(post.id, { ownerOnly: newVal });
+        } catch (e: any) {
+            alert("Erro ao atualizar visibilidade: " + e.message);
+            // Revert on error if API call fails
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, ownerOnly: post.ownerOnly } : p));
+        }
+    };
+    
     const renderContent = () => {
         if (isLoading) {
             return <div className="text-center py-10">Carregando publicações...</div>;
@@ -236,6 +241,7 @@ const AdminPosts: React.FC = () => {
                     const pendingCount = pendingJustificationsMap.get(post.id) || 0;
                     const stats = postStatsMap.get(post.id) || { total: 0, completed: 0 };
                     const percentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+                    const canToggleOwnerOnly = isSuperAdmin || post.createdByEmail === adminData?.email;
 
                     return (
                         <div key={post.id} className="bg-dark/70 rounded-lg shadow-sm flex flex-col overflow-hidden border border-gray-700/50">
@@ -293,7 +299,6 @@ const AdminPosts: React.FC = () => {
                                 <p className="text-xs text-gray-500 mt-2">Criado por: {post.createdByEmail}</p>
 
                                 <div className="mt-auto pt-4 border-t border-gray-700/50 mt-4 space-y-3">
-                                     {/* Toggle for Active Status */}
                                      <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
                                         <input 
                                             type="checkbox" 
@@ -304,7 +309,17 @@ const AdminPosts: React.FC = () => {
                                         <span className={post.isActive ? 'text-green-400 font-medium' : ''}>Postagem Ativa</span>
                                      </label>
 
-                                     {/* Toggle for Auto Assign */}
+                                     <label className={`flex items-center space-x-2 text-sm cursor-pointer ${!canToggleOwnerOnly ? 'opacity-50 cursor-not-allowed' : 'text-gray-300 hover:text-white'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!post.ownerOnly}
+                                            onChange={() => handleToggleOwnerOnly(post)}
+                                            disabled={!canToggleOwnerOnly}
+                                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:cursor-not-allowed"
+                                        />
+                                        <span>Visível apenas para mim</span>
+                                     </label>
+
                                      <label className={`flex items-center space-x-2 text-sm cursor-pointer ${!post.isActive ? 'opacity-50' : 'text-gray-300 hover:text-white'}`}>
                                         <input 
                                             type="checkbox" 
@@ -316,7 +331,6 @@ const AdminPosts: React.FC = () => {
                                         <span>Atribuir a novas divulgadoras</span>
                                      </label>
 
-                                     {/* Toggle for Justifications */}
                                      <label className="flex items-center space-x-2 text-sm cursor-pointer text-gray-300 hover:text-white">
                                         <input 
                                             type="checkbox" 
