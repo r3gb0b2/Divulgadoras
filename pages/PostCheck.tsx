@@ -102,6 +102,8 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
     const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
     const [isRequestingReminder, setIsRequestingReminder] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    
     const allowJustification = assignment.post.allowJustification !== false;
     
     const isPostExpired = useMemo(() => {
@@ -186,6 +188,34 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     
     const handleGoogleDriveDownload = () => { if (!assignment.post.googleDriveUrl) return; const { googleDriveUrl, type } = assignment.post; let urlToOpen = googleDriveUrl; if (type === 'video') { const fileId = extractGoogleDriveId(googleDriveUrl); if (fileId) { urlToOpen = `https://drive.google.com/uc?export=download&id=${fileId}`; } } window.open(urlToOpen, '_blank'); };
     
+    const handleFirebaseDownload = async () => {
+        if (!assignment.post.mediaUrl) return;
+        setIsDownloading(true);
+        try {
+            const path = assignment.post.mediaUrl;
+            let finalUrl = path;
+
+            if (!path.startsWith('http')) {
+                const storageRef = storage.ref(path);
+                finalUrl = await storageRef.getDownloadURL();
+            }
+
+            const link = document.createElement('a');
+            link.href = finalUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.setAttribute('download', 'midia_post'); 
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            console.error("Download failed:", error);
+            alert("Erro ao baixar a mídia. Tente novamente mais tarde.");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
     const handleAddToCalendar = () => { if (!enableTimeDate) return; const title = `Enviar Print - ${assignment.post.campaignName}`; const description = `Está na hora de enviar o print da sua publicação!\\n\\nAcesse o link para enviar: ${window.location.href}`; const endDate = new Date(enableTimeDate.getTime() + 60 * 60 * 1000); const now = formatDateForICS(new Date()); const start = formatDateForICS(enableTimeDate); const end = formatDateForICS(endDate); const icsContent = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Equipe Certa//NONSGML v1.0//EN', 'BEGIN:VEVENT', `UID:${now}-${Math.random().toString(36).substring(2)}@equipecerta.com`, `DTSTAMP:${now}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${title}`, `DESCRIPTION:${description}`, `URL:${window.location.href}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'); const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' }); const link = document.createElement('a'); link.href = window.URL.createObjectURL(blob); link.setAttribute('download', 'lembrete_post.ics'); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
     const handleRequestReminder = async () => { setIsRequestingReminder(true); try { await scheduleWhatsAppReminder(assignment.id); onReminderRequested(); } catch (err: any) { alert(err.message || "Erro ao agendar lembrete."); setIsRequestingReminder(false); } };
 
@@ -296,6 +326,16 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                      {(assignment.post.type === 'image' || assignment.post.type === 'video') && (assignment.post.mediaUrl || assignment.post.googleDriveUrl) && (
                         <div><StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full h-auto object-contain rounded-md bg-dark" />
                             <div className="flex justify-center gap-4 mt-2">
+                                {assignment.post.mediaUrl && (
+                                    <button 
+                                        onClick={handleFirebaseDownload} 
+                                        disabled={isDownloading}
+                                        className="flex items-center gap-2 px-3 py-1 bg-gray-600 text-white rounded-md text-xs font-semibold hover:bg-gray-500 disabled:opacity-50"
+                                    >
+                                        <DownloadIcon className="w-4 h-4"/>
+                                        {isDownloading ? 'Baixando...' : 'Link 1'}
+                                    </button>
+                                )}
                                 {assignment.post.googleDriveUrl && <button onClick={handleGoogleDriveDownload} className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-semibold hover:bg-blue-500"><DownloadIcon className="w-4 h-4"/>Link 2</button>}
                             </div>
                         </div>
