@@ -90,8 +90,12 @@ exports.onPromoterStatusChange = functions
       const promoterId = context.params.promoterId;
 
       // 1. AUTO-ASSIGNMENT LOGIC
-      // If status changed to 'approved', check for posts that need auto-assignment
-      if (newValue.status === 'approved' && oldValue.status !== 'approved') {
+      // Check if promoter is eligible (Approved AND Joined Group)
+      // Trigger if they just became eligible (either status changed to approved OR they just joined the group while approved)
+      const isEligibleForAutoAssign = newValue.status === 'approved' && newValue.hasJoinedGroup === true;
+      const wasEligibleForAutoAssign = oldValue.status === 'approved' && oldValue.hasJoinedGroup === true;
+
+      if (isEligibleForAutoAssign && !wasEligibleForAutoAssign) {
         try {
             // Find posts that:
             // 1. Belong to the same organization
@@ -111,7 +115,17 @@ exports.onPromoterStatusChange = functions
                 const batch = db.batch();
                 let assignCount = 0;
 
+                // Check for existing assignments to avoid duplicates
+                const existingAssignmentsQuery = db.collection('postAssignments')
+                    .where('promoterId', '==', promoterId)
+                    .where('organizationId', '==', newValue.organizationId);
+                
+                const existingSnap = await existingAssignmentsQuery.get();
+                const existingPostIds = new Set(existingSnap.docs.map(doc => doc.data().postId));
+
                 postsSnap.forEach(postDoc => {
+                    if (existingPostIds.has(postDoc.id)) return; // Skip if already assigned
+
                     const postData = postDoc.data();
                     
                     // Double check expiration just in case
