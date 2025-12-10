@@ -60,12 +60,17 @@ export const createPost = async (
   }
 };
 
-export const getPostsForOrg = async (organizationId?: string): Promise<Post[]> => {
+export const getPostsForOrg = async (organizationId?: string, isOwnerOrSuperAdmin?: boolean): Promise<Post[]> => {
     try {
         const postsCollection = firestore.collection("posts");
         let q: firebase.firestore.Query = postsCollection;
         if (organizationId) {
             q = q.where("organizationId", "==", organizationId);
+        }
+
+        if (!isOwnerOrSuperAdmin) {
+            // This will exclude docs where ownerOnly is true, and include all others (false, null, missing).
+            q = q.where("ownerOnly", "!=", true);
         }
 
         const snapshot = await q.get();

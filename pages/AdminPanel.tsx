@@ -579,7 +579,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 if (err.details) {
                     const rawError = err.details.detailedError || err.details.originalError?.message || err.message;
                     if (rawError) {
-                        detailedError = `${rawError}`;
+// FIX: Explicitly cast `rawError` to a string to prevent a TypeScript error.
+                        detailedError = String(rawError);
                     }
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {

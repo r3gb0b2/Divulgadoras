@@ -71,7 +71,7 @@ export interface Campaign {
   preventDuplicateInOrg?: boolean;
 }
 
-export type AdminRole = 'superadmin' | 'admin' | 'viewer' | 'poster';
+export type AdminRole = 'superadmin' | 'admin' | 'approver' | 'viewer' | 'poster';
 
 export interface AdminUserData {
   uid: string;
@@ -162,6 +162,7 @@ export interface Post {
   postFormats?: ('story' | 'reels')[];
   skipProofRequirement?: boolean;
   allowJustification?: boolean;
+  ownerOnly?: boolean;
 }
 
 export interface PostAssignment {
@@ -266,6 +267,7 @@ export interface ScheduledPostData {
   postFormats?: ('story' | 'reels')[];
   skipProofRequirement?: boolean;
   allowJustification?: boolean;
+  ownerOnly?: boolean;
 }
 
 export interface ScheduledPost {

@@ -229,7 +229,8 @@ const AdminAuth: React.FC = () => {
                         adminData?.role === 'superadmin' ? <SuperAdminDashboard /> :
                         adminData?.role === 'admin' ? <AdminDashboard /> :
                         adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
-                        <AdminPanel adminData={adminData!} />
+                        adminData?.role === 'approver' ? <Navigate to="/admin/promoters" replace /> :
+                        <AdminPanel adminData={adminData!} /> // Fallback for 'viewer' role
                     }
                 </ProtectedRoute>
             } />
@@ -306,6 +307,15 @@ const AdminAuth: React.FC = () => {
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
                     <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
                     <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
+                </>
+            )}
+
+            {/* Routes for Approvers */}
+            {adminData?.role === 'approver' && (
+                <>
+                    <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
+                    <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                    <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
                 </>
             )}
 

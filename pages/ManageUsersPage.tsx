@@ -221,7 +221,7 @@ const ManageUsersPage: React.FC = () => {
         }).join('; ');
     }
 
-    const roleNames: { [key in AdminRole]: string } = { superadmin: 'Super Admin', admin: 'Admin', viewer: 'Visualizador', poster: 'Criador de Posts' };
+    const roleNames: { [key in AdminRole]: string } = { superadmin: 'Super Admin', admin: 'Admin', approver: 'Aprovador', viewer: 'Visualizador', poster: 'Criador de Posts' };
 
     return (
         <div>
@@ -255,6 +255,7 @@ const ManageUsersPage: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-300">Nível de Acesso</label>
                             <select value={role} onChange={e => setRole(e.target.value as AdminRole)} className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
                                 <option value="viewer">Visualizador</option>
+                                <option value="approver">Aprovador</option>
                                 <option value="poster">Criador de Posts</option>
                                 <option value="admin">Admin</option>
                                 {isSuperAdmin && <option value="superadmin">Super Admin</option>}

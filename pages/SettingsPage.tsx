@@ -51,7 +51,7 @@ const SettingsPage: React.FC = () => {
       Icon: UsersIcon,
       title: 'Gerenciar Usuários',
       description: 'Adicione, edite ou remova membros da sua equipe que podem acessar este painel.',
-      condition: () => true,
+      condition: () => adminData?.role !== 'approver',
     },
     {
       id: 'whatsapp_campaign',
@@ -83,7 +83,7 @@ const SettingsPage: React.FC = () => {
       Icon: MegaphoneIcon,
       title: 'Gerenciamento de Posts',
       description: 'Crie, edite e acompanhe o desempenho das publicações para suas divulgadoras.',
-      condition: () => true,
+      condition: () => adminData?.role !== 'viewer' && adminData?.role !== 'approver',
     },
     {
       id: 'one_time_post',
@@ -91,7 +91,7 @@ const SettingsPage: React.FC = () => {
       Icon: MegaphoneIcon,
       title: 'Post Único',
       description: 'Crie um post com link compartilhável para pessoas não cadastradas enviarem comprovação e entrarem na lista.',
-      condition: () => organization?.oneTimePostEnabled !== false,
+      condition: () => organization?.oneTimePostEnabled !== false && adminData?.role !== 'approver',
     },
     {
       id: 'manage_guestlists',
@@ -99,7 +99,7 @@ const SettingsPage: React.FC = () => {
       Icon: ClipboardDocumentListIcon,
       title: 'Gerenciar Listas de Convidados',
       description: 'Crie listas (VIP, Aniversariante), atribua divulgadoras e gere links únicos de confirmação.',
-      condition: () => organization?.guestListManagementEnabled !== false,
+      condition: () => organization?.guestListManagementEnabled !== false && adminData?.role !== 'approver',
     },
     {
       id: 'checkin',
@@ -107,7 +107,7 @@ const SettingsPage: React.FC = () => {
       Icon: TicketIcon,
       title: 'Controle de Entrada',
       description: 'Valide a entrada de divulgadoras e convidados no dia do evento através da tela de check-in.',
-      condition: () => organization?.guestListCheckinEnabled !== false,
+      condition: () => organization?.guestListCheckinEnabled !== false && adminData?.role !== 'approver',
     },
     {
       id: 'performance',
@@ -115,7 +115,7 @@ const SettingsPage: React.FC = () => {
       Icon: ChartBarIcon,
       title: 'Desempenho das Divulgadoras',
       description: 'Analise estatísticas de postagens, como aproveitamento, posts perdidos e justificativas por divulgadora.',
-      condition: () => true,
+      condition: () => adminData?.role !== 'approver',
     },
     {
       id: 'scheduled_posts',
@@ -123,7 +123,7 @@ const SettingsPage: React.FC = () => {
       Icon: ClockIcon,
       title: 'Publicações Agendadas',
       description: 'Crie posts com antecedência e agende o envio automático para a data e hora desejada.',
-      condition: () => true,
+      condition: () => adminData?.role !== 'viewer' && adminData?.role !== 'approver',
     },
     {
       id: 'follow_loop',

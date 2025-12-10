@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost } from '../services/postService';
-import { getOrganizations } from '../services/organizationService';
+import { getOrganization, getOrganizations } from '../services/organizationService';
 import { Post, Organization, PostAssignment } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon } from '../components/Icons';
@@ -54,7 +53,15 @@ const AdminPosts: React.FC = () => {
             }
 
             try {
-                const postPromise = getPostsForOrg(orgId);
+                let isOwner = false;
+                if (orgId) {
+                    const orgData = (await getOrganization(orgId));
+                    if (orgData?.ownerUid === adminData.uid) {
+                        isOwner = true;
+                    }
+                }
+
+                const postPromise = getPostsForOrg(orgId, isOwner || isSuperAdmin);
                 const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
                 const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
                 
