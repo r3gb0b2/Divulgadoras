@@ -170,6 +170,15 @@ exports.onPromoterStatusChange = functions
         newValue.status === "rejected_editable";
 
       if (statusChanged && isNotificationStatus) {
+        // Verificar configurações da Organização
+        const orgDoc = await db.collection("organizations").doc(newValue.organizationId).get();
+        const orgData = orgDoc.exists ? orgDoc.data() : {};
+
+        if (orgData.whatsappNotificationsEnabled === false) {
+             console.log(`[WhatsApp] Status notification suppressed by org settings for ${promoterId}`);
+             return;
+        }
+
         const shouldSendWhatsApp = (newValue.status === "approved" || newValue.status === "rejected_editable") && newValue.whatsapp;
         
         if (shouldSendWhatsApp) {
@@ -599,6 +608,15 @@ exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.o
         
         const reminder = reminderSnap.data();
         if (reminder.status === 'sent') return { success: true, message: "Já enviado." };
+
+        // Check if organization has disabled notifications
+        const orgDoc = await db.collection("organizations").doc(reminder.organizationId).get();
+        const orgData = orgDoc.exists ? orgDoc.data() : {};
+        
+        if (orgData.whatsappNotificationsEnabled === false) {
+             await reminderRef.update({ status: 'error', error: "Notificações desativadas pela organização." });
+             return { success: false, message: "Envio desativado na organização." };
+        }
 
         let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);

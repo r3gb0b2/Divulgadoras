@@ -580,17 +580,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 if (err.details) {
                     const rawError = err.details.detailedError || err.details.originalError?.message || err.message;
                     if (rawError) {
-// FIX: Explicitly cast `rawError` to a string to prevent a TypeScript error.
-                        detailedError = String(rawError);
+                        // FIX: Explicitly cast `rawError` to a string (or any then string) to prevent a TypeScript error.
+                        detailedError = String(rawError as any);
                     }
                     providerName = err.details.provider || providerName;
                 } else if (err.message) {
-// FIX: Explicitly cast `err.message` to a string to prevent a TypeScript error.
+                    // FIX: Explicitly cast `err.message` to a string to prevent a TypeScript error.
                     detailedError = String(err.message);
                 }
             } else {
-// FIX: Explicitly cast `error` of type 'unknown' to a string to prevent a TypeScript error.
-                detailedError = String(error);
+                // FIX: Explicitly cast `error` of type 'unknown' to a string to prevent a TypeScript error.
+                detailedError = String(error as any);
             }
             
             alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
@@ -693,7 +693,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (err instanceof Error) {
                 errorMessage = err.message;
             } else {
-                errorMessage = String(err);
+                errorMessage = String(err as any);
             }
             setLookupError(errorMessage);
         } finally {

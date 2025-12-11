@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Promoter, Campaign } from '../types';
 import { getAllCampaigns } from '../services/settingsService';
