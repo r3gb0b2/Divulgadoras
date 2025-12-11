@@ -219,6 +219,31 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
 
 // --- Callable Functions ---
 
+exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { promoterId } = data;
+    
+    try {
+        const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+        if (!promoterDoc.exists) throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
+        const promoterData = promoterDoc.data();
+
+        // CHECK ORGANIZATION SETTINGS
+        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
+        const orgData = orgDoc.exists ? orgDoc.data() : {};
+        if (orgData.whatsappNotificationsEnabled === false) {
+            return { success: false, message: "Envio de WhatsApp desativado nas configurações da organização.", provider: "Bloqueado" };
+        }
+
+        await sendWhatsAppStatusChange(promoterData, promoterId);
+        
+        return { success: true, message: "Notificação enviada." };
+    } catch (error) {
+        console.error("Error manually sending status:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
 // Analisar armazenamento de um evento ou post específico
 exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 300, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
@@ -307,17 +332,6 @@ exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ 
             query = query.where("post.campaignName", "==", campaignName);
         }
 
-        // We filter manually for 'DELETED_PROOF' because we can't easily chain complex not-equals with other where clauses without composite indexes sometimes
-        // But to optimize reading, we just get a batch and process.
-        // A better approach if index exists: query.where("proofImageUrls", "!=", ["DELETED_PROOF"]).limit(BATCH_LIMIT)
-        // Since array inequality is tricky, we fetch a bit more and filter in memory, or just iterate.
-        // Let's assume we fetch, check if needs deletion, and process.
-        
-        // To make this "continuable", we rely on the client knowing we aren't done.
-        // We will fetch documents that DO NOT have the flag yet. 
-        // NOTE: Firestore doesn't support array-contains-any for negation easily. 
-        // We will fetch normally, but since we update the doc to 'DELETED_PROOF', subsequent queries won't process the same file if we check the data.
-        
         const assignmentsSnap = await query.limit(200).get(); // Fetch potential candidates
 
         const bucket = admin.storage().bucket();
@@ -325,8 +339,6 @@ exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ 
         let updatedDocsCount = 0;
         const batch = db.batch();
         
-        let processedDocs = 0;
-
         for (const doc of assignmentsSnap.docs) {
             if (updatedDocsCount >= BATCH_LIMIT) break; // Hard stop for this execution
 
@@ -338,18 +350,14 @@ exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ 
                 continue;
             }
 
-            let fileDeleted = false;
-
             for (const url of proofUrls) {
                 const storagePath = getStoragePathFromUrl(url);
                 if (storagePath) {
                     try {
                         await bucket.file(storagePath).delete();
                         deletedFilesCount++;
-                        fileDeleted = true;
                     } catch (e) {
                         console.warn(`Erro ao deletar ${storagePath}:`, e.message);
-                        if (e.code === 404) fileDeleted = true; // File already gone
                     }
                 }
             }
@@ -365,10 +373,6 @@ exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ 
         if (updatedDocsCount > 0) {
             await batch.commit();
         }
-
-        // Check if there might be more
-        // We fetched 200. If we processed (updated) fewer than what we fetched (excluding those already done), maybe we are done.
-        // A simple heuristic: if we updated > 0, assume there might be more. The client loop continues until 0 updates.
         
         return { 
             success: true, 
@@ -697,6 +701,15 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
 // --- Helper Functions ---
 
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
+    // Add fail-safe check for org settings in the helper
+    try {
+        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
+        if (orgDoc.exists && orgDoc.data().whatsappNotificationsEnabled === false) {
+            console.log(`[WhatsApp] Blocked by Org Settings for ${promoterId}`);
+            return;
+        }
+    } catch(e) { console.error("Error checking org settings in helper", e); }
+
     const config = getConfig().zapi;
     if (!config || !config.instance_id || !config.token) return;
 
@@ -730,6 +743,15 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
 
 // 4. Enviar Post com Mídia (Restaurado e Melhorado)
 async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData, promoterId) {
+    // Add fail-safe check for org settings in the helper
+    try {
+        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
+        if (orgDoc.exists && orgDoc.data().whatsappNotificationsEnabled === false) {
+            console.log(`[WhatsApp] Blocked by Org Settings for ${promoterId}`);
+            return;
+        }
+    } catch(e) { console.error("Error checking org settings in helper", e); }
+
     const config = getConfig().zapi;
     if (!config || !config.instance_id || !config.token) return;
 

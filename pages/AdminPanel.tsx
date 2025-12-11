@@ -680,7 +680,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const email = emailToSearch || lookupEmail;
-        if (!email.trim()) return;
+        if (!email || !email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
@@ -693,7 +693,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (err instanceof Error) {
                 errorMessage = err.message;
             } else {
-                errorMessage = String(err as any);
+                errorMessage = String(err || "Erro desconhecido");
             }
             setLookupError(errorMessage);
         } finally {
