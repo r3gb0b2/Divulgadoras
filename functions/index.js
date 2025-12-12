@@ -293,7 +293,10 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
         let emailApiInstance = null;
         if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
             emailApiInstance = new Brevo.TransactionalEmailsApi();
-            emailApiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, brevoConfig.key);
+            // Safer way to get the enum, falling back to 0 (apiKey identifier) if undefined
+            // This prevents "Cannot read properties of undefined (reading 'apiKey')"
+            const apiKeys = Brevo.TransactionalEmailsApiApiKeys || { apiKey: 0 };
+            emailApiInstance.setApiKey(apiKeys.apiKey, brevoConfig.key);
         }
 
         // 4. Iterate and Send
