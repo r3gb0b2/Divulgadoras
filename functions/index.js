@@ -339,11 +339,22 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
             const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
             const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(assignment.promoterEmail)}`;
 
+            // Resolve Phone Number: Check assignment first, fallback to promoter profile
+            let phone = assignment.promoterWhatsapp;
+            if (!phone) {
+                try {
+                    const promoterDoc = await db.collection('promoters').doc(promoterId).get();
+                    if (promoterDoc.exists) {
+                        phone = promoterDoc.data().whatsapp;
+                    }
+                } catch(e) { console.error(`Error fetching promoter ${promoterId} for phone`, e); }
+            }
+
             // A) WhatsApp
             if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
-                if (assignment.promoterWhatsapp) {
+                if (phone) {
                     try {
-                        let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
+                        let cleanPhone = phone.replace(/\D/g, '');
                         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
                         if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
@@ -485,11 +496,22 @@ exports.sendPostReminder = functions.region("southamerica-east1").runWith({ time
             const portalLink = `https://divulgadoras.vercel.app/#/proof/${assignment.id}`;
             const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
 
+            // Resolve Phone Number: Check assignment first, fallback to promoter profile
+            let phone = assignment.promoterWhatsapp;
+            if (!phone) {
+                try {
+                    const promoterDoc = await db.collection('promoters').doc(promoterId).get();
+                    if (promoterDoc.exists) {
+                        phone = promoterDoc.data().whatsapp;
+                    }
+                } catch(e) { console.error(`Error fetching promoter ${promoterId} for phone`, e); }
+            }
+
             // A) WhatsApp
             if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
-                if (assignment.promoterWhatsapp) {
+                if (phone) {
                     try {
-                        let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
+                        let cleanPhone = phone.replace(/\D/g, '');
                         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
                         if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
