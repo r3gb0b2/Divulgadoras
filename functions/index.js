@@ -258,7 +258,7 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
     
     if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
 
-    const debugLogs = []; // Accumulate errors to show user if count is 0
+    const debugLogs = [];
 
     try {
         // 1. Fetch Post Data
@@ -289,13 +289,15 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
         const config = getConfig();
         const zapiConfig = config.zapi;
         const brevoConfig = config.brevo;
-        let sentCount = 0;
+        
+        let waSentCount = 0;
+        let emailSentCount = 0;
 
         // Prepare Email API
         let emailApiInstance = null;
         if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
             try {
-                // Initialize default client auth (Global)
+                // Initialize default client auth (Global) - most reliable way
                 const defaultClient = Brevo.ApiClient.instance;
                 const apiKeyAuth = defaultClient.authentications['api-key'];
                 if (apiKeyAuth) {
@@ -304,7 +306,7 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
 
                 emailApiInstance = new Brevo.TransactionalEmailsApi();
                 
-                // Configura especificamente na instância criada, se possível (tentando ambas as convenções)
+                // Redundant safety check: Set on instance too
                 if (emailApiInstance.authentications) {
                     if (emailApiInstance.authentications['apiKey']) {
                         emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
@@ -313,8 +315,8 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
                         emailApiInstance.authentications['api-key'].apiKey = brevoConfig.key;
                     }
                 } else if (typeof emailApiInstance.setApiKey === 'function') {
-                     // Fallback antigo
-                     emailApiInstance.setApiKey(0, brevoConfig.key); // 0 usually maps to apiKey
+                     // Fallback legacy SDK
+                     emailApiInstance.setApiKey(0, brevoConfig.key);
                 }
             } catch (err) {
                 console.error("Failed to init Brevo:", err);
@@ -325,6 +327,10 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
             debugLogs.push("Email enabled but config missing (key/sender).");
         }
 
+        if (allowWhatsApp && (!zapiConfig?.instance_id || !zapiConfig?.token)) {
+             debugLogs.push("WhatsApp enabled but Z-API Config missing.");
+        }
+
         // 4. Iterate and Send
         for (const doc of assignmentsSnap.docs) {
             const assignment = doc.data();
@@ -333,11 +339,9 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
             const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
             const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(assignment.promoterEmail)}`;
 
-            let messageSent = false;
-
             // A) WhatsApp
-            if (allowWhatsApp) {
-                if (assignment.promoterWhatsapp && zapiConfig?.instance_id && zapiConfig?.token) {
+            if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
+                if (assignment.promoterWhatsapp) {
                     try {
                         let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
                         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
@@ -356,23 +360,24 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
                         });
                         
                         if (waRes.ok) {
-                            messageSent = true;
+                            waSentCount++;
                         } else {
-                            debugLogs.push(`WA Error ${promoterId}: ${waRes.status}`);
+                            const errTxt = await waRes.text();
+                            console.error(`Z-API Error for ${promoterId}:`, errTxt);
+                            debugLogs.push(`WA Error (${promoterId}): ${waRes.status} ${errTxt}`);
                         }
                     } catch (waError) {
                         console.error(`Failed to send WA reminder to ${promoterId}:`, waError);
-                        debugLogs.push(`WA Exception ${promoterId}: ${waError.message}`);
+                        debugLogs.push(`WA Exception (${promoterId}): ${waError.message}`);
                     }
                 } else {
-                    if (!zapiConfig?.instance_id) debugLogs.push("Missing Z-API Config");
-                    if (!assignment.promoterWhatsapp) debugLogs.push(`No Phone for ${promoterId}`);
+                    debugLogs.push(`No Phone (${promoterId})`);
                 }
             }
 
             // B) Email
-            if (allowEmail) {
-                if (assignment.promoterEmail && emailApiInstance) {
+            if (allowEmail && emailApiInstance) {
+                if (assignment.promoterEmail) {
                     try {
                         const sendSmtpEmail = new Brevo.SendSmtpEmail();
                         sendSmtpEmail.subject = `Lembrete: Postagem Pendente - ${post.campaignName}`;
@@ -394,31 +399,157 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
                         sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
 
                         await emailApiInstance.sendTransacEmail(sendSmtpEmail);
-                        messageSent = true;
+                        emailSentCount++;
                     } catch (emailError) {
                         console.error(`Failed to send Email reminder to ${promoterId}:`, emailError);
-                        debugLogs.push(`Email Exception ${promoterId}: ${emailError.message}`);
+                        debugLogs.push(`Email Exception (${promoterId}): ${emailError.message}`);
                     }
                 } else {
-                     if (!emailApiInstance) debugLogs.push("No Email Instance");
-                     if (!assignment.promoterEmail) debugLogs.push(`No Email for ${promoterId}`);
+                     debugLogs.push(`No Email Addr (${promoterId})`);
                 }
             }
-
-            if (messageSent) sentCount++;
         }
 
-        let message = `Lembretes enviados para ${sentCount} divulgadoras.`;
-        if (sentCount === 0 && debugLogs.length > 0) {
-            // Deduplicate logs
-            const uniqueLogs = [...new Set(debugLogs)].slice(0, 3);
-            message += ` Erros: ${uniqueLogs.join(' | ')}`;
+        const totalSent = waSentCount + emailSentCount;
+        let message = `Lembretes enviados: ${waSentCount} WhatsApp, ${emailSentCount} E-mails.`;
+        
+        if (debugLogs.length > 0) {
+            const uniqueLogs = [...new Set(debugLogs)].slice(0, 5); // Show first 5 unique errors
+            message += ` Erros detectados: ${uniqueLogs.join(' | ')}`;
         }
 
-        return { count: sentCount, message: message };
+        return { count: totalSent, message: message };
 
     } catch (error) {
         console.error("Error sending pending reminders:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+// Implementação: Enviar Lembrete de Comprovação (Para quem confirmou mas não enviou print)
+exports.sendPostReminder = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
+
+    const debugLogs = [];
+
+    try {
+        const postDoc = await db.collection('posts').doc(postId).get();
+        if (!postDoc.exists) return { count: 0, message: "Post não encontrado." };
+        const post = postDoc.data();
+
+        const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+        const orgData = orgDoc.exists ? orgDoc.data() : {};
+        const allowWhatsApp = orgData.whatsappNotificationsEnabled !== false;
+        const allowEmail = orgData.emailRemindersEnabled !== false;
+
+        const assignmentsSnap = await db.collection('postAssignments')
+            .where('postId', '==', postId)
+            .where('status', '==', 'confirmed')
+            .get();
+
+        // Filter in memory for those who haven't submitted proof or justification
+        const pendingProofAssignments = assignmentsSnap.docs
+            .map(doc => doc.data())
+            .filter(a => !a.proofSubmittedAt && !a.justification);
+
+        if (pendingProofAssignments.length === 0) {
+            return { count: 0, message: "Ninguém pendente de comprovação." };
+        }
+
+        const config = getConfig();
+        const zapiConfig = config.zapi;
+        const brevoConfig = config.brevo;
+        
+        let waSentCount = 0;
+        let emailSentCount = 0;
+
+        let emailApiInstance = null;
+        if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
+            try {
+                const defaultClient = Brevo.ApiClient.instance;
+                const apiKeyAuth = defaultClient.authentications['api-key'];
+                if (apiKeyAuth) apiKeyAuth.apiKey = brevoConfig.key;
+                emailApiInstance = new Brevo.TransactionalEmailsApi();
+            } catch (err) {
+                debugLogs.push("Brevo Init Error: " + err.message);
+                emailApiInstance = null;
+            }
+        }
+
+        for (const assignment of pendingProofAssignments) {
+            const promoterId = assignment.promoterId;
+            const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
+            const portalLink = `https://divulgadoras.vercel.app/#/proof/${assignment.id}`;
+            const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
+
+            // A) WhatsApp
+            if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
+                if (assignment.promoterWhatsapp) {
+                    try {
+                        let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
+                        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+                        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+                        const message = `Olá ${firstName}! 📸\n\nVocê confirmou a postagem para *${post.campaignName}*, mas ainda não enviou o print.\n\nPor favor, envie agora para garantir sua presença na lista:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+
+                        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
+                        const headers = { 'Content-Type': 'application/json' };
+                        if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
+
+                        const waRes = await fetch(url, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify({ phone: cleanPhone, message: message })
+                        });
+                        
+                        if (waRes.ok) waSentCount++;
+                        else debugLogs.push(`WA Error (${promoterId}): ${waRes.status}`);
+                    } catch (waError) {
+                        debugLogs.push(`WA Exception (${promoterId}): ${waError.message}`);
+                    }
+                }
+            }
+
+            // B) Email
+            if (allowEmail && emailApiInstance && assignment.promoterEmail) {
+                try {
+                    const sendSmtpEmail = new Brevo.SendSmtpEmail();
+                    sendSmtpEmail.subject = `Lembrete: Envio de Print - ${post.campaignName}`;
+                    sendSmtpEmail.htmlContent = `
+                        <div style="font-family: Arial, sans-serif; color: #333;">
+                            <h2>Olá ${firstName},</h2>
+                            <p>Você confirmou que realizou a postagem para <strong>${post.campaignName}</strong>, mas ainda não recebemos seu print de comprovação.</p>
+                            <p>Clique no botão abaixo para enviar agora:</p>
+                            <p style="text-align: center; margin: 30px 0;">
+                                <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Enviar Print</a>
+                            </p>
+                        </div>
+                    `;
+                    sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
+                    sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
+
+                    await emailApiInstance.sendTransacEmail(sendSmtpEmail);
+                    emailSentCount++;
+                } catch (emailError) {
+                    debugLogs.push(`Email Exception (${promoterId}): ${emailError.message}`);
+                }
+            }
+        }
+
+        const totalSent = waSentCount + emailSentCount;
+        let message = `Cobranças de print enviadas: ${waSentCount} WhatsApp, ${emailSentCount} E-mails.`;
+        if (debugLogs.length > 0) {
+            const uniqueLogs = [...new Set(debugLogs)].slice(0, 5);
+            message += ` Erros: ${uniqueLogs.join(' | ')}`;
+        }
+
+        return { count: totalSent, message: message };
+
+    } catch (error) {
+        console.error("Error sending proof reminders:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
 });
