@@ -258,6 +258,8 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
     
     if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
 
+    const debugLogs = []; // Accumulate errors to show user if count is 0
+
     try {
         // 1. Fetch Post Data
         const postDoc = await db.collection('posts').doc(postId).get();
@@ -292,16 +294,22 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
         // Prepare Email API
         let emailApiInstance = null;
         if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
-            emailApiInstance = new Brevo.TransactionalEmailsApi();
-            
-            // FIX: Configure API Key using authentications object to avoid method errors
-            if (emailApiInstance.authentications && emailApiInstance.authentications['apiKey']) {
-                emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
-            } else if (typeof emailApiInstance.setApiKey === 'function') {
-                // Fallback method if available
-                const apiKeyIndex = (Brevo.TransactionalEmailsApiApiKeys && Brevo.TransactionalEmailsApiApiKeys.apiKey) || 0;
-                emailApiInstance.setApiKey(apiKeyIndex, brevoConfig.key);
+            try {
+                emailApiInstance = new Brevo.TransactionalEmailsApi();
+                // FIX: Configure API Key using authentications object to avoid method errors
+                if (emailApiInstance.authentications && emailApiInstance.authentications['apiKey']) {
+                    emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
+                } else if (typeof emailApiInstance.setApiKey === 'function') {
+                    const apiKeyIndex = (Brevo.TransactionalEmailsApiApiKeys && Brevo.TransactionalEmailsApiApiKeys.apiKey) || 0;
+                    emailApiInstance.setApiKey(apiKeyIndex, brevoConfig.key);
+                }
+            } catch (err) {
+                console.error("Failed to init Brevo:", err);
+                debugLogs.push("Brevo Init Error: " + err.message);
+                emailApiInstance = null;
             }
+        } else if (allowEmail) {
+            debugLogs.push("Email enabled but config missing (key/sender).");
         }
 
         // 4. Iterate and Send
@@ -315,62 +323,86 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
             let messageSent = false;
 
             // A) WhatsApp
-            if (allowWhatsApp && assignment.promoterWhatsapp && zapiConfig?.instance_id && zapiConfig?.token) {
-                try {
-                    let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
-                    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-                    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+            if (allowWhatsApp) {
+                if (assignment.promoterWhatsapp && zapiConfig?.instance_id && zapiConfig?.token) {
+                    try {
+                        let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
+                        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+                        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
-                    const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para o evento *${post.campaignName}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+                        const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para o evento *${post.campaignName}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
 
-                    const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
-                    const headers = { 'Content-Type': 'application/json' };
-                    if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
+                        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
+                        const headers = { 'Content-Type': 'application/json' };
+                        if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
 
-                    await fetch(url, {
-                        method: 'POST',
-                        headers: headers,
-                        body: JSON.stringify({ phone: cleanPhone, message: message })
-                    });
-                    messageSent = true;
-                } catch (waError) {
-                    console.error(`Failed to send WA reminder to ${promoterId}:`, waError);
+                        const waRes = await fetch(url, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify({ phone: cleanPhone, message: message })
+                        });
+                        
+                        if (waRes.ok) {
+                            messageSent = true;
+                        } else {
+                            debugLogs.push(`WA Error ${promoterId}: ${waRes.status}`);
+                        }
+                    } catch (waError) {
+                        console.error(`Failed to send WA reminder to ${promoterId}:`, waError);
+                        debugLogs.push(`WA Exception ${promoterId}: ${waError.message}`);
+                    }
+                } else {
+                    if (!zapiConfig?.instance_id) debugLogs.push("Missing Z-API Config");
+                    if (!assignment.promoterWhatsapp) debugLogs.push(`No Phone for ${promoterId}`);
                 }
             }
 
             // B) Email
-            if (allowEmail && assignment.promoterEmail && emailApiInstance) {
-                try {
-                    const sendSmtpEmail = new Brevo.SendSmtpEmail();
-                    sendSmtpEmail.subject = `Lembrete: Postagem Pendente - ${post.campaignName}`;
-                    sendSmtpEmail.htmlContent = `
-                        <div style="font-family: Arial, sans-serif; color: #333;">
-                            <h2>Olá ${firstName},</h2>
-                            <p>Notamos que você ainda não confirmou sua postagem para o evento <strong>${post.campaignName}</strong>.</p>
-                            <p>Para garantir sua presença na lista e evitar faltas, por favor, acesse seu painel e confirme a tarefa.</p>
-                            <p style="text-align: center; margin: 30px 0;">
-                                <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Acessar Painel</a>
-                            </p>
-                            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-                            <p style="font-size: 12px; color: #888; text-align: center;">
-                                Se você não faz mais parte da equipe deste evento, <a href="${leaveLink}" style="color: #666;">clique aqui para sair do grupo</a>.
-                            </p>
-                        </div>
-                    `;
-                    sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
-                    sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
+            if (allowEmail) {
+                if (assignment.promoterEmail && emailApiInstance) {
+                    try {
+                        const sendSmtpEmail = new Brevo.SendSmtpEmail();
+                        sendSmtpEmail.subject = `Lembrete: Postagem Pendente - ${post.campaignName}`;
+                        sendSmtpEmail.htmlContent = `
+                            <div style="font-family: Arial, sans-serif; color: #333;">
+                                <h2>Olá ${firstName},</h2>
+                                <p>Notamos que você ainda não confirmou sua postagem para o evento <strong>${post.campaignName}</strong>.</p>
+                                <p>Para garantir sua presença na lista e evitar faltas, por favor, acesse seu painel e confirme a tarefa.</p>
+                                <p style="text-align: center; margin: 30px 0;">
+                                    <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Acessar Painel</a>
+                                </p>
+                                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                                <p style="font-size: 12px; color: #888; text-align: center;">
+                                    Se você não faz mais parte da equipe deste evento, <a href="${leaveLink}" style="color: #666;">clique aqui para sair do grupo</a>.
+                                </p>
+                            </div>
+                        `;
+                        sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
+                        sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
 
-                    await emailApiInstance.sendTransacEmail(sendSmtpEmail);
-                    messageSent = true;
-                } catch (emailError) {
-                    console.error(`Failed to send Email reminder to ${promoterId}:`, emailError);
+                        await emailApiInstance.sendTransacEmail(sendSmtpEmail);
+                        messageSent = true;
+                    } catch (emailError) {
+                        console.error(`Failed to send Email reminder to ${promoterId}:`, emailError);
+                        debugLogs.push(`Email Exception ${promoterId}: ${emailError.message}`);
+                    }
+                } else {
+                     if (!emailApiInstance) debugLogs.push("No Email Instance");
+                     if (!assignment.promoterEmail) debugLogs.push(`No Email for ${promoterId}`);
                 }
             }
 
             if (messageSent) sentCount++;
         }
 
-        return { count: sentCount, message: `Lembretes enviados para ${sentCount} divulgadoras.` };
+        let message = `Lembretes enviados para ${sentCount} divulgadoras.`;
+        if (sentCount === 0 && debugLogs.length > 0) {
+            // Deduplicate logs
+            const uniqueLogs = [...new Set(debugLogs)].slice(0, 3);
+            message += ` Erros: ${uniqueLogs.join(' | ')}`;
+        }
+
+        return { count: sentCount, message: message };
 
     } catch (error) {
         console.error("Error sending pending reminders:", error);
