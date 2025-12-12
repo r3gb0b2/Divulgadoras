@@ -79,6 +79,13 @@ function getStoragePathFromUrl(url) {
     }
 }
 
+// --- Helper: Link to Leave Group ---
+function getLeaveGroupLink(promoterId, campaignName, orgId) {
+    const baseUrl = 'https://divulgadoras.vercel.app';
+    const encodedCampaign = encodeURIComponent(campaignName || '');
+    return `${baseUrl}/#/leave-group?promoterId=${promoterId}&campaignName=${encodedCampaign}&orgId=${orgId}`;
+}
+
 // --- Firestore Triggers ---
 
 exports.onPromoterStatusChange = functions
@@ -240,6 +247,125 @@ exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.o
         return { success: true, message: "Notificação enviada." };
     } catch (error) {
         console.error("Error manually sending status:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+// Implementação: Enviar Notificações Pendentes (E-mail + WhatsApp)
+exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
+
+    try {
+        // 1. Fetch Post Data
+        const postDoc = await db.collection('posts').doc(postId).get();
+        if (!postDoc.exists) return { count: 0, message: "Post não encontrado." };
+        const post = postDoc.data();
+
+        // 2. Fetch Organization Settings
+        const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
+        const orgData = orgDoc.exists ? orgDoc.data() : {};
+        const allowWhatsApp = orgData.whatsappNotificationsEnabled !== false;
+        const allowEmail = orgData.emailRemindersEnabled !== false;
+
+        if (!allowWhatsApp && !allowEmail) {
+            return { count: 0, message: "Envio de notificações desativado na organização." };
+        }
+
+        // 3. Fetch Pending Assignments
+        const assignmentsSnap = await db.collection('postAssignments')
+            .where('postId', '==', postId)
+            .where('status', '==', 'pending')
+            .get();
+
+        if (assignmentsSnap.empty) {
+            return { count: 0, message: "Nenhuma tarefa pendente." };
+        }
+
+        const config = getConfig();
+        const zapiConfig = config.zapi;
+        const brevoConfig = config.brevo;
+        let sentCount = 0;
+
+        // Prepare Email API
+        let emailApiInstance = null;
+        if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
+            emailApiInstance = new Brevo.TransactionalEmailsApi();
+            emailApiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, brevoConfig.key);
+        }
+
+        // 4. Iterate and Send
+        for (const doc of assignmentsSnap.docs) {
+            const assignment = doc.data();
+            const promoterId = assignment.promoterId;
+            const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
+            const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
+            const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(assignment.promoterEmail)}`;
+
+            let messageSent = false;
+
+            // A) WhatsApp
+            if (allowWhatsApp && assignment.promoterWhatsapp && zapiConfig?.instance_id && zapiConfig?.token) {
+                try {
+                    let cleanPhone = assignment.promoterWhatsapp.replace(/\D/g, '');
+                    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+                    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+                    const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para o evento *${post.campaignName}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+
+                    const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
+
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify({ phone: cleanPhone, message: message })
+                    });
+                    messageSent = true;
+                } catch (waError) {
+                    console.error(`Failed to send WA reminder to ${promoterId}:`, waError);
+                }
+            }
+
+            // B) Email
+            if (allowEmail && assignment.promoterEmail && emailApiInstance) {
+                try {
+                    const sendSmtpEmail = new Brevo.SendSmtpEmail();
+                    sendSmtpEmail.subject = `Lembrete: Postagem Pendente - ${post.campaignName}`;
+                    sendSmtpEmail.htmlContent = `
+                        <div style="font-family: Arial, sans-serif; color: #333;">
+                            <h2>Olá ${firstName},</h2>
+                            <p>Notamos que você ainda não confirmou sua postagem para o evento <strong>${post.campaignName}</strong>.</p>
+                            <p>Para garantir sua presença na lista e evitar faltas, por favor, acesse seu painel e confirme a tarefa.</p>
+                            <p style="text-align: center; margin: 30px 0;">
+                                <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Acessar Painel</a>
+                            </p>
+                            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                            <p style="font-size: 12px; color: #888; text-align: center;">
+                                Se você não faz mais parte da equipe deste evento, <a href="${leaveLink}" style="color: #666;">clique aqui para sair do grupo</a>.
+                            </p>
+                        </div>
+                    `;
+                    sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
+                    sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
+
+                    await emailApiInstance.sendTransacEmail(sendSmtpEmail);
+                    messageSent = true;
+                } catch (emailError) {
+                    console.error(`Failed to send Email reminder to ${promoterId}:`, emailError);
+                }
+            }
+
+            if (messageSent) sentCount++;
+        }
+
+        return { count: sentCount, message: `Lembretes enviados para ${sentCount} divulgadoras.` };
+
+    } catch (error) {
+        console.error("Error sending pending reminders:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
 });
@@ -530,7 +656,7 @@ exports.cleanupDuplicateReminders = functions.region("southamerica-east1").https
     }
 });
 
-// 2. Agendar Lembrete (Restaurado)
+// 2. Agendar Lembrete (Restaurado e Fortalecido)
 exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { assignmentId } = data;
     if (!assignmentId) throw new functions.https.HttpsError("invalid-argument", "ID da tarefa obrigatório.");
@@ -542,7 +668,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
         
         const assignment = assignmentSnap.data();
 
-        // Check duplicates
+        // Check for duplicates (Pending)
         const existingReminderQuery = await db.collection("whatsAppReminders")
             .where("assignmentId", "==", assignmentId)
             .where("status", "==", "pending")
@@ -551,6 +677,18 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
 
         if (!existingReminderQuery.empty) {
             return { success: true, message: "Lembrete já estava agendado." };
+        }
+
+        // Check for duplicates (Recently Sent - 15 minutes) to prevent accidental double sends
+        const recentSentQuery = await db.collection("whatsAppReminders")
+            .where("assignmentId", "==", assignmentId)
+            .where("status", "==", "sent")
+            .where("createdAt", ">", admin.firestore.Timestamp.fromMillis(Date.now() - 15 * 60 * 1000)) 
+            .limit(1)
+            .get();
+
+        if (!recentSentQuery.empty) {
+            return { success: false, message: "Um lembrete já foi enviado recentemente." };
         }
 
         const promoterRef = db.collection("promoters").doc(assignment.promoterId);
@@ -595,7 +733,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
     }
 });
 
-// 3. Enviar Agora (Restaurado)
+// 3. Enviar Agora (Restaurado com Link de Saída)
 exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { reminderId } = data;
     if (!reminderId) throw new functions.https.HttpsError("invalid-argument", "ID obrigatório.");
@@ -628,8 +766,9 @@ exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.o
 
         const firstName = reminder.promoterName.split(' ')[0];
         const portalLink = `https://divulgadoras.vercel.app/#/proof/${reminder.assignmentId}`;
+        const leaveLink = getLeaveGroupLink(reminder.promoterId, reminder.postCampaignName, reminder.organizationId);
 
-        const message = `Olá ${firstName}! 📸\n\nPassando para lembrar de enviar o *print* da sua publicação no evento *${reminder.postCampaignName}*.\n\nPara garantir sua presença na lista, clique no link abaixo e envie agora:\n${portalLink}`;
+        const message = `Olá ${firstName}! 📸\n\nPassando para lembrar de enviar o *print* da sua publicação no evento *${reminder.postCampaignName}*.\n\nPara garantir sua presença na lista, clique no link abaixo e envie agora:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
 
         const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
         const headers = { 'Content-Type': 'application/json' };
@@ -718,11 +857,12 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
     if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
     const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
+    const leaveLink = getLeaveGroupLink(promoterId, promoterData.campaignName, promoterData.organizationId);
     let message = "";
 
     if (promoterData.status === 'approved') {
         const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
-        message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}`;
+        message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
     } else if (promoterData.status === 'rejected_editable') {
         const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ''}?edit_id=${promoterId}`;
         message = `Olá ${firstName}! 👋\n\nSeu cadastro precisa de um ajuste.\n\nClique para corrigir:\n${editLink}`;
@@ -741,7 +881,7 @@ async function sendWhatsAppStatusChange(promoterData, promoterId) {
     });
 }
 
-// 4. Enviar Post com Mídia (Restaurado e Melhorado)
+// 4. Enviar Post com Mídia (Restaurado e Melhorado com Link de Saída)
 async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData, promoterId) {
     // Add fail-safe check for org settings in the helper
     try {
@@ -761,10 +901,11 @@ async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmen
 
     const firstName = promoterData.name.split(' ')[0];
     const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
+    const leaveLink = getLeaveGroupLink(promoterId, postData.campaignName, postData.organizationId);
     
     let caption = `✨ *NOVA POSTAGEM* ✨\n\nOlá ${firstName}! Nova publicação disponível.\n\n`;
     if (postData.instructions) caption += `📝 *Instruções:* ${postData.instructions.substring(0, 300)}...\n\n`;
-    caption += `👇 *CONFIRA AQUI:* 👇\n${portalLink}`;
+    caption += `👇 *CONFIRA AQUI:* 👇\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
 
     // Logic for Media
     let endpoint = 'send-text';
