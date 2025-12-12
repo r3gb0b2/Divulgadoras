@@ -753,6 +753,18 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
             throw new functions.https.HttpsError("failed-precondition", "Divulgadora sem WhatsApp cadastrado.");
         }
 
+        // SAFE POST DATA RETRIEVAL
+        let campaignName = "Evento";
+        if (assignment.post && assignment.post.campaignName) {
+            campaignName = assignment.post.campaignName;
+        } else if (assignment.postId) {
+            // Fallback: Fetch original post if denormalized data is missing
+            const postDoc = await db.collection("posts").doc(assignment.postId).get();
+            if (postDoc.exists) {
+                campaignName = postDoc.data().campaignName || "Evento";
+            }
+        }
+
         const sendAt = admin.firestore.Timestamp.fromMillis(Date.now() + 6 * 60 * 60 * 1000); 
 
         const reminderData = {
@@ -762,7 +774,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
             promoterEmail: assignment.promoterEmail,
             promoterWhatsapp: phone,
             postId: assignment.postId,
-            postCampaignName: assignment.post.campaignName,
+            postCampaignName: campaignName,
             organizationId: assignment.organizationId,
             status: 'pending',
             sendAt: sendAt,
@@ -782,7 +794,7 @@ exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.
 
     } catch (error) {
         console.error("Error scheduling reminder:", error);
-        throw new functions.https.HttpsError("internal", "Erro ao agendar lembrete.");
+        throw new functions.https.HttpsError("internal", `Erro ao agendar lembrete: ${error.message}`);
     }
 });
 

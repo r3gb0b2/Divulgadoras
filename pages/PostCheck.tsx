@@ -399,9 +399,9 @@ const PostCheck: React.FC = () => {
     };
     const handleReminderRequested = async () => { 
         try {
-            await updateAssignment(assignments[0].id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            setAssignments(prev => prev.map(a => ({ ...a, whatsAppReminderRequestedAt: firebase.firestore.Timestamp.now() })));
+            // Simply refresh data to reflect status change
             alert("Lembrete agendado com sucesso para daqui a 6 horas!"); 
+            performSearch(email); 
         } catch (err: any) {
              alert((err as Error).message);
         }
