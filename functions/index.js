@@ -295,13 +295,26 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
         let emailApiInstance = null;
         if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
             try {
+                // Initialize default client auth (Global)
+                const defaultClient = Brevo.ApiClient.instance;
+                const apiKeyAuth = defaultClient.authentications['api-key'];
+                if (apiKeyAuth) {
+                    apiKeyAuth.apiKey = brevoConfig.key;
+                }
+
                 emailApiInstance = new Brevo.TransactionalEmailsApi();
-                // FIX: Configure API Key using authentications object to avoid method errors
-                if (emailApiInstance.authentications && emailApiInstance.authentications['apiKey']) {
-                    emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
+                
+                // Configura especificamente na instância criada, se possível (tentando ambas as convenções)
+                if (emailApiInstance.authentications) {
+                    if (emailApiInstance.authentications['apiKey']) {
+                        emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
+                    }
+                    if (emailApiInstance.authentications['api-key']) {
+                        emailApiInstance.authentications['api-key'].apiKey = brevoConfig.key;
+                    }
                 } else if (typeof emailApiInstance.setApiKey === 'function') {
-                    const apiKeyIndex = (Brevo.TransactionalEmailsApiApiKeys && Brevo.TransactionalEmailsApiApiKeys.apiKey) || 0;
-                    emailApiInstance.setApiKey(apiKeyIndex, brevoConfig.key);
+                     // Fallback antigo
+                     emailApiInstance.setApiKey(0, brevoConfig.key); // 0 usually maps to apiKey
                 }
             } catch (err) {
                 console.error("Failed to init Brevo:", err);
