@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPostsForOrg, getAssignmentsForOrganization, updatePost } from '../services/postService';
+import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { Post, Organization, PostAssignment, AdminUserData } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -9,6 +9,7 @@ import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon } from '../componen
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../firebase/config';
 import StorageMedia from '../components/StorageMedia';
+import JustificationReviewModal from '../components/JustificationReviewModal';
 
 // Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
@@ -36,43 +37,49 @@ const AdminPosts: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
 
+    // Justification Modal State
+    const [isJustificationModalOpen, setIsJustificationModalOpen] = useState(false);
+    const [selectedPostForJustifications, setSelectedPostForJustifications] = useState<Post | null>(null);
+    const [isAcceptingAll, setIsAcceptingAll] = useState(false);
+
     const isSuperAdmin = adminData?.role === 'superadmin';
 
+    const fetchPosts = useCallback(async () => {
+        if (!adminData) return;
+        
+        // Don't set full loading if we are just refreshing data after an action
+        if (posts.length === 0) setIsLoading(true);
+        setError(null);
+        
+        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+
+        if (!isSuperAdmin && !orgId) {
+            setError("Organização não encontrada para este admin.");
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const postPromise = getPostsForOrg(orgId, adminData);
+            const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
+            const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
+            
+            const [fetchedPosts, fetchedAssignments, fetchedOrgs] = await Promise.all([postPromise, assignmentsPromise, orgPromise]);
+
+            setPosts(fetchedPosts);
+            setAssignments(fetchedAssignments);
+            setOrganizations(fetchedOrgs);
+
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [adminData, isSuperAdmin, selectedOrgId, posts.length]);
+
     useEffect(() => {
-        const fetchPosts = async () => {
-            if (!adminData) return;
-            
-            setIsLoading(true);
-            setError(null);
-            
-            const orgId = isSuperAdmin ? undefined : selectedOrgId;
-
-            if (!isSuperAdmin && !orgId) {
-                setError("Organização não encontrada para este admin.");
-                setIsLoading(false);
-                return;
-            }
-
-            try {
-                const postPromise = getPostsForOrg(orgId, adminData);
-                const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
-                const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
-                
-                const [fetchedPosts, fetchedAssignments, fetchedOrgs] = await Promise.all([postPromise, assignmentsPromise, orgPromise]);
-
-                setPosts(fetchedPosts);
-                setAssignments(fetchedAssignments);
-                setOrganizations(fetchedOrgs);
-
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         fetchPosts();
-    }, [adminData, isSuperAdmin, selectedOrgId]);
+    }, [fetchPosts]);
 
     const handleLogout = async () => {
         try {
@@ -148,12 +155,10 @@ const AdminPosts: React.FC = () => {
             const newActiveState = !post.isActive;
             const updateData: Partial<Post> = { isActive: newActiveState };
 
-            // If deactivating, force auto-assign to false
             if (!newActiveState) {
                 updateData.autoAssignToNewPromoters = false;
             }
 
-            // Optimistic update locally
             setPosts(prev => prev.map(p => {
                 if (p.id === post.id) {
                     return { ...p, ...updateData };
@@ -161,11 +166,9 @@ const AdminPosts: React.FC = () => {
                 return p;
             }));
             
-            // Call API
             await updatePost(post.id, updateData);
         } catch (e: any) {
             alert("Erro ao atualizar status do post: " + e.message);
-            // Revert on error
             setPosts(prev => prev.map(p => p.id === post.id ? post : p));
         }
     }
@@ -173,35 +176,26 @@ const AdminPosts: React.FC = () => {
     const handleToggleJustification = async (post: Post) => {
         try {
             const newVal = post.allowJustification === false ? true : false;
-            // Optimistic update locally
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, allowJustification: newVal } : p));
-            
-            // Call API
             await updatePost(post.id, { allowJustification: newVal });
         } catch (e: any) {
             alert("Erro ao atualizar permissão de justificativa: " + e.message);
-            // Revert on error
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, allowJustification: post.allowJustification } : p));
         }
     }
 
     const handleToggleAutoAssign = async (post: Post) => {
         try {
-            // Cannot enable auto-assign if post is inactive
             if (!post.isActive && !post.autoAssignToNewPromoters) {
                 alert("Você precisa ativar a postagem antes de habilitar a atribuição automática.");
                 return;
             }
 
             const newVal = !post.autoAssignToNewPromoters;
-            // Optimistic update locally
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, autoAssignToNewPromoters: newVal } : p));
-            
-            // Call API
             await updatePost(post.id, { autoAssignToNewPromoters: newVal });
         } catch (e: any) {
             alert("Erro ao atualizar atribuição automática: " + e.message);
-            // Revert on error
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, autoAssignToNewPromoters: post.autoAssignToNewPromoters } : p));
         }
     }
@@ -213,10 +207,45 @@ const AdminPosts: React.FC = () => {
             await updatePost(post.id, { ownerOnly: newVal });
         } catch (e: any) {
             alert("Erro ao atualizar visibilidade: " + e.message);
-            // Revert on error if API call fails
             setPosts(prev => prev.map(p => p.id === post.id ? { ...p, ownerOnly: post.ownerOnly } : p));
         }
     };
+
+    // --- Modal Handlers ---
+
+    const handleOpenJustificationModal = (post: Post) => {
+        setSelectedPostForJustifications(post);
+        setIsJustificationModalOpen(true);
+    };
+
+    const handleCloseJustificationModal = () => {
+        setIsJustificationModalOpen(false);
+        setSelectedPostForJustifications(null);
+    };
+
+    const handleAcceptAllFromModal = async () => {
+        if (!selectedPostForJustifications) return;
+        
+        setIsAcceptingAll(true);
+        try {
+            await acceptAllJustifications(selectedPostForJustifications.id);
+            alert("Todas as justificativas foram aceitas!");
+            await fetchPosts(); // Refresh data
+            handleCloseJustificationModal();
+        } catch (err: any) {
+            alert("Erro ao aceitar justificativas: " + err.message);
+        } finally {
+            setIsAcceptingAll(false);
+        }
+    };
+
+    const pendingAssignmentsForModal = useMemo(() => {
+        if (!selectedPostForJustifications) return [];
+        return assignments.filter(a => 
+            a.postId === selectedPostForJustifications.id && 
+            (a.justificationStatus === 'pending')
+        );
+    }, [assignments, selectedPostForJustifications]);
     
     const renderContent = () => {
         if (isLoading) {
@@ -248,15 +277,19 @@ const AdminPosts: React.FC = () => {
                             <div className="relative">
                                 <StorageMedia 
                                     path={post.mediaUrl || ''} 
-                                    type={post.type === 'text' ? 'image' : post.type} // Fallback to image for text posts to show placeholder
+                                    type={post.type === 'text' ? 'image' : post.type}
                                     className="h-40 w-full object-cover bg-gray-800"
                                     alt={`Arte para ${post.campaignName}`}
                                 />
                                 {pendingCount > 0 && (
-                                     <div className="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
+                                     <button
+                                        onClick={(e) => { e.stopPropagation(); handleOpenJustificationModal(post); }}
+                                        className="absolute top-2 right-2 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg cursor-pointer hover:bg-yellow-400 transition-colors transform hover:scale-105 active:scale-95"
+                                        title="Clique para revisar todas as justificativas"
+                                    >
                                         <MegaphoneIcon className="w-4 h-4" />
                                         {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
-                                    </div>
+                                    </button>
                                 )}
                             </div>
                             <div className="p-4 flex flex-col flex-grow">
@@ -282,7 +315,6 @@ const AdminPosts: React.FC = () => {
                                     </span>
                                 </div>
                                 
-                                {/* Effectiveness Percentage Bar */}
                                 <div className="mt-3 mb-1">
                                     <div className="flex justify-between text-xs text-gray-300 mb-1">
                                         <span>Efetivação</span>
@@ -396,6 +428,15 @@ const AdminPosts: React.FC = () => {
                 </div>
                 {renderContent()}
             </div>
+
+            <JustificationReviewModal 
+                isOpen={isJustificationModalOpen} 
+                onClose={handleCloseJustificationModal} 
+                post={selectedPostForJustifications}
+                assignments={pendingAssignmentsForModal}
+                onAcceptAll={handleAcceptAllFromModal}
+                isProcessing={isAcceptingAll}
+            />
         </div>
     );
 };
