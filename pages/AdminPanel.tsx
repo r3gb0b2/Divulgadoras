@@ -684,12 +684,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err: unknown) {
             let errorMessage = "Ocorreu um erro na busca.";
+            // Explicitly handle unknown error
             if (err instanceof Error) {
                 errorMessage = err.message;
+            } else if (typeof err === 'string') {
+                errorMessage = err;
             } else {
-                errorMessage = String(err || "Erro desconhecido");
+                // Fallback for truly unknown types
+                try {
+                    errorMessage = String(err);
+                } catch {
+                    errorMessage = "Erro desconhecido e não conversível para string.";
+                }
             }
             setLookupError(errorMessage);
         } finally {

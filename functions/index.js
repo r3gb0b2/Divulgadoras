@@ -358,7 +358,8 @@ exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ 
                         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
                         if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
-                        const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para o evento *${post.campaignName}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+                        const eventTitle = post.eventName || post.campaignName;
+                        const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para *${eventTitle}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
 
                         const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
                         const headers = { 'Content-Type': 'application/json' };
@@ -515,7 +516,8 @@ exports.sendPostReminder = functions.region("southamerica-east1").runWith({ time
                         if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
                         if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
 
-                        const message = `Olá ${firstName}! 📸\n\nVocê confirmou a postagem para *${post.campaignName}*, mas ainda não enviou o print.\n\nPor favor, envie agora para garantir sua presença na lista:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+                        const eventTitle = post.eventName || post.campaignName;
+                        const message = `Olá ${firstName}! 📸\n\nVocê confirmou a postagem para *${eventTitle}*, mas ainda não enviou o print.\n\nPor favor, envie agora para garantir sua presença na lista:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
 
                         const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
                         const headers = { 'Content-Type': 'application/json' };
