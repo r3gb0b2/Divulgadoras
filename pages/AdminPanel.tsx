@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -569,8 +570,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
             await updatePromoter(promoter.id, updateData);
 
-        } catch (error: unknown) {
-            const err = error as any;
+        } catch (error: any) {
+            const err = error;
             console.error("Failed to send manual notification:", err);
             let detailedError = 'Ocorreu um erro desconhecido.';
             let providerName = 'Brevo (v9.2)';
