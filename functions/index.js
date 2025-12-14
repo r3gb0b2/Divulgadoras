@@ -1024,10 +1024,102 @@ exports.testZapi = functions.region("southamerica-east1").https.onCall(async (da
     };
 });
 
-exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+exports.sendWhatsAppCampaign = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    // Implementation placeholder for campaign
-    return { success: true, count: 0, failures: 0, message: "Campaign sent (simulated)" };
+    
+    const { messageTemplate, filters, organizationId } = data;
+    const promoterIds = filters.promoterIds || [];
+
+    // 1. Config Check
+    const config = getConfig().zapi;
+    if (!config || !config.instance_id || !config.token) {
+        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurada.");
+    }
+
+    // 2. Organization Settings Check
+    const orgDoc = await db.collection("organizations").doc(organizationId).get();
+    if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
+    if (orgDoc.data().whatsappNotificationsEnabled === false) {
+        throw new functions.https.HttpsError("failed-precondition", "Envio de WhatsApp desativado na organização.");
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    // Helper to chunk array
+    const chunkArray = (array, size) => {
+        const chunked = [];
+        for (let i = 0; i < array.length; i += size) {
+            chunked.push(array.slice(i, i + size));
+        }
+        return chunked;
+    };
+
+    // 3. Fetch Promoters in Batches (Firestore 'in' limit is 30)
+    const batches = chunkArray(promoterIds, 30);
+
+    for (const batchIds of batches) {
+        const snapshots = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', batchIds).get();
+        
+        const promises = snapshots.docs.map(async (doc) => {
+            const p = doc.data();
+            
+            if (!p.whatsapp) {
+                failureCount++;
+                return;
+            }
+
+            let cleanPhone = p.whatsapp.replace(/\D/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+            if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+            // Variable Replacement
+            const firstName = p.name ? p.name.split(' ')[0] : 'Divulgadora';
+            const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(p.email)}`;
+            const leaveLink = getLeaveGroupLink(doc.id, p.campaignName, p.organizationId);
+
+            let personalizedMessage = messageTemplate
+                .replace(/{{name}}/g, firstName)
+                .replace(/{{fullName}}/g, p.name)
+                .replace(/{{email}}/g, p.email)
+                .replace(/{{campaignName}}/g, p.campaignName || 'Eventos')
+                .replace(/{{portalLink}}/g, portalLink);
+
+            // Append leave link if not present (optional, but good practice for mass messages)
+            // personalizedMessage += `\n\nCaso queira sair da lista, clique: ${leaveLink}`;
+
+            const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
+            const headers = { 'Content-Type': 'application/json' };
+            if (config.client_token) headers['Client-Token'] = config.client_token;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ phone: cleanPhone, message: personalizedMessage })
+                });
+
+                if (response.ok) {
+                    successCount++;
+                } else {
+                    console.error(`Z-API Error for ${p.email}:`, await response.text());
+                    failureCount++;
+                }
+            } catch (err) {
+                console.error(`Fetch Error for ${p.email}:`, err);
+                failureCount++;
+            }
+        });
+
+        await Promise.all(promises);
+    }
+
+    return { 
+        success: true, 
+        count: successCount, 
+        failures: failureCount, 
+        message: `Campanha enviada! Sucessos: ${successCount}, Falhas: ${failureCount}` 
+    };
 });
 
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
