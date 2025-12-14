@@ -453,8 +453,8 @@ export const getAllParticipantsForAdmin = async (organizationId: string, loopId:
 
 export const getAllFollowInteractions = async (organizationId: string, loopId: string): Promise<FollowInteraction[]> => {
     try {
+        // First try the optimal query that requires an index
         const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('organizationId', '==', organizationId)
             .where('loopId', '==', loopId)
             .orderBy('createdAt', 'desc')
             .limit(500);
@@ -462,9 +462,29 @@ export const getAllFollowInteractions = async (organizationId: string, loopId: s
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
     } catch (error: any) {
-        console.error("Error fetching interactions history:", error);
-        // Fallback for indexing errors or mixed data
-        return [];
+        console.warn("Optimal interaction query failed (likely index missing). Falling back to client-side sort.", error.message);
+        
+        // Fallback: Query by loopId only, then sort in memory.
+        try {
+            const fallbackQ = firestore.collection(COLLECTION_INTERACTIONS)
+                .where('loopId', '==', loopId)
+                .limit(500); // Still limit to avoid fetching everything
+            
+            const snap = await fallbackQ.get();
+            const interactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
+            
+            // Client-side sort
+            interactions.sort((a, b) => {
+                 const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
+                 const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
+                 return timeB - timeA;
+            });
+            
+            return interactions;
+        } catch (fallbackError: any) {
+            console.error("Fallback interaction query failed:", fallbackError);
+            return [];
+        }
     }
 }
 

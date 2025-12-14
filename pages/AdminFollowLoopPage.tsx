@@ -144,9 +144,19 @@ const AdminFollowLoopPage: React.FC = () => {
         if (!selectedOrgId) return;
         setIsLoading(true);
         setError('');
+        
+        // Reset state
+        setParticipants([]);
+        setInteractions([]);
+
         try {
-            const loopParticipants = await getAllParticipantsForAdmin(selectedOrgId, loopId);
+            // Parallel fetch
+            const [loopParticipants, loopInteractions] = await Promise.all([
+                getAllParticipantsForAdmin(selectedOrgId, loopId),
+                getAllFollowInteractions(selectedOrgId, loopId)
+            ]);
             
+            // Enrich participants with stats (optional, could be slow if many)
             const enriched = await Promise.all(loopParticipants.map(async (p) => {
                 try {
                     const { stats } = await getStatsForPromoter(p.promoterId);
@@ -159,13 +169,11 @@ const AdminFollowLoopPage: React.FC = () => {
             }));
 
             setParticipants(enriched);
-            
-            // Only fetch history when tab changes to save bandwidth, or initially if small
-            // For now, load on demand or parallel? Let's load parallel but lightweight.
-            getAllFollowInteractions(selectedOrgId, loopId).then(setInteractions).catch(console.error);
+            setInteractions(loopInteractions || []);
 
         } catch (err: any) {
-            setError(err.message);
+            console.error(err);
+            setError(err.message || "Erro ao carregar detalhes.");
         } finally {
             setIsLoading(false);
         }
