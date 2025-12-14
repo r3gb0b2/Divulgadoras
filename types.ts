@@ -364,8 +364,19 @@ export interface GuestListChangeRequest {
 
 // --- Follow Loop Types ---
 
-export interface FollowLoopParticipant {
+export interface FollowLoop {
   id: string;
+  organizationId: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Timestamp | FieldValue;
+  createdByEmail?: string;
+}
+
+export interface FollowLoopParticipant {
+  id: string; // Composite ID: loopId_promoterId
+  loopId: string;
   promoterId: string;
   promoterName: string;
   instagram: string;
@@ -383,6 +394,7 @@ export interface FollowLoopParticipant {
 
 export interface FollowInteraction {
   id: string;
+  loopId: string;
   followerId: string;
   followedId: string;
   organizationId: string;

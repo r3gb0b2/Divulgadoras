@@ -233,3 +233,7 @@ export const UserMinusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon
 export const FilterIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M3 4.5a.75.75 0 01.75-.75h16.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.22.53l-5.53 5.53v6.69a.75.75 0 01-1.28.53l-3-3a.75.75 0 01-.22-.53V12.28L4.22 6.75a.75.75 0 01-.22-.53V4.5z" clipRule="evenodd" />
 );
+
+export const PlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+);

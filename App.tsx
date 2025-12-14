@@ -140,7 +140,7 @@ const App: React.FC = () => {
                 <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/status" element={<StatusCheck />} />
                 <Route path="/posts" element={<PostCheck />} />
-                <Route path="/connect" element={<FollowLoopPage />} />
+                <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />

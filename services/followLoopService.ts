@@ -1,20 +1,82 @@
 
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
-import { FollowLoopParticipant, FollowInteraction, Timestamp } from '../types';
+import { FollowLoopParticipant, FollowInteraction, Timestamp, FollowLoop } from '../types';
 import { getPromoterById } from './promoterService';
 
+const COLLECTION_LOOPS = 'followLoops';
 const COLLECTION_PARTICIPANTS = 'followLoopParticipants';
 const COLLECTION_INTERACTIONS = 'followInteractions';
 
+// --- Loop Management (Admin) ---
+
+export const createFollowLoop = async (data: Omit<FollowLoop, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+        const docRef = await firestore.collection(COLLECTION_LOOPS).add({
+            ...data,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        return docRef.id;
+    } catch (error: any) {
+        console.error("Error creating follow loop:", error);
+        throw new Error("Falha ao criar conexão.");
+    }
+};
+
+export const getFollowLoops = async (organizationId: string): Promise<FollowLoop[]> => {
+    try {
+        const q = firestore.collection(COLLECTION_LOOPS)
+            .where('organizationId', '==', organizationId);
+        const snapshot = await q.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowLoop));
+    } catch (error: any) {
+        console.error("Error getting follow loops:", error);
+        throw new Error("Falha ao buscar conexões.");
+    }
+};
+
+export const getFollowLoopById = async (loopId: string): Promise<FollowLoop | null> => {
+    try {
+        const doc = await firestore.collection(COLLECTION_LOOPS).doc(loopId).get();
+        if (doc.exists) {
+            return { id: doc.id, ...doc.data() } as FollowLoop;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting loop:", error);
+        return null;
+    }
+};
+
+export const deleteFollowLoop = async (loopId: string): Promise<void> => {
+    try {
+        // Ideally this should delete sub-collections/related data via cloud function
+        await firestore.collection(COLLECTION_LOOPS).doc(loopId).delete();
+    } catch (error) {
+         console.error("Error deleting loop:", error);
+         throw new Error("Falha ao deletar conexão.");
+    }
+};
+
+export const updateFollowLoop = async (loopId: string, data: Partial<FollowLoop>): Promise<void> => {
+    try {
+        await firestore.collection(COLLECTION_LOOPS).doc(loopId).update(data);
+    } catch (error) {
+        console.error("Error updating loop:", error);
+        throw new Error("Falha ao atualizar conexão.");
+    }
+};
+
 // --- Participant Management ---
 
-export const joinFollowLoop = async (promoterId: string): Promise<void> => {
+export const joinFollowLoop = async (promoterId: string, loopId: string): Promise<void> => {
   try {
     const promoter = await getPromoterById(promoterId);
     if (!promoter) throw new Error('Divulgadora não encontrada.');
 
-    const participantRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(promoterId);
+    // Composite ID to allow promoter to join multiple loops
+    const participantDocId = `${loopId}_${promoterId}`;
+    const participantRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(participantDocId);
     const docSnap = await participantRef.get();
 
     if (docSnap.exists) {
@@ -33,7 +95,8 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
       });
     } else {
       const newParticipant: FollowLoopParticipant = {
-        id: promoterId,
+        id: participantDocId,
+        loopId: loopId,
         promoterId: promoter.id,
         promoterName: promoter.name,
         instagram: promoter.instagram,
@@ -57,9 +120,10 @@ export const joinFollowLoop = async (promoterId: string): Promise<void> => {
   }
 };
 
-export const getParticipantStatus = async (promoterId: string): Promise<FollowLoopParticipant | null> => {
+export const getParticipantStatus = async (promoterId: string, loopId: string): Promise<FollowLoopParticipant | null> => {
   try {
-    const doc = await firestore.collection(COLLECTION_PARTICIPANTS).doc(promoterId).get();
+    const participantDocId = `${loopId}_${promoterId}`;
+    const doc = await firestore.collection(COLLECTION_PARTICIPANTS).doc(participantDocId).get();
     if (doc.exists) {
       return { id: doc.id, ...doc.data() } as FollowLoopParticipant;
     }
@@ -72,25 +136,24 @@ export const getParticipantStatus = async (promoterId: string): Promise<FollowLo
 
 // --- Core Logic: Get Next Profile ---
 
-export const getNextProfileToFollow = async (currentPromoterId: string, organizationId: string, stateFilter?: string): Promise<FollowLoopParticipant | null> => {
+export const getNextProfileToFollow = async (currentPromoterId: string, loopId: string, organizationId: string, stateFilter?: string): Promise<FollowLoopParticipant | null> => {
   try {
+    const currentParticipantId = `${loopId}_${currentPromoterId}`;
+
     const interactionsQuery = firestore.collection(COLLECTION_INTERACTIONS)
-      .where('followerId', '==', currentPromoterId);
+      .where('loopId', '==', loopId)
+      .where('followerId', '==', currentParticipantId);
     
     const interactionsSnap = await interactionsQuery.get();
-    const followedIds = new Set<string>();
-    followedIds.add(currentPromoterId);
+    const followedParticipantIds = new Set<string>();
+    followedParticipantIds.add(currentParticipantId); // Don't follow self
     interactionsSnap.forEach(doc => {
-      followedIds.add(doc.data().followedId);
+      followedParticipantIds.add(doc.data().followedId);
     });
 
     let potentialQuery = firestore.collection(COLLECTION_PARTICIPANTS)
-      .where('organizationId', '==', organizationId)
+      .where('loopId', '==', loopId)
       .limit(2000); 
-
-    if (stateFilter) {
-        potentialQuery = potentialQuery.where('state', '==', stateFilter);
-    }
 
     const potentialSnap = await potentialQuery.get();
     
@@ -98,33 +161,19 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
     potentialSnap.forEach(doc => {
       const data = doc.data();
       
-      // Strict In-Memory Check to prevent mixed states
+      // Strict In-Memory Check to prevent mixed states if loop spans multiple (optional)
       if (stateFilter && data.state && data.state !== stateFilter) {
           return; 
       }
       
       if (
-          !followedIds.has(doc.id) && 
+          !followedParticipantIds.has(doc.id) && 
           data.isActive === true && 
           data.isBanned === false
       ) {
          candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
       }
     });
-
-    if (candidates.length === 0 && stateFilter) {
-         // Fallback for legacy records without state field
-         const broadQuery = firestore.collection(COLLECTION_PARTICIPANTS)
-            .where('organizationId', '==', organizationId)
-            .limit(500);
-         const broadSnap = await broadQuery.get();
-         broadSnap.forEach(doc => {
-             const data = doc.data();
-             if (!followedIds.has(doc.id) && data.isActive === true && data.isBanned === false && !data.state) {
-                 candidates.push({ id: doc.id, ...data } as FollowLoopParticipant);
-             }
-         });
-    }
     
     if (candidates.length === 0) return null;
 
@@ -144,32 +193,40 @@ export const getNextProfileToFollow = async (currentPromoterId: string, organiza
 
 // --- Interaction Tracking ---
 
-export const registerFollow = async (followerId: string, followedId: string): Promise<void> => {
+export const registerFollow = async (followerId: string, followedId: string, loopId: string): Promise<void> => {
   try {
-    const follower = await getParticipantStatus(followerId);
-    const followed = await getParticipantStatus(followedId);
-
-    if (!follower || !followed) throw new Error('Dados inválidos.');
-
+    // These IDs are the composite IDs from participant records
     const interactionId = `${followerId}_${followedId}`;
     const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
 
+    // Fetch participant details to denormalize names/handles
+    const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId);
+    const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followedId);
+    
+    const [followerSnap, followedSnap] = await Promise.all([followerRef.get(), followedRef.get()]);
+
+    if (!followerSnap.exists || !followedSnap.exists) throw new Error("Participantes inválidos.");
+    
+    const followerData = followerSnap.data() as FollowLoopParticipant;
+    const followedData = followedSnap.data() as FollowLoopParticipant;
+
     const interaction: FollowInteraction = {
       id: interactionId,
+      loopId,
       followerId,
       followedId,
-      organizationId: follower.organizationId,
+      organizationId: followerData.organizationId,
       status: 'pending_validation',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      followerName: follower.promoterName,
-      followerInstagram: follower.instagram,
-      followedName: followed.promoterName,
-      followedInstagram: followed.instagram,
+      followerName: followerData.promoterName,
+      followerInstagram: followerData.instagram,
+      followedName: followedData.promoterName,
+      followedInstagram: followedData.instagram,
     };
 
     await interactionRef.set(interaction);
 
-    await firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId).update({
+    await followerRef.update({
       lastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -181,10 +238,10 @@ export const registerFollow = async (followerId: string, followedId: string): Pr
 
 // --- Validation Flow ---
 
-export const getPendingValidations = async (promoterId: string): Promise<FollowInteraction[]> => {
+export const getPendingValidations = async (participantId: string): Promise<FollowInteraction[]> => {
   try {
     const q = firestore.collection(COLLECTION_INTERACTIONS)
-      .where('followedId', '==', promoterId)
+      .where('followedId', '==', participantId)
       .where('status', '==', 'pending_validation');
     
     const snap = await q.get();
@@ -203,10 +260,10 @@ export const getPendingValidations = async (promoterId: string): Promise<FollowI
   }
 };
 
-export const getConfirmedFollowers = async (promoterId: string): Promise<FollowInteraction[]> => {
+export const getConfirmedFollowers = async (participantId: string): Promise<FollowInteraction[]> => {
     try {
         const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followedId', '==', promoterId)
+            .where('followedId', '==', participantId)
             .where('status', '==', 'validated')
             .limit(50);
 
@@ -226,43 +283,24 @@ export const getConfirmedFollowers = async (promoterId: string): Promise<FollowI
     }
 };
 
-export const getRejectedFollowsReceived = async (promoterId: string): Promise<FollowInteraction[]> => {
+export const getRejectedFollowsReceived = async (participantId: string): Promise<FollowInteraction[]> => {
     try {
         const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followerId', '==', promoterId)
+            .where('followerId', '==', participantId)
             .where('status', '==', 'rejected');
         
         const snap = await q.get();
-        const interactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-
-        // Enrichment for legacy data: if followedInstagram is missing, fetch it from participant profile
-        const missingInfo = interactions.filter(i => !i.followedInstagram);
-        if (missingInfo.length > 0) {
-            const idsToFetch: string[] = Array.from(new Set(missingInfo.map(i => i.followedId)));
-            const profiles = await Promise.all(idsToFetch.map(id => getParticipantStatus(id)));
-            const profileMap = new Map<string, FollowLoopParticipant>();
-            profiles.forEach(p => { if (p) profileMap.set(p.id, p); });
-
-            interactions.forEach(i => {
-                if (!i.followedInstagram && profileMap.has(i.followedId)) {
-                    const p = profileMap.get(i.followedId)!;
-                    i.followedInstagram = p.instagram;
-                    i.followedName = p.promoterName;
-                }
-            });
-        }
-
-        return interactions;
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
     } catch (error: any) {
         console.error("Error getting rejected follows received:", error);
         return [];
     }
 };
 
-export const getRejectedFollowsGiven = async (promoterId: string): Promise<FollowInteraction[]> => {
+export const getRejectedFollowsGiven = async (participantId: string): Promise<FollowInteraction[]> => {
     try {
         const q = firestore.collection(COLLECTION_INTERACTIONS)
-            .where('followedId', '==', promoterId)
+            .where('followedId', '==', participantId)
             .where('status', '==', 'rejected');
         
         const snap = await q.get();
@@ -387,9 +425,9 @@ export const reportUnfollow = async (interactionId: string, offenderId: string, 
     }
 };
 
-export const updateParticipantInstagram = async (promoterId: string, newInstagram: string): Promise<void> => {
+export const updateParticipantInstagram = async (participantDocId: string, newInstagram: string): Promise<void> => {
   try {
-    await firestore.collection(COLLECTION_PARTICIPANTS).doc(promoterId).update({
+    await firestore.collection(COLLECTION_PARTICIPANTS).doc(participantDocId).update({
       instagram: newInstagram.trim()
     });
   } catch (error: any) {
@@ -400,10 +438,11 @@ export const updateParticipantInstagram = async (promoterId: string, newInstagra
 
 // --- Admin Functions ---
 
-export const getAllParticipantsForAdmin = async (organizationId: string): Promise<FollowLoopParticipant[]> => {
+export const getAllParticipantsForAdmin = async (organizationId: string, loopId: string): Promise<FollowLoopParticipant[]> => {
     try {
         const q = firestore.collection(COLLECTION_PARTICIPANTS)
-            .where('organizationId', '==', organizationId);
+            .where('organizationId', '==', organizationId)
+            .where('loopId', '==', loopId);
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowLoopParticipant));
     } catch (error: any) {
@@ -412,32 +451,20 @@ export const getAllParticipantsForAdmin = async (organizationId: string): Promis
     }
 }
 
-export const getAllFollowInteractions = async (organizationId: string): Promise<FollowInteraction[]> => {
+export const getAllFollowInteractions = async (organizationId: string, loopId: string): Promise<FollowInteraction[]> => {
     try {
         const q = firestore.collection(COLLECTION_INTERACTIONS)
             .where('organizationId', '==', organizationId)
+            .where('loopId', '==', loopId)
             .orderBy('createdAt', 'desc')
-            .limit(1000);
+            .limit(500);
         
         const snap = await q.get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
     } catch (error: any) {
-        console.error("Error fetching interactions history (fallback):", error);
-         try {
-            const q2 = firestore.collection(COLLECTION_INTERACTIONS)
-                .where('organizationId', '==', organizationId)
-                .limit(500);
-            const snap2 = await q2.get();
-            const results = snap2.docs.map(doc => ({ id: doc.id, ...doc.data() } as FollowInteraction));
-            results.sort((a, b) => {
-                const timeA = (a.createdAt as Timestamp)?.toMillis() || 0;
-                const timeB = (b.createdAt as Timestamp)?.toMillis() || 0;
-                return timeB - timeA;
-            });
-            return results;
-        } catch (e) {
-            throw new Error("Falha ao buscar histórico de interações.");
-        }
+        console.error("Error fetching interactions history:", error);
+        // Fallback for indexing errors or mixed data
+        return [];
     }
 }
 
@@ -453,14 +480,23 @@ export const toggleParticipantBan = async (participantId: string, isBanned: bool
     }
 }
 
-export const adminCreateFollowInteraction = async (followerId: string, followedId: string): Promise<void> => {
+// Admin manual creation needs participant IDs (composite), not promoter IDs
+export const adminCreateFollowInteraction = async (followerParticipantId: string, followedParticipantId: string, loopId: string): Promise<void> => {
     try {
-        if (followerId === followedId) throw new Error("Uma divulgadora não pode seguir a si mesma.");
-        const follower = await getParticipantStatus(followerId);
-        const followed = await getParticipantStatus(followedId);
-        if (!follower || !followed) throw new Error("Participantes inválidos.");
+        if (followerParticipantId === followedParticipantId) throw new Error("Uma divulgadora não pode seguir a si mesma.");
+        
+        // We assume IDs passed are valid participant IDs from the table selection
+        const followerRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followerParticipantId);
+        const followedRef = firestore.collection(COLLECTION_PARTICIPANTS).doc(followedParticipantId);
 
-        const interactionId = `${followerId}_${followedId}`;
+        const [followerSnap, followedSnap] = await Promise.all([followerRef.get(), followedRef.get()]);
+
+        if (!followerSnap.exists || !followedSnap.exists) throw new Error("Participantes inválidos.");
+
+        const follower = followerSnap.data() as FollowLoopParticipant;
+        const followed = followedSnap.data() as FollowLoopParticipant;
+
+        const interactionId = `${followerParticipantId}_${followedParticipantId}`;
         const interactionRef = firestore.collection(COLLECTION_INTERACTIONS).doc(interactionId);
         
         const exists = (await interactionRef.get()).exists;
@@ -469,8 +505,9 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
         const batch = firestore.batch();
         const interaction: FollowInteraction = {
             id: interactionId,
-            followerId,
-            followedId,
+            loopId,
+            followerId: followerParticipantId,
+            followedId: followedParticipantId,
             organizationId: follower.organizationId,
             status: 'validated', 
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -482,10 +519,10 @@ export const adminCreateFollowInteraction = async (followerId: string, followedI
         };
 
         batch.set(interactionRef, interaction);
-        batch.update(firestore.collection(COLLECTION_PARTICIPANTS).doc(followerId), {
+        batch.update(followerRef, {
             followingCount: firebase.firestore.FieldValue.increment(1)
         });
-        batch.update(firestore.collection(COLLECTION_PARTICIPANTS).doc(followedId), {
+        batch.update(followedRef, {
             followersCount: firebase.firestore.FieldValue.increment(1)
         });
 
