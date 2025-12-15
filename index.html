@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Equipe Certa</title>
     
     <script type="importmap">
@@ -13,7 +14,8 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
-    "html5-qrcode": "https://aistudiocdn.com/html5-qrcode@^2.3.8"
+    "html5-qrcode": "https://aistudiocdn.com/html5-qrcode@^2.3.8",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0"
   }
 }
 </script>
@@ -33,6 +35,27 @@
         }
       }
     </script>
+    <style>
+      /* Estilos para comportamento de App Nativo */
+      body {
+        -webkit-user-select: none; /* Desativa seleção de texto no iOS */
+        user-select: none;
+        -webkit-tap-highlight-color: transparent; /* Remove highlight de clique no Android */
+        overscroll-behavior-y: none; /* Evita o efeito de "bounce" ao rolar além do limite */
+      }
+      /* Permite seleção em inputs e textareas */
+      input, textarea {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      /* Ajuste para Safe Area (Notch) */
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+        --sar: env(safe-area-inset-right);
+      }
+    </style>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>

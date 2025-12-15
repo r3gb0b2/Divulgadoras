@@ -60,7 +60,8 @@ const Header: React.FC = () => {
   };
 
   return (
-      <header className="bg-secondary shadow-md sticky top-0 z-20">
+      // Added pt-[env(safe-area-inset-top)] for notch support
+      <header className="bg-secondary shadow-md sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-8 w-auto text-white" />
@@ -128,7 +129,8 @@ const App: React.FC = () => {
   return (
     <AdminAuthProvider>
       <Router>
-        <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col">
+        {/* Added pb-[env(safe-area-inset-bottom)] for iOS home indicator */}
+        <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col pb-[env(safe-area-inset-bottom)]">
           <Header />
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
