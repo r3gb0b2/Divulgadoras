@@ -686,8 +686,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            setLookupError(errorMessage as string);
+            const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : String(error));
+            setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
         }
