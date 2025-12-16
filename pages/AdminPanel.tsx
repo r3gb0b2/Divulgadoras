@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -571,8 +572,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
-            let detailedError = 'Ocorreu um erro desconhecido.';
-            let providerName = 'Brevo (v9.2)';
+            let detailedError: string = 'Ocorreu um erro desconhecido.';
+            let providerName: string = 'Brevo (v9.2)';
 
             if (error && typeof error === 'object') {
                 if (error.details) {
@@ -584,7 +585,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         providerName = String(error.details.provider);
                     }
                 } else if (error.message) {
-                    detailedError = error.message;
+                    detailedError = String(error.message);
                 }
             } else {
                 detailedError = String(error);
