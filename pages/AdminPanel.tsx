@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -688,7 +687,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setLookupResults(results);
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            setLookupError(errorMessage);
+            setLookupError(errorMessage as string);
         } finally {
             setIsLookingUp(false);
         }

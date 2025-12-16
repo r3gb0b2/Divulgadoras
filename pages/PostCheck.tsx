@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
+import { initPushNotifications } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
 import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
@@ -386,6 +387,10 @@ const PostCheck: React.FC = () => {
             const [promoterProfiles, fetchedAssignments, fetchedScheduled] = await Promise.all([findPromotersByEmail(searchEmail), getAssignmentsForPromoterByEmail(searchEmail), getScheduledPostsForPromoter(searchEmail)]);
             if (promoterProfiles.length === 0) { setError("Nenhum cadastro encontrado com este e-mail."); setIsLoading(false); return; }
             setPromoter(promoterProfiles[0]);
+            
+            // Register Push Notification Token for the active promoter
+            await initPushNotifications(promoterProfiles[0].id);
+
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
             setAssignments(assignmentsWithGroupStatus); setScheduledPosts(fetchedScheduled);
         } catch (err: any) { setError(err.message || 'Ocorreu um erro ao buscar.'); } finally { setIsLoading(false); }

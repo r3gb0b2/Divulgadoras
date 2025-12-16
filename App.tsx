@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
@@ -21,6 +21,7 @@ import { auth } from './firebase/config';
 import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import { initPushNotifications, clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -127,6 +128,13 @@ const Header: React.FC = () => {
 
 
 const App: React.FC = () => {
+  // Cleanup push listeners on unmount
+  useEffect(() => {
+      return () => {
+          clearPushListeners();
+      }
+  }, []);
+
   return (
     <AdminAuthProvider>
       <Router>

@@ -31,6 +31,7 @@ export interface Promoter {
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
+  fcmToken?: string; // Token para Push Notifications
 }
 
 export interface PromoterApplicationData {

@@ -6,6 +6,19 @@ import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Tim
 type QueryDocumentSnapshot = firebase.firestore.QueryDocumentSnapshot;
 type DocumentData = firebase.firestore.DocumentData;
 
+// --- Push Token Helper ---
+export const savePushToken = async (promoterId: string, token: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: token,
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Error saving FCM token:", error);
+        // Fail silently so we don't block the user flow
+    }
+};
+
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
