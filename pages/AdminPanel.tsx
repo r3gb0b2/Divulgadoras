@@ -582,7 +582,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
-                        providerName = error.details.provider;
+                        providerName = String(error.details.provider);
                     }
                 } else if (error.message) {
                     detailedError = error.message;

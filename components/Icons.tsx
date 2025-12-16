@@ -237,3 +237,7 @@ export const FilterIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 export const PlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 );
+
+export const ShieldCheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
+    <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.749.749 0 00.374 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.352-.272-2.636-.759-3.807a.75.75 0 00-.722-.515 11.209 11.209 0 01-7.877-3.08zM12 10.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm-3.75 5.25a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v.75a.75.75 0 01-.75.75h-6a.75.75 0 01-.75-.75v-.75z" clipRule="evenodd" />
+);

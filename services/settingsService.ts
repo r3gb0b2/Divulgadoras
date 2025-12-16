@@ -266,3 +266,29 @@ export const deleteLinkTemplate = async (id: string): Promise<void> => {
         throw new Error("Não foi possível deletar o modelo de link.");
     }
 };
+
+// --- Privacy Policy Functions ---
+
+export const getPrivacyPolicy = async (): Promise<string> => {
+    try {
+        const docRef = firestore.collection(SETTINGS_COLLECTION).doc('legal');
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+            return docSnap.data()?.privacyPolicy || '';
+        }
+        return '';
+    } catch (error) {
+        console.error("Error getting privacy policy: ", error);
+        throw new Error("Não foi possível carregar a política de privacidade.");
+    }
+};
+
+export const updatePrivacyPolicy = async (content: string): Promise<void> => {
+    try {
+        const docRef = firestore.collection(SETTINGS_COLLECTION).doc('legal');
+        await docRef.set({ privacyPolicy: content }, { merge: true });
+    } catch (error) {
+        console.error("Error setting privacy policy: ", error);
+        throw new Error("Não foi possível salvar a política de privacidade.");
+    }
+};

@@ -46,6 +46,7 @@ import AdminFollowLoopPage from './AdminFollowLoopPage';
 import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import AdminCleanupPage from './AdminCleanupPage'; // Import new page
+import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -272,6 +273,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="connect" element={<ProtectedRoute><AdminFollowLoopPage /></ProtectedRoute>} />
                     <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
+                    <Route path="settings/privacy" element={<ProtectedRoute><EditPrivacyPolicyPage /></ProtectedRoute>} />
                 </>
             )}
 

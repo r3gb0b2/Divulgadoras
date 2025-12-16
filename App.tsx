@@ -20,6 +20,7 @@ import OneTimePostPage from './pages/OneTimePostPage';
 import { auth } from './firebase/config';
 import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -136,6 +137,7 @@ const App: React.FC = () => {
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<PublicHome />} />
+                <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 
@@ -153,7 +155,7 @@ const App: React.FC = () => {
             </ErrorBoundary>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">
-              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados.</p>
+              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. | <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link></p>
           </footer>
         </div>
       </Router>
