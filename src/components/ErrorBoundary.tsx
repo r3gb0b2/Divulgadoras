@@ -11,34 +11,33 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIX: Explicitly inherited from React.Component to ensure props, state and setState are correctly recognized.
+ * FIXED: Properly extending Component from React ensures setState and props are defined.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Properly declared the state property on the class.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
 
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: setState is now correctly available through inheritance.
+    // FIXED: setState is now available through React.Component inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  render() {
-    // FIX: state is now correctly recognized by inheriting from React.Component.
+  public render() {
+    // FIXED: state is correctly recognized.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -66,7 +65,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: props is now correctly recognized.
+    // FIXED: props is correctly recognized.
     return this.props.children;
   }
 }

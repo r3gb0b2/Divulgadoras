@@ -675,13 +675,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Ensured email search parameters are correctly handled and explicitly typed as string
-    // to resolve an issue where 'unknown' was potentially being passed to findPromotersByEmail.
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        const searchEmail: string = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
-        if (!searchEmail || !searchEmail.trim()) return;
+    // FIX: Refined handleLookupPromoter to use explicit string typing and avoid 'unknown' type errors when calling findPromotersByEmail.
+    const handleLookupPromoter = async (emailToSearch?: string) => {
+        const email = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail).trim();
+        if (!email) return;
         
-        const email: string = searchEmail.trim();
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
