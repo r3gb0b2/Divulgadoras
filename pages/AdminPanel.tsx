@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -675,17 +676,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Refined handleLookupPromoter to use explicit string typing and avoid 'unknown' type errors when calling findPromotersByEmail.
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        const searchEmail: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
-        if (!searchEmail) return;
+    // FIX: Refined handleLookupPromoter to use explicit string narrowing and avoid 'unknown' type errors when calling findPromotersByEmail.
+    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+        let searchString = '';
+        if (typeof emailToSearch === 'string') {
+            searchString = emailToSearch;
+        } else if (lookupEmail) {
+            searchString = lookupEmail;
+        }
+        
+        const finalEmail = searchString.trim();
+        if (!finalEmail) return;
         
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(searchEmail);
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
