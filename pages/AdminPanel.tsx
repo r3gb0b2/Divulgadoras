@@ -572,8 +572,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         } catch (error: any) {
             console.error("Failed to send manual notification:", error);
-            let detailedError: string = 'Ocorreu um erro desconhecido.';
-            let providerName: string = 'Brevo (v9.2)';
+            let detailedError = 'Ocorreu um erro desconhecido.';
+            let providerName = 'Brevo (v9.2)';
 
             if (error && typeof error === 'object') {
                 if (error.details) {
@@ -585,7 +585,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         providerName = String(error.details.provider);
                     }
                 } else if (error.message) {
-                    detailedError = String(error.message);
+                    detailedError = error.message;
                 }
             } else {
                 detailedError = String(error);
@@ -687,8 +687,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
         } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : String(error));
-            setLookupError(errorMessage);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setLookupError(String(errorMessage));
         } finally {
             setIsLookingUp(false);
         }

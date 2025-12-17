@@ -21,6 +21,7 @@ import { auth } from './firebase/config';
 import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import SupportPage from './pages/SupportPage';
 import { initPushNotifications, clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -146,6 +147,7 @@ const App: React.FC = () => {
               <Routes>
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
+                <Route path="/suporte" element={<SupportPage />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 
@@ -163,7 +165,13 @@ const App: React.FC = () => {
             </ErrorBoundary>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">
-              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. | <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link></p>
+              <p>
+                  &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
+                  <span className="mx-2">|</span> 
+                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
+                  <span className="mx-2">|</span> 
+                  <Link to="/suporte" className="hover:text-white underline">Suporte</Link>
+              </p>
           </footer>
         </div>
       </Router>
