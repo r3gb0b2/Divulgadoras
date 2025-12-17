@@ -65,8 +65,14 @@ const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: n
           return reject(new Error('Could not get canvas context'));
         }
         
+        // 1. Fill background with white to remove transparency (Alpha Channel)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Draw the image on top
         ctx.drawImage(img, 0, 0, width, height);
         
+        // 3. Export as JPEG (which doesn't support alpha channel)
         canvas.toBlob((blob) => {
           if (!blob) {
             return reject(new Error('Canvas to Blob conversion failed'));
@@ -199,7 +205,9 @@ const PromoterForm: React.FC = () => {
         const processedFiles = await Promise.all(
           fileList.map(async (file: File) => {
             const compressedBlob = await resizeImage(file, 800, 800, 0.8);
-            return new File([compressedBlob], file.name, { type: 'image/jpeg' });
+            // Replace extension with .jpg to match the MIME type
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            return new File([compressedBlob], newName, { type: 'image/jpeg' });
           })
         );
         
