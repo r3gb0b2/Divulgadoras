@@ -96,19 +96,11 @@ exports.onPromoterStatusChange = functions
       const oldValue = change.before.data();
       const promoterId = context.params.promoterId;
 
-      // 1. AUTO-ASSIGNMENT LOGIC
-      // Check if promoter is eligible (Approved AND Joined Group)
-      // Trigger if they just became eligible (either status changed to approved OR they just joined the group while approved)
       const isEligibleForAutoAssign = newValue.status === 'approved' && newValue.hasJoinedGroup === true;
       const wasEligibleForAutoAssign = oldValue.status === 'approved' && oldValue.hasJoinedGroup === true;
 
       if (isEligibleForAutoAssign && !wasEligibleForAutoAssign) {
         try {
-            // Find posts that:
-            // 1. Belong to the same organization
-            // 2. Are Active
-            // 3. Have auto-assign enabled
-            // 4. Match the promoter's State and Campaign (Exact match required)
             const postsQuery = db.collection('posts')
                 .where('organizationId', '==', newValue.organizationId)
                 .where('isActive', '==', true)
@@ -122,7 +114,6 @@ exports.onPromoterStatusChange = functions
                 const batch = db.batch();
                 let assignCount = 0;
 
-                // Check for existing assignments to avoid duplicates
                 const existingAssignmentsQuery = db.collection('postAssignments')
                     .where('promoterId', '==', promoterId)
                     .where('organizationId', '==', newValue.organizationId);
@@ -131,22 +122,19 @@ exports.onPromoterStatusChange = functions
                 const existingPostIds = new Set(existingSnap.docs.map(doc => doc.data().postId));
 
                 postsSnap.forEach(postDoc => {
-                    if (existingPostIds.has(postDoc.id)) return; // Skip if already assigned
+                    if (existingPostIds.has(postDoc.id)) return;
 
                     const postData = postDoc.data();
-                    
-                    // Double check expiration just in case
                     const now = new Date();
                     if (postData.expiresAt) {
                         const expires = postData.expiresAt.toDate ? postData.expiresAt.toDate() : new Date(postData.expiresAt);
-                        if (now > expires) return; // Skip expired posts
+                        if (now > expires) return;
                     }
 
                     const assignmentRef = db.collection('postAssignments').doc();
-                    
                     batch.set(assignmentRef, {
                         postId: postDoc.id,
-                        post: postData, // Denormalize post data for easy access
+                        post: postData,
                         organizationId: newValue.organizationId,
                         promoterId: promoterId,
                         promoterEmail: newValue.email,
@@ -159,41 +147,23 @@ exports.onPromoterStatusChange = functions
 
                 if (assignCount > 0) {
                     await batch.commit();
-                    console.log(`[Auto-Assign] Assigned ${assignCount} posts to new promoter ${promoterId}`);
-                    // Note: Creating these assignments will trigger 'onPostAssignmentCreated' below,
-                    // which will send the WhatsApp notifications for the new posts.
                 }
             }
         } catch (error) {
-            console.error("[Auto-Assign Error] Failed to assign posts:", error);
+            console.error("[Auto-Assign Error]", error);
         }
       }
 
-      // 2. WHATSAPP NOTIFICATION LOGIC (Status Change)
       const statusChanged = newValue.status !== oldValue.status;
-      const isNotificationStatus =
-        newValue.status === "approved" ||
-        newValue.status === "rejected" ||
-        newValue.status === "rejected_editable";
-
-      if (statusChanged && isNotificationStatus) {
-        // Verificar configurações da Organização
-        const orgDoc = await db.collection("organizations").doc(newValue.organizationId).get();
-        const orgData = orgDoc.exists ? orgDoc.data() : {};
-
-        if (orgData.whatsappNotificationsEnabled === false) {
-             console.log(`[WhatsApp] Status notification suppressed by org settings for ${promoterId}`);
-             return;
-        }
-
-        const shouldSendWhatsApp = (newValue.status === "approved" || newValue.status === "rejected_editable") && newValue.whatsapp;
-        
-        if (shouldSendWhatsApp) {
-            try {
+      if (statusChanged && (newValue.status === "approved" || newValue.status === "rejected_editable")) {
+        try {
+            const orgDoc = await db.collection("organizations").doc(newValue.organizationId).get();
+            const orgData = orgDoc.exists ? orgDoc.data() : {};
+            if (orgData.whatsappNotificationsEnabled !== false && newValue.whatsapp) {
                 await sendWhatsAppStatusChange(newValue, promoterId);
-            } catch (waError) {
-                console.error(`[Z-API Trigger Error] Failed to send WhatsApp for ${promoterId}:`, waError);
             }
+        } catch (waError) {
+            console.error(`[WhatsApp Error]`, waError);
         }
       }
     });
@@ -204,930 +174,71 @@ exports.onPostAssignmentCreated = functions.region("southamerica-east1").firesto
         const assignmentData = snap.data();
         if (!assignmentData) return;
 
-        const { organizationId, promoterId, post } = assignmentData;
-        
         try {
-            const orgDoc = await db.collection("organizations").doc(organizationId).get();
-            const orgData = orgDoc.exists ? orgDoc.data() : {};
+            const orgDoc = await db.collection("organizations").doc(assignmentData.organizationId).get();
+            if (orgDoc.exists && orgDoc.data().whatsappNotificationsEnabled === false) return;
 
-            if (orgData.whatsappNotificationsEnabled !== false) {
-                const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-                if (promoterDoc.exists) {
-                    const promoterData = promoterDoc.data();
-                    if (promoterData.whatsapp) {
-                        await sendNewPostNotificationWhatsApp(promoterData, post, assignmentData, promoterId);
-                    }
+            const promoterDoc = await db.collection("promoters").doc(assignmentData.promoterId).get();
+            if (promoterDoc.exists) {
+                const promoterData = promoterDoc.data();
+                if (promoterData.whatsapp) {
+                    await sendNewPostNotificationWhatsApp(promoterData, assignmentData.post, assignmentData, assignmentData.promoterId);
                 }
             }
         } catch (error) {
-            console.error(`Failed to process notification for assignment ${context.params.assignmentId}:`, error);
+            console.error(`[Notification Error] assignment ${context.params.assignmentId}:`, error);
         }
     });
 
 // --- Callable Functions ---
 
-exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { promoterId } = data;
-    
-    try {
-        const promoterDoc = await db.collection("promoters").doc(promoterId).get();
-        if (!promoterDoc.exists) throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
-        const promoterData = promoterDoc.data();
-
-        // CHECK ORGANIZATION SETTINGS
-        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
-        const orgData = orgDoc.exists ? orgDoc.data() : {};
-        if (orgData.whatsappNotificationsEnabled === false) {
-            return { success: false, message: "Envio de WhatsApp desativado nas configurações da organização.", provider: "Bloqueado" };
-        }
-
-        await sendWhatsAppStatusChange(promoterData, promoterId);
-        
-        return { success: true, message: "Notificação enviada." };
-    } catch (error) {
-        console.error("Error manually sending status:", error);
-        throw new functions.https.HttpsError("internal", error.message);
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { postId, promoterIds } = data;
+    if (!postId || !promoterIds || !Array.isArray(promoterIds)) {
+        throw new functions.https.HttpsError("invalid-argument", "Parâmetros inválidos.");
     }
-});
-
-// Implementação: Enviar Notificações Pendentes (E-mail + WhatsApp)
-exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { postId } = data;
-    
-    if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
-
-    const debugLogs = [];
 
     try {
-        // 1. Fetch Post Data
-        const postDoc = await db.collection('posts').doc(postId).get();
-        if (!postDoc.exists) return { count: 0, message: "Post não encontrado." };
-        const post = postDoc.data();
+        const postDoc = await db.collection("posts").doc(postId).get();
+        if (!postDoc.exists) throw new functions.https.HttpsError("not-found", "Post não encontrado.");
+        const postData = postDoc.data();
 
-        // 2. Fetch Organization Settings
-        const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-        const orgData = orgDoc.exists ? orgDoc.data() : {};
-        const allowWhatsApp = orgData.whatsappNotificationsEnabled !== false;
-        const allowEmail = orgData.emailRemindersEnabled !== false;
-
-        if (!allowWhatsApp && !allowEmail) {
-            return { count: 0, message: "Envio de notificações desativado na organização." };
-        }
-
-        // 3. Fetch Pending Assignments
-        const assignmentsSnap = await db.collection('postAssignments')
-            .where('postId', '==', postId)
-            .where('status', '==', 'pending')
-            .get();
-
-        if (assignmentsSnap.empty) {
-            return { count: 0, message: "Nenhuma tarefa pendente." };
-        }
-
-        const config = getConfig();
-        const zapiConfig = config.zapi;
-        const brevoConfig = config.brevo;
-        
-        let waSentCount = 0;
-        let emailSentCount = 0;
-
-        // Prepare Email API
-        let emailApiInstance = null;
-        if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
-            try {
-                // Initialize default client auth (Global) - most reliable way
-                const defaultClient = Brevo.ApiClient.instance;
-                const apiKeyAuth = defaultClient.authentications['api-key'];
-                if (apiKeyAuth) {
-                    apiKeyAuth.apiKey = brevoConfig.key;
-                }
-
-                emailApiInstance = new Brevo.TransactionalEmailsApi();
-                
-                // Redundant safety check: Set on instance too
-                if (emailApiInstance.authentications) {
-                    if (emailApiInstance.authentications['apiKey']) {
-                        emailApiInstance.authentications['apiKey'].apiKey = brevoConfig.key;
-                    }
-                    if (emailApiInstance.authentications['api-key']) {
-                        emailApiInstance.authentications['api-key'].apiKey = brevoConfig.key;
-                    }
-                } else if (typeof emailApiInstance.setApiKey === 'function') {
-                     // Fallback legacy SDK
-                     emailApiInstance.setApiKey(0, brevoConfig.key);
-                }
-            } catch (err) {
-                console.error("Failed to init Brevo:", err);
-                debugLogs.push("Brevo Init Error: " + err.message);
-                emailApiInstance = null;
-            }
-        } else if (allowEmail) {
-            debugLogs.push("Email enabled but config missing (key/sender).");
-        }
-
-        if (allowWhatsApp && (!zapiConfig?.instance_id || !zapiConfig?.token)) {
-             debugLogs.push("WhatsApp enabled but Z-API Config missing.");
-        }
-
-        // 4. Iterate and Send
-        for (const doc of assignmentsSnap.docs) {
-            const assignment = doc.data();
-            const promoterId = assignment.promoterId;
-            const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
-            const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
-            const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(assignment.promoterEmail)}`;
-
-            // Resolve Phone Number: Check assignment first, fallback to promoter profile
-            let phone = assignment.promoterWhatsapp;
-            if (!phone) {
-                try {
-                    const promoterDoc = await db.collection('promoters').doc(promoterId).get();
-                    if (promoterDoc.exists) {
-                        phone = promoterDoc.data().whatsapp;
-                    }
-                } catch(e) { console.error(`Error fetching promoter ${promoterId} for phone`, e); }
-            }
-
-            // A) WhatsApp
-            if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
-                if (phone) {
-                    try {
-                        let cleanPhone = phone.replace(/\D/g, '');
-                        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-                        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-                        const eventTitle = post.eventName || post.campaignName;
-                        const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para *${eventTitle}*.\n\nPor favor, realize a postagem e confirme no painel para evitar faltas.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
-
-                        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
-                        const headers = { 'Content-Type': 'application/json' };
-                        if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
-
-                        const waRes = await fetch(url, {
-                            method: 'POST',
-                            headers: headers,
-                            body: JSON.stringify({ phone: cleanPhone, message: message })
-                        });
-                        
-                        if (waRes.ok) {
-                            waSentCount++;
-                        } else {
-                            const errTxt = await waRes.text();
-                            console.error(`Z-API Error for ${promoterId}:`, errTxt);
-                            debugLogs.push(`WA Error (${promoterId}): ${waRes.status} ${errTxt}`);
-                        }
-                    } catch (waError) {
-                        console.error(`Failed to send WA reminder to ${promoterId}:`, waError);
-                        debugLogs.push(`WA Exception (${promoterId}): ${waError.message}`);
-                    }
-                } else {
-                    debugLogs.push(`No Phone (${promoterId})`);
-                }
-            }
-
-            // B) Email
-            if (allowEmail && emailApiInstance) {
-                if (assignment.promoterEmail) {
-                    try {
-                        const sendSmtpEmail = new Brevo.SendSmtpEmail();
-                        sendSmtpEmail.subject = `Lembrete: Postagem Pendente - ${post.campaignName}`;
-                        sendSmtpEmail.htmlContent = `
-                            <div style="font-family: Arial, sans-serif; color: #333;">
-                                <h2>Olá ${firstName},</h2>
-                                <p>Notamos que você ainda não confirmou sua postagem para o evento <strong>${post.campaignName}</strong>.</p>
-                                <p>Para garantir sua presença na lista e evitar faltas, por favor, acesse seu painel e confirme a tarefa.</p>
-                                <p style="text-align: center; margin: 30px 0;">
-                                    <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Acessar Painel</a>
-                                </p>
-                                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-                                <p style="font-size: 12px; color: #888; text-align: center;">
-                                    Se você não faz mais parte da equipe deste evento, <a href="${leaveLink}" style="color: #666;">clique aqui para sair do grupo</a>.
-                                </p>
-                            </div>
-                        `;
-                        sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
-                        sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
-
-                        await emailApiInstance.sendTransacEmail(sendSmtpEmail);
-                        emailSentCount++;
-                    } catch (emailError) {
-                        console.error(`Failed to send Email reminder to ${promoterId}:`, emailError);
-                        debugLogs.push(`Email Exception (${promoterId}): ${emailError.message}`);
-                    }
-                } else {
-                     debugLogs.push(`No Email Addr (${promoterId})`);
-                }
-            }
-        }
-
-        const totalSent = waSentCount + emailSentCount;
-        let message = `Lembretes enviados: ${waSentCount} WhatsApp, ${emailSentCount} E-mails.`;
-        
-        if (debugLogs.length > 0) {
-            const uniqueLogs = [...new Set(debugLogs)].slice(0, 5); // Show first 5 unique errors
-            message += ` Erros detectados: ${uniqueLogs.join(' | ')}`;
-        }
-
-        return { count: totalSent, message: message };
-
-    } catch (error) {
-        console.error("Error sending pending reminders:", error);
-        throw new functions.https.HttpsError("internal", error.message);
-    }
-});
-
-// Implementação: Enviar Lembrete de Comprovação (Para quem confirmou mas não enviou print)
-exports.sendPostReminder = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { postId } = data;
-    
-    if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
-
-    const debugLogs = [];
-
-    try {
-        const postDoc = await db.collection('posts').doc(postId).get();
-        if (!postDoc.exists) return { count: 0, message: "Post não encontrado." };
-        const post = postDoc.data();
-
-        const orgDoc = await db.collection("organizations").doc(post.organizationId).get();
-        const orgData = orgDoc.exists ? orgDoc.data() : {};
-        const allowWhatsApp = orgData.whatsappNotificationsEnabled !== false;
-        const allowEmail = orgData.emailRemindersEnabled !== false;
-
-        const assignmentsSnap = await db.collection('postAssignments')
-            .where('postId', '==', postId)
-            .where('status', '==', 'confirmed')
-            .get();
-
-        // Filter in memory for those who haven't submitted proof or justification
-        const pendingProofAssignments = assignmentsSnap.docs
-            .map(doc => doc.data())
-            .filter(a => !a.proofSubmittedAt && !a.justification);
-
-        if (pendingProofAssignments.length === 0) {
-            return { count: 0, message: "Ninguém pendente de comprovação." };
-        }
-
-        const config = getConfig();
-        const zapiConfig = config.zapi;
-        const brevoConfig = config.brevo;
-        
-        let waSentCount = 0;
-        let emailSentCount = 0;
-
-        let emailApiInstance = null;
-        if (allowEmail && brevoConfig?.key && brevoConfig?.sender_email) {
-            try {
-                const defaultClient = Brevo.ApiClient.instance;
-                const apiKeyAuth = defaultClient.authentications['api-key'];
-                if (apiKeyAuth) apiKeyAuth.apiKey = brevoConfig.key;
-                emailApiInstance = new Brevo.TransactionalEmailsApi();
-            } catch (err) {
-                debugLogs.push("Brevo Init Error: " + err.message);
-                emailApiInstance = null;
-            }
-        }
-
-        for (const assignment of pendingProofAssignments) {
-            const promoterId = assignment.promoterId;
-            const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
-            const portalLink = `https://divulgadoras.vercel.app/#/proof/${assignment.id}`;
-            const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
-
-            // Resolve Phone Number: Check assignment first, fallback to promoter profile
-            let phone = assignment.promoterWhatsapp;
-            if (!phone) {
-                try {
-                    const promoterDoc = await db.collection('promoters').doc(promoterId).get();
-                    if (promoterDoc.exists) {
-                        phone = promoterDoc.data().whatsapp;
-                    }
-                } catch(e) { console.error(`Error fetching promoter ${promoterId} for phone`, e); }
-            }
-
-            // A) WhatsApp
-            if (allowWhatsApp && zapiConfig?.instance_id && zapiConfig?.token) {
-                if (phone) {
-                    try {
-                        let cleanPhone = phone.replace(/\D/g, '');
-                        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-                        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-                        const eventTitle = post.eventName || post.campaignName;
-                        const message = `Olá ${firstName}! 📸\n\nVocê confirmou a postagem para *${eventTitle}*, mas ainda não enviou o print.\n\nPor favor, envie agora para garantir sua presença na lista:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
-
-                        const url = `https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`;
-                        const headers = { 'Content-Type': 'application/json' };
-                        if (zapiConfig.client_token) headers['Client-Token'] = zapiConfig.client_token;
-
-                        const waRes = await fetch(url, {
-                            method: 'POST',
-                            headers: headers,
-                            body: JSON.stringify({ phone: cleanPhone, message: message })
-                        });
-                        
-                        if (waRes.ok) waSentCount++;
-                        else debugLogs.push(`WA Error (${promoterId}): ${waRes.status}`);
-                    } catch (waError) {
-                        debugLogs.push(`WA Exception (${promoterId}): ${waError.message}`);
-                    }
-                }
-            }
-
-            // B) Email
-            if (allowEmail && emailApiInstance && assignment.promoterEmail) {
-                try {
-                    const sendSmtpEmail = new Brevo.SendSmtpEmail();
-                    sendSmtpEmail.subject = `Lembrete: Envio de Print - ${post.campaignName}`;
-                    sendSmtpEmail.htmlContent = `
-                        <div style="font-family: Arial, sans-serif; color: #333;">
-                            <h2>Olá ${firstName},</h2>
-                            <p>Você confirmou que realizou a postagem para <strong>${post.campaignName}</strong>, mas ainda não recebemos seu print de comprovação.</p>
-                            <p>Clique no botão abaixo para enviar agora:</p>
-                            <p style="text-align: center; margin: 30px 0;">
-                                <a href="${portalLink}" style="background-color: #e83a93; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Enviar Print</a>
-                            </p>
-                        </div>
-                    `;
-                    sendSmtpEmail.sender = { "name": "Equipe Certa", "email": brevoConfig.sender_email };
-                    sendSmtpEmail.to = [{ "email": assignment.promoterEmail, "name": assignment.promoterName }];
-
-                    await emailApiInstance.sendTransacEmail(sendSmtpEmail);
-                    emailSentCount++;
-                } catch (emailError) {
-                    debugLogs.push(`Email Exception (${promoterId}): ${emailError.message}`);
-                }
-            }
-        }
-
-        const totalSent = waSentCount + emailSentCount;
-        let message = `Cobranças de print enviadas: ${waSentCount} WhatsApp, ${emailSentCount} E-mails.`;
-        if (debugLogs.length > 0) {
-            const uniqueLogs = [...new Set(debugLogs)].slice(0, 5);
-            message += ` Erros: ${uniqueLogs.join(' | ')}`;
-        }
-
-        return { count: totalSent, message: message };
-
-    } catch (error) {
-        console.error("Error sending proof reminders:", error);
-        throw new functions.https.HttpsError("internal", error.message);
-    }
-});
-
-// Analisar armazenamento de um evento ou post específico
-exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 300, memory: "1GB" }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { organizationId, campaignName, postId } = data;
-    
-    if (!organizationId || (!campaignName && !postId)) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
-
-    try {
-        let query = db.collection("postAssignments")
-            .where("organizationId", "==", organizationId);
-
-        if (postId) {
-            query = query.where("postId", "==", postId);
-        } else {
-            query = query.where("post.campaignName", "==", campaignName);
-        }
-
-        const assignmentsSnap = await query.get();
-
-        if (assignmentsSnap.empty) {
-            return { count: 0, sizeBytes: 0, message: "Nenhuma tarefa encontrada." };
-        }
-
-        const bucket = admin.storage().bucket();
-        let totalSize = 0;
-        let fileCount = 0;
-        const filePromises = [];
-
-        for (const doc of assignmentsSnap.docs) {
-            const assignment = doc.data();
-            const proofUrls = assignment.proofImageUrls || [];
-
-            if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
-                for (const url of proofUrls) {
-                    const storagePath = getStoragePathFromUrl(url);
-                    if (storagePath) {
-                        filePromises.push(
-                            bucket.file(storagePath).getMetadata()
-                                .then(([metadata]) => {
-                                    totalSize += parseInt(metadata.size, 10);
-                                    fileCount++;
-                                })
-                                .catch(e => {
-                                    // Ignore if file doesn't exist, just means 0 bytes
-                                })
-                        );
-                    }
-                }
-            }
-        }
-
-        // Process in chunks
-        const CHUNK_SIZE = 50;
-        for (let i = 0; i < filePromises.length; i += CHUNK_SIZE) {
-            await Promise.all(filePromises.slice(i, i + CHUNK_SIZE));
-        }
-
-        return { 
-            count: fileCount, 
-            sizeBytes: totalSize,
-            formattedSize: (totalSize / (1024 * 1024)).toFixed(2) + ' MB'
-        };
-
-    } catch (error) {
-        console.error("Error analyzing proofs:", error);
-        throw new functions.https.HttpsError("internal", "Erro ao analisar armazenamento.");
-    }
-});
-
-// Deletar comprovações de um evento ou post específico (EM LOTES)
-exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const { organizationId, campaignName, postId } = data;
-
-    if (!organizationId || (!campaignName && !postId)) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
-
-    const BATCH_LIMIT = 50; // Process 50 assignments per call to allow progress bar
-
-    try {
-        let query = db.collection("postAssignments")
-            .where("organizationId", "==", organizationId);
-
-        if (postId) {
-            query = query.where("postId", "==", postId);
-        } else {
-            query = query.where("post.campaignName", "==", campaignName);
-        }
-
-        const assignmentsSnap = await query.limit(200).get(); // Fetch potential candidates
-
-        const bucket = admin.storage().bucket();
-        let deletedFilesCount = 0;
-        let updatedDocsCount = 0;
         const batch = db.batch();
-        
-        for (const doc of assignmentsSnap.docs) {
-            if (updatedDocsCount >= BATCH_LIMIT) break; // Hard stop for this execution
+        const promoterDocs = await Promise.all(promoterIds.map(id => db.collection("promoters").doc(id).get()));
 
-            const assignment = doc.data();
-            const proofUrls = assignment.proofImageUrls || [];
-            
-            // Skip if already processed or manual
-            if (proofUrls.length === 0 || proofUrls[0] === 'manual' || proofUrls[0] === 'DELETED_PROOF') {
-                continue;
-            }
-
-            for (const url of proofUrls) {
-                const storagePath = getStoragePathFromUrl(url);
-                if (storagePath) {
-                    try {
-                        await bucket.file(storagePath).delete();
-                        deletedFilesCount++;
-                    } catch (e) {
-                        console.warn(`Erro ao deletar ${storagePath}:`, e.message);
-                    }
-                }
-            }
-
-            // Always update doc even if files were missing (to prevent re-processing)
-            batch.update(doc.ref, { 
-                proofImageUrls: ['DELETED_PROOF'], 
-                proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
+        promoterDocs.forEach(pSnap => {
+            if (!pSnap.exists) return;
+            const p = pSnap.data();
+            const assignmentRef = db.collection("postAssignments").doc();
+            batch.set(assignmentRef, {
+                postId,
+                post: postData,
+                organizationId: postData.organizationId,
+                promoterId: pSnap.id,
+                promoterEmail: p.email,
+                promoterName: p.name,
+                status: "pending",
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            updatedDocsCount++;
-        }
-        
-        if (updatedDocsCount > 0) {
-            await batch.commit();
-        }
-        
-        return { 
-            success: true, 
-            deletedFiles: deletedFilesCount, 
-            updatedDocs: updatedDocsCount,
-            hasMore: updatedDocsCount > 0
-        };
-
-    } catch (error) {
-        console.error("Error deleting campaign proofs:", error);
-        throw new functions.https.HttpsError("internal", "Erro ao apagar arquivos.");
-    }
-});
-
-// Limpeza geral (mantida)
-exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    
-    // Check if user is superadmin or owner (simplified check, ideally verify role)
-    const { organizationId } = data;
-    if (!organizationId) throw new functions.https.HttpsError("invalid-argument", "Organização não informada.");
-
-    try {
-        // 1. Find Inactive Posts for this Org
-        const postsSnap = await db.collection("posts")
-            .where("organizationId", "==", organizationId)
-            .where("isActive", "==", false)
-            .get();
-
-        if (postsSnap.empty) {
-            return { success: true, count: 0, message: "Nenhum post inativo encontrado." };
-        }
-
-        const inactivePostIds = postsSnap.docs.map(doc => doc.id);
-        const bucket = admin.storage().bucket();
-        let deletedFilesCount = 0;
-        let updatedDocsCount = 0;
-
-        // Process in chunks of posts to avoid memory issues
-        const CHUNK_SIZE = 10;
-        for (let i = 0; i < inactivePostIds.length; i += CHUNK_SIZE) {
-            const chunk = inactivePostIds.slice(i, i + CHUNK_SIZE);
-            
-            // Find assignments with proofs for these posts
-            const assignmentsSnap = await db.collection("postAssignments")
-                .where("postId", "in", chunk)
-                .get();
-
-            const batch = db.batch();
-            let batchCount = 0;
-
-            for (const doc of assignmentsSnap.docs) {
-                const assignment = doc.data();
-                const proofUrls = assignment.proofImageUrls || [];
-                
-                // Only process if there are URLs and they aren't already marked as deleted or manual
-                if (proofUrls.length > 0 && proofUrls[0] !== 'manual' && proofUrls[0] !== 'DELETED_PROOF') {
-                    let fileDeleted = false;
-
-                    // Delete files from storage
-                    for (const url of proofUrls) {
-                        try {
-                            const storagePath = getStoragePathFromUrl(url);
-                            if (storagePath) {
-                                const file = bucket.file(storagePath);
-                                const [exists] = await file.exists();
-                                if (exists) {
-                                    await file.delete();
-                                    deletedFilesCount++;
-                                    fileDeleted = true;
-                                }
-                            }
-                        } catch (err) {
-                            console.warn(`Failed to delete file for assignment ${doc.id}:`, err);
-                            fileDeleted = true; // Assume deleted to clean up DB ref
-                        }
-                    }
-
-                    // Update Firestore to mark as deleted
-                    if (fileDeleted || proofUrls.length > 0) {
-                        batch.update(doc.ref, { 
-                            proofImageUrls: ['DELETED_PROOF'], // Special flag for UI
-                            proofDeletedAt: admin.firestore.FieldValue.serverTimestamp()
-                        });
-                        batchCount++;
-                        updatedDocsCount++;
-                    }
-                }
-            }
-
-            if (batchCount > 0) {
-                await batch.commit();
-            }
-        }
-
-        return { 
-            success: true, 
-            count: deletedFilesCount, 
-            docsUpdated: updatedDocsCount,
-            message: `Limpeza concluída! ${deletedFilesCount} imagens apagadas em ${updatedDocsCount} tarefas.` 
-        };
-
-    } catch (error) {
-        console.error("Error cleaning up proofs:", error);
-        throw new functions.https.HttpsError("internal", "Erro ao limpar comprovações.");
-    }
-});
-
-// 1. Limpar Duplicados (Restaurado)
-exports.cleanupDuplicateReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-
-    try {
-        const snapshot = await db.collection("whatsAppReminders")
-            .where("status", "==", "pending")
-            .get();
-
-        if (snapshot.empty) return { count: 0 };
-
-        const assignmentMap = new Map(); // assignmentId -> { docId, createdAt }
-        const docsToDelete = [];
-
-        snapshot.docs.forEach(doc => {
-            const rData = doc.data();
-            const assignmentId = rData.assignmentId;
-            const createdAt = rData.createdAt && rData.createdAt.toMillis ? rData.createdAt.toMillis() : 0;
-
-            if (assignmentMap.has(assignmentId)) {
-                const existing = assignmentMap.get(assignmentId);
-                // Keep the one created MOST RECENTLY
-                if (createdAt > existing.createdAt) {
-                    docsToDelete.push(db.collection("whatsAppReminders").doc(existing.docId));
-                    assignmentMap.set(assignmentId, { docId: doc.id, createdAt });
-                } else {
-                    docsToDelete.push(doc.ref);
-                }
-            } else {
-                assignmentMap.set(assignmentId, { docId: doc.id, createdAt });
-            }
-        });
-
-        let deletedCount = docsToDelete.length;
-        const batches = [];
-        while (docsToDelete.length) {
-            const batch = db.batch();
-            docsToDelete.splice(0, 450).forEach(ref => batch.delete(ref));
-            batches.push(batch.commit());
-        }
-
-        await Promise.all(batches);
-        return { count: deletedCount };
-    } catch (error) {
-        console.error("Error cleaning up duplicates:", error);
-        throw new functions.https.HttpsError("internal", "Erro ao limpar duplicados.");
-    }
-});
-
-// 2. Agendar Lembrete (Restaurado e Fortalecido)
-exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { assignmentId } = data;
-    if (!assignmentId) throw new functions.https.HttpsError("invalid-argument", "ID da tarefa obrigatório.");
-
-    try {
-        const assignmentRef = db.collection("postAssignments").doc(assignmentId);
-        const assignmentSnap = await assignmentRef.get();
-        if (!assignmentSnap.exists) throw new functions.https.HttpsError("not-found", "Tarefa não encontrada.");
-        
-        const assignment = assignmentSnap.data();
-
-        // Check for duplicates (Pending)
-        const existingReminderQuery = await db.collection("whatsAppReminders")
-            .where("assignmentId", "==", assignmentId)
-            .where("status", "==", "pending")
-            .limit(1)
-            .get();
-
-        if (!existingReminderQuery.empty) {
-            return { success: true, message: "Lembrete já estava agendado." };
-        }
-
-        // Check for duplicates (Recently Sent - 15 minutes) to prevent accidental double sends
-        const recentSentQuery = await db.collection("whatsAppReminders")
-            .where("assignmentId", "==", assignmentId)
-            .where("status", "==", "sent")
-            .where("createdAt", ">", admin.firestore.Timestamp.fromMillis(Date.now() - 15 * 60 * 1000)) 
-            .limit(1)
-            .get();
-
-        if (!recentSentQuery.empty) {
-            return { success: false, message: "Um lembrete já foi enviado recentemente." };
-        }
-
-        const promoterRef = db.collection("promoters").doc(assignment.promoterId);
-        const promoterSnap = await promoterRef.get();
-        const promoterData = promoterSnap.exists ? promoterSnap.data() : {};
-        const phone = promoterData.whatsapp || "";
-
-        if (!phone) {
-            throw new functions.https.HttpsError("failed-precondition", "Divulgadora sem WhatsApp cadastrado.");
-        }
-
-        // SAFE POST DATA RETRIEVAL
-        let campaignName = "Evento";
-        if (assignment.post && assignment.post.campaignName) {
-            campaignName = assignment.post.campaignName;
-        } else if (assignment.postId) {
-            // Fallback: Fetch original post if denormalized data is missing
-            const postDoc = await db.collection("posts").doc(assignment.postId).get();
-            if (postDoc.exists) {
-                campaignName = postDoc.data().campaignName || "Evento";
-            }
-        }
-
-        const sendAt = admin.firestore.Timestamp.fromMillis(Date.now() + 6 * 60 * 60 * 1000); 
-
-        const reminderData = {
-            assignmentId,
-            promoterId: assignment.promoterId,
-            promoterName: assignment.promoterName,
-            promoterEmail: assignment.promoterEmail,
-            promoterWhatsapp: phone,
-            postId: assignment.postId,
-            postCampaignName: campaignName,
-            organizationId: assignment.organizationId,
-            status: 'pending',
-            sendAt: sendAt,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        const batch = db.batch();
-        const reminderRef = db.collection("whatsAppReminders").doc();
-        batch.set(reminderRef, reminderData);
-        
-        batch.update(assignmentRef, { 
-            whatsAppReminderRequestedAt: admin.firestore.FieldValue.serverTimestamp() 
         });
 
         await batch.commit();
-        return { success: true, message: "Lembrete agendado." };
-
-    } catch (error) {
-        console.error("Error scheduling reminder:", error);
-        throw new functions.https.HttpsError("internal", `Erro ao agendar lembrete: ${error.message}`);
+        return { success: true };
+    } catch (e) {
+        console.error("Error in addAssignmentsToPost:", e);
+        throw new functions.https.HttpsError("internal", e.message);
     }
-});
-
-// 3. Enviar Agora (Restaurado com Link de Saída)
-exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { reminderId } = data;
-    if (!reminderId) throw new functions.https.HttpsError("invalid-argument", "ID obrigatório.");
-
-    const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) {
-        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurado.");
-    }
-
-    try {
-        const reminderRef = db.collection("whatsAppReminders").doc(reminderId);
-        const reminderSnap = await reminderRef.get();
-        if (!reminderSnap.exists) throw new functions.https.HttpsError("not-found", "Lembrete não encontrado.");
-        
-        const reminder = reminderSnap.data();
-        if (reminder.status === 'sent') return { success: true, message: "Já enviado." };
-
-        // Check if organization has disabled notifications
-        const orgDoc = await db.collection("organizations").doc(reminder.organizationId).get();
-        const orgData = orgDoc.exists ? orgDoc.data() : {};
-        
-        if (orgData.whatsappNotificationsEnabled === false) {
-             await reminderRef.update({ status: 'error', error: "Notificações desativadas pela organização." });
-             return { success: false, message: "Envio desativado na organização." };
-        }
-
-        let cleanPhone = reminder.promoterWhatsapp.replace(/\D/g, '');
-        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-        const firstName = reminder.promoterName.split(' ')[0];
-        const portalLink = `https://divulgadoras.vercel.app/#/proof/${reminder.assignmentId}`;
-        const leaveLink = getLeaveGroupLink(reminder.promoterId, reminder.postCampaignName, reminder.organizationId);
-
-        const message = `Olá ${firstName}! 📸\n\nPassando para lembrar de enviar o *print* da sua publicação no evento *${reminder.postCampaignName}*.\n\nPara garantir sua presença na lista, clique no link abaixo e envie agora:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
-
-        const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-        const headers = { 'Content-Type': 'application/json' };
-        if (config.client_token) headers['Client-Token'] = config.client_token;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({ phone: cleanPhone, message: message })
-        });
-
-        if (response.ok) {
-            await reminderRef.update({ status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp() });
-            return { success: true };
-        } else {
-            const errText = await response.text();
-            console.error("Z-API Error:", errText);
-            await reminderRef.update({ status: 'error', error: errText });
-            throw new Error("Falha na API do WhatsApp");
-        }
-    } catch (error) {
-        console.error("Error sending reminder:", error);
-        throw new functions.https.HttpsError("internal", error.message);
-    }
-});
-
-exports.testZapi = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    const config = getConfig().zapi;
-    return {
-        configFound: !!config,
-        timestamp: new Date().toISOString()
-    };
-});
-
-exports.sendWhatsAppCampaign = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
-    
-    const { messageTemplate, filters, organizationId } = data;
-    const promoterIds = filters.promoterIds || [];
-
-    // 1. Config Check
-    const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) {
-        throw new functions.https.HttpsError("failed-precondition", "Z-API não configurada.");
-    }
-
-    // 2. Organization Settings Check
-    const orgDoc = await db.collection("organizations").doc(organizationId).get();
-    if (!orgDoc.exists) throw new functions.https.HttpsError("not-found", "Organização não encontrada.");
-    if (orgDoc.data().whatsappNotificationsEnabled === false) {
-        throw new functions.https.HttpsError("failed-precondition", "Envio de WhatsApp desativado na organização.");
-    }
-
-    let successCount = 0;
-    let failureCount = 0;
-
-    // Helper to chunk array
-    const chunkArray = (array, size) => {
-        const chunked = [];
-        for (let i = 0; i < array.length; i += size) {
-            chunked.push(array.slice(i, i + size));
-        }
-        return chunked;
-    };
-
-    // 3. Fetch Promoters in Batches (Firestore 'in' limit is 30)
-    const batches = chunkArray(promoterIds, 30);
-
-    for (const batchIds of batches) {
-        const snapshots = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', batchIds).get();
-        
-        const promises = snapshots.docs.map(async (doc) => {
-            const p = doc.data();
-            
-            if (!p.whatsapp) {
-                failureCount++;
-                return;
-            }
-
-            let cleanPhone = p.whatsapp.replace(/\D/g, '');
-            if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-            if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-            // Variable Replacement
-            const firstName = p.name ? p.name.split(' ')[0] : 'Divulgadora';
-            const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(p.email)}`;
-            const leaveLink = getLeaveGroupLink(doc.id, p.campaignName, p.organizationId);
-
-            let personalizedMessage = messageTemplate
-                .replace(/{{name}}/g, firstName)
-                .replace(/{{fullName}}/g, p.name)
-                .replace(/{{email}}/g, p.email)
-                .replace(/{{campaignName}}/g, p.campaignName || 'Eventos')
-                .replace(/{{portalLink}}/g, portalLink);
-
-            // Append leave link if not present (optional, but good practice for mass messages)
-            // personalizedMessage += `\n\nCaso queira sair da lista, clique: ${leaveLink}`;
-
-            const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-            const headers = { 'Content-Type': 'application/json' };
-            if (config.client_token) headers['Client-Token'] = config.client_token;
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify({ phone: cleanPhone, message: personalizedMessage })
-                });
-
-                if (response.ok) {
-                    successCount++;
-                } else {
-                    console.error(`Z-API Error for ${p.email}:`, await response.text());
-                    failureCount++;
-                }
-            } catch (err) {
-                console.error(`Fetch Error for ${p.email}:`, err);
-                failureCount++;
-            }
-        });
-
-        await Promise.all(promises);
-    }
-
-    return { 
-        success: true, 
-        count: successCount, 
-        failures: failureCount, 
-        message: `Campanha enviada! Sucessos: ${successCount}, Falhas: ${failureCount}` 
-    };
 });
 
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { postData, assignedPromoters } = data;
     try {
         const batch = db.batch();
         const postRef = db.collection("posts").doc();
         batch.set(postRef, { ...postData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+        
         assignedPromoters.forEach(promoter => {
             const assignmentRef = db.collection("postAssignments").doc();
             batch.set(assignmentRef, {
@@ -1141,125 +252,315 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
         });
+        
         await batch.commit();
         return { success: true, postId: postRef.id };
     } catch (e) {
         console.error("Error creating post:", e);
-        throw new functions.https.HttpsError("internal", "Failed to create post");
+        throw new functions.https.HttpsError("internal", e.message);
     }
+});
+
+exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { promoterId } = data;
+    try {
+        const promoterDoc = await db.collection("promoters").doc(promoterId).get();
+        if (!promoterDoc.exists) throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
+        const promoterData = promoterDoc.data();
+        await sendWhatsAppStatusChange(promoterData, promoterId);
+        return { success: true, message: "Notificação enviada." };
+    } catch (error) {
+        console.error("Error manually sending status:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+exports.sendPendingReminders = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    if (!postId) throw new functions.https.HttpsError("invalid-argument", "Post ID obrigatório.");
+
+    try {
+        const postDoc = await db.collection('posts').doc(postId).get();
+        if (!postDoc.exists) return { count: 0, message: "Post não encontrado." };
+        const post = postDoc.data();
+
+        const assignmentsSnap = await db.collection('postAssignments')
+            .where('postId', '==', postId)
+            .where('status', '==', 'pending')
+            .get();
+
+        if (assignmentsSnap.empty) return { count: 0, message: "Nenhuma tarefa pendente." };
+
+        const config = getConfig();
+        const zapiConfig = config.zapi;
+        let waSentCount = 0;
+
+        for (const doc of assignmentsSnap.docs) {
+            const assignment = doc.data();
+            const promoterId = assignment.promoterId;
+            const firstName = assignment.promoterName ? assignment.promoterName.split(' ')[0] : 'Divulgadora';
+            const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(assignment.promoterEmail)}`;
+            const leaveLink = getLeaveGroupLink(promoterId, post.campaignName, post.organizationId);
+
+            if (zapiConfig?.instance_id && zapiConfig?.token) {
+                try {
+                    let phone = assignment.promoterWhatsapp;
+                    if (!phone) {
+                        const pDoc = await db.collection('promoters').doc(promoterId).get();
+                        if (pDoc.exists) phone = pDoc.data().whatsapp;
+                    }
+
+                    if (phone) {
+                        let cleanPhone = phone.replace(/\D/g, '');
+                        if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
+                        if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+
+                        const message = `Olá ${firstName}! ⏳\n\nConsta como pendente a sua postagem para *${post.eventName || post.campaignName}*.\n\nPor favor, realize a postagem e confirme no painel.\n\nAcesse aqui: ${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+                        
+                        await fetch(`https://api.z-api.io/instances/${zapiConfig.instance_id}/token/${zapiConfig.token}/send-text`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', ...(zapiConfig.client_token && { 'Client-Token': zapiConfig.client_token }) },
+                            body: JSON.stringify({ phone: cleanPhone, message })
+                        });
+                        waSentCount++;
+                    }
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        return { count: waSentCount, message: `${waSentCount} lembretes enviados via WhatsApp.` };
+    } catch (error) {
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+exports.sendPostReminder = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540 }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { postId } = data;
+    try {
+        const postDoc = await db.collection('posts').doc(postId).get();
+        const post = postDoc.data();
+        const assignmentsSnap = await db.collection('postAssignments').where('postId', '==', postId).where('status', '==', 'confirmed').get();
+        const pendingProofAssignments = assignmentsSnap.docs.map(doc => doc.data()).filter(a => !a.proofSubmittedAt && !a.justification);
+        if (pendingProofAssignments.length === 0) return { count: 0, message: "Ninguém pendente." };
+
+        const zapi = getConfig().zapi;
+        let count = 0;
+        for (const a of pendingProofAssignments) {
+            try {
+                let phone = a.promoterWhatsapp;
+                if (!phone) {
+                    const p = await db.collection('promoters').doc(a.promoterId).get();
+                    if (p.exists) phone = p.data().whatsapp;
+                }
+                if (phone && zapi?.instance_id) {
+                    let cleanPhone = phone.replace(/\D/g, '');
+                    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
+                    const message = `Olá! 📸\n\nVocê confirmou a postagem para *${post.eventName || post.campaignName}*, mas ainda não enviou o print.\n\nEnvie agora: https://divulgadoras.vercel.app/#/proof/${a.id}`;
+                    await fetch(`https://api.z-api.io/instances/${zapi.instance_id}/token/${zapi.token}/send-text`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone: cleanPhone, message })
+                    });
+                    count++;
+                }
+            } catch (e) { console.error(e); }
+        }
+        return { count, message: `${count} lembretes enviados.` };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.analyzeCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 300, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { organizationId, campaignName, postId } = data;
+    try {
+        let query = db.collection("postAssignments").where("organizationId", "==", organizationId);
+        if (postId) query = query.where("postId", "==", postId);
+        else query = query.where("post.campaignName", "==", campaignName);
+        const snap = await query.get();
+        if (snap.empty) return { count: 0, sizeBytes: 0 };
+        const bucket = admin.storage().bucket();
+        let totalSize = 0;
+        let fileCount = 0;
+        for (const doc of snap.docs) {
+            const urls = doc.data().proofImageUrls || [];
+            for (const url of urls) {
+                const path = getStoragePathFromUrl(url);
+                if (path) {
+                    try {
+                        const [meta] = await bucket.file(path).getMetadata();
+                        totalSize += parseInt(meta.size, 10);
+                        fileCount++;
+                    } catch (e) {}
+                }
+            }
+        }
+        return { count: fileCount, sizeBytes: totalSize, formattedSize: (totalSize / 1048576).toFixed(2) + ' MB' };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.deleteCampaignProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { organizationId, campaignName, postId } = data;
+    try {
+        let query = db.collection("postAssignments").where("organizationId", "==", organizationId);
+        if (postId) query = query.where("postId", "==", postId);
+        else query = query.where("post.campaignName", "==", campaignName);
+        const snap = await query.limit(50).get();
+        const bucket = admin.storage().bucket();
+        let deleted = 0;
+        const batch = db.batch();
+        for (const doc of snap.docs) {
+            const urls = doc.data().proofImageUrls || [];
+            if (urls.length > 0 && urls[0] !== 'DELETED_PROOF') {
+                for (const url of urls) {
+                    const path = getStoragePathFromUrl(url);
+                    if (path) {
+                        try { await bucket.file(path).delete(); deleted++; } catch (e) {}
+                    }
+                }
+                batch.update(doc.ref, { proofImageUrls: ['DELETED_PROOF'], proofDeletedAt: admin.firestore.FieldValue.serverTimestamp() });
+            }
+        }
+        if (deleted > 0) await batch.commit();
+        return { success: true, deletedFiles: deleted, updatedDocs: snap.size, hasMore: snap.size === 50 };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.cleanupOldProofs = functions.region("southamerica-east1").runWith({ timeoutSeconds: 540, memory: "1GB" }).https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    const { organizationId } = data;
+    try {
+        const postsSnap = await db.collection("posts").where("organizationId", "==", organizationId).where("isActive", "==", false).get();
+        if (postsSnap.empty) return { count: 0, message: "Nada para limpar." };
+        const bucket = admin.storage().bucket();
+        let count = 0;
+        for (const postDoc of postsSnap.docs) {
+            const assignments = await db.collection("postAssignments").where("postId", "==", postDoc.id).get();
+            const batch = db.batch();
+            let bCount = 0;
+            for (const doc of assignments.docs) {
+                const urls = doc.data().proofImageUrls || [];
+                if (urls.length > 0 && urls[0] !== 'DELETED_PROOF' && urls[0] !== 'manual') {
+                    for (const url of urls) {
+                        const path = getStoragePathFromUrl(url);
+                        if (path) try { await bucket.file(path).delete(); count++; } catch(e) {}
+                    }
+                    batch.update(doc.ref, { proofImageUrls: ['DELETED_PROOF'], proofDeletedAt: admin.firestore.FieldValue.serverTimestamp() });
+                    bCount++;
+                }
+            }
+            if (bCount > 0) await batch.commit();
+        }
+        return { count, message: `Limpeza concluída! ${count} arquivos removidos.` };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.cleanupDuplicateReminders = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Ação não autorizada.");
+    try {
+        const snap = await db.collection("whatsAppReminders").where("status", "==", "pending").get();
+        if (snap.empty) return { count: 0 };
+        const map = new Map();
+        const toDelete = [];
+        snap.docs.forEach(doc => {
+            const id = doc.data().assignmentId;
+            const time = doc.data().createdAt?.toMillis() || 0;
+            if (map.has(id)) {
+                const prev = map.get(id);
+                if (time > prev.time) { toDelete.push(db.collection("whatsAppReminders").doc(prev.docId)); map.set(id, { docId: doc.id, time }); }
+                else toDelete.push(doc.ref);
+            } else map.set(id, { docId: doc.id, time });
+        });
+        const batches = [];
+        while (toDelete.length) {
+            const b = db.batch();
+            toDelete.splice(0, 450).forEach(ref => b.delete(ref));
+            batches.push(b.commit());
+        }
+        await Promise.all(batches);
+        return { count: toDelete.length };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.scheduleWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { assignmentId } = data;
+    try {
+        const snap = await db.collection("postAssignments").doc(assignmentId).get();
+        const a = snap.data();
+        const pSnap = await db.collection("promoters").doc(a.promoterId).get();
+        const phone = pSnap.data().whatsapp;
+        if (!phone) throw new Error("Sem telefone.");
+        const sendAt = admin.firestore.Timestamp.fromMillis(Date.now() + 21600000); 
+        await db.collection("whatsAppReminders").add({
+            assignmentId, promoterId: a.promoterId, promoterName: a.promoterName, promoterEmail: a.promoterEmail,
+            promoterWhatsapp: phone, postId: a.postId, postCampaignName: a.post?.campaignName || "Evento",
+            organizationId: a.organizationId, status: 'pending', sendAt, createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        await db.collection("postAssignments").doc(assignmentId).update({ whatsAppReminderRequestedAt: admin.firestore.FieldValue.serverTimestamp() });
+        return { success: true };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
+});
+
+exports.sendWhatsAppReminderNow = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { reminderId } = data;
+    const config = getConfig().zapi;
+    try {
+        const snap = await db.collection("whatsAppReminders").doc(reminderId).get();
+        const r = snap.data();
+        let phone = r.promoterWhatsapp.replace(/\D/g, '');
+        if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
+        const msg = `Olá! 📸\n\nLembrete de print para o evento *${r.postCampaignName}*.\n\nEnvie agora: https://divulgadoras.vercel.app/#/proof/${r.assignmentId}`;
+        const res = await fetch(`https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(config.client_token && { 'Client-Token': config.client_token }) },
+            body: JSON.stringify({ phone, message: msg })
+        });
+        if (res.ok) {
+            await db.collection("whatsAppReminders").doc(reminderId).update({ status: 'sent', sentAt: admin.firestore.FieldValue.serverTimestamp() });
+            return { success: true };
+        } else throw new Error(await res.text());
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
 });
 
 // --- Helper Functions ---
 
 async function sendWhatsAppStatusChange(promoterData, promoterId) {
-    // Add fail-safe check for org settings in the helper
-    try {
-        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
-        if (orgDoc.exists && orgDoc.data().whatsappNotificationsEnabled === false) {
-            console.log(`[WhatsApp] Blocked by Org Settings for ${promoterId}`);
-            return;
-        }
-    } catch(e) { console.error("Error checking org settings in helper", e); }
-
     const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) return;
-
-    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-    const firstName = promoterData.name ? promoterData.name.split(' ')[0] : 'Divulgadora';
-    const leaveLink = getLeaveGroupLink(promoterId, promoterData.campaignName, promoterData.organizationId);
+    if (!config?.instance_id) return;
+    let phone = promoterData.whatsapp.replace(/\D/g, '');
+    if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
     let message = "";
-
     if (promoterData.status === 'approved') {
-        const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
-        message = `Olá ${firstName}! Parabéns 🥳\n\nSeu cadastro foi APROVADO!\n\nAcesse seu painel agora para ver as regras e entrar no grupo:\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
+        message = `Olá! Parabéns 🥳\n\nSeu cadastro foi APROVADO!\n\nAcesse seu painel: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(promoterData.email)}`;
     } else if (promoterData.status === 'rejected_editable') {
-        const editLink = `https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${promoterData.campaignName ? encodeURIComponent(promoterData.campaignName) : ''}?edit_id=${promoterId}`;
-        message = `Olá ${firstName}! 👋\n\nSeu cadastro precisa de um ajuste.\n\nClique para corrigir:\n${editLink}`;
-    } else {
-        return;
-    }
-
-    const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`;
-    const headers = { 'Content-Type': 'application/json' };
-    if (config.client_token) headers['Client-Token'] = config.client_token;
-
-    await fetch(url, {
+        message = `Olá! 👋\n\nSeu cadastro precisa de um ajuste. Corrija aqui: https://divulgadoras.vercel.app/#/${promoterData.organizationId}/register/${promoterData.state}/${encodeURIComponent(promoterData.campaignName || '')}?edit_id=${promoterId}`;
+    } else return;
+    await fetch(`https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/send-text`, {
         method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ phone: cleanPhone, message: message })
+        headers: { 'Content-Type': 'application/json', ...(config.client_token && { 'Client-Token': config.client_token }) },
+        body: JSON.stringify({ phone, message })
     });
 }
 
-// 4. Enviar Post com Mídia (Restaurado e Melhorado com Link de Saída)
 async function sendNewPostNotificationWhatsApp(promoterData, postData, assignmentData, promoterId) {
-    // Add fail-safe check for org settings in the helper
-    try {
-        const orgDoc = await db.collection("organizations").doc(promoterData.organizationId).get();
-        if (orgDoc.exists && orgDoc.data().whatsappNotificationsEnabled === false) {
-            console.log(`[WhatsApp] Blocked by Org Settings for ${promoterId}`);
-            return;
-        }
-    } catch(e) { console.error("Error checking org settings in helper", e); }
-
     const config = getConfig().zapi;
-    if (!config || !config.instance_id || !config.token) return;
-
-    let cleanPhone = promoterData.whatsapp.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.substring(1);
-    if (cleanPhone.length === 10 || cleanPhone.length === 11) cleanPhone = '55' + cleanPhone;
-
-    const firstName = promoterData.name.split(' ')[0];
-    const portalLink = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
-    const leaveLink = getLeaveGroupLink(promoterId, postData.campaignName, postData.organizationId);
-    
-    let caption = `✨ *NOVA POSTAGEM* ✨\n\nOlá ${firstName}! Nova publicação disponível.\n\n`;
-    if (postData.instructions) caption += `📝 *Instruções:* ${postData.instructions.substring(0, 300)}...\n\n`;
-    caption += `👇 *CONFIRA AQUI:* 👇\n${portalLink}\n\nCaso queira sair do grupo, clique aqui: ${leaveLink}`;
-
-    // Logic for Media
+    if (!config?.instance_id) return;
+    let phone = promoterData.whatsapp.replace(/\D/g, '');
+    if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
+    const caption = `✨ *NOVA POSTAGEM* ✨\n\nOlá! Nova publicação disponível.\n\n👇 *CONFIRA AQUI:* 👇\nhttps://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(promoterData.email)}`;
     let endpoint = 'send-text';
-    let body = { phone: cleanPhone, message: caption };
-
-    if (postData.type === 'image' || postData.type === 'video') {
-        try {
-            let mediaUrl = null;
-            // A) Firebase Storage
-            if (postData.mediaUrl && typeof postData.mediaUrl === 'string') {
-                if (postData.mediaUrl.startsWith('http')) {
-                    mediaUrl = convertDriveToDirectLink(postData.mediaUrl);
-                } else if (!postData.mediaUrl.includes('drive.google.com')) {
-                    mediaUrl = await getSignedUrl(postData.mediaUrl);
-                }
-            }
-            // B) Google Drive fallback
-            if (!mediaUrl && postData.googleDriveUrl && typeof postData.googleDriveUrl === 'string') {
-                 mediaUrl = convertDriveToDirectLink(postData.googleDriveUrl);
-            }
-
-            if (mediaUrl && mediaUrl.startsWith('http')) {
-                if (postData.type === 'image') {
-                    endpoint = 'send-image';
-                    body = { phone: cleanPhone, image: mediaUrl, caption: caption };
-                } else if (postData.type === 'video') {
-                    endpoint = 'send-video';
-                    body = { phone: cleanPhone, video: mediaUrl, caption: caption };
-                }
-            }
-        } catch (mediaError) {
-            console.error("Error resolving media, sending text only:", mediaError);
-        }
+    let body = { phone, message: caption };
+    const mediaUrl = await (postData.mediaUrl?.startsWith('http') ? Promise.resolve(postData.mediaUrl) : getSignedUrl(postData.mediaUrl));
+    if (mediaUrl) {
+        if (postData.type === 'image') { endpoint = 'send-image'; body = { phone, image: mediaUrl, caption }; }
+        else if (postData.type === 'video') { endpoint = 'send-video'; body = { phone, video: mediaUrl, caption }; }
     }
-
-    const url = `https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/${endpoint}`;
-    const headers = { 'Content-Type': 'application/json' };
-    if (config.client_token) headers['Client-Token'] = config.client_token;
-
-    await fetch(url, {
+    await fetch(`https://api.z-api.io/instances/${config.instance_id}/token/${config.token}/${endpoint}`, {
         method: 'POST',
-        headers: headers,
+        headers: { 'Content-Type': 'application/json', ...(config.client_token && { 'Client-Token': config.client_token }) },
         body: JSON.stringify(body)
     });
 }

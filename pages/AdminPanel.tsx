@@ -470,7 +470,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => p.id === id);
+                const currentPromoter = previousPromoters.find(p => id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -676,16 +676,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     // FIX: Refined handleLookupPromoter to use explicit string typing and avoid 'unknown' type errors when calling findPromotersByEmail.
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const email = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail).trim();
-        if (!email) return;
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        const searchEmail: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
+        if (!searchEmail) return;
         
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(email);
+            const results = await findPromotersByEmail(searchEmail);
             setLookupResults(results);
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
