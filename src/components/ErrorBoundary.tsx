@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,20 +12,16 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Fixed: Property 'state', 'setState' and 'props' not found by extending React.Component explicitly.
+ * FIX: Switched to explicit Component inheritance and property initializer for state 
+ * to resolve several "Property does not exist on type 'ErrorBoundary'" errors.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    /**
-     * Fixed: Property 'state' does not exist on type 'ErrorBoundary'.
-     */
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Properly declared the state property on the class.
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
@@ -36,9 +32,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    /**
-     * Fixed: Property 'setState' does not exist on type 'ErrorBoundary'.
-     */
+    // FIX: setState is now correctly available through inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -46,9 +40,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   render() {
-    /**
-     * Fixed: Property 'state' does not exist on type 'ErrorBoundary'.
-     */
+    // FIX: state is now correctly recognized by the compiler.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -57,14 +49,8 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/**
-             * Fixed: Property 'state' does not exist on type 'ErrorBoundary'.
-             */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                {/**
-                 * Fixed: Property 'state' does not exist on type 'ErrorBoundary'.
-                 */}
                 <p className="text-red-400">{this.state.error.toString()}</p>
               </div>
             )}
@@ -82,9 +68,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    /**
-     * Fixed: Property 'props' does not exist on type 'ErrorBoundary'.
-     */
+    // FIX: props is now correctly recognized.
     return this.props.children;
   }
 }

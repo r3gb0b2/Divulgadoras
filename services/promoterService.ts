@@ -63,15 +63,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
         }
     }
 
-    let facePhotoUrl: string | undefined = undefined;
-    if (promoterData.facePhoto) {
-      const photo = promoterData.facePhoto;
-      const fileExtension = photo.name.split('.').pop();
-      const fileName = `face-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-      const storageRef = storage.ref(fileName);
-      await storageRef.put(photo);
-      facePhotoUrl = await storageRef.getDownloadURL();
-    }
+    // REMOVED: facePhoto upload logic
 
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
@@ -87,7 +79,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const { photos, facePhoto, ...rest } = promoterData;
 
-    const newPromoter: Omit<Promoter, 'id' | 'createdAt' | 'facePhotoUrl'> & { facePhotoUrl?: string, createdAt: firebase.firestore.FieldValue } = {
+    const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail, // Save the normalized email
       campaignName: promoterData.campaignName || null,
@@ -97,12 +89,6 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
     };
     
-    // Conditionally add facePhotoUrl only if it has a value to prevent Firestore error.
-    if (facePhotoUrl) {
-      newPromoter.facePhotoUrl = facePhotoUrl;
-    }
-
-
     await firestore.collection('promoters').add(newPromoter);
   } catch (error) {
     console.error("Error adding promoter: ", error);

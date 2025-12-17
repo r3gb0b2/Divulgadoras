@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,9 +12,10 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Fixed: Property 'setState' and 'props' not found by extending React.Component explicitly.
+ * FIX: Explicitly imported Component from react and used it to extend ErrorBoundary, 
+ * resolving issues where state, setState, and props were not being recognized as members.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -30,9 +31,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    /**
-     * Fixed: Property 'setState' does not exist on type 'ErrorBoundary'.
-     */
+    // FIX: setState is now correctly recognized via standard class component inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -40,6 +39,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
+    // FIX: state is now correctly recognized.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -67,9 +67,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    /**
-     * Fixed: Property 'props' does not exist on type 'ErrorBoundary'.
-     */
+    // FIX: props is now correctly recognized.
     return this.props.children;
   }
 }

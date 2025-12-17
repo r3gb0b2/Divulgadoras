@@ -49,7 +49,7 @@ const HowToUsePage: React.FC = () => {
                     icon={UserPlusIcon}
                     color="bg-blue-500"
                     title="Faça seu Cadastro"
-                    description="Escolha a organização do evento no início do site, selecione seu estado e preencha seus dados. Capriche nas fotos de corpo e na selfie de rosto, elas são essenciais para sua aprovação."
+                    description="Escolha a organização do evento no início do site, selecione seu estado e preencha seus dados. Capriche nas fotos de corpo e perfil, elas são essenciais para sua aprovação."
                 />
                 
                 <StepCard 
@@ -97,7 +97,7 @@ const HowToUsePage: React.FC = () => {
                     icon={TicketIcon}
                     color="bg-red-500"
                     title="Check-in no Evento"
-                    description="No dia da festa, apresente-se na entrada. O organizador usará sua selfie de cadastro ou seu QR Code (se disponível) para validar sua entrada e a de seus convidados."
+                    description="No dia da festa, apresente-se na entrada. O organizador usará suas fotos de cadastro ou seu QR Code (se disponível) para validar sua entrada e a de seus convidados."
                 />
 
                 <StepCard 
