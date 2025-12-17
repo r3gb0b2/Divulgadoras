@@ -39,6 +39,7 @@ import SubscriptionPage from './SubscriptionPage';
 import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
+import SettingsPage from './SettingsPage';
 
 // --- Local ProtectedRoute Component ---
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {

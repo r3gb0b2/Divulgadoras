@@ -484,7 +484,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -676,8 +676,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Refined handleLookupPromoter to use explicit string narrowing and avoid 'unknown' type errors when calling findPromotersByEmail.
-    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+    // FIX: Refined handleLookupPromoter to use explicit any type for the parameter to avoid 'unknown' narrowing issues in different environments.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
         let searchString = '';
         if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
