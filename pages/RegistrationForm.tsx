@@ -6,7 +6,7 @@ import { getCampaigns } from '../services/settingsService';
 // FIX: Added missing import for Campaign type
 import { Campaign } from '../types';
 // FIX: Added missing import for Icons
-import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
+import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon, FaceSmileIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { storage } from '../firebase/config';
 
@@ -102,10 +102,18 @@ const PromoterForm: React.FC = () => {
     tiktok: '',
     dateOfBirth: '',
   });
+  
+  // States for Face Photo (Selfie)
+  const [facePhotoFile, setFacePhotoFile] = useState<File | null>(null);
+  const [facePhotoPreview, setFacePhotoPreview] = useState<string | null>(null);
+  const [isProcessingFace, setIsProcessingFace] = useState(false);
+
+  // States for Gallery Photos
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -128,8 +136,13 @@ const PromoterForm: React.FC = () => {
                     tiktok: profile.tiktok || '',
                     dateOfBirth: profile.dateOfBirth,
                 });
+                // Load existing photos
                 setPhotoPreviews(profile.photoUrls);
                 setOriginalPhotoUrls(profile.photoUrls);
+                // Load existing face photo
+                if (profile.facePhotoUrl) {
+                    setFacePhotoPreview(profile.facePhotoUrl);
+                }
                 setProfileLoaded(true);
             }
         }).catch(err => setSubmitError(err.message));
@@ -179,8 +192,20 @@ const PromoterForm: React.FC = () => {
           tiktok: profile.tiktok || '',
           dateOfBirth: profile.dateOfBirth,
         });
+        
+        // Auto-fill face photo if available from previous profile
+        if (profile.facePhotoUrl) {
+             setFacePhotoPreview(profile.facePhotoUrl);
+             // We don't set facePhotoFile here, as we can't convert URL to File easily without fetching.
+             // We'll treat a present preview as "has photo" logic during submission for new profiles later if needed,
+             // but currently addPromoter creates a new record, so user needs to re-upload photos for new events usually.
+             // However, to be user friendly:
+             // Note: Re-using the URL directly for a new record isn't standard in this flow as we want fresh photos for new events generally,
+             // but displaying it helps confirmation.
+        }
+
         setProfileLoaded(true);
-        // Clear photos as they need to be re-uploaded for each event
+        // Clear gallery photos as they need to be re-uploaded for each event usually
         setPhotoFiles([]);
         setPhotoPreviews([]);
       }
@@ -190,6 +215,27 @@ const PromoterForm: React.FC = () => {
     } finally {
       setIsCheckingEmail(false);
     }
+  };
+
+  const handleFacePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          setIsProcessingFace(true);
+          setSubmitError(null);
+          try {
+              // Resize to 600x600 max for face photo
+              const compressedBlob = await resizeImage(file, 600, 600, 0.8);
+              const processedFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
+              
+              setFacePhotoFile(processedFile);
+              setFacePhotoPreview(URL.createObjectURL(processedFile));
+          } catch (error) {
+              console.error("Error processing face photo:", error);
+              setSubmitError("Erro ao processar a foto de rosto. Tente outra imagem.");
+          } finally {
+              setIsProcessingFace(false);
+          }
+      }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -252,8 +298,15 @@ const PromoterForm: React.FC = () => {
         return;
     }
 
+    // Validate Face Photo
+    if (!facePhotoFile && !facePhotoPreview) {
+        setSubmitError("A foto de rosto é obrigatória. Por favor, envie uma selfie.");
+        return;
+    }
+
+    // Validate Gallery Photos
     if (photoFiles.length === 0 && originalPhotoUrls.length === 0) {
-        setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
+        setSubmitError("Por favor, selecione pelo menos uma foto de corpo/perfil para o cadastro.");
         return;
     }
     
@@ -265,6 +318,8 @@ const PromoterForm: React.FC = () => {
       
       if (editId) {
         // Update existing promoter
+        
+        // 1. Handle Gallery Photos
         let finalPhotoUrls = originalPhotoUrls;
         if (photoFiles.length > 0) {
             finalPhotoUrls = await Promise.all(
@@ -278,22 +333,32 @@ const PromoterForm: React.FC = () => {
             );
         }
 
+        // 2. Handle Face Photo
+        let finalFacePhotoUrl = facePhotoPreview || undefined;
+        if (facePhotoFile) {
+             const fileExtension = facePhotoFile.name.split('.').pop();
+             const fileName = `face-photos/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+             const storageRef = storage.ref(fileName);
+             await storageRef.put(facePhotoFile);
+             finalFacePhotoUrl = await storageRef.getDownloadURL();
+        }
+
         await resubmitPromoterApplication(editId, {
             ...formData,
             photoUrls: finalPhotoUrls,
+            facePhotoUrl: finalFacePhotoUrl,
             status: 'pending', // Reset status to pending for re-evaluation
             rejectionReason: '', // Clear previous rejection reason
         });
       } else {
         // Create new promoter
-        // FIX: Added facePhoto: null to satisfy type requirement
         await addPromoter({ 
             ...formData, 
             photos: photoFiles, 
             state, 
             campaignName: decodedCampaignName, 
             organizationId,
-            facePhoto: null
+            facePhoto: facePhotoFile // Now passing the file correctly
         });
       }
 
@@ -308,11 +373,17 @@ const PromoterForm: React.FC = () => {
       setPhotoFiles([]);
       setPhotoPreviews([]);
       setOriginalPhotoUrls([]);
+      setFacePhotoFile(null);
+      setFacePhotoPreview(null);
       setProfileLoaded(false);
       setShowGenderWarning(false);
       setEditId(null);
-      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      
+      // Reset inputs
+      const photoInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (photoInput) photoInput.value = '';
+      const faceInput = document.getElementById('face-upload') as HTMLInputElement;
+      if (faceInput) faceInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (error) {
@@ -327,7 +398,7 @@ const PromoterForm: React.FC = () => {
   
   const getButtonText = () => {
       if (isSubmitting) return 'Enviando Cadastro...';
-      if (isProcessingPhoto) return 'Processando fotos...';
+      if (isProcessingPhoto || isProcessingFace) return 'Processando fotos...';
       return editId ? 'Reenviar Cadastro' : 'Finalizar Cadastro';
   }
 
@@ -374,7 +445,7 @@ const PromoterForm: React.FC = () => {
                      {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
                      {profileLoaded && (
                         <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
-                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
+                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e atualize suas fotos se necessário.</p>
                         </div>
                     )}
                 </div>
@@ -394,8 +465,36 @@ const PromoterForm: React.FC = () => {
                 <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Seu usuário do Instagram (@usuario)" value={formData.instagram} onChange={handleChange} required />
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
+                {/* Face Photo Section */}
+                <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <label className="block text-sm font-bold text-gray-200 mb-2">Foto de Rosto (Selfie) - Obrigatório</label>
+                    <p className="text-xs text-gray-400 mb-3">Envie uma foto clara do seu rosto (selfie). Isso é importante para identificação no check-in.</p>
+                    
+                    <div className="flex items-center justify-center">
+                        <label htmlFor="face-upload" className="cursor-pointer relative group">
+                            <div className={`w-32 h-32 rounded-full border-2 ${facePhotoPreview ? 'border-primary' : 'border-gray-500 border-dashed'} flex items-center justify-center overflow-hidden bg-gray-700 transition-all hover:border-primary`}>
+                                {isProcessingFace ? (
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                                ) : facePhotoPreview ? (
+                                    <img src={facePhotoPreview} alt="Selfie" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="flex flex-col items-center text-gray-400">
+                                        <FaceSmileIcon className="w-8 h-8 mb-1" />
+                                        <span className="text-xs">Enviar Selfie</span>
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center rounded-full text-white text-xs font-bold">
+                                    {facePhotoPreview ? 'Trocar' : 'Selecionar'}
+                                </div>
+                            </div>
+                            <input id="face-upload" name="facePhoto" type="file" className="sr-only" onChange={handleFacePhotoChange} accept="image/*" disabled={isProcessingFace || isSubmitting} />
+                        </label>
+                    </div>
+                </div>
+
+                {/* Gallery Photos Section */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (obrigatório)</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos de corpo/perfil (obrigatório)</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />
@@ -412,7 +511,7 @@ const PromoterForm: React.FC = () => {
                                    <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
                                 ))
                             ) : (
-                                <p className="text-sm text-gray-400">Nenhuma foto selecionada.</p>
+                                <p className="text-sm text-gray-400">Nenhuma foto de corpo selecionada.</p>
                             )}
                         </div>
                     </div>
@@ -421,7 +520,7 @@ const PromoterForm: React.FC = () => {
 
                 <button
                     type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
+                    disabled={isSubmitting || isProcessingPhoto || isProcessingFace}
                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
                 >
                     {getButtonText()}
