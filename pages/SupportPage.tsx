@@ -25,27 +25,35 @@ const SupportPage: React.FC = () => {
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-gray-800 p-4 rounded-lg flex items-center gap-4 border border-gray-700">
-                                <div className="p-3 bg-gray-700 rounded-full text-green-400">
+                            <a 
+                                href="https://wa.me/5585982280780" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="bg-gray-800 p-4 rounded-lg flex items-center gap-4 border border-gray-700 hover:bg-gray-700 transition-colors group"
+                            >
+                                <div className="p-3 bg-gray-700 rounded-full text-green-400 group-hover:bg-gray-600">
                                     <WhatsAppIcon className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-400">WhatsApp</p>
-                                    <p className="text-white font-medium">(11) 99999-9999</p>
-                                    <p className="text-xs text-gray-500">Seg a Sex, 09h às 18h</p>
+                                    <p className="text-white font-medium">(85) 98228-0780</p>
+                                    <p className="text-xs text-gray-500">Clique para iniciar conversa</p>
                                 </div>
-                            </div>
+                            </a>
 
-                            <div className="bg-gray-800 p-4 rounded-lg flex items-center gap-4 border border-gray-700">
-                                <div className="p-3 bg-gray-700 rounded-full text-blue-400">
+                            <a 
+                                href="mailto:rafael@agenciavitrine.com"
+                                className="bg-gray-800 p-4 rounded-lg flex items-center gap-4 border border-gray-700 hover:bg-gray-700 transition-colors group"
+                            >
+                                <div className="p-3 bg-gray-700 rounded-full text-blue-400 group-hover:bg-gray-600">
                                     <MailIcon className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-400">E-mail</p>
-                                    <p className="text-white font-medium">suporte@equipecerta.com</p>
+                                    <p className="text-white font-medium text-sm break-all">rafael@agenciavitrine.com</p>
                                     <p className="text-xs text-gray-500">Resposta em até 24h úteis</p>
                                 </div>
-                            </div>
+                            </a>
                         </div>
                     </section>
 
@@ -67,7 +75,7 @@ const SupportPage: React.FC = () => {
                             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700/50">
                                 <h3 className="font-bold text-gray-200">Como apagar minha conta e meus dados?</h3>
                                 <p className="text-sm text-gray-400 mt-1">
-                                    Respeitamos sua privacidade. Para solicitar a exclusão completa da sua conta e de todos os seus dados pessoais do nosso sistema, envie um e-mail para <strong>suporte@equipecerta.com</strong> com o assunto "Exclusão de Conta".
+                                    Respeitamos sua privacidade. Para solicitar a exclusão completa da sua conta e de todos os seus dados pessoais do nosso sistema, envie um e-mail para <strong>rafael@agenciavitrine.com</strong> com o assunto "Exclusão de Conta".
                                 </p>
                             </div>
                         </div>

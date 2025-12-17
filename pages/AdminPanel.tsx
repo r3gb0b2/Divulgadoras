@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -1016,7 +1015,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email) => handleLookupPromoter(email)} />
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => handleLookupPromoter(email)} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>
