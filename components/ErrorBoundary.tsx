@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -11,7 +11,10 @@ interface ErrorBoundaryState {
   errorInfo: ErrorInfo | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+/**
+ * Fixed: Property 'setState' and 'props' not found by extending React.Component explicitly.
+ */
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -27,6 +30,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
+    /**
+     * Fixed: Property 'setState' does not exist on type 'ErrorBoundary'.
+     */
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -61,6 +67,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    /**
+     * Fixed: Property 'props' does not exist on type 'ErrorBoundary'.
+     */
     return this.props.children;
   }
 }

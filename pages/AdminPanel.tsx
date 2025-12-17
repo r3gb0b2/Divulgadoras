@@ -276,7 +276,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
-    const fetchAllData = useCallback(async () => {
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         setSelectedPromoterIds(new Set());
@@ -676,8 +676,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
+    /**
+     * Fixed line 509: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+     * By adding explicit type narrowing and casting.
+     */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const email = emailToSearch || lookupEmail;
+        const email: string = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail) || '';
         if (!email || !email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);
