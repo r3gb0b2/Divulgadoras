@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -333,7 +332,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     }, [adminData, organization, isSuperAdmin, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
 
-    // FIX: Changed from fetchAllData to fetchData as fetchData is the actual name of the defined useCallback.
     useEffect(() => {
         fetchData();
     }, [fetchData]);
@@ -579,7 +577,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    if (rawError) {
+                    if (matchMedia) {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
@@ -677,15 +675,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    /**
-     * FIX: Simplified handleLookupPromoter logic and ensured email search parameters are correctly typed
-     * to resolve a "type unknown is not assignable to string" error.
-     */
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchEmail = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
+    // FIX: Ensured email search parameters are correctly handled and explicitly typed as string
+    // to resolve an issue where 'unknown' was potentially being passed to findPromotersByEmail.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        const searchEmail: string = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
         if (!searchEmail || !searchEmail.trim()) return;
         
-        const email = searchEmail.trim();
+        const email: string = searchEmail.trim();
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
@@ -693,7 +689,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email);
             setLookupResults(results);
-        } catch (error: unknown) {
+        } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             setLookupError(errorMessage);
         } finally {

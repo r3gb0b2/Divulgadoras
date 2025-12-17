@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -12,10 +11,9 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIX: Switched to explicit Component inheritance and property initializer for state 
- * to resolve several "Property does not exist on type 'ErrorBoundary'" errors.
+ * FIX: Explicitly inherited from React.Component to ensure props, state and setState are correctly recognized.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // FIX: Properly declared the state property on the class.
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -40,7 +38,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
-    // FIX: state is now correctly recognized by the compiler.
+    // FIX: state is now correctly recognized by inheriting from React.Component.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
