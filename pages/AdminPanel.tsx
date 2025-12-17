@@ -688,7 +688,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setLookupResults(results);
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            setLookupError(String(errorMessage));
+            setLookupError(errorMessage as string);
         } finally {
             setIsLookingUp(false);
         }

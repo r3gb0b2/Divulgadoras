@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftIcon, MailIcon, WhatsAppIcon } from '../components/Icons';
+import { ArrowLeftIcon, MailIcon, WhatsAppIcon, ShieldCheckIcon, LockClosedIcon, ServerIcon } from '../components/Icons';
 
 const SupportPage: React.FC = () => {
     const navigate = useNavigate();
@@ -13,11 +13,12 @@ const SupportPage: React.FC = () => {
                 <span>Voltar ao Início</span>
             </button>
 
-            <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-4">Suporte e Ajuda</h1>
+            <div className="space-y-8">
+                {/* Seção de Contato */}
+                <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                    <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-700 pb-4">Suporte e Ajuda</h1>
 
-                <div className="space-y-8">
-                    <section>
+                    <section className="mb-8">
                         <h2 className="text-xl font-semibold text-white mb-3">Fale Conosco</h2>
                         <p className="text-gray-300 mb-4">
                             Está enfrentando problemas técnicos, encontrou um bug ou tem alguma dúvida sobre o aplicativo? Nossa equipe está pronta para ajudar.
@@ -71,6 +72,44 @@ const SupportPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
+                </div>
+
+                {/* Nova Seção de Segurança */}
+                <div className="bg-secondary shadow-2xl rounded-lg p-8 border-t-4 border-primary">
+                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+                        <ShieldCheckIcon className="w-8 h-8 text-primary" />
+                        Segurança e Criptografia
+                    </h2>
+                    
+                    <p className="text-gray-300 mb-6">
+                        Levamos a segurança dos seus dados a sério. Abaixo detalhamos os padrões técnicos de proteção utilizados no Equipe Certa.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                            <div className="text-blue-400 mb-3"><LockClosedIcon className="w-8 h-8"/></div>
+                            <h3 className="font-bold text-white mb-2">Dados em Trânsito</h3>
+                            <p className="text-sm text-gray-400">
+                                Toda a comunicação entre seu dispositivo e nossos servidores é criptografada utilizando o padrão <strong>HTTPS (TLS 1.2/1.3)</strong>. Isso garante que ninguém possa interceptar suas informações durante o uso do app.
+                            </p>
+                        </div>
+
+                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                            <div className="text-green-400 mb-3"><ServerIcon className="w-8 h-8"/></div>
+                            <h3 className="font-bold text-white mb-2">Dados em Repouso</h3>
+                            <p className="text-sm text-gray-400">
+                                Seus dados e imagens são armazenados nos servidores do Google Cloud (Firestore e Storage), protegidos por criptografia automática <strong>AES-256</strong> em nível de infraestrutura.
+                            </p>
+                        </div>
+
+                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                            <div className="text-purple-400 mb-3"><ShieldCheckIcon className="w-8 h-8"/></div>
+                            <h3 className="font-bold text-white mb-2">Pagamentos Seguros</h3>
+                            <p className="text-sm text-gray-400">
+                                O processamento de pagamentos é realizado pelo Stripe. Nós <strong>não armazenamos</strong> números de cartão de crédito. Seguimos os padrões PCI-DSS de segurança.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
