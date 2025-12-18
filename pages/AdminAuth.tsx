@@ -40,21 +40,26 @@ import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import SettingsPage from './SettingsPage';
+import AdminLoginPage from './AdminLoginPage';
 
 // --- Local ProtectedRoute Component ---
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
     if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-    // Redirect to public home if not logged in
-    if (!user) return <Navigate to="/" replace />; 
+    
+    // REDIRECIONAMENTO CORRIGIDO: Se não logado, vai para login administrativo
+    if (!user) return <Navigate to="/admin/login" replace />; 
     return <>{children}</>;
 };
 
 const AdminAuth: React.FC = () => {
-    const { adminData } = useAdminAuth();
+    const { adminData, user } = useAdminAuth();
 
     return (
         <Routes>
+            {/* Rota de Login acessível publicamente dentro de /admin */}
+            <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
+
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {/* Super Admin specific routes */}

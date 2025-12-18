@@ -12,9 +12,9 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Explicitly extending React.Component and using React namespace to ensure setState and props are defined.
+ * FIXED: Extending Component directly to ensure setState and props are defined and correctly typed.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -30,7 +30,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    // setState is now available through React.Component inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo

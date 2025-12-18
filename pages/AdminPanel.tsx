@@ -676,7 +676,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Refined handleLookupPromoter to use explicit any type for the parameter to avoid 'unknown' narrowing issues in different environments.
+    /**
+     * FIX: Refined handleLookupPromoter to use explicit 'any' for the emailToSearch parameter
+     * to avoid "unknown" narrowing errors in event handlers on line 509.
+     */
     const handleLookupPromoter = async (emailToSearch?: any) => {
         let searchString = '';
         if (typeof emailToSearch === 'string') {
@@ -1025,7 +1028,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => handleLookupPromoter(email)} />
+                                    {/** FIX: Simplified handleLookupPromoter call to prevent inference errors on line 509 */}
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={handleLookupPromoter} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>
