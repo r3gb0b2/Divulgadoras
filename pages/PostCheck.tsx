@@ -5,7 +5,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -200,16 +200,13 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {timeLeftForProof === 'Tempo esgotado' && allowJustification ? (
-                                    <button onClick={() => onJustify(assignment)} className="w-full sm:w-auto px-6 py-3 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>
-                                ) : (
-                                    <>
-                                        <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">Enviar Comprovação</button>
-                                        <div className="flex justify-center gap-3">
-                                            <button onClick={handleRequestReminder} disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt} className="inline-flex items-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-full hover:bg-green-900/50 text-xs font-semibold disabled:opacity-50"><WhatsAppIcon className="w-4 h-4" />{assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrete no WhatsApp'}</button>
-                                        </div>
-                                    </>
-                                )}
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
+                                    <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="flex-1 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">Enviar Comprovação</button>
+                                </div>
+                                <div className="flex justify-center gap-3">
+                                    <button onClick={handleRequestReminder} disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt} className="inline-flex items-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-full hover:bg-green-900/50 text-xs font-semibold disabled:opacity-50"><WhatsAppIcon className="w-4 h-4" />{assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrete no WhatsApp'}</button>
+                                </div>
                                 <p className={`text-xs ${timeLeftForProof === 'Tempo esgotado' ? 'text-red-400' : 'text-gray-400'}`}>{timeLeftForProof}</p>
                             </div>
                         )}
@@ -237,7 +234,6 @@ const PostCheck: React.FC = () => {
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
     
-    // Push State
     const [isPushRegistered, setIsPushRegistered] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
@@ -250,11 +246,8 @@ const PostCheck: React.FC = () => {
             const activePromoter = promoterProfiles[0];
             setPromoter(activePromoter);
             
-            // Register Push Notification Token IMMEDIATELY if on App
             if (Capacitor.isNativePlatform()) {
-                initPushNotifications(activePromoter.id).then(success => {
-                    setIsPushRegistered(success);
-                });
+                initPushNotifications(activePromoter.id).then(success => { setIsPushRegistered(success); });
             }
 
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
@@ -263,9 +256,21 @@ const PostCheck: React.FC = () => {
     }, []);
 
     useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
-    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); };
+    
     const handleConfirmAssignment = async () => { performSearch(email); };
-    const handleReminderRequested = async () => { alert("Lembrete agendado com sucesso!"); performSearch(email); };
+    const handleReminderRequested = async () => { performSearch(email); };
+
+    const handleOpenJustification = (a: PostAssignment) => {
+        setJustificationText('');
+        setJustificationFiles([]);
+        setJustificationAssignment(a);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            setJustificationFiles(Array.from(e.target.files));
+        }
+    };
 
     const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
     const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
@@ -276,7 +281,7 @@ const PostCheck: React.FC = () => {
                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
                     <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Minhas Publicações</h1>
                     <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver suas tarefas.</p>
-                    <form onSubmit={handleSubmit}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" required /><button type="submit" disabled={isLoading} className="mt-4 w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Ver Tarefas'}</button></form>
+                    <form onSubmit={(e) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); }}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" required /><button type="submit" disabled={isLoading} className="mt-4 w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Ver Tarefas'}</button></form>
                 </div>
             ) : (
                 <div className="flex flex-col gap-4 mb-6">
@@ -287,14 +292,10 @@ const PostCheck: React.FC = () => {
                         </div>
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
-                    
-                    {/* FEEDBACK PUSH */}
                     {Capacitor.isNativePlatform() && (
                         <div className={`p-3 rounded-lg border flex items-center gap-3 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
                             <FaceIdIcon className="w-5 h-5" />
-                            <span className="text-sm font-medium">
-                                {isPushRegistered ? 'Celular vinculado para notificações push!' : 'Vinculando dispositivo para notificações...'}
-                            </span>
+                            <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações push!' : 'Vinculando dispositivo para notificações...'}</span>
                         </div>
                     )}
                 </div>
@@ -309,9 +310,8 @@ const PostCheck: React.FC = () => {
                             <button onClick={() => setActiveTab('history')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'history' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-white'}`}>Histórico ({historyAssignments.length})</button>
                         </nav>
                     </div>
-
                     <div className="space-y-6">
-                        {activeTab === 'pending' && (pendingAssignments.length > 0 ? pendingAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={setJustificationAssignment} onReminderRequested={handleReminderRequested} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma tarefa pendente! 🎉</p>)}
+                        {activeTab === 'pending' && (pendingAssignments.length > 0 ? pendingAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} onReminderRequested={handleReminderRequested} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma tarefa pendente! 🎉</p>)}
                         {activeTab === 'scheduled' && (scheduledPosts.length > 0 ? scheduledPosts.map(p => (<div key={p.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex items-center justify-between"><p className="font-semibold text-white">{p.postData.campaignName}</p><span className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded-full border border-blue-500/30">Agendado</span></div>)) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma publicação agendada.</p>)}
                         {activeTab === 'history' && (historyAssignments.length > 0 ? historyAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} onReminderRequested={()=>{}} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Seu histórico está vazio.</p>)}
                     </div>
@@ -319,16 +319,27 @@ const PostCheck: React.FC = () => {
             )}
 
             {justificationAssignment && (
-                <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-                    <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-md">
-                        <h3 className="text-xl font-bold text-white mb-4">Justificar Ausência</h3>
-                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Motivo..." rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 mb-4 text-white" />
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setJustificationAssignment(null)} className="px-4 py-2 bg-gray-600 text-white rounded-md">Cancelar</button>
+                <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4 backdrop-blur-sm" onClick={() => setJustificationAssignment(null)}>
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-700" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-white">Justificar Ausência</h3>
+                            <button onClick={() => setJustificationAssignment(null)} className="text-gray-400 hover:text-white"><XIcon className="w-6 h-6" /></button>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-4">Explique o motivo pelo qual você não poderá realizar esta postagem hoje.</p>
+                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Digite sua justificativa aqui..." rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-800 mb-4 text-white focus:ring-2 focus:ring-primary outline-none" />
+                        
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-300 mb-2">Anexar comprovante (opcional)</label>
+                            <input type="file" onChange={handleFileChange} accept="image/*" className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600" />
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setJustificationAssignment(null)} className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium">Cancelar</button>
                             <button onClick={async () => {
+                                if (!justificationText.trim()) { alert("Por favor, escreva o motivo."); return; }
                                 setIsSubmittingJustification(true);
-                                try { await submitJustification(justificationAssignment.id, justificationText, justificationFiles); setJustificationAssignment(null); performSearch(email); } catch (err: any) { alert(err.message); } finally { setIsSubmittingJustification(false); }
-                            }} disabled={isSubmittingJustification} className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50">{isSubmittingJustification ? 'Enviando...' : 'Enviar'}</button>
+                                try { await submitJustification(justificationAssignment.id, justificationText, justificationFiles); setJustificationAssignment(null); alert("Justificativa enviada com sucesso!"); performSearch(email); } catch (err: any) { alert(err.message); } finally { setIsSubmittingJustification(false); }
+                            }} disabled={isSubmittingJustification} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark font-bold disabled:opacity-50">{isSubmittingJustification ? 'Enviando...' : 'Enviar Justificativa'}</button>
                         </div>
                     </div>
                 </div>

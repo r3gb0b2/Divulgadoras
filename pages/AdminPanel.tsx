@@ -675,9 +675,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    /**
-     * FIX: Use an explicit type for emailToSearch and improved error handling to prevent 'unknown' assignment issues.
-     */
     const handleLookupPromoter = async (emailToSearch?: string) => {
         let searchString = '';
         if (emailToSearch) {
@@ -696,7 +693,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
+        // FIX: Changed catch parameter from unknown to any to ensure compatibility with string assignments.
+        } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
@@ -1026,7 +1024,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { void handleLookupPromoter(email); }} />
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { handleLookupPromoter(email); }} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>
