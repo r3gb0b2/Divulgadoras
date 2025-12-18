@@ -35,19 +35,15 @@ import AdminCleanupPage from './AdminCleanupPage';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
 import NewsletterPage from './NewsletterPage';
-import SubscriptionPage from './SubscriptionPage';
 import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
 
-// --- Local ProtectedRoute Component ---
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
     if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-    
-    // REDIRECIONAMENTO CORRIGIDO: Se não logado, vai para login administrativo
     if (!user) return <Navigate to="/admin/login" replace />; 
     return <>{children}</>;
 };
@@ -57,12 +53,10 @@ const AdminAuth: React.FC = () => {
 
     return (
         <Routes>
-            {/* Rota de Login acessível publicamente dentro de /admin */}
             <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
 
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
-            {/* Super Admin specific routes */}
             {adminData?.role === 'superadmin' && (
                 <>
                     <Route path="super" element={<ProtectedRoute><SuperAdminDashboard /></ProtectedRoute>} />
@@ -77,7 +71,6 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
 
-            {/* Common Admin Routes */}
             <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData!} /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
@@ -111,11 +104,9 @@ const AdminAuth: React.FC = () => {
             <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
             <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
             
-            {/* Rota Push agora disponível para todos os admins */}
             <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
             
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
-            <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
