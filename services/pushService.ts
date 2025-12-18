@@ -7,7 +7,7 @@ import { savePushToken } from './promoterService';
 /**
  * Obtém o token FCM correto (especialmente no iOS) e salva no Firestore.
  */
-const getTokenAndSave = async (promoterId: string) => {
+const getTokenAndSave = async (promoterId: string, retryCount = 0): Promise<boolean> => {
     try {
         let fcmToken: string | null = null;
 
@@ -18,7 +18,6 @@ const getTokenAndSave = async (promoterId: string) => {
             console.log('Push: Token FCM obtido (iOS):', fcmToken);
         } else {
             // No Android, o PushNotifications já retorna o token FCM no evento
-            // Mas buscamos novamente para garantir consistência se necessário
             const res = await FCM.getToken();
             fcmToken = res.token;
             console.log('Push: Token FCM obtido (Android):', fcmToken);
@@ -26,8 +25,17 @@ const getTokenAndSave = async (promoterId: string) => {
 
         if (fcmToken) {
             await savePushToken(promoterId, fcmToken);
+            console.log('Push: Token sincronizado com o Firebase!');
             return true;
         }
+
+        // Se falhou e ainda temos tentativas (comum no iOS recém aberto)
+        if (retryCount < 3) {
+            console.log(`Push: Token não disponível ainda. Tentativa ${retryCount + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return await getTokenAndSave(promoterId, retryCount + 1);
+        }
+
         return false;
     } catch (e) {
         console.error("Push: Erro ao obter/salvar token:", e);
@@ -58,7 +66,7 @@ export const initPushNotifications = async (promoterId: string) => {
         await PushNotifications.removeAllListeners();
 
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Evento de registro nativo recebido.');
+            console.log('Push: Dispositivo registrado no APNs/FCM com sucesso.');
             await getTokenAndSave(promoterId);
         });
 
@@ -67,11 +75,12 @@ export const initPushNotifications = async (promoterId: string) => {
         });
 
         PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push: Notificação recebida:', notification);
+            console.log('Push: Notificação recebida com app aberto:', notification);
         });
 
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
             const data = notification.notification.data;
+            console.log('Push: Usuário clicou na notificação:', data);
             if (data && data.url) {
                 // Remove prefixo de hash se houver e navega
                 const target = data.url.replace('/#', '').replace('#', '');
@@ -82,11 +91,10 @@ export const initPushNotifications = async (promoterId: string) => {
         // 3. Solicitar registro nativo
         await PushNotifications.register();
 
-        // 4. Fallback: Tenta buscar o token imediatamente caso o app já esteja registrado
-        // Isso resolve o problema de o listener 'registration' não disparar em aberturas subsequentes
+        // 4. Tentativa imediata (importante se o app já estiver registrado de sessões anteriores)
         setTimeout(() => {
             getTokenAndSave(promoterId);
-        }, 1000);
+        }, 1500);
 
         return true;
 
@@ -101,6 +109,11 @@ export const initPushNotifications = async (promoterId: string) => {
  */
 export const syncPushTokenManually = async (promoterId: string): Promise<boolean> => {
     if (!Capacitor.isNativePlatform()) return false;
+    console.log('Push: Iniciando sincronização manual...');
+    // No iOS, forçamos o registro novamente para garantir
+    if (Capacitor.getPlatform() === 'ios') {
+        await PushNotifications.register();
+    }
     return await getTokenAndSave(promoterId);
 };
 
