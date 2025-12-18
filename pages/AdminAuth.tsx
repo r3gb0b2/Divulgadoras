@@ -55,8 +55,10 @@ const AdminAuth: React.FC = () => {
 
     return (
         <Routes>
+            {/* Login deve ser acessível sem proteção, mas redireciona se já logado */}
             <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
 
+            {/* Todas as outras rotas são protegidas */}
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {adminData?.role === 'superadmin' && (
@@ -110,6 +112,7 @@ const AdminAuth: React.FC = () => {
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
 
+            {/* Catch-all interno do admin redireciona para o dashboard principal */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
     );

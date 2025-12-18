@@ -201,7 +201,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [lookupEmail, setLookupEmail] = useState('');
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
     const [isLookingUp, setIsLookingUp] = useState(false);
-    // FIX: Changed lookupError initial value to empty string and kept type as string to simplify logic and resolve unknown errors.
     const [lookupError, setLookupError] = useState<string>('');
 
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
@@ -674,18 +673,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Simplified handleLookupPromoter logic to resolve 'unknown' to 'string' type issues at line 508 and ensures search term is valid.
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const finalEmail = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail).trim();
+    // FIX: Simplified handleLookupPromoter logic to resolve 'unknown' to 'string' type issues and ensures search term is valid.
+    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
+        const finalEmail = searchInput.trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
-        setLookupError(''); // FIX: Reset to empty string instead of null for better compatibility.
+        setLookupError(''); 
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Explicitly cast finalEmail to string for compatibility.
-            const results = await findPromotersByEmail(finalEmail as string);
+            // FIX: Ensure findPromotersByEmail receives a string.
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
@@ -967,7 +967,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     </select>
                     <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                         <option value="all">Todos os Eventos</option>
-                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                        {campaignForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
                     <div className="flex gap-2 items-center flex-grow">
                         <input
