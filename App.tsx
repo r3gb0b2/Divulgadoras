@@ -134,10 +134,10 @@ const App: React.FC = () => {
             <ErrorBoundary>
               <Routes>
                 {/* 1. ROTAS DE ADMIN (PRIORIDADE MÁXIMA) */}
-                {/* Definida primeiro para que 'admin' não seja confundido com ':organizationId' */}
+                {/* Definida explicitamente no topo para evitar conflito com :organizationId */}
                 <Route path="/admin/*" element={<AdminAuth />} />
 
-                {/* 2. ROTAS ESTÁTICAS E PÁGINAS GERAIS */}
+                {/* 2. ROTAS ESTÁTICAS GERAIS */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
@@ -146,7 +146,7 @@ const App: React.FC = () => {
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
-                {/* 3. FUNCIONALIDADES DE DIVULGADORAS */}
+                {/* 3. FUNCIONALIDADES PÚBLICAS/DIVULGADORAS */}
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
@@ -156,6 +156,7 @@ const App: React.FC = () => {
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
 
                 {/* 4. ROTAS DINÂMICAS DE ORGANIZAÇÃO (Captura o que restou) */}
+                {/* Nota: Rotas com ":" devem ficar por último para não roubarem o tráfego de nomes fixos como /admin */}
                 <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />

@@ -13,10 +13,9 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Changed to extend React.Component directly to ensure base class is recognized and properties like state/props/setState are available.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Changed to use named import 'Component' and ensure base class is recognized for inheritance.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Explicitly typing state to satisfy strict environments
-  // FIX: Removed override modifier as it was failing due to base class recognition issues.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -27,24 +26,22 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     super(props);
   }
 
-  // FIX: Removed override modifier.
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  // FIX: Removed override modifier.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
+    // FIX: setState now recognized as inherited from Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  // FIX: Removed override modifier.
   public render() {
     if (this.state.hasError) {
       return (
@@ -73,6 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
+    // FIX: props now recognized as inherited from Component.
     return this.props.children;
   }
 }
