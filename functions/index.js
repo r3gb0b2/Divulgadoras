@@ -1,29 +1,19 @@
 
-/**
- * Import and initialize the Firebase Admin SDK.
- */
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 
-// Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
-
-// ... (helpers anteriores mantidos)
-
-// --- Cloud Messaging (Push Notifications) ---
 
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     
-    const { title, body, url, promoterIds, organizationId } = data;
+    const { title, body, url, promoterIds } = data;
     if (!title || !body || !promoterIds) {
-        throw new functions.https.HttpsError("invalid-argument", "Título, mensagem e destinatários são obrigatórios.");
+        throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
     }
 
     try {
-        // Busca os tokens das divulgadoras selecionadas
         const tokens = [];
         const CHUNK_SIZE = 30;
         
@@ -39,18 +29,19 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
             });
         }
 
-        if (tokens.length === 0) {
-            return { success: false, message: "Nenhum dispositivo registrado encontrado para estas divulgadoras." };
-        }
+        if (tokens.length === 0) return { success: false, message: "Nenhum token encontrado." };
 
         const messagePayload = {
-            notification: {
-                title: title,
-                body: body
+            notification: { title, body },
+            data: { url: url || '/#/posts' },
+            android: {
+                priority: "high",
+                notification: { sound: "default", icon: "stock_ticker_update", color: "#e83a93" }
             },
-            data: {
-                // Se o app estiver aberto ou em background, esse link será usado para navegar
-                url: url || '/#/admin'
+            apns: {
+                payload: {
+                    aps: { sound: "default", badge: 1 }
+                }
             },
             tokens: tokens
         };
@@ -59,7 +50,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
         
         return { 
             success: true, 
-            message: `${response.successCount} notificações enviadas com sucesso.`,
+            message: `${response.successCount} notificações enviadas.`,
             failureCount: response.failureCount
         };
 
@@ -68,5 +59,3 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
-
-// ... (restante das funções mantidas)

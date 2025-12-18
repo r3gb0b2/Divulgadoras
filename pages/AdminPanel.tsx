@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -390,6 +391,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         setStats(prev => {
             const currentPromoter = previousPromoters.find(p => p.id === id);
+            // FIX: currentHold was undefined, changing to currentPromoter
             if (!currentPromoter) return prev;
             
             const oldStatus = currentPromoter.status;
@@ -470,7 +472,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => id === id);
+                // FIX: p => id === id was incorrect, changing to p => p.id === id
+                const currentPromoter = previousPromoters.find(p => p.id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -483,7 +486,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -577,7 +580,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    if (matchMedia) {
+                    // FIX: matchMedia was incorrect, changing to rawError check
+                    if (rawError) {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
@@ -676,8 +680,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     const handleLookupPromoter = async (emailToSearch?: string) => {
+        // FIX: Handled unknown type implicitly by initialization
         let searchString = '';
-        if (emailToSearch) {
+        if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
         } else if (lookupEmail) {
             searchString = lookupEmail;
@@ -693,7 +698,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        // FIX: Replaced 'any' with standard 'err' and added proper type checks for catch blocks to satisfy TypeScript requirements.
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
