@@ -72,7 +72,6 @@ const AdminAuth: React.FC = () => {
                     <Route path="email-templates" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
                     <Route path="edit-privacy" element={<ProtectedRoute><EditPrivacyPolicyPage /></ProtectedRoute>} />
                     <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
-                    <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
                     <Route path="whatsapp-reminders" element={<ProtectedRoute><AdminWhatsAppReminders /></ProtectedRoute>} />
                 </>
@@ -111,6 +110,9 @@ const AdminAuth: React.FC = () => {
             <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
             <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
             <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
+            
+            {/* Rota Push agora disponível para todos os admins */}
+            <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
             
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />

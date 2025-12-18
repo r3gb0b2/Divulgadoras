@@ -32,13 +32,15 @@ const AdminPushCampaignPage: React.FC = () => {
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (adminData?.role !== 'superadmin') navigate('/admin');
-    }, [adminData, navigate]);
+    const isSuperAdmin = adminData?.role === 'superadmin';
 
     useEffect(() => {
-        getOrganizations().then(orgs => setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name))));
-    }, []);
+        if (isSuperAdmin) {
+            getOrganizations().then(orgs => setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name))));
+        } else if (selectedOrgId) {
+            setTargetOrgId(selectedOrgId);
+        }
+    }, [isSuperAdmin, selectedOrgId]);
 
     useEffect(() => {
         if (targetOrgId) {
@@ -108,7 +110,7 @@ const AdminPushCampaignPage: React.FC = () => {
                     <FaceIdIcon className="w-8 h-8 text-primary" />
                     Notificação Push Nativa
                 </h1>
-                <button onClick={() => navigate('/admin')} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
             </div>
@@ -116,13 +118,28 @@ const AdminPushCampaignPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-secondary p-6 rounded-lg shadow-lg space-y-4">
                     <h2 className="text-xl font-semibold border-b border-gray-700 pb-2">1. Destinatários</h2>
-                    <div>
-                        <label className="block text-sm text-gray-400 mb-1">Organização</label>
-                        <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
-                            <option value="">Selecione...</option>
-                            {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                        </select>
+                    {isSuperAdmin ? (
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">Organização</label>
+                            <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                                <option value="">Selecione...</option>
+                                {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                            </select>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-primary font-bold">Enviando para sua equipe</p>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-4">
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-1">Filtrar por Evento</label>
+                            <select value={targetCampaignName} onChange={e => setTargetCampaignName(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
+                                <option value="all">Todos os Eventos</option>
+                                {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                            </select>
+                        </div>
                     </div>
+
                     <div className="p-3 bg-blue-900/20 border border-blue-800 rounded text-xs text-blue-300">
                         Apenas divulgadoras que abriram o aplicativo recentemente e autorizaram notificações aparecem aqui.
                     </div>
