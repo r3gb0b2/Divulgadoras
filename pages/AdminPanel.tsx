@@ -676,12 +676,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     /**
-     * FIX: Use an explicit type for emailToSearch to prevent "unknown" assignment error.
-     * Changed from string | unknown to any for safer direct assignment.
+     * FIX: Use an explicit type for emailToSearch and improved error handling to prevent 'unknown' assignment issues.
      */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
+    const handleLookupPromoter = async (emailToSearch?: string) => {
         let searchString = '';
-        if (typeof emailToSearch === 'string') {
+        if (emailToSearch) {
             searchString = emailToSearch;
         } else if (lookupEmail) {
             searchString = lookupEmail;
@@ -697,8 +696,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
