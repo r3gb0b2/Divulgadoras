@@ -1,10 +1,10 @@
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import AdminDashboard from './AdminDashboard';
 import SuperAdminDashboard from './SuperAdminDashboard';
-import AdminPanel from './AdminPanel';
+// FIX: Using named import for AdminPanel to resolve "no default export" error
+import { AdminPanel } from './AdminPanel';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import ManageUsersPage from './ManageUsersPage';

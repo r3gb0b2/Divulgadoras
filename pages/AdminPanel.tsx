@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -216,7 +217,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
 
     const isSuperAdmin = adminData.role === 'superadmin';
-    const canManage = adminData.role === 'superadmin' || adminData.role === 'admin';
+    const canManage = adminData.role === 'superadmin' || adminData.role === 'approver' || adminData.role === 'admin';
 
     const organizationIdForReasons = useMemo(() => {
         if (isSuperAdmin) {
@@ -470,7 +471,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => id === id);
+                const currentPromoter = previousPromoters.find(p => p.id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -483,7 +484,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -546,140 +547,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    const handleManualNotify = async (promoter: Promoter) => {
-        if (notifyingId) return;
-        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora with base no seu status atual (Aprovado). Deseja continuar?")) {
-            return;
-        }
-        
-        setNotifyingId(promoter.id);
-        try {
-            const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
-            const result = await manuallySendStatusEmail({ promoterId: promoter.id });
-            const data = result.data as { success: boolean, message: string, provider?: string };
-            const providerName = data.provider || 'Brevo (v9.2)';
-            alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
-            
-            setAllPromoters(prev => prev.map(p => 
-                p.id === promoter.id 
-                ? { ...p, lastManualNotificationAt: { seconds: Date.now() / 1000 } as any } 
-                : p
-            ));
-
-            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
-            await updatePromoter(promoter.id, updateData);
-
-        } catch (error: any) {
-            console.error("Failed to send manual notification:", error);
-            let detailedError = 'Ocorreu um erro desconhecido.';
-            let providerName = 'Brevo (v9.2)';
-
-            if (error && typeof error === 'object') {
-                if (error.details) {
-                    const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    detailedError = String(rawError);
-                    if (error.details.provider) {
-                        providerName = String(error.details.provider);
-                    }
-                } else if (error.message) {
-                    detailedError = error.message;
-                }
-            } else {
-                detailedError = String(error);
-            }
-            
-            alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
-        } finally {
-            setNotifyingId(null);
-        }
-    };
-
-    const handleRemoveFromTeam = async (promoter: Promoter) => {
-        if (!canManage) return;
-        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
-            setProcessingId(promoter.id);
-            try {
-                const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
-                await setPromoterStatusToRemoved({ promoterId: promoter.id });
-                
-                setAllPromoters(prev => prev.map(p => 
-                    p.id === promoter.id ? { ...p, status: 'removed' } : p
-                ));
-                setStats(prev => ({
-                    ...prev,
-                    approved: prev.approved > 0 ? prev.approved - 1 : 0,
-                    removed: prev.removed + 1
-                }));
-
-            } catch (err: any) {
-                alert(`Falha ao remover divulgadora: ${err.message}`);
-            } finally {
-                setProcessingId(null);
-            }
-        }
-    };
-
-    const handleDeletePromoter = async (id: string) => {
-        if (!isSuperAdmin) return;
-        if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
-            try {
-                await deletePromoter(id);
-                setAllPromoters(prev => prev.filter(p => p.id !== id));
-                setStats(prev => ({ ...prev, total: prev.total - 1 }));
-            } catch (error: any) {
-                alert("Falha ao excluir a inscrição.");
-            }
-        }
-    };
-
-    const openPhotoViewer = (urls: string[], startIndex: number) => {
-        setPhotoViewerUrls(urls);
-        setPhotoViewerStartIndex(startIndex);
-        setIsPhotoViewerOpen(true);
-    };
-
-    const openEditModal = (promoter: Promoter) => {
-        setEditingPromoter(promoter);
-        setIsEditModalOpen(true);
-    };
-
-    const openRejectionModal = async (promoter: Promoter) => {
-        if (isSuperAdmin && promoter.organizationId) {
-            try {
-                const reasons = await getRejectionReasons(promoter.organizationId);
-                setRejectionReasons(reasons);
-            } catch (e: any) {
-                console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
-                setRejectionReasons([]);
-            }
-        }
-        setRejectingPromoter(promoter);
-        setIsRejectionModalOpen(true);
-    }
-    
-    const handleLogout = async () => {
-        try {
-            await auth.signOut();
-            navigate('/admin/login');
-        } catch (error) {
-            console.error("Logout failed", error);
-        }
-    };
-
-    const organizationsMap = useMemo(() => {
-        return allOrganizations.reduce((acc, org) => {
-            acc[org.id] = org.name;
-            return acc;
-        }, {} as Record<string, string>);
-    }, [allOrganizations]);
-
-    /* 
-     * FIX: Updated handleLookupPromoter to explicitly accept a string or nothing. 
-     * This avoids type mismatch errors when called with a string from the Badge, or with nothing from the Global Search input.
-     */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
-        const finalEmail = (searchInput || '').trim();
+    // Fix: Changed emailToSearch type from unknown to string and simplified logic to resolve unknown-to-string assignment error.
+    const handleLookupPromoter = async (emailToSearch?: string) => {
+        const finalEmail = (emailToSearch || lookupEmail || '').trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -687,7 +557,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // findPromotersByEmail correctly receives a string.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
@@ -728,11 +597,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             } else if (a.justification) {
                 stat.justifications++;
                 if (a.justificationStatus === 'accepted') {
-                    statsMap.get(a.promoterId)!.acceptedJustifications++;
+                    stat.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
-                    statsMap.get(a.promoterId)!.missed++;
+                    stat.missed++;
                 } else if (a.justificationStatus === 'pending' || a.justification) {
-                    statsMap.get(a.promoterId)!.pending++;
+                    stat.pending++;
                 }
             } else {
                 let deadlineHasPassed = false;
@@ -866,6 +735,133 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[status]}`}>{text[status]}</span>;
     };
 
+    const handleManualNotify = async (promoter: Promoter) => {
+        if (notifyingId) return;
+        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado). Deseja continuar?")) {
+            return;
+        }
+        
+        setNotifyingId(promoter.id);
+        try {
+            const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
+            const result = await manuallySendStatusEmail({ promoterId: promoter.id });
+            const data = result.data as { success: boolean, message: string, provider?: string };
+            const providerName = data.provider || 'Brevo (v9.2)';
+            alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
+            
+            setAllPromoters(prev => prev.map(p => 
+                p.id === promoter.id 
+                ? { ...p, lastManualNotificationAt: { seconds: Date.now() / 1000 } as any } 
+                : p
+            ));
+
+            const updateData = { lastManualNotificationAt: firebase.firestore.FieldValue.serverTimestamp() };
+            await updatePromoter(promoter.id, updateData);
+
+        } catch (error: any) {
+            console.error("Failed to send manual notification:", error);
+            let detailedError = 'Ocorreu um erro desconhecido.';
+            let providerName = 'Brevo (v9.2)';
+
+            if (error && typeof error === 'object') {
+                if (error.details) {
+                    const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
+                    detailedError = String(rawError);
+                    if (error.details.provider) {
+                        providerName = String(error.details.provider);
+                    }
+                } else if (error.message) {
+                    detailedError = error.message;
+                }
+            } else {
+                detailedError = String(error);
+            }
+            
+            alert(`Falha ao enviar notificação: ${detailedError} (Tentativa via: ${providerName})`);
+        } finally {
+            setNotifyingId(null);
+        }
+    };
+
+    const handleRemoveFromTeam = async (promoter: Promoter) => {
+        if (!canManage) return;
+        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
+            setProcessingId(promoter.id);
+            try {
+                const setPromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
+                await setPromoterStatusToRemoved({ promoterId: promoter.id });
+                
+                setAllPromoters(prev => prev.map(p => 
+                    p.id === promoter.id ? { ...p, status: 'removed' } : p
+                ));
+                setStats(prev => ({
+                    ...prev,
+                    approved: prev.approved > 0 ? prev.approved - 1 : 0,
+                    removed: prev.removed + 1
+                }));
+
+            } catch (err: any) {
+                alert(`Falha ao remover divulgadora: ${err.message}`);
+            } finally {
+                setProcessingId(null);
+            }
+        }
+    };
+
+    const handleDeletePromoter = async (id: string) => {
+        if (!isSuperAdmin) return;
+        if (window.confirm("Tem certeza que deseja excluir esta inscrição? Esta ação não pode ser desfeita.")) {
+            try {
+                await deletePromoter(id);
+                setAllPromoters(prev => prev.filter(p => p.id !== id));
+                setStats(prev => ({ ...prev, total: prev.total - 1 }));
+            } catch (error: any) {
+                alert("Falha ao excluir a inscrição.");
+            }
+        }
+    };
+
+    const openPhotoViewer = (urls: string[], startIndex: number) => {
+        setPhotoViewerUrls(urls);
+        setPhotoViewerStartIndex(startIndex);
+        setIsPhotoViewerOpen(true);
+    };
+
+    const openEditModal = (promoter: Promoter) => {
+        setEditingPromoter(promoter);
+        setIsEditModalOpen(true);
+    };
+
+    const openRejectionModal = async (promoter: Promoter) => {
+        if (isSuperAdmin && promoter.organizationId) {
+            try {
+                const reasons = await getRejectionReasons(promoter.organizationId);
+                setRejectionReasons(reasons);
+            } catch (e: any) {
+                console.error("Failed to fetch rejection reasons for org:", promoter.organizationId, e);
+                setRejectionReasons([]);
+            }
+        }
+        setRejectingPromoter(promoter);
+        setIsRejectionModalOpen(true);
+    }
+    
+    const handleLogout = async () => {
+        try {
+            await auth.signOut();
+            navigate('/admin/login');
+        } catch (error) {
+            console.error("Logout failed", error);
+        }
+    };
+
+    const organizationsMap = useMemo(() => {
+        return allOrganizations.reduce((acc, org) => {
+            acc[org.id] = org.name;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [allOrganizations]);
+
     if (isLoading && allPromoters.length === 0) {
         return (
             <div className="flex justify-center items-center h-64">
@@ -964,4 +960,127 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             {allOrganizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
                         </select>
                     )}
-                    <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-
+                    <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                        <option value="all">Todos os Estados</option>
+                        {(isSuperAdmin ? states.map(s => s.abbr) : (getStatesForScope() || [])).map(abbr => <option key={abbr} value={abbr}>{stateMap[abbr]}</option>)}
+                    </select>
+                    <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
+                        <option value="all">Todos os Eventos</option>
+                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                    </select>
+                    <div className="flex gap-2 items-center flex-grow">
+                        <input
+                            type="number"
+                            placeholder="Idade Mín."
+                            value={minAge}
+                            onChange={(e) => setMinAge(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                        />
+                        <input
+                            type="number"
+                            placeholder="Idade Máx."
+                            value={maxAge}
+                            onChange={(e) => setMaxAge(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {selectedPromoterIds.size > 0 && (
+                <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm p-3 rounded-md flex flex-col sm:flex-row justify-between items-center my-4 gap-3">
+                    <span className="font-semibold text-white">{selectedPromoterIds.size} selecionadas</span>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} disabled={isBulkProcessing} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-md text-sm font-semibold">Aprovar</button>
+                        <button onClick={handleBulkRejectClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-sm font-semibold">Rejeitar</button>
+                        <button onClick={handleBulkRemoveClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold">Remover da Equipe</button>
+                    </div>
+                </div>
+            )}
+
+            {error && <p className="text-red-400 mt-4">{error}</p>}
+            <div className="mt-6 space-y-4">
+                {displayPromoters.map(promoter => (
+                    <div key={promoter.id} className="bg-secondary shadow-md rounded-lg p-4 flex flex-col md:flex-row items-start gap-4">
+                        <div className="flex-shrink-0 flex items-center gap-3">
+                            {canManage && filter === 'pending' && (
+                                <input type="checkbox" checked={selectedPromoterIds.has(promoter.id)} onChange={() => handleToggleSelect(promoter.id)} className="h-5 w-5 rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary" />
+                            )}
+                            <div className="relative">
+                                <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
+                                <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth)}</div>
+                            </div>
+                        </div>
+                        <div className="flex-grow">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
+                                        <div title={promoter.fcmToken ? "Dispositivo App Vinculado" : "Sem App Vinculado"}>
+                                            <FaceIdIcon className={`w-5 h-5 ${promoter.fcmToken ? 'text-green-400' : 'text-gray-600'}`} />
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-gray-400">{promoter.email}</p>
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { handleLookupPromoter(email); }} />
+                                </div>
+                                {getStatusBadge(promoter.status)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
+                                <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                <span>{promoter.campaignName}</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
+                            </div>
+                            {promoter.observation && (
+                                <p className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded-md mt-2 italic"><strong>Obs:</strong> {promoter.observation}</p>
+                            )}
+                            {promoter.actionTakenByEmail && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {getActionLabel(promoter.status)} {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt as Timestamp)}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
+                            {filter === 'pending' && canManage && (
+                                <>
+                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold">Aprovar</button>
+                                    <button onClick={() => openRejectionModal(promoter)} className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-semibold">Rejeitar</button>
+                                </>
+                            )}
+                            {filter === 'approved' && canManage && (
+                                <>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                        {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
+                                    </button>
+                                    <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
+                                </>
+                            )}
+                             {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="w-full px-4 py-2 bg-gray-800 text-red-400 border border-red-900/50 rounded-md hover:bg-red-900/30 text-xs">Excluir Inscrição</button>}
+                            <button onClick={() => openEditModal(promoter)} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">Detalhes</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {totalFilteredCount > PROMOTERS_PER_PAGE && (
+                <div className="mt-6 flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                    <div className="flex gap-2">
+                        <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Anterior</button>
+                        <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Próxima</button>
+                    </div>
+                </div>
+            )}
+
+            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
+        </div>
+    );
+};
+
+export default AdminPanel;
