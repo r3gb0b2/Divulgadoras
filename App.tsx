@@ -6,16 +6,14 @@ import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PublicHome from './pages/PublicHome';
+import HowToUsePage from './pages/HowToUsePage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
-import GeminiPage from './pages/Gemini';
-import PostCheck from './pages/PostCheck';
-import { GuestListCheck } from './pages/GuestListCheck';
-import ProofUploadPage from './pages/ProofUploadPage';
 import ErrorBoundary from './components/ErrorBoundary';
-import OneTimePostPage from './pages/OneTimePostPage';
 import { auth } from './firebase/config';
-import LeaveGroupPage from './pages/LeaveGroupPage';
+import ProofUploadPage from './pages/ProofUploadPage';
+import OneTimePostPage from './pages/OneTimePostPage';
+import GuestListCheck from './pages/GuestListCheck';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
@@ -61,7 +59,7 @@ const Header: React.FC = () => {
   };
 
   return (
-      <header className="bg-secondary shadow-md sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
+      <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-8 w-auto text-white" />
@@ -70,6 +68,7 @@ const Header: React.FC = () => {
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
+                  <Link to="/como-funciona" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
                   <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
@@ -92,12 +91,13 @@ const Header: React.FC = () => {
           </nav>
 
           {isMenuOpen && (
-              <div className="md:hidden" id="mobile-menu">
+              <div className="md:hidden bg-secondary border-b border-gray-700" id="mobile-menu">
                   <div className="px-2 pt-2 pb-4 space-y-2 sm:px-3">
                       <div className="px-2 pb-3 mb-2 border-b border-gray-700">
                           <OrganizationSwitcher />
                       </div>
                       <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
+                      <Link to="/como-funciona" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                       {adminData && (
@@ -129,33 +129,34 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
+                {/* Rotas Estáticas e de Admin primeiro */}
                 <Route path="/" element={<PublicHome />} />
+                <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
-                
-                {/* Nova rota simplificada/única */}
-                <Route path="/apple-test" element={<AppleTestRegistration />} />
-                
-                <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
-                <Route path="/:organizationId" element={<StateSelection />} />
-                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
-                
-                <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/status" element={<StatusCheck />} />
+                <Route path="/admin/*" element={<AdminAuth />} />
+                
+                {/* Rotas de Funcionalidades Públicas */}
+                <Route path="/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
-                <Route path="/leave-group" element={<LeaveGroupPage />} />
+                
+                {/* Rotas Dinâmicas de Organização por último */}
+                <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
+                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
+                <Route path="/:organizationId" element={<StateSelection />} />
               </Routes>
             </ErrorBoundary>
           </main>
-          <footer className="text-center py-4 text-gray-400 text-sm">
+          <footer className="text-center py-4 text-gray-400 text-sm mt-auto">
               <p>
                   &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
                   <span className="mx-2">|</span> 
-                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
+                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Privacidade</Link>
                   <span className="mx-2">|</span> 
                   <Link to="/suporte" className="hover:text-white underline">Suporte</Link>
               </p>
