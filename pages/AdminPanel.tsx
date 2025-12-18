@@ -547,9 +547,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // Fix: Changed emailToSearch type from unknown to string and simplified logic to resolve unknown-to-string assignment error.
+    // Fix: Explicitly handle string parameter to resolve unknown-to-string assignment error.
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const finalEmail = (emailToSearch || lookupEmail || '').trim();
+        const finalEmail = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail || '').trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
