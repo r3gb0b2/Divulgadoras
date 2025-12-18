@@ -34,6 +34,13 @@ const SuperAdminDashboard: React.FC = () => {
                     </div>
                     <p className="mt-2 text-gray-400">Verificar pedidos de novos administradores.</p>
                 </Link>
+                <Link to="/admin/apple-test" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                    <div className="flex items-center">
+                        <FaceIdIcon className="w-8 h-8 text-primary" />
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Apple Test Review</h2>
+                    </div>
+                    <p className="mt-2 text-gray-400">Gerenciar inscritos para teste do app iOS.</p>
+                </Link>
                 <Link to="/admin/newsletter" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                     <div className="flex items-center">
                         <EnvelopeIcon className="w-8 h-8 text-primary" />
@@ -55,7 +62,7 @@ const SuperAdminDashboard: React.FC = () => {
                     </div>
                     <p className="mt-2 text-gray-400">Atualizar o texto legal da plataforma.</p>
                 </Link>
-                <Link to="/admin/push-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                <Link to="/admin/push-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-transparent hover:border-indigo-500">
                     <div className="flex items-center">
                         <FaceIdIcon className="w-8 h-8 text-primary" />
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Campanha Push</h2>

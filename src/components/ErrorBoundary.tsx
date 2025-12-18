@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -14,9 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Changed to extend React.Component directly to ensure base class is recognized and properties like state/props/setState are available.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Explicitly typing state to satisfy strict environments
-  public override state: ErrorBoundaryState = {
+  // FIX: Removed override modifier as it was failing due to base class recognition issues.
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -26,12 +27,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
+  // FIX: Removed override modifier.
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // FIX: Removed override modifier.
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
@@ -41,7 +44,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     });
   }
 
-  public override render() {
+  // FIX: Removed override modifier.
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

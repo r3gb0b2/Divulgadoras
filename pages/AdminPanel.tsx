@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -684,8 +683,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             searchString = String(lookupEmail || '');
         }
         
-        // FIX: Ensure finalEmail is a string and handle unknown type issues.
-        const finalEmail: string = (searchString || '').trim();
+        // FIX: Ensure finalEmail is strictly a string to avoid unknown type issues.
+        const finalEmail: string = String(searchString || '').trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -693,10 +692,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: findPromotersByEmail expects a string.
+            // findPromotersByEmail expects a string.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err: unknown) {
+            // FIX: Safely handle unknown error type in catch block
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

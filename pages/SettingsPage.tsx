@@ -46,6 +46,14 @@ const SettingsPage: React.FC = () => {
       condition: () => true,
     },
     {
+      id: 'apple_test',
+      to: '/admin/apple-test',
+      Icon: FaceIdIcon,
+      title: 'Apple Test Review',
+      description: 'Gerencie e exporte a lista de interessados em testar o aplicativo no iOS (Apple).',
+      condition: () => true,
+    },
+    {
       id: 'push_campaign',
       to: '/admin/push-campaign',
       Icon: FaceIdIcon,

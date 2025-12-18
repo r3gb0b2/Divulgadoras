@@ -133,7 +133,11 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* 1. ROTAS ESTÁTICAS E PÁGINAS GERAIS (Prioridade Alta) */}
+                {/* 1. ROTAS DE ADMIN (PRIORIDADE MÁXIMA) */}
+                {/* Definida primeiro para que 'admin' não seja confundido com ':organizationId' */}
+                <Route path="/admin/*" element={<AdminAuth />} />
+
+                {/* 2. ROTAS ESTÁTICAS E PÁGINAS GERAIS */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
@@ -141,9 +145,6 @@ const App: React.FC = () => {
                 <Route path="/suporte" element={<SupportPage />} />
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
-                
-                {/* 2. ROTAS DE ADMIN (Antes das dinâmicas para evitar conflito com :organizationId) */}
-                <Route path="/admin/*" element={<AdminAuth />} />
                 
                 {/* 3. FUNCIONALIDADES DE DIVULGADORAS */}
                 <Route path="/posts" element={<PostCheck />} />
@@ -154,7 +155,7 @@ const App: React.FC = () => {
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
 
-                {/* 4. ROTAS DINÂMICAS DE ORGANIZAÇÃO (Captura tudo que não bateu acima) */}
+                {/* 4. ROTAS DINÂMICAS DE ORGANIZAÇÃO (Captura o que restou) */}
                 <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
