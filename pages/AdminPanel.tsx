@@ -246,7 +246,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 }
                 const campaignsData = await campaignsPromise;
                 setAllCampaigns(campaignsData);
-            // FIX: Use any for catch to match style and handle unknown errors safely
             } catch (err: any) {
                 setError(err.message || 'Não foi possível carregar dados de suporte.');
             }
@@ -578,9 +577,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    if (matchMedia) {
-                        detailedError = String(rawError);
-                    }
+                    detailedError = String(rawError);
                     if (error.details.provider) {
                         providerName = String(error.details.provider);
                     }
@@ -676,15 +673,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
+    // FIX: Added explicit string conversion and type checks to resolve 'unknown' to 'string' assignment error.
     const handleLookupPromoter = async (emailToSearch?: string) => {
         let searchString = '';
-        if (emailToSearch) {
+        if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
-        } else if (lookupEmail) {
+        } else if (typeof lookupEmail === 'string') {
             searchString = lookupEmail;
         }
         
-        const finalEmail: string = searchString.trim();
+        const finalEmail: string = (searchString || '').trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -694,7 +692,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        // FIX: Using catch (err: any) to ensure compatibility and simplify property access.
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);

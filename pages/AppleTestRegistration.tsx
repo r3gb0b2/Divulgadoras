@@ -1,19 +1,45 @@
 
-import React, { useState } from 'react';
-import { useAdminAuth } from '../contexts/AdminAuthContext';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { registerForAppleTest } from '../services/testRegistrationService';
+import { getPublicOrganizations } from '../services/organizationService';
 import { UserIcon, MailIcon, LogoIcon } from '../components/Icons';
 
 const AppleTestRegistration: React.FC = () => {
-    const { selectedOrgId } = useAdminAuth();
+    const { organizationId: urlOrgId } = useParams<{ organizationId: string }>();
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
         email: '',
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetchingOrg, setIsFetchingOrg] = useState(!urlOrgId);
+    const [resolvedOrgId, setResolvedOrgId] = useState<string | null>(urlOrgId || null);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const resolveOrg = async () => {
+            if (urlOrgId) return;
+
+            try {
+                // Busca as organizações públicas para associar o teste a uma delas
+                const orgs = await getPublicOrganizations();
+                if (orgs.length > 0) {
+                    // Associa à primeira organização ativa encontrada por padrão
+                    setResolvedOrgId(orgs[0].id);
+                } else {
+                    setError("Nenhuma organização ativa encontrada para processar inscrições.");
+                }
+            } catch (err) {
+                setError("Erro ao identificar a produtora responsável.");
+            } finally {
+                setIsFetchingOrg(false);
+            }
+        };
+
+        resolveOrg();
+    }, [urlOrgId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -24,8 +50,8 @@ const AppleTestRegistration: React.FC = () => {
         setIsLoading(true);
         setError(null);
 
-        if (!selectedOrgId) {
-            setError("Organização não identificada. Por favor, acesse o link oficial.");
+        if (!resolvedOrgId) {
+            setError("Organização não identificada. Por favor, utilize o link oficial.");
             setIsLoading(false);
             return;
         }
@@ -33,7 +59,7 @@ const AppleTestRegistration: React.FC = () => {
         try {
             await registerForAppleTest({
                 ...formData,
-                organizationId: selectedOrgId
+                organizationId: resolvedOrgId
             });
             setSuccess(true);
         } catch (err: any) {
@@ -43,6 +69,14 @@ const AppleTestRegistration: React.FC = () => {
         }
     };
 
+    if (isFetchingOrg) {
+        return (
+            <div className="min-h-[80vh] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
     if (success) {
         return (
             <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -51,7 +85,7 @@ const AppleTestRegistration: React.FC = () => {
                         <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">Inscrição Realizada!</h2>
-                    <p className="text-gray-400">Em breve você receberá um e-mail da Apple (TestFlight) com as instruções para baixar o nosso aplicativo oficial.</p>
+                    <p className="text-gray-400">Em breve você receberá um e-mail da Apple (TestFlight) com as instruções para baixar o nosso aplicativo oficial no seu iPhone.</p>
                 </div>
             </div>
         );

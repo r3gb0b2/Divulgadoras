@@ -132,7 +132,11 @@ const App: React.FC = () => {
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
+                
+                {/* Nova rota simplificada/única */}
                 <Route path="/apple-test" element={<AppleTestRegistration />} />
+                
+                <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 

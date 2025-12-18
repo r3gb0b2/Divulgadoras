@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService';
 import { AppleTestRegistrant } from '../types';
-import { ArrowLeftIcon, DownloadIcon, TrashIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, TrashIcon, LinkIcon } from '../components/Icons';
 
 const AdminAppleTestReview: React.FC = () => {
     const navigate = useNavigate();
@@ -13,6 +13,7 @@ const AdminAppleTestReview: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -29,6 +30,15 @@ const AdminAppleTestReview: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [selectedOrgId]);
+
+    const handleCopyLink = () => {
+        // Agora copia o link "único" sem precisar do ID da organização na URL
+        const link = `${window.location.origin}/#/apple-test`;
+        navigator.clipboard.writeText(link).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
@@ -67,7 +77,6 @@ const AdminAppleTestReview: React.FC = () => {
             return;
         }
 
-        // Apple Store Connect Bulk Import Format: First Name, Last Name, Email
         const headers = ["First Name", "Last Name", "Email"];
         const rows = targetList.map(r => `"${r.firstName}","${r.lastName}","${r.email}"`);
         const csvContent = [headers.join(','), ...rows].join('\n');
@@ -92,6 +101,12 @@ const AdminAppleTestReview: React.FC = () => {
                     <h1 className="text-3xl font-bold text-white">Inscritos para Teste iOS</h1>
                 </div>
                 <div className="flex gap-3">
+                    <button 
+                        onClick={handleCopyLink}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold"
+                    >
+                        <LinkIcon className="w-4 h-4" /> {copied ? 'Copiado!' : 'Copiar Link Único'}
+                    </button>
                     <button 
                         onClick={handleDownloadCSV}
                         disabled={selectedIds.size === 0}
