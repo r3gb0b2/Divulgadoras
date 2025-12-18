@@ -7,13 +7,17 @@ import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PublicHome from './pages/PublicHome';
 import HowToUsePage from './pages/HowToUsePage';
+import PricingPage from './pages/PricingPage';
+import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
-import ErrorBoundary from './components/ErrorBoundary';
-import { auth } from './firebase/config';
+import PostCheck from './pages/PostCheck';
+import { GuestListCheck } from './pages/GuestListCheck';
 import ProofUploadPage from './pages/ProofUploadPage';
+import ErrorBoundary from './components/ErrorBoundary';
 import OneTimePostPage from './pages/OneTimePostPage';
-import GuestListCheck from './pages/GuestListCheck';
+import { auth } from './firebase/config';
+import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
@@ -129,30 +133,35 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* Rotas Estáticas e de Admin primeiro */}
+                {/* 1. ROTAS ESTÁTICAS E PÁGINAS GERAIS (Prioridade Alta) */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
+                <Route path="/status" element={<StatusCheck />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
-                <Route path="/status" element={<StatusCheck />} />
+                <Route path="/planos" element={<PricingPage />} />
+                <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
+                
+                {/* 2. ROTAS DE ADMIN (Antes das dinâmicas para evitar conflito com :organizationId) */}
                 <Route path="/admin/*" element={<AdminAuth />} />
                 
-                {/* Rotas de Funcionalidades Públicas */}
-                <Route path="/apple-test" element={<AppleTestRegistration />} />
+                {/* 3. FUNCIONALIDADES DE DIVULGADORAS */}
                 <Route path="/posts" element={<PostCheck />} />
+                <Route path="/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
-                
-                {/* Rotas Dinâmicas de Organização por último */}
+                <Route path="/leave-group" element={<LeaveGroupPage />} />
+
+                {/* 4. ROTAS DINÂMICAS DE ORGANIZAÇÃO (Captura tudo que não bateu acima) */}
                 <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
               </Routes>
             </ErrorBoundary>
           </main>
-          <footer className="text-center py-4 text-gray-400 text-sm mt-auto">
+          <footer className="text-center py-6 text-gray-400 text-sm mt-auto">
               <p>
                   &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
                   <span className="mx-2">|</span> 

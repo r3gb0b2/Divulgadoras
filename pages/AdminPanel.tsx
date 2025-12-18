@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -548,7 +549,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleManualNotify = async (promoter: Promoter) => {
         if (notifyingId) return;
-        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora com base no seu status atual (Aprovado). Deseja continuar?")) {
+        if (!window.confirm("Isso enviará um e-mail de notificação para esta divulgadora with base no seu status atual (Aprovado). Deseja continuar?")) {
             return;
         }
         
@@ -678,10 +679,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         let searchString = '';
         if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
-        } else if (typeof lookupEmail === 'string') {
-            searchString = lookupEmail;
+        } else {
+            // Explicitly cast or convert lookupEmail
+            searchString = String(lookupEmail || '');
         }
         
+        // FIX: Ensure finalEmail is a string and handle unknown type issues.
         const finalEmail: string = (searchString || '').trim();
         if (!finalEmail) return;
         
@@ -690,6 +693,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
+            // FIX: findPromotersByEmail expects a string.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
@@ -1032,7 +1036,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
-                                <span>{promoter.campaignName} ({promoter.state})</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
+                                <span>{promoter.campaignName}</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
                             </div>
                             {promoter.observation && (
                                 <p className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded-md mt-2 italic"><strong>Obs:</strong> {promoter.observation}</p>

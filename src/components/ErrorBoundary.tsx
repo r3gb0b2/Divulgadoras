@@ -1,4 +1,5 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -11,22 +12,27 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Inheriting from 'React.Component' and removed 'override' to resolve type errors.
+ * Error boundary component to catch and handle uncaught errors in child components.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Explicitly typing state to satisfy strict environments
+  public override state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
 
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // You can also log the error to an error reporting service
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
     this.setState({
@@ -35,7 +41,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     });
   }
 
-  public render() {
+  public override render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
