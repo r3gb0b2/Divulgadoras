@@ -12,6 +12,7 @@ import { storage } from '../firebase/config';
 import firebase from 'firebase/compat/app';
 import { Capacitor } from '@capacitor/core';
 
+// ... (helpers mantidos)
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
     if (typeof timestamp.toDate === 'function') return timestamp.toDate();
@@ -235,6 +236,7 @@ const PostCheck: React.FC = () => {
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
     
+    const [currentFcmToken, setCurrentFcmToken] = useState<string | null>(null);
     const [isPushRegistered, setIsPushRegistered] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
@@ -246,9 +248,11 @@ const PostCheck: React.FC = () => {
             
             const activePromoter = promoterProfiles[0];
             setPromoter(activePromoter);
-            
+            setCurrentFcmToken(activePromoter.fcmToken || null);
+
             if (Capacitor.isNativePlatform()) {
-                initPushNotifications(activePromoter.id).then(success => { setIsPushRegistered(success); });
+                const success = await initPushNotifications(activePromoter.id);
+                setIsPushRegistered(success);
             }
 
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
@@ -277,12 +281,13 @@ const PostCheck: React.FC = () => {
         if (!promoter || isSyncingPush) return;
         setIsSyncingPush(true);
         try {
-            const success = await syncPushTokenManually(promoter.id);
-            if (success) {
+            const token = await syncPushTokenManually(promoter.id);
+            if (token) {
                 setIsPushRegistered(true);
-                alert("Seu dispositivo foi sincronizado com sucesso! Agora você receberá notificações push.");
+                setCurrentFcmToken(token);
+                alert("Seu dispositivo foi sincronizado com sucesso! Token gerado.");
             } else {
-                alert("Não foi possível sincronizar. Verifique se você autorizou as notificações nas configurações do iPhone.");
+                alert("Não foi possível sincronizar. Verifique se as notificações estão ativadas no iOS (Ajustes > Notificações).");
             }
         } catch (e) {
             alert("Erro ao sincronizar. Tente novamente mais tarde.");
@@ -312,24 +317,31 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-4 rounded-xl border-2 flex items-center justify-between gap-4 transition-all ${isPushRegistered ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-full ${isPushRegistered ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
-                                    <FaceIdIcon className="w-6 h-6" />
+                        <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
+                                        <FaceIdIcon className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-bold block">{currentFcmToken ? 'Notificações Ativas!' : 'Ativar Notificações'}</span>
+                                        <span className="text-xs text-gray-400">{currentFcmToken ? 'Este celular está vinculado à sua conta.' : 'Receba avisos de novas tarefas no seu celular.'}</span>
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="text-sm font-bold block">{isPushRegistered ? 'Notificações Ativas!' : 'Ativar Notificações'}</span>
-                                    <span className="text-xs text-gray-400">{isPushRegistered ? 'Este celular está vinculado à sua conta.' : 'Receba avisos de novas tarefas no seu celular.'}</span>
-                                </div>
+                                <button 
+                                    onClick={handleSyncPush}
+                                    disabled={isSyncingPush}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
+                                >
+                                    <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
+                                    <span>{isSyncingPush ? 'Sincronizando...' : (currentFcmToken ? 'Atualizar Vínculo' : 'Sincronizar Agora')}</span>
+                                </button>
                             </div>
-                            <button 
-                                onClick={handleSyncPush}
-                                disabled={isSyncingPush}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${isPushRegistered ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
-                            >
-                                <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                <span>{isSyncingPush ? 'Sincronizando...' : (isPushRegistered ? 'Atualizar Vínculo' : 'Sincronizar Agora')}</span>
-                            </button>
+                            
+                            {/* CAMPO DE DIAGNÓSTICO (Remover após teste bem sucedido) */}
+                            <div className="bg-black/40 p-2 rounded text-[10px] font-mono break-all opacity-60">
+                                <strong>DEBUG TOKEN:</strong> {currentFcmToken || 'Nenhum token encontrado. Clique em Sincronizar.'}
+                            </div>
                         </div>
                     )}
                 </div>
