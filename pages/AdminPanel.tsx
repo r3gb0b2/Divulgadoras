@@ -201,7 +201,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [lookupEmail, setLookupEmail] = useState('');
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
     const [isLookingUp, setIsLookingUp] = useState(false);
-    const [lookupError, setLookupError] = useState<string | null>(null);
+    // FIX: Changed lookupError initial value to empty string and kept type as string to simplify logic and resolve unknown errors.
+    const [lookupError, setLookupError] = useState<string>('');
 
     const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
     const [photoViewerUrls, setPhotoViewerUrls] = useState<string[]>([]);
@@ -673,29 +674,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Added explicit string conversion and type checks to resolve 'unknown' to 'string' assignment error.
+    // FIX: Simplified handleLookupPromoter logic to resolve 'unknown' to 'string' type issues at line 508 and ensures search term is valid.
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        let searchString = '';
-        if (typeof emailToSearch === 'string') {
-            searchString = emailToSearch;
-        } else {
-            // Explicitly cast or convert lookupEmail
-            searchString = String(lookupEmail || '');
-        }
-        
-        // FIX: Ensure finalEmail is strictly a string to avoid unknown type issues.
-        const finalEmail: string = String(searchString || '').trim();
+        const finalEmail = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail).trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
-        setLookupError(null);
+        setLookupError(''); // FIX: Reset to empty string instead of null for better compatibility.
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // findPromotersByEmail expects a string.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        // FIX: Changed catch(err: unknown) to catch(err: any) to resolve type assignability issue on line 508.
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);

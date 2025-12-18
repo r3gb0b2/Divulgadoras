@@ -8,7 +8,7 @@ import { ArrowLeftIcon, DownloadIcon, TrashIcon, LinkIcon } from '../components/
 
 const AdminAppleTestReview: React.FC = () => {
     const navigate = useNavigate();
-    const { selectedOrgId, adminData } = useAdminAuth();
+    const { selectedOrgId } = useAdminAuth();
     const [registrants, setRegistrants] = useState<AppleTestRegistrant[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -18,6 +18,7 @@ const AdminAppleTestReview: React.FC = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
+            // Busca todos os inscritos ou filtrados por org
             const data = await getAppleTestRegistrants(selectedOrgId || undefined);
             setRegistrants(data);
         } catch (err: any) {
@@ -32,7 +33,7 @@ const AdminAppleTestReview: React.FC = () => {
     }, [selectedOrgId]);
 
     const handleCopyLink = () => {
-        // Agora copia o link "único" sem precisar do ID da organização na URL
+        // Agora o link de inscrição é fixo e público
         const link = `${window.location.origin}/#/apple-test`;
         navigator.clipboard.writeText(link).then(() => {
             setCopied(true);
@@ -98,14 +99,14 @@ const AdminAppleTestReview: React.FC = () => {
                     <button onClick={() => navigate('/admin')} className="inline-flex items-center gap-2 text-primary hover:underline text-sm mb-2">
                         <ArrowLeftIcon className="w-4 h-4" /> Voltar ao Painel
                     </button>
-                    <h1 className="text-3xl font-bold text-white">Inscritos para Teste iOS</h1>
+                    <h1 className="text-3xl font-bold text-white">Gestão de Beta Testers iOS</h1>
                 </div>
                 <div className="flex gap-3">
                     <button 
                         onClick={handleCopyLink}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold"
                     >
-                        <LinkIcon className="w-4 h-4" /> {copied ? 'Copiado!' : 'Copiar Link Único'}
+                        <LinkIcon className="w-4 h-4" /> {copied ? 'Copiado!' : 'Link de Inscrição'}
                     </button>
                     <button 
                         onClick={handleDownloadCSV}
@@ -172,7 +173,7 @@ const AdminAppleTestReview: React.FC = () => {
             
             <div className="mt-4 bg-blue-900/20 border border-blue-800 p-4 rounded-lg">
                 <p className="text-sm text-blue-300">
-                    <strong>Dica:</strong> O CSV exportado está no formato padrão para o App Store Connect. Vá em <em>TestFlight &gt; External Testers &gt; clique no "+" &gt; Import from CSV</em>.
+                    <strong>Como usar:</strong> Exporte o CSV e importe no painel do App Store Connect (TestFlight > External Testers > clique no "+" > Import from CSV).
                 </p>
             </div>
         </div>

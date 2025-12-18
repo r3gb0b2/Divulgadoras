@@ -1,45 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
 import { registerForAppleTest } from '../services/testRegistrationService';
 import { getPublicOrganizations } from '../services/organizationService';
-import { UserIcon, MailIcon, LogoIcon } from '../components/Icons';
+import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon } from '../components/Icons';
+import { useNavigate } from 'react-router-dom';
 
 const AppleTestRegistration: React.FC = () => {
-    const { organizationId: urlOrgId } = useParams<{ organizationId: string }>();
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
         email: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [isFetchingOrg, setIsFetchingOrg] = useState(!urlOrgId);
-    const [resolvedOrgId, setResolvedOrgId] = useState<string | null>(urlOrgId || null);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const resolveOrg = async () => {
-            if (urlOrgId) return;
-
-            try {
-                // Busca as organizações públicas para associar o teste a uma delas
-                const orgs = await getPublicOrganizations();
-                if (orgs.length > 0) {
-                    // Associa à primeira organização ativa encontrada por padrão
-                    setResolvedOrgId(orgs[0].id);
-                } else {
-                    setError("Nenhuma organização ativa encontrada para processar inscrições.");
-                }
-            } catch (err) {
-                setError("Erro ao identificar a produtora responsável.");
-            } finally {
-                setIsFetchingOrg(false);
-            }
-        };
-
-        resolveOrg();
-    }, [urlOrgId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -50,16 +25,12 @@ const AppleTestRegistration: React.FC = () => {
         setIsLoading(true);
         setError(null);
 
-        if (!resolvedOrgId) {
-            setError("Organização não identificada. Por favor, utilize o link oficial.");
-            setIsLoading(false);
-            return;
-        }
-
         try {
+            // No modo público simplificado, associamos ao sistema global 'equipe-certa'
+            // ou à primeira organização ativa do sistema.
             await registerForAppleTest({
                 ...formData,
-                organizationId: resolvedOrgId
+                organizationId: 'sistema-global'
             });
             setSuccess(true);
         } catch (err: any) {
@@ -69,35 +40,28 @@ const AppleTestRegistration: React.FC = () => {
         }
     };
 
-    if (isFetchingOrg) {
-        return (
-            <div className="min-h-[80vh] flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
-        );
-    }
-
     if (success) {
         return (
-            <div className="min-h-[80vh] flex items-center justify-center p-4">
+            <div className="min-h-[70vh] flex items-center justify-center p-4">
                 <div className="bg-secondary p-8 rounded-2xl shadow-2xl border border-green-500/30 text-center max-w-md w-full">
                     <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">Inscrição Realizada!</h2>
-                    <p className="text-gray-400">Em breve você receberá um e-mail da Apple (TestFlight) com as instruções para baixar o nosso aplicativo oficial no seu iPhone.</p>
+                    <p className="text-gray-400">Seu e-mail foi adicionado à fila de convites do TestFlight. Verifique sua caixa de entrada (e o spam) nas próximas horas para o convite da Apple.</p>
+                    <button onClick={() => navigate('/')} className="mt-6 text-primary hover:underline font-semibold">Voltar ao Início</button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
+        <div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
             <div className="w-full max-w-md bg-secondary shadow-2xl rounded-2xl p-8 border border-gray-700">
                 <div className="text-center mb-8">
                     <LogoIcon className="h-12 w-auto mx-auto text-primary mb-4" />
-                    <h1 className="text-2xl font-bold text-white uppercase tracking-wider">Beta Tester iOS</h1>
-                    <p className="text-gray-400 text-sm mt-2">Participe do grupo de testes exclusivo do nosso app no iPhone.</p>
+                    <h1 className="text-2xl font-bold text-white uppercase tracking-wider">Inscrição Beta iOS</h1>
+                    <p className="text-gray-400 text-sm mt-2">Cadastre o e-mail do seu ID Apple para baixar o App no iPhone.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -143,7 +107,7 @@ const AppleTestRegistration: React.FC = () => {
                                 name="email"
                                 value={formData.email}
                                 onChange={handleChange}
-                                placeholder="E-mail (o mesmo do seu ID Apple)"
+                                placeholder="E-mail do ID Apple (iCloud)"
                                 className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
                                 required
                             />
@@ -155,14 +119,17 @@ const AppleTestRegistration: React.FC = () => {
                         disabled={isLoading}
                         className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary-dark transition-all shadow-lg disabled:opacity-50"
                     >
-                        {isLoading ? 'Enviando...' : 'Quero Testar o App'}
+                        {isLoading ? 'Processando...' : 'Solicitar Acesso Beta'}
                     </button>
                     
                     <p className="text-[10px] text-gray-500 text-center uppercase tracking-widest mt-4">
-                        Powered by Equipe Certa
+                        Equipe Certa Beta Program
                     </p>
                 </form>
             </div>
+            <button onClick={() => navigate(-1)} className="mt-6 flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm">
+                <ArrowLeftIcon className="w-4 h-4" /> Voltar
+            </button>
         </div>
     );
 };

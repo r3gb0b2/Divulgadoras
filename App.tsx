@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
@@ -133,11 +133,10 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* 1. ROTAS DE ADMIN (PRIORIDADE MÁXIMA) */}
-                {/* Definida explicitamente no topo para evitar conflito com :organizationId */}
+                {/* 1. ROTAS DE ADMIN (ALTA PRIORIDADE) */}
                 <Route path="/admin/*" element={<AdminAuth />} />
 
-                {/* 2. ROTAS ESTÁTICAS GERAIS */}
+                {/* 2. ROTAS ESTÁTICAS PÚBLICAS (NÃO EXIGEM LOGIN) */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
@@ -146,18 +145,21 @@ const App: React.FC = () => {
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
-                {/* 3. FUNCIONALIDADES PÚBLICAS/DIVULGADORAS */}
-                <Route path="/posts" element={<PostCheck />} />
+                {/* 3. FORMULÁRIO DE TESTE APPLE (PÚBLICO) */}
+                {/* Movido para fora do admin para que as divulgadoras consigam acessar sem senha */}
                 <Route path="/apple-test" element={<AppleTestRegistration />} />
+
+                {/* 4. FUNCIONALIDADES DE DIVULGADORAS JÁ CADASTRADAS */}
+                <Route path="/posts" element={<PostCheck />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
 
-                {/* 4. ROTAS DINÂMICAS DE ORGANIZAÇÃO (Captura o que restou) */}
-                {/* Nota: Rotas com ":" devem ficar por último para não roubarem o tráfego de nomes fixos como /admin */}
-                <Route path="/:organizationId/apple-test" element={<AppleTestRegistration />} />
+                {/* 5. ROTAS DINÂMICAS DE PRODUTORAS (ULTIMA PRIORIDADE) */}
+                {/* O Navigate previne que 'admin' seja usado como organizationId */}
+                <Route path="/admin" element={<Navigate to="/admin" replace />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
               </Routes>
