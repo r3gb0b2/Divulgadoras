@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon, TrashIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon, TrashIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -142,6 +142,14 @@ const SettingsPage: React.FC = () => {
       condition: () => true,
     },
     {
+      id: 'subscription',
+      to: '/admin/settings/subscription',
+      Icon: CreditCardIcon,
+      title: 'Gerenciar Assinatura',
+      description: 'Visualize seu plano atual, histórico de faturas e gerencie sua forma de pagamento.',
+      condition: () => true,
+    },
+    {
       id: 'gemini_assistant',
       to: '/admin/gemini',
       Icon: SparklesIcon,
@@ -187,13 +195,13 @@ const SettingsPage: React.FC = () => {
             initialItems = [...ordered, ...remaining];
         } catch (e) {
             console.error("Failed to parse settings order from localStorage", e);
-            localStorage.removeItem(storageKey);
+            localStorage.removeItem(storageKey); // Clear corrupted data
         }
     }
     
     setOrderedItems(initialItems);
 
-  }, [isOwner, organization]);
+  }, [isOwner, organization]); // Re-run when conditions might change
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     dragItem.current = index;
@@ -231,6 +239,7 @@ const SettingsPage: React.FC = () => {
     }
     dragItem.current = null;
     dragOverItem.current = null;
+    // Use timeout to ensure the click event has a chance to be cancelled
     setTimeout(() => {
         wasDragging.current = false;
     }, 0);
@@ -239,7 +248,7 @@ const SettingsPage: React.FC = () => {
   const handleCleanup = async () => {
       if (!selectedOrgId) return;
       
-      const confirmMessage = "Tem certeza que deseja apagar PERMANENTEMENTE todas as imagens de comprovação de eventos marcados como 'Inativos'?\n\nEsta ação não pode ser desfeita.";
+      const confirmMessage = "Tem certeza que deseja apagar PERMANENTEMENTE todas as imagens de comprovação de eventos marcados como 'Inativos'?\n\nIsso liberará espaço no banco de dados, mas os prints não poderão mais ser visualizados no histórico.\n\nEsta ação não pode ser desfeita.";
       
       if (window.confirm(confirmMessage)) {
           setIsCleaning(true);
@@ -272,21 +281,28 @@ const SettingsPage: React.FC = () => {
                   Manutenção de Armazenamento
               </h2>
               <p className="text-gray-300 text-sm mb-4">
-                  Apague permanentemente as fotos de eventos inativos para liberar espaço.
+                  Seu banco de dados pode acumular muitas imagens antigas. Use esta ferramenta para limpar automaticamente as comprovações (prints) de eventos que já foram desativados. As imagens serão substituídas por um aviso visual.
               </p>
               <button 
                   onClick={handleCleanup} 
                   disabled={isCleaning}
                   className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-md disabled:opacity-50 flex items-center gap-2"
               >
-                  {isCleaning ? 'Limpando...' : 'Limpar Comprovações Antigas'}
+                  {isCleaning ? (
+                      <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Limpando...
+                      </>
+                  ) : (
+                      'Limpar Comprovações Antigas'
+                  )}
               </button>
           </div>
       )}
 
       <div className="bg-secondary shadow-lg rounded-lg p-6">
         <p className="text-gray-400 mb-6">
-          Gerencie os usuários, regiões e eventos da sua organização.
+          Gerencie os usuários, regiões, eventos e sua assinatura na plataforma. Você pode arrastar os cards pela alça (:::) para organizá-los como preferir.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {orderedItems.filter(item => item.condition()).map((item, index) => (
@@ -305,6 +321,7 @@ const SettingsPage: React.FC = () => {
                         handleDragStart(e, index);
                     }}
                     className="absolute top-2 right-2 p-2 text-gray-500 group-hover:text-gray-300 cursor-grab active:cursor-grabbing z-10 opacity-50 hover:opacity-100 transition-opacity"
+                    title="Arraste para reordenar"
                 >
                     <GripDotsIcon className="w-6 h-6" />
                 </div>

@@ -1,36 +1,40 @@
 
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+// FIX: Removed modular signInWithEmailAndPassword import to use compat syntax.
 import { auth } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { submitAdminApplication } from '../services/adminService';
+// FIX: Changed to a named import to resolve module export error.
 import { AdminPanel } from './AdminPanel';
 import SuperAdminDashboard from './SuperAdminDashboard';
-import AdminDashboard from './AdminDashboard'; 
+import AdminDashboard from './AdminDashboard'; // Import the new dashboard
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import SettingsPage from './SettingsPage';
 import ManageUsersPage from './ManageUsersPage';
+import SubscriptionPage from './SubscriptionPage';
 import StripeSettingsPage from './StripeSettingsPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
-import AdminApplicationsListPage from './AdminApplicationsListPage'; 
-import { MailIcon, LockClosedIcon, UserIcon, PhoneIcon } from '../components/Icons';
+import AdminApplicationsListPage from './AdminApplicationsListPage'; // Import the new page
+import { MailIcon, LockClosedIcon, BuildingOfficeIcon, UserIcon, PhoneIcon } from '../components/Icons';
 import GeminiPage from './Gemini';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import AdminPosts from './AdminPosts';
 import CreatePost from './CreatePost';
+// FIX: Changed to a named import to resolve module export issue.
 import { PostDetails } from './PostDetails';
-import GuestListPage from './GuestListPage'; 
-import GuestListCheckinPage from './GuestListCheckinPage'; 
+import GuestListPage from './GuestListPage'; // Import new page
+import GuestListCheckinPage from './GuestListCheckinPage'; // Import new page
 import AdminLists from './AdminLists';
 import GuestListAssignments from './GuestListAssignments';
-import ChangePasswordPage from './ChangePasswordPage'; 
+import ChangePasswordPage from './ChangePasswordPage'; // Import new page
 import PostDashboard from './PostDashboard';
 import AdminSchedulePage from './AdminSchedulePage';
-import PromoterDiagnosticsPage from './PromoterDiagnosticsPage'; 
-import AdminCheckinDashboard from './AdminCheckinDashboard'; 
-import QrCodeScannerPage from './QrCodeScannerPage'; 
+import PromoterDiagnosticsPage from './PromoterDiagnosticsPage'; // Import new page
+import AdminCheckinDashboard from './AdminCheckinDashboard'; // Import new page
+import QrCodeScannerPage from './QrCodeScannerPage'; // Importar a nova página
 import AdminOneTimePosts from './AdminOneTimePosts';
 import CreateOneTimePost from './CreateOneTimePost';
 import EditOneTimePost from './EditOneTimePost';
@@ -41,7 +45,7 @@ import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 import AdminFollowLoopPage from './AdminFollowLoopPage';
 import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
-import AdminCleanupPage from './AdminCleanupPage'; 
+import AdminCleanupPage from './AdminCleanupPage'; // Import new page
 import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
 
 const AdminRegistrationRequestForm: React.FC<{ onSwitchToLogin: () => void }> = ({ onSwitchToLogin }) => {
@@ -152,6 +156,7 @@ const AdminLogin: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
+            // FIX: Use compat signInWithEmailAndPassword method.
             await auth.signInWithEmailAndPassword(email, password);
             navigate('/admin');
         } catch (error) {
@@ -226,11 +231,12 @@ const AdminAuth: React.FC = () => {
                         adminData?.role === 'admin' ? <AdminDashboard /> :
                         adminData?.role === 'poster' ? <Navigate to="/admin/posts" replace /> :
                         adminData?.role === 'approver' ? <Navigate to="/admin/promoters" replace /> :
-                        <AdminPanel adminData={adminData!} /> 
+                        <AdminPanel adminData={adminData!} /> // Fallback for 'viewer' role
                     }
                 </ProtectedRoute>
             } />
             
+             {/* Routes for SuperAdmins */}
             {adminData?.role === 'superadmin' && (
                 <>
                     <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
@@ -271,11 +277,13 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
 
+            {/* Routes for regular Admins */}
             {adminData?.role === 'admin' && (
                 <>
                     <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
                     <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                     <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
+                    <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
                     <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
                     <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData} /></ProtectedRoute>} />
                     <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
@@ -304,6 +312,7 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
 
+            {/* Routes for Approvers */}
             {adminData?.role === 'approver' && (
                 <>
                     <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData} /></ProtectedRoute>} />
@@ -312,6 +321,7 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
 
+            {/* Routes for Posters */}
             {adminData?.role === 'poster' && (
                 <>
                     <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
@@ -321,6 +331,7 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
             
+            {/* Catch-all for any other /admin routes, redirect to the appropriate dashboard */}
             <Route path="*" element={
                 <ProtectedRoute>
                     <Navigate to="/admin" replace />

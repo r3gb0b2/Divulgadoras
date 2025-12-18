@@ -685,8 +685,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        } catch (error: any) {
-            // FIX: Changed type from unknown to any to resolve property access and assignment issues
+        } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             setLookupError(errorMessage);
         } finally {
@@ -1022,8 +1021,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
                                 <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
-                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="h-4 h-4" /><span>{promoter.instagram}</span></a>
-                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="h-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
                                 <span>{promoter.campaignName} ({promoter.state})</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
