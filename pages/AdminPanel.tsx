@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -694,8 +693,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        // FIX: Using catch (err) and handling it as unknown for compatibility with string assignments.
-        } catch (err: unknown) {
+        // FIX: Using catch (err: any) to ensure compatibility and simplify property access.
+        } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

@@ -1,5 +1,6 @@
 
 import { PushNotifications } from '@capacitor/push-notifications';
+import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
 import { savePushToken } from './promoterService';
 
@@ -22,47 +23,54 @@ export const initPushNotifications = async (promoterId: string) => {
             return false;
         }
 
-        // 2. Registrar Listeners antes de chamar o register()
-        
-        // Remove listeners antigos para evitar duplicidade
+        // 2. Registrar Listeners
         await PushNotifications.removeAllListeners();
 
-        // Listener de Sucesso
+        // No iOS, o token retornado pelo PushNotifications é o token da Apple (APNs).
+        // Precisamos converter ele para o token do Firebase (FCM).
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Token capturado com sucesso:', token.value);
+            console.log('Push: Registro nativo concluído.');
+            
             try {
-                await savePushToken(promoterId, token.value);
-                console.log('Push: Token salvo no Firestore para o ID:', promoterId);
+                let fcmToken = token.value;
+
+                if (Capacitor.getPlatform() === 'ios') {
+                    // Obtém o token real do FCM para o iOS
+                    const res = await FCM.getToken();
+                    fcmToken = res.token;
+                    console.log('Push: Token FCM obtido (iOS):', fcmToken);
+                } else {
+                    console.log('Push: Token FCM obtido (Android):', fcmToken);
+                }
+
+                await savePushToken(promoterId, fcmToken);
+                console.log('Push: Token salvo com sucesso para:', promoterId);
             } catch (e) {
-                console.error("Push: Erro ao salvar token no Firestore:", e);
+                console.error("Push: Erro ao obter/salvar token FCM:", e);
             }
         });
 
-        // Listener de Erro
         PushNotifications.addListener('registrationError', (error) => {
-            console.error('Push: Erro no registro do FCM:', JSON.stringify(error));
+            console.error('Push: Erro no registro nativo:', JSON.stringify(error));
         });
 
-        // Listener de Recebimento (App Aberto)
         PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push: Notificação recebida (foreground):', notification);
+            console.log('Push: Notificação recebida em primeiro plano:', notification);
         });
 
-        // Listener de Clique na Notificação
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
             const data = notification.notification.data;
             if (data && data.url) {
-                // Redireciona usando o hash do React Router se necessário
                 window.location.hash = data.url.replace('/#', '');
             }
         });
 
-        // 3. Solicitar registro ao Firebase/Google
+        // 3. Solicitar registro
         await PushNotifications.register();
         return true;
 
     } catch (error) {
-        console.error("Push: Erro geral na inicialização:", error);
+        console.error("Push: Erro na inicialização:", error);
         return false;
     }
 };
