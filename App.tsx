@@ -133,10 +133,10 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* 1. ROTAS DE ADMIN (ALTA PRIORIDADE) */}
+                {/* 1. ROTAS DE ADMIN (PRIORIDADE MÁXIMA) */}
                 <Route path="/admin/*" element={<AdminAuth />} />
 
-                {/* 2. ROTAS ESTÁTICAS PÚBLICAS (NÃO EXIGEM LOGIN) */}
+                {/* 2. ROTAS ESTÁTICAS PÚBLICAS */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
@@ -146,10 +146,9 @@ const App: React.FC = () => {
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
                 {/* 3. FORMULÁRIO DE TESTE APPLE (PÚBLICO) */}
-                {/* Movido para fora do admin para que as divulgadoras consigam acessar sem senha */}
                 <Route path="/apple-test" element={<AppleTestRegistration />} />
 
-                {/* 4. FUNCIONALIDADES DE DIVULGADORAS JÁ CADASTRADAS */}
+                {/* 4. FUNCIONALIDADES DE DIVULGADORAS */}
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
@@ -158,10 +157,13 @@ const App: React.FC = () => {
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
 
                 {/* 5. ROTAS DINÂMICAS DE PRODUTORAS (ULTIMA PRIORIDADE) */}
-                {/* O Navigate previne que 'admin' seja usado como organizationId */}
-                <Route path="/admin" element={<Navigate to="/admin" replace />} />
+                {/* Evita que 'admin' seja capturado como ID de organização se as rotas acima falharem */}
+                <Route path="/admin" element={<Navigate to="/admin/" replace />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
+
+                {/* 6. CATCH-ALL */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </ErrorBoundary>
           </main>

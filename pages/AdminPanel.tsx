@@ -684,7 +684,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(finalEmail);
+            // FIX: Explicitly cast finalEmail to string for compatibility.
+            const results = await findPromotersByEmail(finalEmail as string);
             setLookupResults(results);
         } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
