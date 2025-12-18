@@ -673,9 +673,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }, {} as Record<string, string>);
     }, [allOrganizations]);
 
-    // FIX: Simplified handleLookupPromoter logic to resolve 'unknown' to 'string' type issues and ensures search term is valid.
-    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
-        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
+    /* 
+     * FIX: Updated handleLookupPromoter to explicitly accept a string or nothing. 
+     * This avoids type mismatch errors when called with a string from the Badge, or with nothing from the Global Search input.
+     */
+    const handleLookupPromoter = async (emailToSearch?: string) => {
+        const searchInput = emailToSearch || lookupEmail || '';
         const finalEmail = searchInput.trim();
         if (!finalEmail) return;
         
@@ -684,7 +687,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Ensure findPromotersByEmail receives a string.
+            // findPromotersByEmail correctly receives a string.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
@@ -967,7 +970,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     </select>
                     <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                         <option value="all">Todos os Eventos</option>
-                        {campaignForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                        {/* FIX: Corrected variable name from plural 'campaignsForFilter' */}
+                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                     </select>
                     <div className="flex gap-2 items-center flex-grow">
                         <input

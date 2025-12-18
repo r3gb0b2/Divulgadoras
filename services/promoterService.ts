@@ -16,14 +16,21 @@ const toMillisSafe = (timestamp: any): number => {
     return isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
+/**
+ * Salva o token de notificação Push no documento da divulgadora.
+ */
 export const savePushToken = async (promoterId: string, token: string): Promise<void> => {
     try {
-        await firestore.collection('promoters').doc(promoterId).update({
+        if (!promoterId || !token) return;
+        
+        await firestore.collection('promoters').doc(promoterId).set({
             fcmToken: token,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }, { merge: true });
+        
+        console.log(`Push: Token salvo para ${promoterId}`);
     } catch (error) {
-        console.error("Error saving FCM token:", error);
+        console.error("Push: Erro ao salvar FCM token no Firestore:", error);
     }
 };
 

@@ -3,9 +3,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { initPushNotifications } from '../services/pushService';
+import { initPushNotifications, syncPushTokenManually } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -224,6 +224,7 @@ const PostCheck: React.FC = () => {
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
     const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSyncingPush, setIsSyncingPush] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -272,6 +273,24 @@ const PostCheck: React.FC = () => {
         }
     };
 
+    const handleSyncPush = async () => {
+        if (!promoter || isSyncingPush) return;
+        setIsSyncingPush(true);
+        try {
+            const success = await syncPushTokenManually(promoter.id);
+            if (success) {
+                setIsPushRegistered(true);
+                alert("Seu dispositivo foi sincronizado com sucesso! Agora você receberá notificações push.");
+            } else {
+                alert("Não foi possível sincronizar. Verifique se você autorizou as notificações nas configurações do iPhone.");
+            }
+        } catch (e) {
+            alert("Erro ao sincronizar. Tente novamente mais tarde.");
+        } finally {
+            setIsSyncingPush(false);
+        }
+    };
+
     const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
     const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
 
@@ -293,9 +312,21 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-3 rounded-lg border flex items-center gap-3 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
-                            <FaceIdIcon className="w-5 h-5" />
-                            <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações push!' : 'Vinculando dispositivo para notificações...'}</span>
+                        <div className={`p-3 rounded-lg border flex items-center justify-between gap-3 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                            <div className="flex items-center gap-3">
+                                <FaceIdIcon className="w-5 h-5" />
+                                <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações!' : 'Vincular dispositivo para notificações'}</span>
+                            </div>
+                            {!isPushRegistered && (
+                                <button 
+                                    onClick={handleSyncPush}
+                                    disabled={isSyncingPush}
+                                    className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50"
+                                    title="Sincronizar Notificações"
+                                >
+                                    <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
