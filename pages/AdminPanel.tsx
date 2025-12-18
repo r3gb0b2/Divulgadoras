@@ -246,6 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 }
                 const campaignsData = await campaignsPromise;
                 setAllCampaigns(campaignsData);
+            // FIX: Use any for catch to match style and handle unknown errors safely
             } catch (err: any) {
                 setError(err.message || 'Não foi possível carregar dados de suporte.');
             }
@@ -683,7 +684,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             searchString = lookupEmail;
         }
         
-        const finalEmail = searchString.trim();
+        const finalEmail: string = searchString.trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
