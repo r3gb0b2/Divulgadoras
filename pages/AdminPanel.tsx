@@ -275,7 +275,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
-    const fetchAllData = useCallback(async () => {
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         setSelectedPromoterIds(new Set());
@@ -333,8 +333,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [adminData, organization, isSuperAdmin, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
 
     useEffect(() => {
-        fetchAllData();
-    }, [fetchAllData]);
+        fetchData();
+    }, [fetchData]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -470,7 +470,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => p.id === id);
+                const currentPromoter = previousPromoters.find(p => id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -483,7 +483,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -577,7 +577,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    if (rawError) {
+                    if (matchMedia) {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
@@ -676,17 +676,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const email = emailToSearch || lookupEmail;
-        if (!email || !email.trim()) return;
+        let searchString = '';
+        if (emailToSearch) {
+            searchString = emailToSearch;
+        } else if (lookupEmail) {
+            searchString = lookupEmail;
+        }
+        
+        const finalEmail = searchString.trim();
+        if (!finalEmail) return;
+        
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(email.trim());
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+        // FIX: Changed catch parameter from unknown to any to ensure compatibility with string assignments.
+        } catch (err: any) {
+            const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
@@ -1015,7 +1024,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => handleLookupPromoter(email)} />
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { handleLookupPromoter(email); }} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>

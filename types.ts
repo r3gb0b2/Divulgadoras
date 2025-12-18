@@ -42,7 +42,7 @@ export interface PromoterApplicationData {
   tiktok: string;
   dateOfBirth: string;
   photos: File[];
-  facePhoto: File | null;
+  facePhoto?: File | null;
   state: string;
   campaignName?: string;
   organizationId: string;

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon, TrashIcon } from '../components/Icons';
+import { UsersIcon, CreditCardIcon, MapPinIcon, ArrowLeftIcon, SparklesIcon, MegaphoneIcon, BuildingOfficeIcon, KeyIcon, ChartBarIcon, ClockIcon, ClipboardDocumentListIcon, TicketIcon, LogoutIcon, GripDotsIcon, HeartIcon, WhatsAppIcon, TrashIcon, FaceIdIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganization } from '../services/organizationService';
 import { Organization } from '../types';
@@ -44,6 +44,14 @@ const SettingsPage: React.FC = () => {
       title: 'Regiões e Eventos',
       description: 'Visualize suas regiões ativas e crie ou edite eventos/gêneros para receber cadastros.',
       condition: () => true,
+    },
+    {
+      id: 'push_campaign',
+      to: '/admin/push-campaign',
+      Icon: FaceIdIcon,
+      title: 'Notificações Push',
+      description: 'Envie alertas rápidos para as divulgadoras que possuem o app instalado.',
+      condition: () => adminData?.role !== 'viewer' && adminData?.role !== 'approver',
     },
     {
       id: 'manage_users',

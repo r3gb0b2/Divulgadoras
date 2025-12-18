@@ -1,6 +1,7 @@
 {
   "name": "Equipe Certa",
-  "description": "Plataforma completa para organizadores de eventos gerenciarem suas equipes de divulgação de forma eficiente.",
+  "version": "1.0.1",
+  "description": "Equipe Certa: A ferramenta definitiva para produtores de eventos. Gerencie divulgadoras, listas VIP, check-in com QR Code e visualize relatórios em tempo real.",
   "requestFramePermissions": [
     "camera"
   ]

@@ -8,6 +8,7 @@ import StateSelection from './pages/StateSelection';
 import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
+import HowToUsePage from './pages/HowToUsePage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
@@ -74,6 +75,7 @@ const Header: React.FC = () => {
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
+                  <Link to="/como-funciona" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
                   <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
@@ -111,6 +113,7 @@ const Header: React.FC = () => {
                           <OrganizationSwitcher />
                       </div>
                       <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
+                      <Link to="/como-funciona" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/planos" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Planos</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
@@ -146,6 +149,7 @@ const App: React.FC = () => {
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<PublicHome />} />
+                <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
@@ -167,6 +171,8 @@ const App: React.FC = () => {
           <footer className="text-center py-4 text-gray-400 text-sm">
               <p>
                   &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
+                  <span className="mx-2">|</span> 
+                  <Link to="/como-funciona" className="hover:text-white underline">Como Funciona</Link>
                   <span className="mx-2">|</span> 
                   <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
                   <span className="mx-2">|</span> 
