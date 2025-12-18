@@ -677,9 +677,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * FIX: Updated handleLookupPromoter to explicitly accept a string or nothing. 
      * This avoids type mismatch errors when called with a string from the Badge, or with nothing from the Global Search input.
      */
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchInput = emailToSearch || lookupEmail || '';
-        const finalEmail = searchInput.trim();
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
+        const finalEmail = (searchInput || '').trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -728,11 +728,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             } else if (a.justification) {
                 stat.justifications++;
                 if (a.justificationStatus === 'accepted') {
-                    stat.acceptedJustifications++;
+                    statsMap.get(a.promoterId)!.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
-                    stat.missed++;
+                    statsMap.get(a.promoterId)!.missed++;
                 } else if (a.justificationStatus === 'pending' || a.justification) {
-                    stat.pending++;
+                    statsMap.get(a.promoterId)!.pending++;
                 }
             } else {
                 let deadlineHasPassed = false;

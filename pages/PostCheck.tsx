@@ -312,21 +312,24 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-3 rounded-lg border flex items-center justify-between gap-3 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                        <div className={`p-4 rounded-xl border-2 flex items-center justify-between gap-4 transition-all ${isPushRegistered ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
                             <div className="flex items-center gap-3">
-                                <FaceIdIcon className="w-5 h-5" />
-                                <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações!' : 'Vincular dispositivo para notificações'}</span>
+                                <div className={`p-2 rounded-full ${isPushRegistered ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
+                                    <FaceIdIcon className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <span className="text-sm font-bold block">{isPushRegistered ? 'Notificações Ativas!' : 'Ativar Notificações'}</span>
+                                    <span className="text-xs text-gray-400">{isPushRegistered ? 'Este celular está vinculado à sua conta.' : 'Receba avisos de novas tarefas no seu celular.'}</span>
+                                </div>
                             </div>
-                            {!isPushRegistered && (
-                                <button 
-                                    onClick={handleSyncPush}
-                                    disabled={isSyncingPush}
-                                    className="p-2 bg-blue-700 text-white rounded-full hover:bg-blue-600 transition-colors disabled:opacity-50"
-                                    title="Sincronizar Notificações"
-                                >
-                                    <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                </button>
-                            )}
+                            <button 
+                                onClick={handleSyncPush}
+                                disabled={isSyncingPush}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${isPushRegistered ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
+                            >
+                                <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
+                                <span>{isSyncingPush ? 'Sincronizando...' : (isPushRegistered ? 'Atualizar Vínculo' : 'Sincronizar Agora')}</span>
+                            </button>
                         </div>
                     )}
                 </div>
