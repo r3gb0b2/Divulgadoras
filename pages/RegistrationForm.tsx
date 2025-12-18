@@ -1,240 +1,638 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { addPromoter, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
+import { getCampaigns } from '../services/settingsService';
+// FIX: Added missing import for Campaign type
+import { Campaign } from '../types';
+// FIX: Added missing import for Icons
 import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { storage } from '../firebase/config';
 
-const compressImage = (file: File): Promise<Blob> => {
+// Adicionado para suportar o Pixel do Facebook
+declare global {
+    interface Window {
+        fbq?: (...args: any[]) => void;
+    }
+}
+
+
+// Lista de nomes masculinos para o aviso de gênero
+const MALE_NAMES = [
+    'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
+    'marcos', 'paulo', 'rodrigo', 'fernando', 'daniel', 'diego', 'thiago', 'tiago', 'andré', 
+    'antonio', 'francisco', 'josé', 'luiz', 'ricardo', 'vinicius', 'guilherme', 'gustavo', 
+    'leonardo', 'eduardo', 'marcelo', 'juliano', 'cesar', 'renato', 'adriano', 'leandro', 
+    'alexandre', 'fábio', 'sérgio', 'claudio', 'mauricio', 'cristiano', 'heitor', 'davi', 
+    'arthur', 'bernardo', 'miguel', 'enzo', 'nicolas', 'lorenzo', 'samuel', 'benjamin', 
+    'joaquim', 'augusto', 'caio', 'breno', 'vitor', 'igor', 'yuri', 'henrique', 'otávio'
+].map(name => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "")); // Normaliza para remover acentos
+
+
+// Helper function to resize and compress images and return a Blob
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
+      if (!event.target?.result) {
+        return reject(new Error("FileReader did not return a result."));
+      }
       const img = new Image();
-      img.src = event.target?.result as string;
+      img.src = event.target.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
-        let width = img.width;
-        let height = img.height;
+        let { width, height } = img;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
           }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
           }
         }
+
         canvas.width = width;
         canvas.height = height;
+        
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+        if (!ctx) {
+          return reject(new Error('Could not get canvas context'));
+        }
+        
+        // 1. Fill background with white to remove transparency (Alpha Channel)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Draw the image on top
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 3. Export as JPEG (which doesn't support alpha channel)
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Erro na compressão'));
-        }, 'image/jpeg', 0.8);
+          if (!blob) {
+            return reject(new Error('Canvas to Blob conversion failed'));
+          }
+          resolve(blob);
+        }, 'image/jpeg', quality);
       };
+      img.onerror = (error) => reject(error);
     };
+    reader.onerror = (error) => reject(error);
   });
 };
 
-const RegistrationForm: React.FC = () => {
+const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
   const navigate = useNavigate();
-  const editId = searchParams.get('edit_id');
 
+  const [editId, setEditId] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     email: '',
     name: '',
     whatsapp: '',
     instagram: '',
     tiktok: '',
-    dateOfBirth: ''
+    dateOfBirth: '',
   });
   
+  // States for Gallery Photos
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [showGenderWarning, setShowGenderWarning] = useState(false);
 
   useEffect(() => {
-    if (editId) {
-      getPromoterById(editId).then(data => {
-        if (data) {
-          setFormData({
-            email: data.email,
-            name: data.name,
-            whatsapp: data.whatsapp,
-            instagram: data.instagram,
-            tiktok: data.tiktok || '',
-            dateOfBirth: data.dateOfBirth
-          });
-        }
-      });
+    const queryParams = new URLSearchParams(location.search);
+    const idToEdit = queryParams.get('edit_id');
+    if (idToEdit) {
+        setEditId(idToEdit);
+        getPromoterById(idToEdit).then(profile => {
+            if (profile) {
+                setFormData({
+                    email: profile.email,
+                    name: profile.name,
+                    whatsapp: profile.whatsapp,
+                    instagram: profile.instagram,
+                    tiktok: profile.tiktok || '',
+                    dateOfBirth: profile.dateOfBirth,
+                });
+                // Load existing photos
+                setPhotoPreviews(profile.photoUrls);
+                setOriginalPhotoUrls(profile.photoUrls);
+                setProfileLoaded(true);
+            }
+        }).catch(err => setSubmitError(err.message));
     }
-  }, [editId]);
+  }, [location.search]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setIsProcessingPhotos(true);
-      const files = Array.from(e.target.files) as File[];
-      const compressedFiles: File[] = [];
-      const previews: string[] = [];
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
 
-      for (const file of files) {
-        try {
-          const blob = await compressImage(file);
-          const compressedFile = new File([blob], file.name, { type: 'image/jpeg' });
-          compressedFiles.push(compressedFile);
-          previews.push(URL.createObjectURL(compressedFile));
-        } catch (err) {
-          console.error("Erro ao processar foto", err);
+    // Check for male name when name input changes
+    if (name === 'name') {
+        const firstName = value.trim().split(' ')[0].toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Normalize for comparison
+        if (firstName && MALE_NAMES.includes(firstName)) {
+            setShowGenderWarning(true);
+        } else {
+            setShowGenderWarning(false);
         }
+    }
+  };
+  
+  const handleCheckEmail = async () => {
+    // Don't auto-fill if we are in edit mode
+    if (editId) return;
+
+    const email = formData.email.trim();
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return; // Don't search for invalid or empty emails
+    }
+
+    setIsCheckingEmail(true);
+    setProfileLoaded(false);
+    setSubmitError(null);
+
+    try {
+      const profile = await getLatestPromoterProfileByEmail(email);
+      if (profile) {
+        setFormData({
+          email: profile.email,
+          name: profile.name,
+          whatsapp: profile.whatsapp,
+          instagram: profile.instagram,
+          tiktok: profile.tiktok || '',
+          dateOfBirth: profile.dateOfBirth,
+        });
+        
+        setProfileLoaded(true);
+        // Clear gallery photos as they need to be re-uploaded for each event usually
+        setPhotoFiles([]);
+        setPhotoPreviews([]);
       }
-      setPhotoFiles(compressedFiles);
-      setPhotoPreviews(previews);
-      setIsProcessingPhotos(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao buscar seus dados.";
+      setSubmitError(message);
+    } finally {
+      setIsCheckingEmail(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setIsProcessingPhoto(true);
+      setSubmitError(null);
+      setPhotoPreviews([]);
+      setPhotoFiles([]);
+      
+      try {
+        const fileList = Array.from(files);
+        const processedFiles = await Promise.all(
+          fileList.map(async (file: File) => {
+            const compressedBlob = await resizeImage(file, 800, 800, 0.8);
+            // Replace extension with .jpg to match the MIME type
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            return new File([compressedBlob], newName, { type: 'image/jpeg' });
+          })
+        );
+        
+        setPhotoFiles(processedFiles);
+        const previewUrls = processedFiles.map(file => URL.createObjectURL(file));
+        setPhotoPreviews(previewUrls);
+
+      } catch (error) {
+        console.error("Error processing image:", error);
+        setSubmitError("Houve um problema com uma das fotos. Por favor, tente novamente.");
+        e.target.value = '';
+      } finally {
+        setIsProcessingPhoto(false);
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (photoFiles.length === 0 && !editId) {
-      setSubmitError("Por favor, envie pelo menos uma foto sua.");
-      return;
+
+    // Age validation
+    if (formData.dateOfBirth) {
+        const birthDate = new Date(formData.dateOfBirth);
+        // Adjust for timezone offset to get the correct local date
+        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
+        
+        const today = new Date();
+        const fourteenYearsAgo = new Date(today.getFullYear() - 14, today.getMonth(), today.getDate());
+
+        if (birthDate > fourteenYearsAgo) {
+            setSubmitError("Você precisa ter pelo menos 14 anos para se cadastrar.");
+            return;
+        }
+    }
+
+    if (!organizationId) {
+        setSubmitError("Organização não identificada. Volte para a página inicial e selecione a organização correta.");
+        return;
+    }
+    if (!state) {
+        setSubmitError("Estado não selecionado. Volte para a página inicial e selecione seu estado.");
+        return;
+    }
+
+    // Validate Gallery Photos
+    if (photoFiles.length === 0 && originalPhotoUrls.length === 0) {
+        setSubmitError("Por favor, selecione pelo menos uma foto de corpo/perfil para o cadastro.");
+        return;
     }
     
     setIsSubmitting(true);
     setSubmitError(null);
-
+    
     try {
+      const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
+      
       if (editId) {
+        // Update existing promoter
+        
+        // Handle Gallery Photos
+        let finalPhotoUrls = originalPhotoUrls;
+        if (photoFiles.length > 0) {
+            finalPhotoUrls = await Promise.all(
+                photoFiles.map(async (photo) => {
+                    const fileExtension = photo.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+                    const storageRef = storage.ref(`promoters-photos/${fileName}`);
+                    await storageRef.put(photo);
+                    return await storageRef.getDownloadURL();
+                })
+            );
+        }
+
         await resubmitPromoterApplication(editId, {
-          ...formData,
-          status: 'pending',
-          statusChangedAt: null
+            ...formData,
+            photoUrls: finalPhotoUrls,
+            status: 'pending', // Reset status to pending for re-evaluation
+            rejectionReason: '', // Clear previous rejection reason
         });
       } else {
-        await addPromoter({
-          ...formData,
-          photos: photoFiles,
-          state: state!,
-          organizationId: organizationId!,
-          campaignName: campaignName ? decodeURIComponent(campaignName) : undefined
+        // Create new promoter
+        await addPromoter({ 
+            ...formData, 
+            photos: photoFiles, 
+            state, 
+            campaignName: decodedCampaignName, 
+            organizationId,
+            facePhoto: null // REMOVED facePhoto
         });
       }
-      navigate('/status?email=' + encodeURIComponent(formData.email));
-    } catch (err: any) {
-      setSubmitError(err.message || "Erro ao enviar cadastro.");
+
+      setSubmitSuccess(true);
+      
+      // Dispara o evento de conclusão de cadastro para o Pixel
+      if (window.fbq) {
+          window.fbq('track', 'CompleteRegistration');
+      }
+
+      setFormData({ email: '', name: '', whatsapp: '', instagram: '', tiktok: '', dateOfBirth: '' });
+      setPhotoFiles([]);
+      setPhotoPreviews([]);
+      setOriginalPhotoUrls([]);
+      setProfileLoaded(false);
+      setShowGenderWarning(false);
+      setEditId(null);
+      
+      // Reset inputs
+      const photoInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (photoInput) photoInput.value = '';
+      
+      setTimeout(() => setSubmitSuccess(false), 5000);
+    } catch (error) {
+      console.error("Failed to submit form", error);
+      const message = error instanceof Error ? error.message : "Ocorreu um erro ao enviar o formulário. Por favor, tente novamente mais tarde.";
+      setSubmitError(message);
+       setTimeout(() => setSubmitError(null), 5000);
     } finally {
       setIsSubmitting(false);
     }
   };
+  
+  const getButtonText = () => {
+      if (isSubmitting) return 'Enviando Cadastro...';
+      if (isProcessingPhoto) return 'Processando fotos...';
+      return editId ? 'Reenviar Cadastro' : 'Finalizar Cadastro';
+  }
+
+  const formTitle = editId ? "Corrigir Cadastro" : `Seja uma Divulgadora - ${stateFullName} (${state?.toUpperCase()})`;
 
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
-      <div className="bg-secondary rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
-        <div className="bg-primary p-6 text-white text-center">
-          <h1 className="text-3xl font-bold">Faça parte da Equipe!</h1>
-          <p className="opacity-90">Cadastro para divulgadoras - {stateMap[state || ''] || state}</p>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Dados Pessoais</h3>
+    <div className="max-w-2xl mx-auto">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+            <ArrowLeftIcon className="w-5 h-5" />
+            <span>Voltar</span>
+        </button>
+        <div className="bg-secondary shadow-2xl rounded-lg p-8">
+            <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">{formTitle}</h1>
+            {campaignName && <p className="text-center text-primary font-semibold text-lg mb-2">{decodeURIComponent(campaignName)}</p>}
+            <p className="text-center text-gray-400 mb-8">{editId ? "Verifique e corrija os dados do seu cadastro abaixo." : "Preencha o formulário abaixo para fazer parte do nosso time."}</p>
             
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-              <input type="text" placeholder="Seu nome completo" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none" 
-                value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-            </div>
+            {submitSuccess && (
+                <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 mb-6 rounded-md" role="alert">
+                    <p className="font-bold">Sucesso!</p>
+                    <p>Seu cadastro foi enviado com sucesso! Fique de olho na página 'Verificar Status' para acompanhar sua aprovação.</p>
+                </div>
+            )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <MailIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-                <input type="email" placeholder="Seu e-mail" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
-                  value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
-              </div>
-              <div className="relative">
-                <PhoneIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-                <input type="tel" placeholder="WhatsApp (DDD+Número)" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
-                  value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} required />
-              </div>
-            </div>
+            {submitError && (
+                <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 mb-6 rounded-md" role="alert">
+                    <p className="font-bold">Erro</p>
+                    <p>{submitError}</p>
+                </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                    <InputWithIcon 
+                        Icon={MailIcon} 
+                        type="email" 
+                        name="email" 
+                        placeholder="Seu melhor e-mail" 
+                        value={formData.email} 
+                        onChange={handleChange} 
+                        onBlur={handleCheckEmail}
+                        disabled={!!editId}
+                        required 
+                    />
+                     {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
+                     {profileLoaded && (
+                        <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
+                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e atualize suas fotos se necessário.</p>
+                        </div>
+                    )}
+                </div>
 
-            <div className="relative">
-              <label className="block text-xs text-gray-400 mb-1 ml-1">Data de Nascimento</label>
-              <CalendarIcon className="absolute left-3 top-8 w-5 h-5 text-gray-500" />
-              <input type="date" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
-                value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} required style={{ colorScheme: 'dark' }} />
-            </div>
-          </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
+                        {showGenderWarning && (
+                            <div className="bg-yellow-900/50 border-l-4 border-yellow-500 text-yellow-300 p-3 mt-2 rounded-md text-sm" role="alert">
+                                <p><strong className="font-semibold">Aviso:</strong> Nossos grupos de divulgação são primariamente destinados ao público feminino. Você pode continuar com o cadastro, mas esteja ciente desta preferência.</p>
+                            </div>
+                        )}
+                    </div>
+                    <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" placeholder="Data de Nascimento" value={formData.dateOfBirth} onChange={handleChange} required />
+                </div>
+                <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
+                <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Seu usuário do Instagram (@usuario)" value={formData.instagram} onChange={handleChange} required />
+                <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Redes Sociais</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="relative">
-                <InstagramIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-                <input type="text" placeholder="Seu @ no Instagram" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
-                  value={formData.instagram} onChange={e => setFormData({...formData, instagram: e.target.value})} required />
-              </div>
-              <div className="relative">
-                <TikTokIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-                <input type="text" placeholder="Seu @ no TikTok (opcional)" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
-                  value={formData.tiktok} onChange={e => setFormData({...formData, tiktok: e.target.value})} />
-              </div>
-            </div>
-          </div>
+                {/* Gallery Photos Section */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos de corpo/perfil (obrigatório)</label>
+                    <div className="mt-2 flex items-center gap-4">
+                        <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                           <CameraIcon className="w-5 h-5 mr-2 inline-block" />
+                            <span>{photoPreviews.length > 0 ? 'Trocar fotos' : 'Enviar fotos'}</span>
+                            <input id="photo-upload" name="photo" type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
+                        </label>
+                        <div className="flex-grow flex items-center gap-3 overflow-x-auto p-1 scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          {isProcessingPhoto ? (
+                                <span className="h-20 w-20 flex-shrink-0 rounded-lg bg-gray-700 flex items-center justify-center snap-start">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                </span>
+                            ) : photoPreviews.length > 0 ? (
+                                photoPreviews.map((preview, index) => (
+                                   <img key={index} className="h-20 w-20 flex-shrink-0 rounded-lg object-cover snap-start" src={preview} alt={`Prévia da foto ${index + 1}`} />
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-400">Nenhuma foto selecionada.</p>
+                            )}
+                        </div>
+                    </div>
+                     {editId && photoFiles.length === 0 && <p className="text-xs text-yellow-400 mt-2">As fotos atuais serão mantidas. Para alterá-las, clique em 'Trocar fotos'.</p>}
+                </div>
 
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Sua Foto</h3>
-            <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center bg-gray-800/50 hover:bg-gray-800 transition-colors">
-              <CameraIcon className="w-12 h-12 text-primary mx-auto mb-3" />
-              <p className="text-gray-300 font-medium">Fotos são fundamentais para sua aprovação!</p>
-              <p className="text-xs text-gray-500 mb-4">Mínimo 1 foto de rosto ou corpo inteiro.</p>
-              
-              <input type="file" multiple accept="image/*" className="hidden" id="photo-input" onChange={handleFileChange} />
-              <label htmlFor="photo-input" className="cursor-pointer inline-block bg-primary px-6 py-2 rounded-full text-white font-bold hover:bg-primary-dark transition-all">
-                {photoFiles.length > 0 ? 'Trocar Fotos' : 'Selecionar Fotos'}
-              </label>
-
-              <div className="flex flex-wrap gap-2 mt-6 justify-center">
-                {photoPreviews.map((src, i) => (
-                  <img key={i} src={src} className="w-24 h-32 object-cover rounded-lg border-2 border-primary shadow-lg" alt="Preview" />
-                ))}
-                {isProcessingPhotos && (
-                  <div className="w-24 h-32 bg-gray-700 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-400">Processando...</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {submitError && (
-            <div className="bg-red-900/50 text-red-300 p-4 rounded-lg text-sm text-center font-bold">
-              {submitError}
-            </div>
-          )}
-
-          <button type="submit" disabled={isSubmitting || isProcessingPhotos} 
-            className="w-full py-4 bg-primary text-white font-bold rounded-xl text-xl hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-3">
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Enviando cadastro...
-              </>
-            ) : 'Enviar meu Cadastro 🚀'}
-          </button>
-        </form>
-      </div>
+                <button
+                    type="submit"
+                    disabled={isSubmitting || isProcessingPhoto}
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
+                >
+                    {getButtonText()}
+                </button>
+            </form>
+        </div>
     </div>
   );
 };
 
-export default RegistrationForm;
+const RegistrationFlowPage: React.FC = () => {
+    const { organizationId, state, campaignName } = useParams<{ organizationId: string, state: string, campaignName?: string }>();
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isValidCampaign, setIsValidCampaign] = useState(false); // Tracks if the URL campaign is valid
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (organizationId && state) {
+            setIsLoading(true);
+            setError(null);
+            
+            getCampaigns(state, organizationId)
+                .then(allCampaignsForState => {
+                    if (campaignName) {
+                        const decodedCampaignName = decodeURIComponent(campaignName);
+                        const targetCampaign = allCampaignsForState.find(c => c.name === decodedCampaignName);
+                        
+                        if (targetCampaign && targetCampaign.status !== 'inactive') {
+                            setIsValidCampaign(true);
+                            setActiveCampaign(targetCampaign);
+                        } else {
+                            setError("Este evento/gênero não está mais aceitando cadastros ou não foi encontrado.");
+                            setIsValidCampaign(false);
+                            setActiveCampaign(null);
+                        }
+                    } else {
+                        // No campaign in URL, prepare list for selection
+                        const activeCampaigns = allCampaignsForState.filter(c => c.status === 'active');
+                        setCampaigns(activeCampaigns);
+                        setIsValidCampaign(false); // Not showing form directly
+                        setActiveCampaign(null);
+                    }
+                })
+                .catch(() => setError("Erro ao carregar os eventos disponíveis."))
+                .finally(() => setIsLoading(false));
+        } else {
+            setIsLoading(false);
+        }
+    }, [organizationId, state, campaignName]);
+
+    // Efeito para injetar o script do Pixel
+    useEffect(() => {
+        if (activeCampaign?.pixelId) {
+            const pixelId = activeCampaign.pixelId;
+            
+            if (window.fbq) {
+                window.fbq('init', pixelId);
+                window.fbq('track', 'PageView');
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.id = 'meta-pixel-script';
+            script.innerHTML = `
+                !function(f,b,e,v,n,t,s)
+                {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                n.queue=[];t=b.createElement(e);t.async=!0;
+                t.src=v;s=b.getElementsByTagName(e)[0];
+                s.parentNode.insertBefore(t,s)}(window, document,'script',
+                'https://connect.facebook.net/en_US/fbevents.js');
+            `;
+            document.head.appendChild(script);
+
+            script.onload = () => {
+                if (window.fbq) {
+                    window.fbq('init', pixelId);
+                    window.fbq('track', 'PageView');
+                }
+            };
+            
+            const noscript = document.createElement('noscript');
+            const img = document.createElement('img');
+            img.height = 1;
+            img.width = 1;
+            img.style.display = 'none';
+            img.src = `https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`;
+            noscript.appendChild(img);
+            document.body.appendChild(noscript);
+
+            // Retornar uma função de limpeza para remover o noscript se o componente for desmontado
+            return () => {
+                if (document.body.contains(noscript)) {
+                    document.body.removeChild(noscript);
+                }
+            };
+        }
+    }, [activeCampaign]);
+
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center py-10">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (error) {
+         return (
+             <div className="max-w-4xl mx-auto text-center">
+                <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                    <ArrowLeftIcon className="w-5 h-5" />
+                    <span>Voltar</span>
+                </button>
+                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                     <p className="text-red-400 text-center text-lg">{error}</p>
+                 </div>
+             </div>
+        );
+    }
+
+    // Case 1: Direct link to a valid, active campaign
+    if (campaignName && isValidCampaign) {
+        return <PromoterForm />;
+    }
+    
+    // Case 2: No campaign in URL, show selection list
+    if (!campaignName) {
+        if (campaigns.length > 0) {
+            return (
+                <div className="max-w-4xl mx-auto text-center">
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar</span>
+                    </button>
+                    <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                        <h1 className="text-3xl font-bold text-gray-100 mb-2">
+                            Selecione o Evento ou Gênero
+                        </h1>
+                        <p className="text-gray-400 mb-8">
+                            Escolha para qual campanha você gostaria de se inscrever em {state ? stateMap[state.toUpperCase()] : ''}.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {campaigns.map(campaign => (
+                                <Link
+                                    key={campaign.id}
+                                    to={`/${organizationId}/register/${state}/${encodeURIComponent(campaign.name)}`}
+                                    className="group block p-6 bg-gray-700 rounded-lg text-center font-semibold text-gray-200 hover:bg-primary hover:text-white transition-all duration-300 transform hover:scale-105"
+                                >
+                                    <span className="text-xl">{campaign.name}</span>
+                                    {campaign.description && <span className="block text-xs mt-1 text-gray-400 group-hover:text-white transition-all">{campaign.description}</span>}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        } else {
+            // No active campaigns for this state
+            return (
+                 <div className="max-w-4xl mx-auto text-center">
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
+                        <ArrowLeftIcon className="w-5 h-5" />
+                        <span>Voltar</span>
+                    </button>
+                    <div className="bg-secondary shadow-2xl rounded-lg p-8">
+                        <h1 className="text-2xl font-bold text-gray-100 mb-2">
+                            Nenhum Evento Disponível
+                        </h1>
+                        <p className="text-gray-400 mt-4">No momento, não há eventos ou gêneros aceitando cadastros nesta região. Tente novamente mais tarde.</p>
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    return null; // Fallback, should be covered by loading/error states
+};
+
+interface InputWithIconProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    Icon: React.ElementType;
+}
+
+const InputWithIcon: React.FC<InputWithIconProps> = ({ Icon, ...props }) => {
+    return (
+        <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                <Icon className="h-5 w-5 text-gray-400" />
+            </span>
+            <input
+                {...props}
+                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200 disabled:bg-gray-800 disabled:text-gray-400"
+                style={props.type === 'date' ? { colorScheme: 'dark' } : undefined}
+            />
+        </div>
+    );
+};
+
+export default RegistrationFlowPage;

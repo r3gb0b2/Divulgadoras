@@ -7,6 +7,15 @@ export type FieldValue = firebase.firestore.FieldValue;
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 
+export interface AppleTestRegistrant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  createdAt: Timestamp | FieldValue;
+  organizationId: string;
+}
+
 export interface Promoter {
   id: string;
   name: string;
@@ -92,7 +101,6 @@ export interface Organization {
   id: string;
   name: string;
   ownerName?: string;
-  // FIX: Cannot find name 'owner'. Changed to 'string'.
   ownerEmail: string;
   ownerUid: string;
   status: OrganizationStatus;

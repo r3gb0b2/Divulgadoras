@@ -391,7 +391,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         setStats(prev => {
             const currentPromoter = previousPromoters.find(p => p.id === id);
-            // FIX: currentHold was undefined, changing to currentPromoter
             if (!currentPromoter) return prev;
             
             const oldStatus = currentPromoter.status;
@@ -472,8 +471,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                // FIX: p => id === id was incorrect, changing to p => p.id === id
-                const currentPromoter = previousPromoters.find(p => p.id === id);
+                const currentPromoter = previousPromoters.find(p => id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -486,7 +484,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -580,8 +578,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    // FIX: matchMedia was incorrect, changing to rawError check
-                    if (rawError) {
+                    if (matchMedia) {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
@@ -680,9 +677,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Handled unknown type implicitly by initialization
         let searchString = '';
-        if (typeof emailToSearch === 'string') {
+        if (emailToSearch) {
             searchString = emailToSearch;
         } else if (lookupEmail) {
             searchString = lookupEmail;
@@ -698,7 +694,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err) {
+        // FIX: Using catch (err) and handling it as unknown for compatibility with string assignments.
+        } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

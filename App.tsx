@@ -6,9 +6,9 @@ import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PublicHome from './pages/PublicHome';
-import HowToUsePage from './pages/HowToUsePage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
+import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
 import { GuestListCheck } from './pages/GuestListCheck';
 import ProofUploadPage from './pages/ProofUploadPage';
@@ -19,6 +19,7 @@ import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
+import AppleTestRegistration from './pages/AppleTestRegistration';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -52,7 +53,7 @@ const Header: React.FC = () => {
   const handleLogout = async () => {
       try {
           await auth.signOut();
-          setIsMenuOpen(false);
+          setIsMenuOpen(false); 
           navigate('/admin/login');
       } catch (error) {
           console.error("Logout failed", error);
@@ -69,7 +70,6 @@ const Header: React.FC = () => {
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-                  <Link to="/como-funciona" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
                   <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
@@ -98,7 +98,6 @@ const Header: React.FC = () => {
                           <OrganizationSwitcher />
                       </div>
                       <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
-                      <Link to="/como-funciona" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                       {adminData && (
@@ -131,9 +130,9 @@ const App: React.FC = () => {
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<PublicHome />} />
-                <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
+                <Route path="/apple-test" element={<AppleTestRegistration />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 
@@ -151,8 +150,6 @@ const App: React.FC = () => {
           <footer className="text-center py-4 text-gray-400 text-sm">
               <p>
                   &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
-                  <span className="mx-2">|</span> 
-                  <Link to="/como-funciona" className="hover:text-white underline">Como Funciona</Link>
                   <span className="mx-2">|</span> 
                   <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
                   <span className="mx-2">|</span> 

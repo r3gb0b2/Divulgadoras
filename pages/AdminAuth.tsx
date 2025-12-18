@@ -35,11 +35,13 @@ import AdminCleanupPage from './AdminCleanupPage';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
 import NewsletterPage from './NewsletterPage';
+import SubscriptionPage from './SubscriptionPage';
 import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
+import AdminAppleTestReview from './AdminAppleTestReview';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -73,6 +75,7 @@ const AdminAuth: React.FC = () => {
 
             <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData!} /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
             <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData!} /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
@@ -103,10 +106,9 @@ const AdminAuth: React.FC = () => {
             <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
             <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
             <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
-            
             <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
-            
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+            <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
