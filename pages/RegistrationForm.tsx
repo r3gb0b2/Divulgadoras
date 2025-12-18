@@ -102,13 +102,10 @@ const PromoterForm: React.FC = () => {
     tiktok: '',
     dateOfBirth: '',
   });
-  
-  // States for Gallery Photos
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -131,7 +128,6 @@ const PromoterForm: React.FC = () => {
                     tiktok: profile.tiktok || '',
                     dateOfBirth: profile.dateOfBirth,
                 });
-                // Load existing photos
                 setPhotoPreviews(profile.photoUrls);
                 setOriginalPhotoUrls(profile.photoUrls);
                 setProfileLoaded(true);
@@ -183,9 +179,8 @@ const PromoterForm: React.FC = () => {
           tiktok: profile.tiktok || '',
           dateOfBirth: profile.dateOfBirth,
         });
-        
         setProfileLoaded(true);
-        // Clear gallery photos as they need to be re-uploaded for each event usually
+        // Clear photos as they need to be re-uploaded for each event
         setPhotoFiles([]);
         setPhotoPreviews([]);
       }
@@ -257,9 +252,8 @@ const PromoterForm: React.FC = () => {
         return;
     }
 
-    // Validate Gallery Photos
     if (photoFiles.length === 0 && originalPhotoUrls.length === 0) {
-        setSubmitError("Por favor, selecione pelo menos uma foto de corpo/perfil para o cadastro.");
+        setSubmitError("Por favor, selecione pelo menos uma foto para o cadastro.");
         return;
     }
     
@@ -271,8 +265,6 @@ const PromoterForm: React.FC = () => {
       
       if (editId) {
         // Update existing promoter
-        
-        // Handle Gallery Photos
         let finalPhotoUrls = originalPhotoUrls;
         if (photoFiles.length > 0) {
             finalPhotoUrls = await Promise.all(
@@ -294,13 +286,14 @@ const PromoterForm: React.FC = () => {
         });
       } else {
         // Create new promoter
+        // FIX: Added facePhoto: null to satisfy type requirement
         await addPromoter({ 
             ...formData, 
             photos: photoFiles, 
             state, 
             campaignName: decodedCampaignName, 
             organizationId,
-            facePhoto: null // REMOVED facePhoto
+            facePhoto: null
         });
       }
 
@@ -318,10 +311,8 @@ const PromoterForm: React.FC = () => {
       setProfileLoaded(false);
       setShowGenderWarning(false);
       setEditId(null);
-      
-      // Reset inputs
-      const photoInput = document.getElementById('photo-upload') as HTMLInputElement;
-      if (photoInput) photoInput.value = '';
+      const fileInput = document.getElementById('photo-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
       
       setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (error) {
@@ -383,7 +374,7 @@ const PromoterForm: React.FC = () => {
                      {isCheckingEmail && <p className="text-sm text-yellow-400 mt-2">Buscando seu cadastro...</p>}
                      {profileLoaded && (
                         <div className="bg-green-900/50 text-green-300 p-3 mt-2 rounded-md text-sm">
-                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e atualize suas fotos se necessário.</p>
+                            <p><strong>Cadastro encontrado!</strong> Seus dados foram preenchidos. Verifique se estão corretos e envie suas fotos atualizadas.</p>
                         </div>
                     )}
                 </div>
@@ -403,9 +394,8 @@ const PromoterForm: React.FC = () => {
                 <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="Seu usuário do Instagram (@usuario)" value={formData.instagram} onChange={handleChange} required />
                 <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="Seu usuário do TikTok (@usuario)" value={formData.tiktok} onChange={handleChange} />
 
-                {/* Gallery Photos Section */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos de corpo/perfil (obrigatório)</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Suas melhores fotos (obrigatório)</label>
                     <div className="mt-2 flex items-center gap-4">
                         <label htmlFor="photo-upload" className="flex-shrink-0 cursor-pointer bg-gray-700 py-2 px-3 border border-gray-600 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-200 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                            <CameraIcon className="w-5 h-5 mr-2 inline-block" />

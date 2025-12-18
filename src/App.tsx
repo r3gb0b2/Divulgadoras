@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
@@ -8,7 +8,6 @@ import StateSelection from './pages/StateSelection';
 import PricingPage from './pages/PricingPage';
 import PublicHome from './pages/PublicHome';
 import SubscriptionFlowPage from './pages/AdminRegistrationPage';
-import HowToUsePage from './pages/HowToUsePage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
@@ -21,9 +20,6 @@ import OneTimePostPage from './pages/OneTimePostPage';
 import { auth } from './firebase/config';
 import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
-import SupportPage from './pages/SupportPage';
-import { initPushNotifications, clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -64,8 +60,7 @@ const Header: React.FC = () => {
   };
 
   return (
-      // Added pt-[env(safe-area-inset-top)] for notch support
-      <header className="bg-secondary shadow-md sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
+      <header className="bg-secondary shadow-md sticky top-0 z-20">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-8 w-auto text-white" />
@@ -75,7 +70,6 @@ const Header: React.FC = () => {
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-                  <Link to="/como-funciona" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
                   <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/planos" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Planos</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
@@ -113,7 +107,6 @@ const Header: React.FC = () => {
                           <OrganizationSwitcher />
                       </div>
                       <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
-                      <Link to="/como-funciona" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/planos" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Planos</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
@@ -132,33 +125,22 @@ const Header: React.FC = () => {
 
 
 const App: React.FC = () => {
-  // Cleanup push listeners on unmount
-  useEffect(() => {
-      return () => {
-          clearPushListeners();
-      }
-  }, []);
-
   return (
     <AdminAuthProvider>
       <Router>
-        {/* Added pb-[env(safe-area-inset-bottom)] for iOS home indicator */}
-        <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col pb-[env(safe-area-inset-bottom)]">
+        <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col">
           <Header />
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<PublicHome />} />
-                <Route path="/como-funciona" element={<HowToUsePage />} />
-                <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
-                <Route path="/suporte" element={<SupportPage />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 
                 <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/status" element={<StatusCheck />} />
                 <Route path="/posts" element={<PostCheck />} />
-                <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
+                <Route path="/connect" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
@@ -169,15 +151,7 @@ const App: React.FC = () => {
             </ErrorBoundary>
           </main>
           <footer className="text-center py-4 text-gray-400 text-sm">
-              <p>
-                  &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
-                  <span className="mx-2">|</span> 
-                  <Link to="/como-funciona" className="hover:text-white underline">Como Funciona</Link>
-                  <span className="mx-2">|</span> 
-                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
-                  <span className="mx-2">|</span> 
-                  <Link to="/suporte" className="hover:text-white underline">Suporte</Link>
-              </p>
+              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados.</p>
           </footer>
         </div>
       </Router>

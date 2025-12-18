@@ -275,7 +275,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         return statesForScope;
     }, [isSuperAdmin, adminData, organization]);
 
-    const fetchData = useCallback(async () => {
+    const fetchAllData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         setSelectedPromoterIds(new Set());
@@ -333,8 +333,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [adminData, organization, isSuperAdmin, selectedOrg, selectedState, selectedCampaign, getStatesForScope, selectedOrgId]);
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        fetchAllData();
+    }, [fetchAllData]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -470,7 +470,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setStats(prev => {
             const newStats = { ...prev };
             idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => id === id);
+                const currentPromoter = previousPromoters.find(p => p.id === id);
                 if (currentPromoter) {
                     const oldStatus = currentPromoter.status;
                     const newStatus = updateData.status;
@@ -483,7 +483,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                         
                         if (newStatus === 'pending') newStats.pending++;
                         else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStats.rejected_editable) newStats.rejected++;
+                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
                         else if (newStatus === 'removed') newStats.removed++;
                     }
                 }
@@ -577,7 +577,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             if (error && typeof error === 'object') {
                 if (error.details) {
                     const rawError = error.details.detailedError || error.details.originalError?.message || error.message;
-                    if (matchMedia) {
+                    if (rawError) {
                         detailedError = String(rawError);
                     }
                     if (error.details.provider) {
@@ -676,26 +676,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allOrganizations]);
 
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        let searchString = '';
-        if (emailToSearch) {
-            searchString = emailToSearch;
-        } else if (lookupEmail) {
-            searchString = lookupEmail;
-        }
-        
-        const finalEmail = searchString.trim();
-        if (!finalEmail) return;
-        
+        const email = emailToSearch || lookupEmail;
+        if (!email || !email.trim()) return;
         setIsLookingUp(true);
         setLookupError(null);
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(finalEmail);
+            const results = await findPromotersByEmail(email.trim());
             setLookupResults(results);
-        // FIX: Changed catch parameter from unknown to any to ensure compatibility with string assignments.
-        } catch (err: any) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
+        } catch (error: any) {
+            // FIX: Changed type from unknown to any to resolve property access and assignment issues
+            const errorMessage = error instanceof Error ? error.message : String(error);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
@@ -1024,14 +1016,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                 <div>
                                     <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { handleLookupPromoter(email); }} />
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => handleLookupPromoter(email)} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
                                 <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
-                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
-                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="h-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="h-4 h-4" /><span>{promoter.tiktok}</span></a>}
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
                                 <span>{promoter.campaignName} ({promoter.state})</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>

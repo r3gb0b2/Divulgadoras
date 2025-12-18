@@ -3,10 +3,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
 import { getOrganization, getOrganizations } from '../services/organizationService';
-import { getAllCampaigns } from '../services/settingsService';
-import { Post, Organization, PostAssignment, AdminUserData, Campaign } from '../types';
+import { Post, Organization, PostAssignment, AdminUserData } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { auth } from '../firebase/config';
 import StorageMedia from '../components/StorageMedia';
@@ -34,11 +33,9 @@ const AdminPosts: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [assignments, setAssignments] = useState<PostAssignment[]>([]);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
-    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
-    const [filterCampaign, setFilterCampaign] = useState<string>('all');
 
     // Justification Modal State
     const [isJustificationModalOpen, setIsJustificationModalOpen] = useState(false);
@@ -66,19 +63,12 @@ const AdminPosts: React.FC = () => {
             const postPromise = getPostsForOrg(orgId, adminData);
             const assignmentsPromise = orgId ? getAssignmentsForOrganization(orgId) : Promise.resolve([]);
             const orgPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
-            const campaignPromise = orgId ? getAllCampaigns(orgId) : Promise.resolve([]);
             
-            const [fetchedPosts, fetchedAssignments, fetchedOrgs, fetchedCampaigns] = await Promise.all([
-                postPromise, 
-                assignmentsPromise, 
-                orgPromise,
-                campaignPromise
-            ]);
+            const [fetchedPosts, fetchedAssignments, fetchedOrgs] = await Promise.all([postPromise, assignmentsPromise, orgPromise]);
 
             setPosts(fetchedPosts);
             setAssignments(fetchedAssignments);
             setOrganizations(fetchedOrgs);
-            setCampaigns(fetchedCampaigns);
 
         } catch (err: any) {
             setError(err.message);
@@ -133,22 +123,32 @@ const AdminPosts: React.FC = () => {
     }, [assignments]);
 
 
-    const filteredPosts = useMemo(() => {
+    const { activePosts, inactivePosts } = useMemo(() => {
         const now = new Date();
-        
-        return posts.filter(p => {
-            // Filter by Status
+        const active: Post[] = [];
+        const inactive: Post[] = [];
+
+        posts.forEach(p => {
             const isExpired = p.expiresAt && toDateSafe(p.expiresAt) < now;
-            const matchesStatus = statusFilter === 'all' 
-                || (statusFilter === 'active' && p.isActive && !isExpired)
-                || (statusFilter === 'inactive' && (!p.isActive || isExpired));
-
-            // Filter by Campaign
-            const matchesCampaign = filterCampaign === 'all' || p.campaignName === filterCampaign;
-
-            return matchesStatus && matchesCampaign;
+            if (p.isActive && !isExpired) {
+                active.push(p);
+            } else {
+                inactive.push(p);
+            }
         });
-    }, [posts, statusFilter, filterCampaign]);
+        return { activePosts: active, inactivePosts: inactive };
+    }, [posts]);
+
+    const filteredPosts = useMemo(() => {
+        switch (statusFilter) {
+            case 'active':
+                return activePosts;
+            case 'inactive':
+                return inactivePosts;
+            default:
+                return posts;
+        }
+    }, [posts, activePosts, inactivePosts, statusFilter]);
 
     const handleToggleActive = async (post: Post) => {
         try {
@@ -256,9 +256,11 @@ const AdminPosts: React.FC = () => {
         }
         if (filteredPosts.length === 0) {
             return (
-                <div className="text-center text-gray-400 py-10 border-2 border-dashed border-gray-700 rounded-lg">
-                    <p className="text-lg font-medium">Nenhum post encontrado.</p>
-                    <p className="text-sm mt-1">Tente ajustar seus filtros de status ou evento.</p>
+                <div className="text-center text-gray-400 py-10">
+                    {statusFilter === 'active' && 'Nenhuma publicação ativa encontrada.'}
+                    {statusFilter === 'inactive' && 'Nenhuma publicação inativa encontrada.'}
+                    {statusFilter === 'all' && posts.length === 0 && 'Nenhuma publicação criada ainda.'}
+                    {statusFilter === 'all' && posts.length > 0 && 'Nenhuma publicação encontrada com os filtros atuais.'}
                 </div>
             );
         }
@@ -413,42 +415,17 @@ const AdminPosts: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                
-                {/* Filters Bar */}
-                <div className="flex flex-col md:flex-row gap-4 mb-8">
-                    {/* Status Toggle */}
-                    <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg w-fit">
-                        {(['active', 'inactive', 'all'] as const).map(f => (
-                            <button 
-                                key={f} 
-                                onClick={() => setStatusFilter(f)} 
-                                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
-                            >
-                                {{'active': 'Ativos', 'inactive': 'Inativos', 'all': 'Todos'}[f]}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Campaign Filter */}
-                    <div className="flex-grow md:flex md:justify-end">
-                        <div className="relative w-full md:w-64">
-                            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                                <FilterIcon className="w-4 h-4 text-gray-400" />
-                            </div>
-                            <select
-                                value={filterCampaign}
-                                onChange={(e) => setFilterCampaign(e.target.value)}
-                                className="block w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md leading-5 bg-gray-700 text-gray-200 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm"
-                            >
-                                <option value="all">Filtrar por Evento: Todos</option>
-                                {campaigns.map(c => (
-                                    <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
+                <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg mb-6 w-fit">
+                    {(['active', 'inactive', 'all'] as const).map(f => (
+                        <button 
+                            key={f} 
+                            onClick={() => setStatusFilter(f)} 
+                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                        >
+                            {{'active': 'Ativos', 'inactive': 'Inativos', 'all': 'Todos'}[f]}
+                        </button>
+                    ))}
                 </div>
-
                 {renderContent()}
             </div>
 

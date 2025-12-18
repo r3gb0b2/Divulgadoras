@@ -49,7 +49,7 @@ const getJustificationStatusBadge = (status: 'pending' | 'accepted' | 'rejected'
     return <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${styles[effectiveStatus]}`}>{text[effectiveStatus]}</span>;
 };
 
-const PostDetails: React.FC = () => {
+export const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
     const { organizationsForAdmin } = useAdminAuth();
@@ -375,6 +375,7 @@ const PostDetails: React.FC = () => {
                     <div className="md:col-span-1">
                         <StorageMedia 
                             path={post.mediaUrl || post.googleDriveUrl || ''} 
+                            // FIX: Cast post.type to ensure it's valid for StorageMedia prop type
                             type={post.type as 'image' | 'video'} 
                             className="w-full h-auto object-contain rounded-md bg-dark" 
                         />
@@ -496,5 +497,3 @@ const PostDetails: React.FC = () => {
         </div>
     );
 };
-
-export default PostDetails;

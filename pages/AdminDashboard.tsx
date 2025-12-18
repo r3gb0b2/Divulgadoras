@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, ClipboardDocumentListIcon, MegaphoneIcon, ChartBarIcon, ClockIcon, TicketIcon, LogoutIcon, HeartIcon, CogIcon, SearchIcon, FaceIdIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, ClipboardDocumentListIcon, MegaphoneIcon, ChartBarIcon, ClockIcon, TicketIcon, LogoutIcon, HeartIcon, CogIcon, SearchIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const AdminDashboard: React.FC = () => {
@@ -34,6 +34,7 @@ const AdminDashboard: React.FC = () => {
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* O CARD SOLICITADO: ACESSO ÀS DIVULGADORAS */}
                     <Link to="/admin/promoters" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-gray-600 hover:border-primary">
                         <div className="flex items-center">
                             <div className="p-3 rounded-full bg-primary/20 text-primary">
@@ -51,17 +52,6 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Posts e Tarefas</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Criar publicações, verificar prints e gerenciar conteúdo.</p>
-                    </Link>
-
-                    {/* NOVO CARD: NOTIFICAÇÕES PUSH */}
-                    <Link to="/admin/push-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-transparent hover:border-indigo-500">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-full bg-indigo-500/20 text-indigo-400">
-                                <FaceIdIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Notificações Push</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Envie avisos urgentes diretamente para a tela do celular das divulgadoras.</p>
                     </Link>
 
                     <Link to="/admin/lists" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
@@ -102,6 +92,14 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Conexão (Follow Loop)</h2>
                         </div>
                         <p className="mt-2 text-gray-400">Gerenciar dinâmica de seguidores.</p>
+                    </Link>
+
+                    <Link to="/admin/diagnostics" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                        <div className="flex items-center">
+                            <SearchIcon className="w-8 h-8 text-primary" />
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Diagnóstico</h2>
+                        </div>
+                        <p className="mt-2 text-gray-400">Investigar problemas com divulgadoras específicas.</p>
                     </Link>
 
                     <Link to="/admin/settings" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">

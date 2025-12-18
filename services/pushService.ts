@@ -5,12 +5,12 @@ import { savePushToken } from './promoterService';
 
 export const initPushNotifications = async (promoterId: string) => {
     if (!Capacitor.isNativePlatform()) {
-        console.log("Push notifications: Apenas em dispositivos nativos (App).");
-        return false;
+        console.log("Push notifications are only available on native devices.");
+        return;
     }
 
     try {
-        // 1. Verificar permissão
+        // 1. Check permission
         let permStatus = await PushNotifications.checkPermissions();
 
         if (permStatus.receive === 'prompt') {
@@ -18,52 +18,48 @@ export const initPushNotifications = async (promoterId: string) => {
         }
 
         if (permStatus.receive !== 'granted') {
-            console.warn("Push notifications: Permissão negada pelo usuário.");
-            return false;
+            console.warn("Push notification permission denied.");
+            return;
         }
 
-        // 2. Registrar Listeners antes de chamar o register()
+        // 2. Register listeners (must be done before registering)
         
-        // Remove listeners antigos para evitar duplicidade
-        await PushNotifications.removeAllListeners();
-
-        // Listener de Sucesso
+        // On success, we get the token
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Token capturado com sucesso:', token.value);
+            console.log('Push registration success, token: ' + token.value);
+            // Save token to Firestore linked to the promoter
             try {
                 await savePushToken(promoterId, token.value);
-                console.log('Push: Token salvo no Firestore para o ID:', promoterId);
             } catch (e) {
-                console.error("Push: Erro ao salvar token no Firestore:", e);
+                console.error("Failed to save push token to database", e);
             }
         });
 
-        // Listener de Erro
         PushNotifications.addListener('registrationError', (error) => {
-            console.error('Push: Erro no registro do FCM:', JSON.stringify(error));
+            console.error('Error on push registration: ' + JSON.stringify(error));
         });
 
-        // Listener de Recebimento (App Aberto)
+        // Show alert/toast when notification arrives in foreground
         PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push: Notificação recebida (foreground):', notification);
+            console.log('Push received: ', notification);
+            // You can implement a custom toast here if you want
+            // For now, let's just log it. The OS usually handles the rest or Capacitor allows local notifications.
         });
 
-        // Listener de Clique na Notificação
+        // Handle action when user taps the notification
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+            console.log('Push action performed: ', notification);
             const data = notification.notification.data;
             if (data && data.url) {
-                // Redireciona usando o hash do React Router se necessário
-                window.location.hash = data.url.replace('/#', '');
+                window.location.href = data.url; // Navigate to specific page if URL is provided
             }
         });
 
-        // 3. Solicitar registro ao Firebase/Google
+        // 3. Register with FCM
         await PushNotifications.register();
-        return true;
 
     } catch (error) {
-        console.error("Push: Erro geral na inicialização:", error);
-        return false;
+        console.error("Error initializing push notifications:", error);
     }
 };
 
@@ -72,6 +68,6 @@ export const clearPushListeners = async () => {
     try {
         await PushNotifications.removeAllListeners();
     } catch (e) {
-        console.error("Push: Erro ao limpar listeners", e);
+        console.error("Error clearing push listeners", e);
     }
 };
