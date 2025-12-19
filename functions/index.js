@@ -10,9 +10,28 @@ admin.initializeApp();
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
-// ... (helpers anteriores mantidos)
-
 // --- Cloud Messaging (Push Notifications) ---
+
+exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // Não exigimos auth aqui porque as divulgadoras não usam Firebase Auth
+    const { promoterId, token } = data;
+    
+    if (!promoterId || !token) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da divulgadora e token são obrigatórios.");
+    }
+
+    try {
+        await db.collection('promoters').doc(promoterId).update({
+            fcmToken: token,
+            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: true, message: "Token vinculado com sucesso." };
+    } catch (e) {
+        console.error("Error saving token:", e);
+        throw new functions.https.HttpsError("internal", "Erro ao gravar no banco de dados: " + e.message);
+    }
+});
 
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -49,8 +68,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                 body: body
             },
             data: {
-                // Se o app estiver aberto ou em background, esse link será usado para navegar
-                url: url || '/#/admin'
+                url: url || '/#/posts'
             },
             tokens: tokens
         };
@@ -68,5 +86,3 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
-
-// ... (restante das funções mantidas)

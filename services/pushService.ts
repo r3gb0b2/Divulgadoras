@@ -5,7 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { savePushToken } from './promoterService';
 
 /**
- * Obtém o token FCM e salva no banco.
+ * Obtém o token FCM e salva no banco chamando a Cloud Function correspondente.
  */
 export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promise<string | null> => {
     if (!Capacitor.isNativePlatform()) return null;
@@ -13,15 +13,14 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
     try {
         console.log(`Push Debug: Tentando capturar token... (${retryCount + 1}/5)`);
         
-        // No iOS o registro nativo precisa disparar o evento 'registration' primeiro
-        // mas o plugin FCM.getToken() consegue buscar o token se o registro APNs já ocorreu.
         const res = await FCM.getToken();
         const fcmToken = res.token;
 
         if (fcmToken) {
             console.log('Push Debug: Token encontrado:', fcmToken);
-            await savePushToken(promoterId, fcmToken);
-            return fcmToken;
+            const success = await savePushToken(promoterId, fcmToken);
+            if (success) return fcmToken;
+            throw new Error("Falha ao salvar o token via Cloud Function.");
         }
 
         if (retryCount < 5) {
@@ -30,9 +29,10 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
         }
 
         return null;
-    } catch (e) {
-        console.error("Push Debug: Erro ao obter token:", e);
-        return null;
+    } catch (e: any) {
+        console.error("Push Debug: Erro fatal no processo de registro:", e);
+        // Não retornar null se houver erro real de salvamento, propagar para PostCheck capturar.
+        throw e;
     }
 };
 
@@ -49,22 +49,28 @@ export const initPushNotifications = async (promoterId: string) => {
 
         await PushNotifications.removeAllListeners();
 
-        // Listener importante: quando o iOS termina o registro no servidor da Apple
         PushNotifications.addListener('registration', async (token) => {
             console.log('Push: Registro nativo APNs concluído. Buscando FCM...');
-            await getTokenAndSave(promoterId);
+            try {
+                await getTokenAndSave(promoterId);
+            } catch (err) {
+                console.error("Erro no callback registration:", err);
+            }
         });
 
         PushNotifications.addListener('registrationError', (error) => {
             console.error('Push: Erro no registro nativo APNs:', error);
         });
 
-        // Registra o dispositivo no sistema da Apple
         await PushNotifications.register();
 
         // Tenta buscar o token FCM após um curto delay (caso já estivesse registrado)
-        setTimeout(() => {
-            getTokenAndSave(promoterId);
+        setTimeout(async () => {
+            try {
+                await getTokenAndSave(promoterId);
+            } catch (err) {
+                console.error("Erro no timeout inicial do push:", err);
+            }
         }, 2000);
 
         return true;

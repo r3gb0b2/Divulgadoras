@@ -12,7 +12,6 @@ import { storage } from '../firebase/config';
 import firebase from 'firebase/compat/app';
 import { Capacitor } from '@capacitor/core';
 
-// ... (helpers mantidos)
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
     if (typeof timestamp.toDate === 'function') return timestamp.toDate();
@@ -287,10 +286,11 @@ const PostCheck: React.FC = () => {
                 setCurrentFcmToken(token);
                 alert("SUCESSO: Seu celular foi vinculado ao banco de dados!");
             } else {
-                alert("FALHA: O código foi gerado mas não conseguimos salvar no banco de dados. Verifique sua internet.");
+                alert("FALHA: O código foi gerado mas não conseguimos salvar. Verifique se autorizou as notificações.");
             }
         } catch (e: any) {
-            alert(`ERRO: ${e.message}`);
+            const msg = e.details?.message || e.message || "Erro desconhecido.";
+            alert(`ERRO AO SALVAR: ${msg}`);
         } finally {
             setIsSyncingPush(false);
         }
@@ -343,11 +343,6 @@ const PostCheck: React.FC = () => {
                                     O envio de Push só funciona para perfis aprovados. O seu está: {promoter.status}
                                 </div>
                             )}
-                            
-                            {/* CAMPO DE DIAGNÓSTICO (Remover após teste bem sucedido) */}
-                            <div className="bg-black/40 p-2 rounded text-[10px] font-mono break-all opacity-60">
-                                <strong>DEBUG TOKEN:</strong> {currentFcmToken || 'Nenhum token encontrado. Clique em Sincronizar.'}
-                            </div>
                         </div>
                     )}
                 </div>

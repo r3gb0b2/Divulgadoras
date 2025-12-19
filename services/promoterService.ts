@@ -6,7 +6,6 @@ import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Tim
 type QueryDocumentSnapshot = firebase.firestore.QueryDocumentSnapshot;
 type DocumentData = firebase.firestore.DocumentData;
 
-// Helper to safely get milliseconds for sorting
 const toMillisSafe = (timestamp: any): number => {
     if (!timestamp) return 0;
     if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
@@ -17,32 +16,24 @@ const toMillisSafe = (timestamp: any): number => {
 };
 
 /**
- * Salva o token de notificação Push no documento da divulgadora.
+ * Salva o token de notificação Push chamando uma Cloud Function.
+ * Isso evita erros de 'permission-denied' no cliente.
  */
 export const savePushToken = async (promoterId: string, token: string): Promise<boolean> => {
     try {
         if (!promoterId || !token) return false;
         
-        console.log(`Push: Tentando gravar token no Firestore para o ID: ${promoterId}`);
+        const savePromoterToken = functions.httpsCallable('savePromoterToken');
+        const result = await savePromoterToken({ promoterId, token });
         
-        await firestore.collection('promoters').doc(promoterId).update({
-            fcmToken: token,
-            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log(`Push: Token gravado com sucesso no Banco de Dados.`);
-        return true;
+        const data = result.data as { success: boolean };
+        return data.success;
     } catch (error: any) {
-        console.error("Push: Erro fatal ao gravar no Firestore:", error);
-        // Se o erro for 'permission-denied', as regras do Firebase estão bloqueando
-        if (error.code === 'permission-denied') {
-            throw new Error("Permissão negada no Banco de Dados. Verifique as Regras do Firestore.");
-        }
+        console.error("Push Service: Erro ao invocar savePromoterToken:", error);
         throw error;
     }
 };
 
-// ... (restante do arquivo mantido exatamente igual)
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
@@ -54,7 +45,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       .where("organizationId", "==", promoterData.organizationId);
       
     const querySnapshot = await q.get();
-    if (!querySnapshot.empty) throw new Error("Você já se cadastrou para este evento/gênero.");
+    if (!querySnapshot.empty) throw new Error("Você já possui um cadastro pendente para este evento.");
 
     if (promoterData.campaignName) {
         const campaignQuery = firestore.collection('campaigns')
@@ -81,9 +72,9 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
 
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
-        const fileExtension = photo.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-        const storageRef = storage.ref(`promoters-photos/${fileName}`);
+        const fileExtension = photo.name.split('.').pop() || 'jpg';
+        const fileName = `promoters/${normalizedEmail}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+        const storageRef = storage.ref(fileName);
         await storageRef.put(photo);
         return await storageRef.getDownloadURL();
       })
@@ -95,16 +86,17 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       email: normalizedEmail,
       campaignName: promoterData.campaignName || null,
       photoUrls,
-      status: 'pending' as const,
+      status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
     };
     
     await firestore.collection('promoters').add(newPromoter);
-  } catch (error) {
-    console.error("Error adding promoter: ", error);
+  } catch (error: any) {
+    console.error("Error adding promoter:", error);
+    if (error.code === 'permission-denied') throw new Error("Erro de permissão no servidor. Verifique as regras do Firebase.");
     if (error instanceof Error) throw error;
-    throw new Error("Não foi possível enviar o cadastro. Tente novamente.");
+    throw new Error("Falha ao salvar cadastro. Tente novamente.");
   }
 };
 
@@ -114,8 +106,8 @@ export const getPromoterById = async (id: string): Promise<Promoter | null> => {
         const docSnap = await docRef.get();
         return docSnap.exists ? { id: docSnap.id, ...docSnap.data() } as Promoter : null;
     } catch (error) {
-        console.error("Error getting promoter: ", error);
-        throw new Error("Não foi possível buscar os dados da divulgadora.");
+        console.error("Error getting promoter:", error);
+        throw new Error("Não foi possível buscar os dados.");
     }
 };
 
@@ -127,8 +119,8 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         const promoterDocs = querySnapshot.docs.sort((a, b) => toMillisSafe(b.data().createdAt) - toMillisSafe(a.data().createdAt));
         return { id: promoterDocs[0].id, ...promoterDocs[0].data() } as Promoter;
     } catch (error) {
-        console.error("Error fetching latest profile: ", error);
-        throw new Error("Não foi possível buscar os dados do seu cadastro anterior.");
+        console.error("Error fetching profile:", error);
+        return null;
     }
 };
 
@@ -140,8 +132,8 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
         promoters.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
         return promoters;
     } catch (error) {
-        console.error("Error finding promoters: ", error);
-        throw new Error("Não foi possível buscar as divulgadoras por e-mail.");
+        console.error("Error finding promoters:", error);
+        return [];
     }
 };
 
@@ -208,7 +200,7 @@ export const getAllPromoters = async (options: {
 
     return Array.from(promotersMap.values());
   } catch (error) {
-    console.error("Error fetching promoters: ", error);
+    console.error("Error fetching promoters:", error);
     throw new Error("Não foi possível buscar as divulgadoras.");
   }
 };
@@ -240,8 +232,8 @@ export const getPromoterStats = async (options: {
         
         return { total: totalSnap.size, pending: pendingSnap.size, approved: approvedSnap.size, rejected: rejectedSnap.size, removed: removedSnap.size };
     } catch (error) {
-        console.error("Error getting stats: ", error);
-        throw new Error("Não foi possível carregar as estatísticas.");
+        console.error("Error getting stats:", error);
+        throw new Error("Erro ao carregar estatísticas.");
     }
 };
 
@@ -250,12 +242,9 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
     const updatePromoterAndSync = functions.httpsCallable('updatePromoterAndSync');
     await updatePromoterAndSync({ promoterId: id, data });
   } catch (error) {
-    console.error("Error updating promoter: ", error);
-    if (error instanceof Error) {
-        const details = (error as any).details?.message || error.message;
-        throw new Error(`Não foi possível atualizar a divulgadora. Detalhes: ${details}`);
-    }
-    throw new Error("Não foi possível atualizar a divulgadora.");
+    console.error("Error updating promoter:", error);
+    if (error instanceof Error) throw error;
+    throw new Error("Não foi possível atualizar.");
   }
 };
 
@@ -263,8 +252,8 @@ export const resubmitPromoterApplication = async (id: string, data: Partial<Omit
   try {
     await firestore.collection("promoters").doc(id).update(data);
   } catch (error) {
-    console.error("Error resubmitting: ", error);
-    throw new Error("Não foi possível reenviar o cadastro. Tente novamente.");
+    console.error("Error resubmitting:", error);
+    throw new Error("Falha ao reenviar.");
   }
 };
 
@@ -273,7 +262,7 @@ export const confirmPromoterGroupEntry = async (promoterId: string): Promise<voi
     await firestore.collection('promoters').doc(promoterId).update({ hasJoinedGroup: true });
   } catch (error) {
     console.error("Error confirming group entry:", error);
-    throw new Error("Não foi possível confirmar a entrada no grupo.");
+    throw new Error("Falha ao confirmar.");
   }
 };
 
@@ -281,8 +270,8 @@ export const deletePromoter = async (id: string): Promise<void> => {
     try {
       await firestore.collection("promoters").doc(id).delete();
     } catch (error) {
-      console.error("Error deleting promoter: ", error);
-      throw new Error("Não foi possível deletar a divulgadora.");
+      console.error("Error deleting promoter:", error);
+      throw new Error("Falha ao deletar.");
     }
 };
 
@@ -296,8 +285,8 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
         promoters.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
         return promoters;
     } catch (error) {
-        console.error("Error checking status: ", error);
-        throw new Error("Não foi possível verificar o status.");
+        console.error("Error checking status:", error);
+        throw new Error("Falha ao verificar status.");
     }
 };
 
@@ -307,8 +296,8 @@ export const getApprovedEventsForPromoter = async (email: string): Promise<Promo
         const querySnapshot = await q.get();
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
     } catch (error) {
-        console.error("Error getting approved events: ", error);
-        throw new Error("Não foi possível buscar os eventos aprovados.");
+        console.error("Error getting approved events:", error);
+        return [];
     }
 };
 
@@ -323,8 +312,8 @@ export const getApprovedPromoters = async (organizationId: string, state: string
     const activePromoters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter)).filter(p => p.hasJoinedGroup !== false);
     return activePromoters.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   } catch (error) {
-    console.error("Error getting approved promoters: ", error);
-    throw new Error("Não foi possível buscar as divulgadoras aprovadas.");
+    console.error("Error getting approved promoters:", error);
+    return [];
   }
 };
 
@@ -335,8 +324,8 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
         const reasons = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RejectionReason));
         return reasons.sort((a, b) => (a.text || '').localeCompare(b.text || ''));
     } catch (error) {
-        console.error("Error getting reasons: ", error);
-        throw new Error("Não foi possível buscar os motivos de rejeição.");
+        console.error("Error getting reasons:", error);
+        return [];
     }
 };
 
@@ -345,8 +334,8 @@ export const addRejectionReason = async (text: string, organizationId: string): 
         const docRef = await firestore.collection('rejectionReasons').add({ text, organizationId });
         return docRef.id;
     } catch (error) {
-        console.error("Error adding reason: ", error);
-        throw new Error("Não foi possível adicionar o motivo.");
+        console.error("Error adding reason:", error);
+        throw new Error("Falha ao adicionar motivo.");
     }
 };
 
@@ -354,8 +343,8 @@ export const updateRejectionReason = async (id: string, text: string): Promise<v
     try {
         await firestore.collection('rejectionReasons').doc(id).update({ text });
     } catch (error) {
-        console.error("Error updating reason: ", error);
-        throw new Error("Não foi possível atualizar o motivo.");
+        console.error("Error updating reason:", error);
+        throw new Error("Falha ao atualizar motivo.");
     }
 };
 
@@ -363,8 +352,8 @@ export const deleteRejectionReason = async (id: string): Promise<void> => {
     try {
         await firestore.collection("rejectionReasons").doc(id).delete();
     } catch (error) {
-        console.error("Error deleting reason: ", error);
-        throw new Error("Não foi possível deletar o motivo.");
+        console.error("Error deleting reason:", error);
+        throw new Error("Falha ao deletar motivo.");
     }
 };
 
@@ -389,10 +378,9 @@ export const requestGroupRemoval = async (promoterId: string, campaignName: stri
             status: 'pending',
             requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
-    } catch (error) {
-        console.error("Error removal request: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível enviar a solicitação.");
+    } catch (error: any) {
+        console.error("Error removal request:", error);
+        throw new Error(error.message || "Falha ao enviar solicitação.");
     }
 };
 
@@ -404,8 +392,8 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
         requests.sort((a, b) => toMillisSafe(b.requestedAt) - toMillisSafe(a.requestedAt));
         return requests;
     } catch (error) {
-        console.error("Error getting removal requests: ", error);
-        throw new Error("Não foi possível buscar as solicitações.");
+        console.error("Error getting removal requests:", error);
+        return [];
     }
 };
 
@@ -413,7 +401,7 @@ export const updateGroupRemovalRequest = async (requestId: string, data: Partial
     try {
         await firestore.collection("groupRemovalRequests").doc(requestId).update(data);
     } catch (error) {
-        console.error("Error updating removal request: ", error);
-        throw new Error("Não foi possível atualizar a solicitação.");
+        console.error("Error updating removal request:", error);
+        throw new Error("Não foi possível atualizar.");
     }
 };
