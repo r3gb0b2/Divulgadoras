@@ -249,11 +249,12 @@ const PostCheck: React.FC = () => {
             setPromoter(activePromoter);
             setCurrentFcmToken(activePromoter.fcmToken || null);
 
+            // Tenta inicializar apenas se estiver no App
             if (Capacitor.isNativePlatform()) {
                 try {
                     await initPushNotifications(activePromoter.id);
                 } catch (e) {
-                    console.warn("Não foi possível inicializar o push automaticamente.");
+                    console.warn("Falha silenciosa na inicialização do push.");
                 }
             }
 
@@ -281,20 +282,26 @@ const PostCheck: React.FC = () => {
 
     const handleSyncPush = async () => {
         if (!promoter || isSyncingPush) return;
+
+        if (!Capacitor.isNativePlatform()) {
+            alert("⚠️ AVISO: Notificações Push só funcionam no Aplicativo Instalado.\n\nVocê está acessando pelo navegador. Se você tem o App instalado, abra-o para vincular seu celular.");
+            return;
+        }
+
         setIsSyncingPush(true);
         try {
             const token = await syncPushTokenManually(promoter.id);
             if (token) {
                 setCurrentFcmToken(token);
-                alert("CONEXÃO OK: Celular vinculado com sucesso!");
+                alert("CONECTADO: Seu celular foi vinculado e agora você receberá notificações de novos posts!");
             } else {
-                alert("AVISO: O celular não gerou uma resposta válida. Tente reiniciar o App.");
+                alert("AVISO: O sistema autorizou, mas o identificador não foi gerado. Tente fechar e abrir o App.");
             }
         } catch (e: any) {
-            if (e.message === "DETECTION_FAILED") {
-                alert("SISTEMA: O suporte a notificações push nativas não foi detectado nesta versão do App.\n\nVerifique se o seu iPhone está na versão estável disponível na App Store/TestFlight.");
+            if (e.message === "PLUGIN_FCM_NOT_LOADED") {
+                alert("⚠️ FALHA TÉCNICA: O suporte a notificações não foi detectado de imediato. Reinicie o App ou aguarde 5 segundos e tente novamente.");
             } else {
-                alert(`ERRO: ${e.message || "Falha técnica ao vincular."}`);
+                alert(`ERRO: ${e.message || "Falha ao vincular."}`);
             }
         } finally {
             setIsSyncingPush(false);
@@ -322,48 +329,44 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
 
-                    {Capacitor.isNativePlatform() && (
-                        <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
-                                        <FaceIdIcon className="w-6 h-6" />
-                                    </div>
-                                    <div onClick={() => setShowPushHelp(!showPushHelp)} className="cursor-pointer">
-                                        <span className="text-sm font-bold block flex items-center gap-1">
-                                            {currentFcmToken ? 'Alertas Ativos!' : 'Ativar Push'}
-                                            <AlertTriangleIcon className="w-3 h-3 text-gray-500" />
-                                        </span>
-                                        <span className="text-xs text-gray-400 underline">{currentFcmToken ? 'Celular vinculado.' : 'Clique para ajuda.'}</span>
-                                    </div>
+                    <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
+                                    <FaceIdIcon className="w-6 h-6" />
                                 </div>
-                                <button 
-                                    onClick={handleSyncPush}
-                                    disabled={isSyncingPush}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
-                                >
-                                    <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                    <span>{isSyncingPush ? '...' : (currentFcmToken ? 'Atualizar' : 'Vincular')}</span>
-                                </button>
+                                <div onClick={() => setShowPushHelp(!showPushHelp)} className="cursor-pointer">
+                                    <span className="text-sm font-bold block flex items-center gap-1">
+                                        {currentFcmToken ? 'Alertas Ativos!' : 'Ativar Alertas'}
+                                        <AlertTriangleIcon className="w-3 h-3 text-gray-500" />
+                                    </span>
+                                    <span className="text-xs text-gray-400 underline">{currentFcmToken ? 'Dispositivo vinculado.' : 'Toque para ajuda.'}</span>
+                                </div>
                             </div>
-
-                            {showPushHelp && (
-                                <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
-                                    <p><strong>Problemas com notificações?</strong></p>
-                                    <ol className="list-decimal list-inside space-y-1">
-                                        <li>Vá em Ajustes do iPhone, Notificações e permita para o Equipe Certa.</li>
-                                        <li>Toque no botão "Vincular" se você trocou de aparelho recentemente.</li>
-                                        <li>Certifique-se que seu e-mail de cadastro está correto.</li>
-                                    </ol>
-                                    {promoter.pushDiagnostics?.lastError && (
-                                        <div className="mt-2 p-2 bg-black/40 rounded font-mono text-[10px] break-all">
-                                            Código de Erro: {promoter.pushDiagnostics.lastError}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                            <button 
+                                onClick={handleSyncPush}
+                                disabled={isSyncingPush}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
+                            >
+                                <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
+                                <span>{isSyncingPush ? '...' : (currentFcmToken ? 'Atualizar' : 'Vincular')}</span>
+                            </button>
                         </div>
-                    )}
+
+                        {showPushHelp && (
+                            <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
+                                <p><strong>Não está recebendo notificações?</strong></p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                    <li>Abra este site pelo <strong>Aplicativo Oficial</strong> do Equipe Certa.</li>
+                                    <li>Vá em Ajustes > Notificações e ative para o Equipe Certa.</li>
+                                    <li>Use o botão "Vincular" se você trocou de celular.</li>
+                                    {promoter.pushDiagnostics?.lastError && (
+                                        <li className="text-red-300 break-all font-mono text-[9px] mt-1">Erro: {promoter.pushDiagnostics.lastError}</li>
+                                    )}
+                                </ol>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
             
@@ -386,7 +389,7 @@ const PostCheck: React.FC = () => {
 
             {justificationAssignment && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4 backdrop-blur-sm" onClick={() => setJustificationAssignment(null)}>
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-md border border-gray-700" onClick={e => e.stopPropagation()}>
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-700" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-white">Justificar Ausência</h3>
                             <button onClick={() => setJustificationAssignment(null)} className="text-gray-400 hover:text-white"><XIcon className="w-6 h-6" /></button>

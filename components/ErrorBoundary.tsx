@@ -14,7 +14,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Using named Component import to resolve inheritance and visibility issues for setState and props.
+// FIX: Inherit from Component with generic types to correctly recognize state, setState and props.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -25,9 +25,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     };
   }
 
-  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  // FIX: Explicitly type return for getDerivedStateFromError.
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -35,7 +36,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     console.error("Uncaught error:", error, errorInfo);
     
     // Track the error details for the fallback UI.
-    // FIX: setState now recognized as ErrorBoundary correctly extends Component.
+    // FIX: setState correctly typed via Component inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -43,6 +44,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
+    // FIX: state and props correctly resolved via Component inheritance.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +72,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: props.children now recognized as ErrorBoundary correctly extends Component.
     return this.props.children;
   }
 }

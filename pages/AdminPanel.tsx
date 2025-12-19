@@ -710,7 +710,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const { displayPromoters, totalFilteredCount } = processedPromoters;
     
-    const pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
+    pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
 
     const handleNextPage = () => {
         if (currentPage < pageCount) {
@@ -745,7 +745,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
             const result = await manuallySendStatusEmail({ promoterId: promoter.id });
-            // FIX: Added type checking for manuallySendStatusEmail response to avoid 'unknown' errors.
             const data = result.data as { success: boolean, message?: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);
@@ -1001,7 +1000,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
             {error && <p className="text-red-400 mt-4">{error}</p>}
             <div className="mt-6 space-y-4">
-                {displayPromoters.map(promoter => (
+                {displayPromoters.map((promoter: Promoter) => (
                     <div key={promoter.id} className="bg-secondary shadow-md rounded-lg p-4 flex flex-col md:flex-row items-start gap-4">
                         <div className="flex-shrink-0 flex items-center gap-3">
                             {canManage && filter === 'pending' && (
@@ -1022,7 +1021,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { handleLookupPromoter(email); }} />
+                                    {/* FIX: Explicitly cast callback argument to string to match handler signature */}
+                                    <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { void handleLookupPromoter(email); }} />
                                 </div>
                                 {getStatusBadge(promoter.status)}
                             </div>
@@ -1052,7 +1052,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             {filter === 'approved' && canManage && (
                                 <>
-                                    <button onClick={handleManualNotify} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                         {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
                                     </button>
                                     <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
