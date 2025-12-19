@@ -19,21 +19,30 @@ const toMillisSafe = (timestamp: any): number => {
 /**
  * Salva o token de notificação Push no documento da divulgadora.
  */
-export const savePushToken = async (promoterId: string, token: string): Promise<void> => {
+export const savePushToken = async (promoterId: string, token: string): Promise<boolean> => {
     try {
-        if (!promoterId || !token) return;
+        if (!promoterId || !token) return false;
         
-        await firestore.collection('promoters').doc(promoterId).set({
+        console.log(`Push: Tentando gravar token no Firestore para o ID: ${promoterId}`);
+        
+        await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: token,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        });
         
-        console.log(`Push: Token salvo para ${promoterId}`);
-    } catch (error) {
-        console.error("Push: Erro ao salvar FCM token no Firestore:", error);
+        console.log(`Push: Token gravado com sucesso no Banco de Dados.`);
+        return true;
+    } catch (error: any) {
+        console.error("Push: Erro fatal ao gravar no Firestore:", error);
+        // Se o erro for 'permission-denied', as regras do Firebase estão bloqueando
+        if (error.code === 'permission-denied') {
+            throw new Error("Permissão negada no Banco de Dados. Verifique as Regras do Firestore.");
+        }
+        throw error;
     }
 };
 
+// ... (restante do arquivo mantido exatamente igual)
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
@@ -80,7 +89,7 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
       })
     );
 
-    const { photos, facePhoto, ...rest } = promoterData;
+    const { photos, ...rest } = promoterData;
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail,

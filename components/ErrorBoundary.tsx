@@ -13,8 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fix: Use React.Component to ensure props and setState are correctly inherited and recognized by TypeScript.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+/**
+ * Fix: Use Component directly to ensure props and setState are correctly inherited 
+ * and recognized by TypeScript in class components.
+ */
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -35,7 +38,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     console.error("Uncaught error:", error, errorInfo);
     
     // Track the error details for the fallback UI.
-    // Fix: Explicitly using this.setState as a standard class component method.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -70,8 +72,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Correctly returning children when no error is present.
-    // Fix: Correctly using this.props to access children passed to the component.
+    /**
+     * Fix: Correctly using this.props to access children passed to the component.
+     */
     return this.props.children;
   }
 }

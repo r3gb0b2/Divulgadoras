@@ -285,12 +285,12 @@ const PostCheck: React.FC = () => {
             if (token) {
                 setIsPushRegistered(true);
                 setCurrentFcmToken(token);
-                alert("Seu dispositivo foi sincronizado com sucesso! Token gerado.");
+                alert("SUCESSO: Seu celular foi vinculado ao banco de dados!");
             } else {
-                alert("Não foi possível sincronizar. Verifique se as notificações estão ativadas no iOS (Ajustes > Notificações).");
+                alert("FALHA: O código foi gerado mas não conseguimos salvar no banco de dados. Verifique sua internet.");
             }
-        } catch (e) {
-            alert("Erro ao sincronizar. Tente novamente mais tarde.");
+        } catch (e: any) {
+            alert(`ERRO: ${e.message}`);
         } finally {
             setIsSyncingPush(false);
         }
@@ -337,6 +337,12 @@ const PostCheck: React.FC = () => {
                                     <span>{isSyncingPush ? 'Sincronizando...' : (currentFcmToken ? 'Atualizar Vínculo' : 'Sincronizar Agora')}</span>
                                 </button>
                             </div>
+
+                            {promoter.status !== 'approved' && (
+                                <div className="bg-orange-900/30 p-2 rounded-lg border border-orange-800/50 text-[11px] text-orange-300 font-semibold text-center uppercase tracking-wider">
+                                    O envio de Push só funciona para perfis aprovados. O seu está: {promoter.status}
+                                </div>
+                            )}
                             
                             {/* CAMPO DE DIAGNÓSTICO (Remover após teste bem sucedido) */}
                             <div className="bg-black/40 p-2 rounded text-[10px] font-mono break-all opacity-60">

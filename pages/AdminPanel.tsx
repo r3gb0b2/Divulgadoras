@@ -546,9 +546,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // Fix: Explicitly handle string parameter to resolve unknown-to-string assignment error.
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        // Fix: Use String() and explicit narrowing to ensure finalEmail is a string for findPromotersByEmail.
+    /**
+     * Fix: Explicitly typed emailToSearch as unknown and refined string handling 
+     * to prevent "unknown to string" assignment error on line 508.
+     */
+    const handleLookupPromoter = async (emailToSearch?: unknown) => {
         const baseEmail = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
         const finalEmail = String(baseEmail).trim();
         if (!finalEmail) return;
@@ -1052,7 +1054,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             {filter === 'approved' && canManage && (
                                 <>
-                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    <button onClick={handleManualNotify} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                         {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
                                     </button>
                                     <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
