@@ -40,7 +40,14 @@ export interface Promoter {
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
-  fcmToken?: string; // Token para Push Notifications
+  fcmToken?: string; 
+  lastTokenUpdate?: Timestamp | FieldValue;
+  pushDiagnostics?: {
+    lastError?: string;
+    platform?: string;
+    pluginStatus?: string;
+    updatedAt: Timestamp | FieldValue;
+  };
 }
 
 export interface PromoterApplicationData {
@@ -242,8 +249,8 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guestNames: string[]; // Legacy support
-    guests?: { name: string; email: string }[]; // New structure
+    guestNames: string[]; 
+    guests?: { name: string; email: string }[]; 
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;
@@ -371,8 +378,6 @@ export interface GuestListChangeRequest {
   actionTakenBy?: string;
 }
 
-// --- Follow Loop Types ---
-
 export interface FollowLoop {
   id: string;
   organizationId: string;
@@ -384,7 +389,7 @@ export interface FollowLoop {
 }
 
 export interface FollowLoopParticipant {
-  id: string; // Composite ID: loopId_promoterId
+  id: string; 
   loopId: string;
   promoterId: string;
   promoterName: string;
@@ -416,7 +421,6 @@ export interface FollowInteraction {
   followedInstagram?: string;
 }
 
-// --- WhatsApp Reminder Types ---
 export interface WhatsAppReminder {
   id: string;
   promoterId: string;
