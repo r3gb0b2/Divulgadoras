@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
@@ -298,10 +297,8 @@ const PostCheck: React.FC = () => {
                 alert("AVISO: O sistema autorizou, mas o identificador não foi gerado. Tente fechar e abrir o App.");
             }
         } catch (e: any) {
-            if (e.message.includes("not implemented")) {
-                alert("⚠️ FALHA TÉCNICA: O suporte a notificações no iOS não foi detectado. Isso geralmente ocorre se o desenvolvedor não configurou as permissões de Push no Xcode ou o arquivo GoogleService-Info.plist está ausente.");
-            } else if (e.message === "PLUGIN_FCM_NOT_LOADED") {
-                alert("⚠️ AGUARDE: O suporte a notificações está carregando. Reinicie o App ou aguarde 5 segundos e tente novamente.");
+            if (e.message === "PLUGIN_FCM_NOT_LOADED") {
+                alert("⚠️ FALHA TÉCNICA: O suporte a notificações não foi detectado de imediato. Reinicie o App ou aguarde 5 segundos e tente novamente.");
             } else {
                 alert(`ERRO: ${e.message || "Falha ao vincular."}`);
             }
@@ -357,13 +354,13 @@ const PostCheck: React.FC = () => {
 
                         {showPushHelp && (
                             <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
-                                <p><strong>Não está recebendo notificações no iOS?</strong></p>
+                                <p><strong>Não está recebendo notificações?</strong></p>
                                 <ol className="list-decimal list-inside space-y-1">
-                                    <li>Abra este site pelo <strong>Aplicativo Oficial</strong> instalado via TestFlight.</li>
-                                    <li>Vá em Ajustes do iPhone &gt; Notificações e verifique se o Equipe Certa está autorizado.</li>
-                                    <li>Se aparecer erro de "plugin not implemented", solicite ao desenvolvedor que verifique o arquivo <strong>GoogleService-Info.plist</strong> no Xcode.</li>
+                                    <li>Abra este site pelo <strong>Aplicativo Oficial</strong> do Equipe Certa.</li>
+                                    <li>Vá em Ajustes &gt; Notificações e ative para o Equipe Certa.</li>
+                                    <li>Use o botão "Vincular" se você trocou de celular.</li>
                                     {promoter.pushDiagnostics?.lastError && (
-                                        <li className="text-red-300 break-all font-mono text-[9px] mt-1">Status: {promoter.pushDiagnostics.lastError}</li>
+                                        <li className="text-red-300 break-all font-mono text-[9px] mt-1">Erro: {promoter.pushDiagnostics.lastError}</li>
                                     )}
                                 </ol>
                             </div>
