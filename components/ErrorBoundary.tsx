@@ -13,7 +13,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fix for errors on line 20, 36, 43, 51, 53, 70: Correctly extend the Component class using the imported named export to ensure standard class properties like 'state', 'setState', and 'props' are correctly recognized by TypeScript.
+// FIX: Inherit from Component with defined Props and State to fix missing properties like state and setState.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);

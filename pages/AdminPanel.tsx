@@ -558,8 +558,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        // Fix for error on line 509 (approx 524 here): Correctly handle the catch block with 'unknown' type and ensure errorMessage is a string.
-        } catch (err: unknown) {
+        // FIX: Handled err as any to avoid 'unknown' type assignment issues to string properties.
+        } catch (err: any) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
