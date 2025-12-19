@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -547,9 +546,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // Fix for error on line 509: Explicitly type finalEmail as string to avoid unknown to string assignment error in findPromotersByEmail.
+    // Fix for error on line 509: Explicitly type finalEmail as string and use a safe conversion to avoid unknown to string assignment error in findPromotersByEmail.
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const finalEmail: string = (emailToSearch || lookupEmail || '').trim();
+        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
+        const finalEmail = searchInput.trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);

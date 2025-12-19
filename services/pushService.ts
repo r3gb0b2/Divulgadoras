@@ -13,6 +13,12 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
     try {
         console.log(`Push Debug: Tentando capturar token... (${retryCount + 1}/5)`);
         
+        // Verificação de segurança: O plugin FCM community pode não estar vinculado no iOS
+        if (!FCM || typeof FCM.getToken !== 'function') {
+            console.warn("Push Debug: Plugin FCM não detectado no sistema nativo.");
+            throw new Error("Plugin de notificações não inicializado.");
+        }
+
         const res = await FCM.getToken();
         const fcmToken = res.token;
 
@@ -30,8 +36,13 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
 
         return null;
     } catch (e: any) {
-        console.error("Push Debug: Erro fatal no processo de registro:", e);
-        // Não retornar null se houver erro real de salvamento, propagar para PostCheck capturar.
+        console.error("Push Debug: Erro no processo de registro:", e);
+        
+        // Trata especificamente o erro de plugin não implementado (comum no iOS se não configurado no Xcode)
+        if (e.message && e.message.includes("not implemented")) {
+            throw new Error("O suporte a notificações push nativas não foi detectado nesta versão do App.");
+        }
+        
         throw e;
     }
 };
@@ -50,26 +61,30 @@ export const initPushNotifications = async (promoterId: string) => {
         await PushNotifications.removeAllListeners();
 
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Registro nativo APNs concluído. Buscando FCM...');
+            console.log('Push: Registro nativo concluído. Tentando converter para FCM...');
             try {
+                // No iOS, o token de 'registration' é o APNs. O FCM.getToken() converte para o formato Google.
                 await getTokenAndSave(promoterId);
             } catch (err) {
-                console.error("Erro no callback registration:", err);
+                console.error("Erro ao converter token para FCM:", err);
             }
         });
 
         PushNotifications.addListener('registrationError', (error) => {
-            console.error('Push: Erro no registro nativo APNs:', error);
+            console.error('Push: Erro no registro nativo:', error);
         });
 
         await PushNotifications.register();
 
-        // Tenta buscar o token FCM após um curto delay (caso já estivesse registrado)
+        // Tenta buscar o token FCM após um curto delay caso a permissão já exista
         setTimeout(async () => {
             try {
-                await getTokenAndSave(promoterId);
+                // Verifica se o plugin FCM está disponível antes de tentar
+                if (FCM && typeof FCM.getToken === 'function') {
+                    await getTokenAndSave(promoterId);
+                }
             } catch (err) {
-                console.error("Erro no timeout inicial do push:", err);
+                console.error("Erro no fetch inicial do push:", err);
             }
         }, 2000);
 
@@ -87,5 +102,9 @@ export const syncPushTokenManually = async (promoterId: string): Promise<string 
 
 export const clearPushListeners = async () => {
     if (!Capacitor.isNativePlatform()) return;
-    await PushNotifications.removeAllListeners();
+    try {
+        await PushNotifications.removeAllListeners();
+    } catch (e) {
+        console.warn("Erro ao limpar listeners de push:", e);
+    }
 };

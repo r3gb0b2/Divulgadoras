@@ -250,8 +250,12 @@ const PostCheck: React.FC = () => {
             setCurrentFcmToken(activePromoter.fcmToken || null);
 
             if (Capacitor.isNativePlatform()) {
-                const success = await initPushNotifications(activePromoter.id);
-                setIsPushRegistered(success);
+                try {
+                    const success = await initPushNotifications(activePromoter.id);
+                    setIsPushRegistered(success);
+                } catch (e) {
+                    console.warn("Nao foi possivel inicializar o push automaticamente.");
+                }
             }
 
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
@@ -289,8 +293,11 @@ const PostCheck: React.FC = () => {
                 alert("FALHA: O código foi gerado mas não conseguimos salvar. Verifique se autorizou as notificações.");
             }
         } catch (e: any) {
-            const msg = e.details?.message || e.message || "Erro desconhecido.";
-            alert(`ERRO AO SALVAR: ${msg}`);
+            // Tradução amigável do erro técnico de implementação
+            const msg = e.message && e.message.includes("not detected") 
+                ? "Erro: O suporte a notificações push não está disponível nesta versão instalada do App. Tente atualizar o App ou entrar em contato com o suporte."
+                : (e.message || "Erro desconhecido.");
+            alert(msg);
         } finally {
             setIsSyncingPush(false);
         }
