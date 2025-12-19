@@ -198,7 +198,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [maxAge, setMaxAge] = useState('');
 
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
-    const [lookupEmail, setLookupEmail] = useState('');
+    // Explicitly typing state to avoid unknown issues
+    const [lookupEmail, setLookupEmail] = useState<string>('');
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupError, setLookupError] = useState<string>('');
@@ -546,9 +547,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // Fix for error on line 509: Explicitly type finalEmail as string and use a safe conversion to avoid unknown to string assignment error in findPromotersByEmail.
+    // Fix for error on line 508: Explicitly handle parameters to ensure type safety.
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
+        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
         const finalEmail = searchInput.trim();
         if (!finalEmail) return;
         

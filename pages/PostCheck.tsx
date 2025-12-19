@@ -254,7 +254,7 @@ const PostCheck: React.FC = () => {
                     const success = await initPushNotifications(activePromoter.id);
                     setIsPushRegistered(success);
                 } catch (e) {
-                    console.warn("Nao foi possivel inicializar o push automaticamente.");
+                    console.warn("Não foi possível inicializar o push automaticamente.");
                 }
             }
 
@@ -290,14 +290,14 @@ const PostCheck: React.FC = () => {
                 setCurrentFcmToken(token);
                 alert("SUCESSO: Seu celular foi vinculado ao banco de dados!");
             } else {
-                alert("FALHA: O código foi gerado mas não conseguimos salvar. Verifique se autorizou as notificações.");
+                alert("AVISO: O sistema não recebeu resposta do servidor de notificações. Tente fechar o app e abrir novamente.");
             }
         } catch (e: any) {
-            // Tradução amigável do erro técnico de implementação
-            const msg = e.message && e.message.includes("not detected") 
-                ? "Erro: O suporte a notificações push não está disponível nesta versão instalada do App. Tente atualizar o App ou entrar em contato com o suporte."
-                : (e.message || "Erro desconhecido.");
-            alert(msg);
+            if (e.message === "DETECTION_FAILED") {
+                alert("SISTEMA: O suporte a notificações push não está presente nesta versão do App instalada.\n\nSe você está testando via TestFlight (iPhone), verifique se está usando a última versão disponível ou se o seu ID Apple está na lista de testes.");
+            } else {
+                alert(`ERRO: ${e.message || "Falha técnica ao vincular."}`);
+            }
         } finally {
             setIsSyncingPush(false);
         }
