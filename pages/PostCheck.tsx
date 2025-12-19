@@ -5,7 +5,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications, syncPushTokenManually } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -237,6 +237,7 @@ const PostCheck: React.FC = () => {
     
     const [currentFcmToken, setCurrentFcmToken] = useState<string | null>(null);
     const [isPushRegistered, setIsPushRegistered] = useState(false);
+    const [showPushHelp, setShowPushHelp] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -288,15 +289,15 @@ const PostCheck: React.FC = () => {
             if (token) {
                 setIsPushRegistered(true);
                 setCurrentFcmToken(token);
-                alert("SUCESSO: Seu celular foi vinculado ao banco de dados!");
+                alert("CONECTADO: Seu celular foi registrado com sucesso!");
             } else {
-                alert("AVISO: O sistema não recebeu resposta do servidor de notificações. Tente fechar o app e abrir novamente.");
+                alert("AVISO: O celular autorizou mas o servidor não respondeu. Tente fechar e abrir o App.");
             }
         } catch (e: any) {
             if (e.message === "DETECTION_FAILED") {
-                alert("SISTEMA: O suporte a notificações push não está presente nesta versão do App instalada.\n\nSe você está testando via TestFlight (iPhone), verifique se está usando a última versão disponível ou se o seu ID Apple está na lista de testes.");
+                alert("⚠️ FALHA NATIVA: O suporte a notificações push não pôde ser ativado.\n\nIsso pode acontecer se você estiver em uma versão de testes ou se as notificações do sistema estiverem bloqueadas para o Equipe Certa.");
             } else {
-                alert(`ERRO: ${e.message || "Falha técnica ao vincular."}`);
+                alert(`ERRO: ${e.message || "Falha ao vincular."}`);
             }
         } finally {
             setIsSyncingPush(false);
@@ -323,6 +324,7 @@ const PostCheck: React.FC = () => {
                         </div>
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
+
                     {Capacitor.isNativePlatform() && (
                         <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
                             <div className="flex items-center justify-between gap-4">
@@ -330,9 +332,12 @@ const PostCheck: React.FC = () => {
                                     <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
                                         <FaceIdIcon className="w-6 h-6" />
                                     </div>
-                                    <div>
-                                        <span className="text-sm font-bold block">{currentFcmToken ? 'Notificações Ativas!' : 'Ativar Notificações'}</span>
-                                        <span className="text-xs text-gray-400">{currentFcmToken ? 'Este celular está vinculado à sua conta.' : 'Receba avisos de novas tarefas no seu celular.'}</span>
+                                    <div onClick={() => setShowPushHelp(!showPushHelp)} className="cursor-pointer">
+                                        <span className="text-sm font-bold block flex items-center gap-1">
+                                            {currentFcmToken ? 'Notificações Ativas!' : 'Ativar Notificações'}
+                                            <AlertTriangleIcon className="w-3 h-3 text-gray-500" />
+                                        </span>
+                                        <span className="text-xs text-gray-400 underline">{currentFcmToken ? 'Dispositivo vinculado.' : 'Toque para ajuda.'}</span>
                                     </div>
                                 </div>
                                 <button 
@@ -341,13 +346,24 @@ const PostCheck: React.FC = () => {
                                     className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
                                 >
                                     <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                    <span>{isSyncingPush ? 'Sincronizando...' : (currentFcmToken ? 'Atualizar Vínculo' : 'Sincronizar Agora')}</span>
+                                    <span>{isSyncingPush ? 'Vinculando...' : (currentFcmToken ? 'Atualizar Vínculo' : 'Sincronizar')}</span>
                                 </button>
                             </div>
 
+                            {showPushHelp && (
+                                <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 animate-fadeIn border border-gray-700">
+                                    <p><strong>Não está recebendo notificações?</strong></p>
+                                    <ol className="list-decimal list-inside space-y-1">
+                                        <li>Verifique nos Ajustes do iPhone se as notificações estão permitidas para este App.</li>
+                                        <li>Toque em "Atualizar Vínculo" acima.</li>
+                                        <li>Se você trocou de celular, precisa clicar em Sincronizar no novo aparelho.</li>
+                                    </ol>
+                                </div>
+                            )}
+
                             {promoter.status !== 'approved' && (
                                 <div className="bg-orange-900/30 p-2 rounded-lg border border-orange-800/50 text-[11px] text-orange-300 font-semibold text-center uppercase tracking-wider">
-                                    O envio de Push só funciona para perfis aprovados. O seu está: {promoter.status}
+                                    O envio de Push só funciona para perfis aprovados.
                                 </div>
                             )}
                         </div>
