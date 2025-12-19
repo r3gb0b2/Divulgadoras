@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode, Component } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,10 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fixed: Explicitly using 'React.Component' to ensure base methods like setState and props are correctly identified by the compiler within this class.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fixed: Explicitly extending Component with Props and State interfaces to resolve property visibility issues.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    // Initializing state correctly within the constructor
     this.state = {
       hasError: false,
       error: null,
@@ -29,7 +30,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fixed: Standard React lifecycle method implementation using this.setState.
+  // Fixed: Correctly using this.setState within the class component.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
@@ -41,7 +42,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // Fixed: Correctly accessing state within class component using this.state.
+    // Fixed: Correctly accessing this.state within the render method.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -69,7 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fixed: Correctly accessing props within class component using this.props.
+    // Fixed: Correctly accessing this.props within the class component.
     return this.props.children;
   }
 }

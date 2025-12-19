@@ -534,18 +534,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
 
-    const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
-        if (isBulkRejection) {
-            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
-            await handleBulkUpdate({ status: newStatus, rejectionReason: reason }, 'reject');
-        } else if (rejectingPromoter && canManage) {
-            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
-            await handleUpdatePromoter(rejectingPromoter.id, { status: newStatus, rejectionReason: reason });
-        }
-        setRejectingPromoter(null);
-        setIsBulkRejection(false);
-    };
-
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
         const finalEmail = searchInput.trim();
@@ -558,9 +546,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: any) {
-            // Fix: Using a more robust error message extraction to satisfy TypeScript's string requirement
-            const errorMessage: string = err instanceof Error ? err.message : String(err);
+        } catch (err: unknown) {
+            // Fix for Error in file pages/AdminPanel.tsx on line 508: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+            // Explicitly convert 'err' to a string error message for setLookupError.
+            const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
