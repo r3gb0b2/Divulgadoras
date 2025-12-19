@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -14,7 +13,7 @@ import EditPromoterModal from '../components/EditPromoterModal';
 import RejectionModal from '../components/RejectionModal';
 import ManageReasonsModal from '../components/ManageReasonsModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
-import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon, CheckCircleIcon, XIcon, TrashIcon, FaceIdIcon, RefreshIcon } from '../components/Icons';
+import { CogIcon, UsersIcon, WhatsAppIcon, InstagramIcon, TikTokIcon, BuildingOfficeIcon, LogoutIcon, ArrowLeftIcon, CheckCircleIcon, XIcon, TrashIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 interface AdminPanelProps {
@@ -559,7 +558,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: any) {
+        // Fix for error on line 509 (approx 524 here): Correctly handle the catch block with 'unknown' type and ensure errorMessage is a string.
+        } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
@@ -710,7 +710,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     
     const { displayPromoters, totalFilteredCount } = processedPromoters;
     
-    pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
+    const pageCount = Math.ceil(totalFilteredCount / PROMOTERS_PER_PAGE);
 
     const handleNextPage = () => {
         if (currentPage < pageCount) {
@@ -1017,11 +1017,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-xl font-bold text-white">{promoter.name}</h3>
                                         <div title={promoter.fcmToken ? "Dispositivo App Vinculado" : "Sem App Vinculado"}>
-                                            <FaceIdIcon className={`w-5 h-5 ${promoter.fcmToken ? 'text-green-400' : 'text-gray-600'}`} />
+                                            <FaceIdIcon className={`w-5 h-5 ${promoter.fcmToken ? 'text-green-400' : (promoter.pushDiagnostics?.lastError ? 'text-red-500' : 'text-gray-600')}`} />
                                         </div>
+                                        {promoter.pushDiagnostics?.lastError && (
+                                            <div className="group relative">
+                                                <AlertTriangleIcon className="w-4 h-4 text-red-500 animate-pulse" />
+                                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-red-900 text-white text-[10px] rounded shadow-xl z-50">
+                                                    Erro Push: {promoter.pushDiagnostics.lastError}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
-                                    {/* FIX: Explicitly cast callback argument to string to match handler signature */}
                                     <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(email: string) => { void handleLookupPromoter(email); }} />
                                 </div>
                                 {getStatusBadge(promoter.status)}

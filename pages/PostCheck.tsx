@@ -358,7 +358,7 @@ const PostCheck: React.FC = () => {
                                 <p><strong>Não está recebendo notificações?</strong></p>
                                 <ol className="list-decimal list-inside space-y-1">
                                     <li>Abra este site pelo <strong>Aplicativo Oficial</strong> do Equipe Certa.</li>
-                                    <li>Vá em Ajustes > Notificações e ative para o Equipe Certa.</li>
+                                    <li>Vá em Ajustes &gt; Notificações e ative para o Equipe Certa.</li>
                                     <li>Use o botão "Vincular" se você trocou de celular.</li>
                                     {promoter.pushDiagnostics?.lastError && (
                                         <li className="text-red-300 break-all font-mono text-[9px] mt-1">Erro: {promoter.pushDiagnostics.lastError}</li>

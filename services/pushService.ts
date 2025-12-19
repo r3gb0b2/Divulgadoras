@@ -14,6 +14,7 @@ const reportTechnicalError = async (promoterId: string, errorMsg: string) => {
             pushDiagnostics: {
                 lastError: errorMsg,
                 platform: Capacitor.getPlatform(),
+                pluginStatus: (typeof FCM !== 'undefined' && FCM !== null) ? 'LOADED' : 'NOT_LOADED',
                 updatedAt: firebase.firestore.Timestamp.now()
             }
         });
@@ -28,8 +29,8 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
     try {
         console.log(`Push: Tentativa de obter token ${retryCount + 1}...`);
         
-        // Verifica se o plugin FCM está disponível (pode demorar alguns ms para carregar no iOS)
-        const isFCMAvailable = typeof FCM !== 'undefined' && FCM !== null;
+        // No iOS, o plugin pode demorar alguns milissegundos para injetar o bridge.
+        const isFCMAvailable = (typeof FCM !== 'undefined' && FCM !== null);
 
         if (!isFCMAvailable) {
             if (retryCount < 3) {
@@ -46,6 +47,12 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
             console.log('Push: Token obtido com sucesso.');
             const savePromoterToken = functions.httpsCallable('savePromoterToken');
             await savePromoterToken({ promoterId, token: fcmToken });
+            
+            // Limpa erro anterior se houver sucesso
+            await firestore.collection('promoters').doc(promoterId).update({
+                "pushDiagnostics.lastError": firebase.firestore.FieldValue.delete()
+            }).catch(() => {});
+
             return fcmToken;
         }
 
