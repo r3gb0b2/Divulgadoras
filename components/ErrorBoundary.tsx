@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,25 +12,28 @@ interface ErrorBoundaryState {
 
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
- * FIX: Use named Component import to ensure TypeScript correctly resolves setState and props properties.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+// Fixed: Explicitly using 'React.Component' to ensure base methods like setState and props are correctly identified by the compiler within this class.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error, errorInfo: null };
   }
 
+  // Fixed: Standard React lifecycle method implementation using this.setState.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: setState is now correctly inherited from Component
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -38,6 +41,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
+    // Fixed: Correctly accessing state within class component using this.state.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -65,7 +69,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: props is now correctly inherited from Component
+    // Fixed: Correctly accessing props within class component using this.props.
     return this.props.children;
   }
 }

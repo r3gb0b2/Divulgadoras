@@ -315,7 +315,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 }),
             ];
 
-             if (orgIdForAssignments) {
+                 if (orgIdForAssignments) {
                 promises.push(getAssignmentsForOrganization(orgIdForAssignments));
             }
 
@@ -546,7 +546,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Properly handle unknown error and typed result.
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
         const finalEmail = searchInput.trim();
@@ -559,8 +558,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : String(err);
+        } catch (err: any) {
+            // Fix: Using a more robust error message extraction to satisfy TypeScript's string requirement
+            const errorMessage: string = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
