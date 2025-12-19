@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const createIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVGElement>> => (props) => (
@@ -46,7 +45,6 @@ export const FaceIdIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeI
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 0M15.59 14.37a15.953 15.953 0 00-5.84 0m5.84 0a15.953 15.953 0 01-2.92 0m2.92 0a15.953 15.953 0 00-2.92 0M3 10.5a11.96 11.96 0 011.664-5.993 11.96 11.96 0 0110.672 0 11.96 11.96 0 011.664 5.993M19.34 10.5a11.96 11.96 0 01-1.664 5.993 11.96 11.96 0 01-10.672 0 11.96 11.96 0 01-1.664-5.993m13.992-5.993a11.96 11.96 0 00-10.672 0" />
 );
 
-/* Fixed: Removed the first duplicate CodeBracketIcon here to maintain consistent iconography and resolve redeclaration error */
 export const CodeBracketIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
     <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
 );
@@ -244,4 +242,5 @@ export const ShieldCheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIc
 );
 
 export const ServerIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M18.75 18a.75.75 0 00.75-1.5H4.5a.75.75 0 00-.75 1.5h15zM21 16.5a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003
+    <path d="M18.75 18a.75.75 0 00.75-1.5H4.5a.75.75 0 00-.75 1.5h15zM21 16.5a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5zM18.75 12a.75.75 0 00.75-1.5H4.5a.75.75 0 00-.75 1.5h15zM21 10.5a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 10.5v2.25A2.25 2.25 0 005.25 15h13.5A2.25 2.25 0 0021 12.75V10.5zM18.75 6a.75.75 0 00.75-1.5H4.5a.75.75 0 00-.75 1.5h15zM21 4.5a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 4.5v2.25A2.25 2.25 0 005.25 9h13.5A2.25 2.25 0 0021 6.75V4.5z" />
+);

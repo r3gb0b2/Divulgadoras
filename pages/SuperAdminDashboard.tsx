@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -137,7 +136,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                         <p className="text-sm text-gray-400 mb-6">Baixe o arquivo AppDelegate.swift pronto com integração Firebase e FCM para substituir no seu projeto Xcode.</p>
                         <button 
                             onClick={handleDownloadAppDelegate}
-                            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all"
+                            className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-all w-full sm:w-auto"
                         >
                             <DownloadIcon className="w-5 h-5" />
                             Baixar AppDelegate.swift

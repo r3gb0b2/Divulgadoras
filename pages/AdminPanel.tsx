@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -546,9 +547,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // Fix for Error in file pages/AdminPanel.tsx on line 508: Argument of type 'unknown' is not assignable to parameter of type 'string'.
-            // Explicitly convert 'err' to a string error message for setLookupError.
+        } catch (err: any) {
+            // Fixed: Explicitly convert 'err' to a string error message for setLookupError using 'any' to fix line 508 error.
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {
@@ -556,6 +556,5 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
     };
     
-    // Remaining methods like renderContent, paging, etc...
     // (Content omitted for brevity as per prompt constraints)
 };

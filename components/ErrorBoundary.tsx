@@ -1,3 +1,4 @@
+
 import React, { ErrorInfo, ReactNode, Component } from 'react';
 
 interface ErrorBoundaryProps {
@@ -15,14 +16,15 @@ interface ErrorBoundaryState {
  */
 // Fixed: Explicitly extending Component with Props and State interfaces to resolve property visibility issues.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fixed: Initialize state as a class property to ensure it is recognized by TypeScript on 'this'.
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // Initializing state correctly within the constructor
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -70,7 +72,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: Correctly accessing this.props within the class component.
+    // Fixed: Correctly accessing this.props within the class component to return children.
     return this.props.children;
   }
 }
