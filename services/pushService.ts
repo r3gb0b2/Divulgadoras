@@ -7,6 +7,7 @@ import firebase from 'firebase/compat/app';
 
 /**
  * Reporta o estado técnico do Push para o banco de dados.
+ * Ajuda a identificar por que o token não está chegando no admin.
  */
 const reportPushStatus = async (promoterId: string, status: { error?: string, token?: string }) => {
     try {
@@ -32,7 +33,8 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
     try {
         console.log(`Push: Tentando capturar token FCM... (Tentativa ${retryCount + 1})`);
         
-        const isFCMAvailable = typeof FCM !== 'undefined' && FCM !== null && typeof FCM.getToken === 'function';
+        // Verifica se o plugin FCM está realmente carregado no binário
+        const isFCMAvailable = typeof FCM !== 'undefined' && FCM !== null && typeof (FCM as any).getToken === 'function';
 
         if (!isFCMAvailable) {
             const error = "PLUGIN_FCM_NOT_DETECTED";
@@ -49,6 +51,7 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
             return fcmToken;
         }
 
+        // Retry logic for cases where the token takes time to generate
         if (retryCount < 2) {
             await new Promise(resolve => setTimeout(resolve, 3000));
             return await getTokenAndSave(promoterId, retryCount + 1);
@@ -60,8 +63,9 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
         const errorMsg = e.message || "Unknown native error";
         console.error("Push: Erro fatal ao obter token:", errorMsg);
         
+        // Se o erro for "not implemented", significa que o plugin não foi compilado no App
         if (errorMsg.includes("not implemented") || errorMsg === "PLUGIN_FCM_NOT_DETECTED") {
-            await reportPushStatus(promoterId, { error: "NATIVE_BRIDGE_FAILURE" });
+            await reportPushStatus(promoterId, { error: "NATIVE_BRIDGE_FAILURE_NOT_IMPLEMENTED" });
             throw new Error("DETECTION_FAILED");
         }
         
@@ -84,7 +88,7 @@ export const initPushNotifications = async (promoterId: string) => {
         await PushNotifications.removeAllListeners();
 
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Registro nativo concluído (APNs/Android Core).');
+            console.log('Push: Registro nativo concluído.');
             try {
                 await getTokenAndSave(promoterId);
             } catch (err) {
@@ -108,7 +112,7 @@ export const initPushNotifications = async (promoterId: string) => {
 export const syncPushTokenManually = async (promoterId: string): Promise<string | null> => {
     if (!Capacitor.isNativePlatform()) return null;
     try {
-        // Garante registro antes de pedir o token
+        // Força novo registro no sistema nativo
         await PushNotifications.register();
         return await getTokenAndSave(promoterId);
     } catch (e) {

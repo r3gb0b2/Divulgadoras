@@ -292,7 +292,7 @@ const PostCheck: React.FC = () => {
             }
         } catch (e: any) {
             if (e.message === "DETECTION_FAILED") {
-                alert("⚠️ FALHA TÉCNICA: Esta versão do App não possui os componentes nativos de notificação.\n\nSe estiver no iPhone via TestFlight, garanta que está na versão oficial estável.");
+                alert("SISTEMA: O suporte a notificações push nativas não foi detectado nesta versão do App.\n\nVerifique se o seu iPhone está na versão estável disponível na App Store/TestFlight.");
             } else {
                 alert(`ERRO: ${e.message || "Falha técnica ao vincular."}`);
             }
@@ -351,13 +351,13 @@ const PostCheck: React.FC = () => {
                                 <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
                                     <p><strong>Problemas com notificações?</strong></p>
                                     <ol className="list-decimal list-inside space-y-1">
-                                        <li>Vá em Ajustes > Notificações e ative para o Equipe Certa.</li>
-                                        <li>Use o botão "Vincular" se você trocou de celular.</li>
-                                        <li>Se persistir, informe ao organizador o erro que aparece aqui.</li>
+                                        <li>Vá em Ajustes do iPhone, Notificações e permita para o Equipe Certa.</li>
+                                        <li>Toque no botão "Vincular" se você trocou de aparelho recentemente.</li>
+                                        <li>Certifique-se que seu e-mail de cadastro está correto.</li>
                                     </ol>
                                     {promoter.pushDiagnostics?.lastError && (
                                         <div className="mt-2 p-2 bg-black/40 rounded font-mono text-[10px] break-all">
-                                            Erro Técnico: {promoter.pushDiagnostics.lastError}
+                                            Código de Erro: {promoter.pushDiagnostics.lastError}
                                         </div>
                                     )}
                                 </div>
@@ -386,7 +386,7 @@ const PostCheck: React.FC = () => {
 
             {justificationAssignment && (
                 <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4 backdrop-blur-sm" onClick={() => setJustificationAssignment(null)}>
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-700" onClick={e => e.stopPropagation()}>
+                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-md border border-gray-700" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-white">Justificar Ausência</h3>
                             <button onClick={() => setJustificationAssignment(null)} className="text-gray-400 hover:text-white"><XIcon className="w-6 h-6" /></button>
