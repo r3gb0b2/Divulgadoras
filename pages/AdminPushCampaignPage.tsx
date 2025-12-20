@@ -181,7 +181,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                     <p>Sem isso, o Firebase não tem "permissão" da Apple para enviar o Push:</p>
                                     <ol className="mt-2 ml-4 list-decimal space-y-1">
                                         <li>No Apple Developer, gere uma chave <strong className="text-white">Push (.p8)</strong>.</li>
-                                        <li>No <strong className="text-white">Firebase Console</strong> -> Configurações do Projeto -> Cloud Messaging.</li>
+                                        <li>No <strong className="text-white">Firebase Console</strong> &rarr; Configurações do Projeto &rarr; Cloud Messaging.</li>
                                         <li>Em "Configuração do App iOS", faça o upload dessa chave .p8.</li>
                                         <li>Certifique-se de que o <strong className="text-white">Bundle ID</strong> no Firebase é IGUAL ao do Xcode.</li>
                                     </ol>
