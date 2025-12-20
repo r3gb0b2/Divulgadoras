@@ -9,38 +9,32 @@ type DocumentData = firebase.firestore.DocumentData;
 const toMillisSafe = (timestamp: any): number => {
     if (!timestamp) return 0;
     if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
-    if (typeof timestamp.toDate === 'function') return timestamp.toDate().getTime();
     if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return timestamp.seconds * 1000;
     const date = new Date(timestamp);
     return isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
 /**
- * Salva o token FCM no perfil da divulgadora.
- * Impede o salvamento de tokens que não sigam o padrão do Firebase (FCM).
+ * Salva o token FCM no perfil da divulgadora com limpeza de string.
  */
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
-    if (!token || token === 'undefined' || token === 'null') {
+    if (!token || typeof token !== 'string') return;
+
+    // LIMPEZA: Remove espaços, quebras de linha e caracteres de controle invisíveis
+    const cleanToken = token.trim().replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+
+    if (cleanToken === '' || cleanToken === 'undefined' || cleanToken === 'null') {
         return;
     }
 
-    // Validação de formato: Tokens FCM geralmente são bem longos (>100 caracteres)
-    // Se for iOS e o token for hexadecimal de 64 chars, é um token APNs (inválido para o Firebase Admin SDK)
-    const isLikelyApns = platform === 'ios' && /^[0-9a-fA-F]{64}$/.test(token);
-    
-    if (isLikelyApns || token.length < 30) {
-        console.warn(`Push: O token recebido ("${token}") parece ser APNs ou inválido. O envio via Cloud Functions falhará.`);
-        // Mesmo assim salvamos para diagnóstico, mas no envio a Cloud Function irá filtrar.
-    }
-
-    console.log(`Push: Salvando token para ${promoterId}...`);
+    console.log(`Push: Salvando token limpo para ${promoterId}...`);
     try {
         await firestore.collection('promoters').doc(promoterId).update({
-            fcmToken: token,
+            fcmToken: cleanToken,
             platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log("Push: Token atualizado com sucesso.");
+        console.log("Push: Token atualizado com sucesso no banco.");
     } catch (error) {
         console.error("Push: Erro ao gravar token no banco:", error);
         throw error;

@@ -7,7 +7,6 @@ const db = admin.firestore();
 
 /**
  * Função para integração com a IA Gemini do Google.
- * Exclusivamente utiliza process.env.API_KEY.
  */
 exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -35,7 +34,7 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 /**
  * Envio de Campanhas Push para dispositivos móveis.
- * Utiliza sendEach para isolar falhas de tokens individuais malformados.
+ * Sanitização rigorosa de tokens para evitar erro de token inválido.
  */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -47,7 +46,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
     try {
         const messages = [];
-        const promoterMapByToken = {}; // Para identificar quem falhou depois
+        const promoterMapByToken = {}; 
         const CHUNK_SIZE = 30;
         
         for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
@@ -60,18 +59,24 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                 const p = doc.data();
                 let token = p.fcmToken;
                 
-                // SANITIZAÇÃO: Remove espaços, quebras de linha e valida tipo
+                // SANITIZAÇÃO RIGOROSA
                 if (token && typeof token === 'string') {
-                    token = token.trim();
+                    // Remove espaços, quebras de linha e caracteres invisíveis de controle
+                    token = token.trim().replace(/[\x00-\x1F\x7F-\x9F]/g, "");
                     
-                    // Verifica se o token parece válido (FCM tokens são longos e não-hex puros)
-                    if (token !== 'undefined' && token !== 'null' && token.length > 40) {
+                    // Validação de formato FCM:
+                    // 1. Não pode ser apenas hexadecimal de 64 caracteres (isso é APNs puro, FCM não aceita direto)
+                    // 2. Tokens FCM reais costumam ter mais de 100 caracteres e estrutura base64
+                    const isRawApns = /^[0-9a-fA-F]{64}$/.test(token);
+                    const isValidFormat = token.length > 50 && !isRawApns && token !== 'undefined' && token !== 'null';
+
+                    if (isValidFormat) {
                         const msg = {
                             token: token,
                             notification: { title, body },
                             data: { 
                                 url: url || '/#/posts',
-                                click_action: "FLUTTER_NOTIFICATION_CLICK" // Compatibilidade extra
+                                click_action: "FLUTTER_NOTIFICATION_CLICK" 
                             },
                             android: {
                                 priority: "high",
@@ -85,16 +90,17 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                         };
                         messages.push(msg);
                         promoterMapByToken[token] = { id: doc.id, name: p.name };
+                    } else {
+                        console.warn(`Push: Token descartado por formato inválido. Divulgadora: ${p.name} (ID: ${doc.id}). Comprimento: ${token.length}. Token: ${token.substring(0, 10)}...`);
                     }
                 }
             });
         }
 
         if (messages.length === 0) {
-            return { success: false, message: "Nenhum dispositivo com token válido encontrado na seleção." };
+            return { success: false, message: "Nenhum dispositivo com token FCM válido encontrado. Verifique se as divulgadoras usam a versão mais recente do App." };
         }
 
-        // Usar sendEach para garantir que um token inválido não derrube o envio dos outros
         const response = await admin.messaging().sendEach(messages);
         
         const successCount = response.responses.filter(r => r.success).length;
@@ -102,12 +108,11 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
         let errorDetail = "";
         if (failureCount > 0) {
-            // Log detalhado no Firebase Console para saber QUEM falhou
             response.responses.forEach((res, idx) => {
                 if (!res.success) {
                     const failedToken = messages[idx].token;
                     const promoter = promoterMapByToken[failedToken];
-                    console.error(`Falha no Push - Divulgadora: ${promoter.name} (ID: ${promoter.id}). Erro: ${res.error.message}`);
+                    console.error(`Falha no Push - Divulgadora: ${promoter.name} (ID: ${promoter.id}). Erro FCM: ${res.error.message}. Token Length: ${failedToken.length}`);
                     if (!errorDetail) errorDetail = res.error.message;
                 }
             });
@@ -115,8 +120,8 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
         return { 
             success: successCount > 0, 
-            message: `${successCount} enviadas com sucesso. ${failureCount} falhas detectadas.`,
-            errorDetail: failureCount > 0 ? `Erro no primeiro dispositivo falho: ${errorDetail}` : ""
+            message: `${successCount} enviadas com sucesso. ${failureCount} falhas.`,
+            errorDetail: failureCount > 0 ? `Erro no envio: ${errorDetail}` : ""
         };
 
     } catch (e) {
