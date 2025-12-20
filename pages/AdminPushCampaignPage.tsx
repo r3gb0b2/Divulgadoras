@@ -28,7 +28,6 @@ const AdminPushCampaignPage: React.FC = () => {
     const [isDeletingToken, setIsDeletingToken] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [debugError, setDebugError] = useState<string | null>(null);
     const [showTroubleshoot, setShowTroubleshoot] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
@@ -83,7 +82,7 @@ const AdminPushCampaignPage: React.FC = () => {
     };
 
     const handleDeleteToken = async (promoterId: string) => {
-        if (!window.confirm("Isso removerá o token atual do banco. A divulgadora precisará abrir o App novamente para gerar um novo token.")) return;
+        if (!window.confirm("Isso removerá o token atual. Após corrigir no Xcode, peça para a divulgadora abrir o App de novo.")) return;
         
         setIsDeletingToken(promoterId);
         try {
@@ -102,14 +101,11 @@ const AdminPushCampaignPage: React.FC = () => {
             return;
         }
 
-        const idsToSend: string[] = [...selectedPromoterIds].filter(id => 
-            filteredPromoters.some(p => p.id === id)
-        );
+        const idsToSend: string[] = Array.from(selectedPromoterIds);
 
         setIsSending(true);
         setResult(null);
         setError(null);
-        setDebugError(null);
 
         try {
             const res = await sendPushCampaign({
@@ -126,9 +122,6 @@ const AdminPushCampaignPage: React.FC = () => {
                 setBody('');
             } else {
                 setError(res.message);
-                if (res.message.includes("tokens nativos Apple")) {
-                    setDebugError("Diagnóstico: O App está enviando o token APNs ao invés do token FCM. Isso geralmente indica falta do arquivo de configuração ou erro na chave .p8 no Console do Firebase.");
-                }
             }
         } catch (err: any) {
             setError(err.message);
@@ -142,56 +135,52 @@ const AdminPushCampaignPage: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <FaceIdIcon className="w-8 h-8 text-primary" />
-                    Central de Mensagens Push
+                    Campanhas Push
                 </h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
             </div>
 
-            {/* Troubleshooting Section - Agora focado em Capabilities e Firebase Console */}
             <div className="mb-6">
                 <button 
                     onClick={() => setShowTroubleshoot(!showTroubleshoot)}
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
                     <CogIcon className="w-5 h-5" />
-                    {showTroubleshoot ? 'Fechar Guia de Configuração' : 'O Target está marcado mas o Push não chega? Clique aqui'}
+                    {showTroubleshoot ? 'Fechar Guia Técnico' : 'A chave .p8 está certa mas o erro de 64 chars continua? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
                     <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
-                        <h3 className="text-lg font-bold text-white mb-4">Checklist Final de Push (iOS)</h3>
-                        <div className="space-y-6 text-sm text-gray-300">
+                        <h3 className="text-lg font-bold text-white mb-4">Checklist de Integração Nativa (iOS)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-gray-300">
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
-                                    <p className="font-bold text-white mb-2">1. Xcode: Habilitar Capacidades</p>
-                                    <p>No Xcode, clique no ícone azul do projeto (topo da lista esquerda):</p>
-                                    <ol className="mt-2 ml-4 list-decimal space-y-1">
-                                        <li>Vá na aba <strong className="text-white">"Signing & Capabilities"</strong>.</li>
-                                        <li>Clique em <strong className="text-white">"+ Capability"</strong>.</li>
-                                        <li>Adicione <strong className="text-green-400">Push Notifications</strong>.</li>
-                                        <li>Adicione <strong className="text-green-400">Background Modes</strong> e marque a caixa <strong className="text-white">"Remote notifications"</strong>.</li>
-                                    </ol>
-                                </div>
-
-                                <div className="bg-black/40 p-4 rounded-lg border-l-4 border-green-500">
-                                    <p className="font-bold text-white mb-2">2. Firebase Console: Chave APNs</p>
-                                    <p>Sem isso, o Firebase não tem "permissão" da Apple para enviar o Push:</p>
-                                    <ol className="mt-2 ml-4 list-decimal space-y-1">
-                                        <li>No Apple Developer, gere uma chave <strong className="text-white">Push (.p8)</strong>.</li>
-                                        <li>No <strong className="text-white">Firebase Console</strong> &rarr; Configurações do Projeto &rarr; Cloud Messaging.</li>
-                                        <li>Em "Configuração do App iOS", faça o upload dessa chave .p8.</li>
-                                        <li>Certifique-se de que o <strong className="text-white">Bundle ID</strong> no Firebase é IGUAL ao do Xcode.</li>
-                                    </ol>
-                                </div>
+                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
+                                <p className="font-bold text-white mb-2">1. Xcode: GoogleService-Info.plist</p>
+                                <p>Mesmo que o arquivo esteja no projeto, ele pode não estar sendo compilado:</p>
+                                <ul className="mt-2 ml-4 list-disc space-y-1">
+                                    <li>Clique no arquivo no Xcode.</li>
+                                    <li>No painel da direita (File Inspector), veja a seção <strong className="text-white">"Target Membership"</strong>.</li>
+                                    <li>A caixa ao lado do nome do seu App <strong className="text-green-400">DEVE estar marcada</strong>.</li>
+                                </ul>
                             </div>
 
-                            <div className="bg-yellow-900/20 p-4 rounded-lg border border-yellow-500/30">
-                                <p className="font-bold text-yellow-300 mb-1">Como testar a correção?</p>
-                                <p>Delete o token da divulgadora na tabela abaixo. Peça para ela fechar o App totalmente e abrir de novo. Se o token gerado tiver <strong className="text-white">centenas de caracteres</strong>, as notificações agora funcionarão!</p>
+                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-green-500">
+                                <p className="font-bold text-white mb-2">2. AppDelegate.swift</p>
+                                <p>O Firebase precisa ser iniciado no arranque do App nativo:</p>
+                                <ul className="mt-2 ml-4 list-disc space-y-1">
+                                    <li>Verifique se tem <code className="text-blue-300">import FirebaseCore</code> no topo.</li>
+                                    <li>No <code className="text-blue-300">didFinishLaunchingWithOptions</code>, deve ter a linha:</li>
+                                    <li className="font-mono text-xs bg-black p-1 mt-1">FirebaseApp.configure()</li>
+                                </ul>
                             </div>
+                        </div>
+
+                        <div className="mt-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
+                            <p className="text-sm text-yellow-200 leading-relaxed">
+                                <strong>O que causa o erro:</strong> Quando o App registra para Push, a Apple entrega um token de 64 caracteres. Se o Firebase estiver bem configurado no Xcode, ele detecta esse evento, "pega" esse token e troca por um token do Firebase (que é bem maior). Se você está recebendo 64 caracteres, significa que o <strong className="text-white">Firebase SDK não está inicializando</strong> no seu código nativo.
+                            </p>
                         </div>
                     </div>
                 )}
@@ -203,7 +192,7 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                1. Dispositivos Identificados
+                                Dispositivos
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -223,7 +212,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Diagnóstico</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
                                     </tr>
                                 </thead>
@@ -231,10 +220,10 @@ const AdminPushCampaignPage: React.FC = () => {
                                     {isLoadingData ? (
                                         <tr><td colSpan={4} className="text-center py-8 text-gray-500">Buscando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum dispositivo encontrado nesta aba.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum dispositivo encontrado.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => {
-                                            const isAPNs = p.fcmToken?.length === 64;
+                                            const isAPNs = (p.fcmToken?.length || 0) === 64;
                                             return (
                                                 <tr key={p.id} className={`hover:bg-gray-700/30 transition-colors ${isAPNs ? 'bg-red-900/10' : ''}`}>
                                                     <td className="px-4 py-3">
@@ -252,12 +241,12 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars. Firebase ignorado.</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars. Firebase inativo no App.</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">VÁLIDO (FCM)</span>
-                                                                <span className="text-[9px] text-green-400 mt-1">{p.fcmToken?.length} caracteres</span>
+                                                                <span className="text-[9px] text-green-400 mt-1">Pronto para receber.</span>
                                                             </div>
                                                         )}
                                                     </td>
@@ -279,24 +268,19 @@ const AdminPushCampaignPage: React.FC = () => {
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
-                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">2. Enviar Push</h2>
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Disparar Agora</h2>
                         <div className="space-y-4">
                             <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+                            <textarea placeholder="Mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
                                 <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
                                     <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1">
-                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO NO ENVIO
+                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO TÉCNICO
                                     </div>
                                     <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
-                                </div>
-                            )}
-                            {debugError && (
-                                <div className="p-2 bg-indigo-900/20 border border-indigo-500/30 rounded mb-4">
-                                    <p className="text-indigo-300 text-[10px] leading-tight italic">{debugError}</p>
                                 </div>
                             )}
                             {result && (

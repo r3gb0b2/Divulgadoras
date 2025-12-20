@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -13,7 +12,7 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors.
  */
-// Fix: Inherit from Component to ensure base class properties like 'state' and 'props' are recognized.
+// Fix: Use Component from react to ensure base class properties like 'state' and 'props' are recognized correctly by TypeScript.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicitly define the state property to resolve "Property 'state' does not exist" errors.
   public state: ErrorBoundaryState = {
@@ -25,8 +24,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
+  // Fix: Static method to update state when an error is caught for derived state updates.
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Fix: Return the updated state for error tracking.
     return { hasError: true, error };
   }
 

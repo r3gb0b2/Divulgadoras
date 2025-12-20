@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -14,7 +13,7 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Inherit from Component directly to ensure 'state', 'props', and 'setState' are correctly recognized.
+// Fix: Inherit from Component directly to ensure 'state', 'props', and 'setState' are correctly recognized by TypeScript.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicitly define the state property to resolve "Property 'state' does not exist" errors.
   public state: ErrorBoundaryState = {
@@ -27,6 +26,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
+  // Fix: Static method to update state when an error is caught.
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
   }
@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // Fix: Access state inherited from Component.
+    // Fix: Access state inherited from Component base class.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,7 +52,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/* Fix: Access inherited state property. */}
+            {/* Fix: Access inherited state property 'error'. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -72,7 +72,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fix: Access props inherited from Component.
+    // Fix: Access props inherited from Component base class.
     return this.props.children;
   }
 }
