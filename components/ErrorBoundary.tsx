@@ -8,20 +8,33 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
+/**
+ * FIXED: Importing Component explicitly to resolve setState and props resolution issues.
+ */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
-    error: null
+    error: null,
+    errorInfo: null,
   };
 
-  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    // Update state so the next render will show the fallback UI.
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Erro capturado pela aplicação:", error, errorInfo);
+    // You can also log the error to an error reporting service
+    console.error("Uncaught error:", error, errorInfo);
+    
+    // Explicitly using this.setState as Component is extended.
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
   }
 
   public render() {
@@ -33,17 +46,26 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            <button
+            {this.state.error && (
+              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
+                <p className="text-red-400">{this.state.error.toString()}</p>
+              </div>
+            )}
+             <button
               onClick={() => window.location.reload()}
               className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
             >
               Recarregar Página
             </button>
+             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
+                Voltar para a Página Inicial
+            </a>
           </div>
         </div>
       );
     }
 
+    // Accessing this.props.children correctly as Component is extended.
     return this.props.children;
   }
 }

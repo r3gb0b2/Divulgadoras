@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { initPushNotifications, syncPushTokenManually } from '../services/pushService';
+import { initPushNotifications } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -223,7 +224,6 @@ const PostCheck: React.FC = () => {
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
     const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [isSyncingPush, setIsSyncingPush] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -234,8 +234,7 @@ const PostCheck: React.FC = () => {
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
     
-    const [currentFcmToken, setCurrentFcmToken] = useState<string | null>(null);
-    const [showPushHelp, setShowPushHelp] = useState(false);
+    const [isPushRegistered, setIsPushRegistered] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -246,15 +245,9 @@ const PostCheck: React.FC = () => {
             
             const activePromoter = promoterProfiles[0];
             setPromoter(activePromoter);
-            setCurrentFcmToken(activePromoter.fcmToken || null);
-
-            // Tenta inicializar apenas se estiver no App
+            
             if (Capacitor.isNativePlatform()) {
-                try {
-                    await initPushNotifications(activePromoter.id);
-                } catch (e) {
-                    console.warn("Falha silenciosa na inicialização do push.");
-                }
+                initPushNotifications(activePromoter.id).then(success => { setIsPushRegistered(success); });
             }
 
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
@@ -279,34 +272,6 @@ const PostCheck: React.FC = () => {
         }
     };
 
-    const handleSyncPush = async () => {
-        if (!promoter || isSyncingPush) return;
-
-        if (!Capacitor.isNativePlatform()) {
-            alert("⚠️ AVISO: Notificações Push só funcionam no Aplicativo Instalado.\n\nVocê está acessando pelo navegador. Se você tem o App instalado, abra-o para vincular seu celular.");
-            return;
-        }
-
-        setIsSyncingPush(true);
-        try {
-            const token = await syncPushTokenManually(promoter.id);
-            if (token) {
-                setCurrentFcmToken(token);
-                alert("CONECTADO: Seu celular foi vinculado e agora você receberá notificações de novos posts!");
-            } else {
-                alert("AVISO: O sistema autorizou, mas o identificador não foi gerado. Tente fechar e abrir o App.");
-            }
-        } catch (e: any) {
-            if (e.message === "PLUGIN_FCM_NOT_LOADED") {
-                alert("⚠️ FALHA TÉCNICA: O suporte a notificações não foi detectado de imediato. Reinicie o App ou aguarde 5 segundos e tente novamente.");
-            } else {
-                alert(`ERRO: ${e.message || "Falha ao vincular."}`);
-            }
-        } finally {
-            setIsSyncingPush(false);
-        }
-    };
-
     const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
     const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
 
@@ -327,45 +292,12 @@ const PostCheck: React.FC = () => {
                         </div>
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
-
-                    <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
-                                    <FaceIdIcon className="w-6 h-6" />
-                                </div>
-                                <div onClick={() => setShowPushHelp(!showPushHelp)} className="cursor-pointer">
-                                    <span className="text-sm font-bold block flex items-center gap-1">
-                                        {currentFcmToken ? 'Alertas Ativos!' : 'Ativar Alertas'}
-                                        <AlertTriangleIcon className="w-3 h-3 text-gray-500" />
-                                    </span>
-                                    <span className="text-xs text-gray-400 underline">{currentFcmToken ? 'Dispositivo vinculado.' : 'Toque para ajuda.'}</span>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={handleSyncPush}
-                                disabled={isSyncingPush}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
-                            >
-                                <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                <span>{isSyncingPush ? '...' : (currentFcmToken ? 'Atualizar' : 'Vincular')}</span>
-                            </button>
+                    {Capacitor.isNativePlatform() && (
+                        <div className={`p-3 rounded-lg border flex items-center gap-3 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                            <FaceIdIcon className="w-5 h-5" />
+                            <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações push!' : 'Vinculando dispositivo para notificações...'}</span>
                         </div>
-
-                        {showPushHelp && (
-                            <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
-                                <p><strong>Não está recebendo notificações?</strong></p>
-                                <ol className="list-decimal list-inside space-y-1">
-                                    <li>Abra este site pelo <strong>Aplicativo Oficial</strong> do Equipe Certa.</li>
-                                    <li>Vá em Ajustes &gt; Notificações e ative para o Equipe Certa.</li>
-                                    <li>Use o botão "Vincular" se você trocou de celular.</li>
-                                    {promoter.pushDiagnostics?.lastError && (
-                                        <li className="text-red-300 break-all font-mono text-[9px] mt-1">Erro: {promoter.pushDiagnostics.lastError}</li>
-                                    )}
-                                </ol>
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
             )}
             

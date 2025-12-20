@@ -1,238 +1,235 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { addPromoter } from '../services/promoterService';
-import { 
-  UserIcon, 
-  MailIcon, 
-  PhoneIcon, 
-  InstagramIcon, 
-  TikTokIcon, 
-  CalendarIcon, 
-  CameraIcon, 
-  ArrowLeftIcon,
-  CheckCircleIcon,
-  XIcon
-} from '../components/Icons';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { addPromoter, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
+import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
+const compressImage = (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000;
+        const MAX_HEIGHT = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Erro na compressão'));
+        }, 'image/jpeg', 0.8);
+      };
+    };
+  });
+};
+
 const RegistrationForm: React.FC = () => {
-  const { organizationId, state, campaignName } = useParams<{ 
-    organizationId: string; 
-    state: string; 
-    campaignName?: string 
-  }>();
+  const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
+  const editId = searchParams.get('edit_id');
 
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
+    name: '',
     whatsapp: '',
     instagram: '',
     tiktok: '',
-    dateOfBirth: '',
+    dateOfBirth: ''
   });
-
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Limpeza de memória das URLs de preview para evitar crash no iPhone
   useEffect(() => {
-    return () => {
-      previews.forEach(url => URL.revokeObjectURL(url));
-    };
-  }, [previews]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const filesArray = Array.from(e.target.files).slice(0, 5);
-      const updatedPhotos = [...photos, ...filesArray].slice(0, 5);
-      setPhotos(updatedPhotos);
-      
-      const newPreviews = updatedPhotos.map(file => URL.createObjectURL(file as Blob));
-      setPreviews(newPreviews);
+    if (editId) {
+      getPromoterById(editId).then(data => {
+        if (data) {
+          setFormData({
+            email: data.email,
+            name: data.name,
+            whatsapp: data.whatsapp,
+            instagram: data.instagram,
+            tiktok: data.tiktok || '',
+            dateOfBirth: data.dateOfBirth
+          });
+        }
+      });
     }
-  };
+  }, [editId]);
 
-  const removePhoto = (index: number) => {
-    const updatedPhotos = photos.filter((_, i) => i !== index);
-    setPhotos(updatedPhotos);
-    const updatedPreviews = previews.filter((_, i) => i !== index);
-    URL.revokeObjectURL(previews[index]);
-    setPreviews(updatedPreviews);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setIsProcessingPhotos(true);
+      const files = Array.from(e.target.files) as File[];
+      const compressedFiles: File[] = [];
+      const previews: string[] = [];
+
+      for (const file of files) {
+        try {
+          const blob = await compressImage(file);
+          const compressedFile = new File([blob], file.name, { type: 'image/jpeg' });
+          compressedFiles.push(compressedFile);
+          previews.push(URL.createObjectURL(compressedFile));
+        } catch (err) {
+          console.error("Erro ao processar foto", err);
+        }
+      }
+      setPhotoFiles(compressedFiles);
+      setPhotoPreviews(previews);
+      setIsProcessingPhotos(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organizationId || !state) return;
-    
-    if (photos.length === 0) {
-      setError("Por favor, envie ao menos uma foto nítida para o casting.");
+    if (photoFiles.length === 0 && !editId) {
+      setSubmitError("Por favor, envie pelo menos uma foto sua.");
       return;
     }
-
+    
     setIsSubmitting(true);
-    setError(null);
+    setSubmitError(null);
 
     try {
-      await addPromoter({
-        ...formData,
-        photos,
-        state,
-        campaignName: campaignName ? decodeURIComponent(campaignName) : undefined,
-        organizationId
-      });
-      setIsSuccess(true);
-      setTimeout(() => navigate('/status'), 3000);
+      if (editId) {
+        await resubmitPromoterApplication(editId, {
+          ...formData,
+          status: 'pending',
+          statusChangedAt: null
+        });
+      } else {
+        await addPromoter({
+          ...formData,
+          photos: photoFiles,
+          state: state!,
+          organizationId: organizationId!,
+          campaignName: campaignName ? decodeURIComponent(campaignName) : undefined
+        });
+      }
+      navigate('/status?email=' + encodeURIComponent(formData.email));
     } catch (err: any) {
-      setError(err.message || "Erro ao realizar cadastro.");
+      setSubmitError(err.message || "Erro ao enviar cadastro.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="max-w-md mx-auto text-center py-20 animate-fadeIn px-4">
-        <div className="bg-secondary p-10 rounded-[2.5rem] shadow-2xl border border-green-500/30">
-          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500">
-            <CheckCircleIcon className="w-12 h-12" />
-          </div>
-          <h1 className="text-3xl font-black text-white mb-4 uppercase">Sucesso!</h1>
-          <p className="text-gray-400 mb-8 font-medium">
-            Seu casting foi enviado. Analisaremos seu perfil em breve.
-          </p>
-          <button 
-            onClick={() => navigate('/status')}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all shadow-xl shadow-primary/20"
-          >
-            ACOMPANHAR MEU STATUS
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-2xl mx-auto py-6 px-4">
-      <button 
-        onClick={() => navigate(-1)} 
-        className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-white transition-colors mb-6 uppercase tracking-widest"
-      >
-        <ArrowLeftIcon className="w-5 h-5" /> <span>Voltar</span>
-      </button>
-
-      <div className="bg-secondary shadow-2xl rounded-[2.5rem] overflow-hidden border border-gray-800">
-        <div className="bg-gradient-to-br from-primary/20 to-purple-600/10 p-8 text-center border-b border-gray-800">
-          <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Casting Divulgadoras</h1>
-          <p className="text-primary font-bold mt-1 tracking-widest text-xs uppercase">
-            {stateFullName} {campaignName ? `• ${decodeURIComponent(campaignName)}` : ''}
-          </p>
+    <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="bg-secondary rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+        <div className="bg-primary p-6 text-white text-center">
+          <h1 className="text-3xl font-bold">Faça parte da Equipe!</h1>
+          <p className="opacity-90">Cadastro para divulgadoras - {stateMap[state || ''] || state}</p>
         </div>
-
+        
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          {error && (
-            <div className="bg-red-900/40 border border-red-800 text-red-200 p-4 rounded-2xl text-sm font-bold animate-shake text-center">
-              {error}
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Dados Pessoais</h3>
+            
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+              <input type="text" placeholder="Seu nome completo" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none" 
+                value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <MailIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                <input type="email" placeholder="Seu e-mail" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                  value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+              </div>
+              <div className="relative">
+                <PhoneIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                <input type="tel" placeholder="WhatsApp (DDD+Número)" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                  value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} required />
+              </div>
+            </div>
+
+            <div className="relative">
+              <label className="block text-xs text-gray-400 mb-1 ml-1">Data de Nascimento</label>
+              <CalendarIcon className="absolute left-3 top-8 w-5 h-5 text-gray-500" />
+              <input type="date" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} required style={{ colorScheme: 'dark' }} />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Redes Sociais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <InstagramIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                <input type="text" placeholder="Seu @ no Instagram" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                  value={formData.instagram} onChange={e => setFormData({...formData, instagram: e.target.value})} required />
+              </div>
+              <div className="relative">
+                <TikTokIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                <input type="text" placeholder="Seu @ no TikTok (opcional)" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                  value={formData.tiktok} onChange={e => setFormData({...formData, tiktok: e.target.value})} />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Sua Foto</h3>
+            <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center bg-gray-800/50 hover:bg-gray-800 transition-colors">
+              <CameraIcon className="w-12 h-12 text-primary mx-auto mb-3" />
+              <p className="text-gray-300 font-medium">Fotos são fundamentais para sua aprovação!</p>
+              <p className="text-xs text-gray-500 mb-4">Mínimo 1 foto de rosto ou corpo inteiro.</p>
+              
+              <input type="file" multiple accept="image/*" className="hidden" id="photo-input" onChange={handleFileChange} />
+              <label htmlFor="photo-input" className="cursor-pointer inline-block bg-primary px-6 py-2 rounded-full text-white font-bold hover:bg-primary-dark transition-all">
+                {photoFiles.length > 0 ? 'Trocar Fotos' : 'Selecionar Fotos'}
+              </label>
+
+              <div className="flex flex-wrap gap-2 mt-6 justify-center">
+                {photoPreviews.map((src, i) => (
+                  <img key={i} src={src} className="w-24 h-32 object-cover rounded-lg border-2 border-primary shadow-lg" alt="Preview" />
+                ))}
+                {isProcessingPhotos && (
+                  <div className="w-24 h-32 bg-gray-700 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-400">Processando...</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {submitError && (
+            <div className="bg-red-900/50 text-red-300 p-4 rounded-lg text-sm text-center font-bold">
+              {submitError}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Nome Completo</label>
-              <div className="relative">
-                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="text" name="name" required value={formData.name} onChange={handleChange} className="input-field w-full pl-12" placeholder="Nome Sobrenome" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">WhatsApp</label>
-              <div className="relative">
-                <PhoneIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="tel" name="whatsapp" required value={formData.whatsapp} onChange={handleChange} className="input-field w-full pl-12" placeholder="(00) 00000-0000" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">E-mail</label>
-              <div className="relative">
-                <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="email" name="email" required value={formData.email} onChange={handleChange} className="input-field w-full pl-12" placeholder="seu@email.com" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Nascimento</label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="date" name="dateOfBirth" required value={formData.dateOfBirth} onChange={handleChange} className="input-field w-full pl-12" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Instagram</label>
-              <div className="relative">
-                <InstagramIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="text" name="instagram" required value={formData.instagram} onChange={handleChange} className="input-field w-full pl-12" placeholder="@seu_perfil" />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">TikTok (Opcional)</label>
-              <div className="relative">
-                <TikTokIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
-                <input type="text" name="tiktok" value={formData.tiktok} onChange={handleChange} className="input-field w-full pl-12" placeholder="@seu_tiktok" />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4 pt-4">
-            <div className="flex justify-between items-end ml-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Fotos para o Casting (Até 5)</label>
-                <span className="text-[10px] text-primary font-bold uppercase">{previews.length}/5 Fotos</span>
-            </div>
-            
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-              {previews.map((src, i) => (
-                <div key={i} className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-primary/50 shadow-xl group">
-                  <img src={src} className="w-full h-full object-cover" alt="Preview" />
-                  <button 
-                    type="button"
-                    onClick={() => removePhoto(i)}
-                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <XIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              {previews.length < 5 && (
-                <label className="aspect-[3/4] flex flex-col items-center justify-center bg-gray-800 rounded-2xl border-2 border-dashed border-gray-700 cursor-pointer hover:border-primary transition-all group active:scale-95">
-                  <CameraIcon className="w-8 h-8 text-gray-600 group-hover:text-primary transition-colors" />
-                  <span className="text-[9px] text-gray-500 font-black mt-2 group-hover:text-primary uppercase">Adicionar</span>
-                  <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
-                </label>
-              )}
-            </div>
-            <p className="text-[9px] text-gray-500 text-center uppercase font-bold tracking-tight">
-              Dica: Use fotos sem filtros exagerados, mostrando bem o rosto e corpo.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-5 bg-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-          >
-            {isSubmitting ? 'Processando Cadastro...' : 'Enviar meu Perfil'}
+          <button type="submit" disabled={isSubmitting || isProcessingPhotos} 
+            className="w-full py-4 bg-primary text-white font-bold rounded-xl text-xl hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-3">
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                Enviando cadastro...
+              </>
+            ) : 'Enviar meu Cadastro 🚀'}
           </button>
         </form>
       </div>

@@ -1,14 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
 import PublicHome from './pages/PublicHome';
 import HowToUsePage from './pages/HowToUsePage';
-import PricingPage from './pages/PricingPage';
-import SubscriptionFlowPage from './pages/AdminRegistrationPage';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import PostCheck from './pages/PostCheck';
@@ -21,7 +19,6 @@ import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
-import AppleTestRegistration from './pages/AppleTestRegistration';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -55,7 +52,7 @@ const Header: React.FC = () => {
   const handleLogout = async () => {
       try {
           await auth.signOut();
-          setIsMenuOpen(false); 
+          setIsMenuOpen(false);
           navigate('/admin/login');
       } catch (error) {
           console.error("Logout failed", error);
@@ -63,7 +60,7 @@ const Header: React.FC = () => {
   };
 
   return (
-      <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+      <header className="bg-secondary shadow-md sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-8 w-auto text-white" />
@@ -95,7 +92,7 @@ const Header: React.FC = () => {
           </nav>
 
           {isMenuOpen && (
-              <div className="md:hidden bg-secondary border-b border-gray-700" id="mobile-menu">
+              <div className="md:hidden" id="mobile-menu">
                   <div className="px-2 pt-2 pb-4 space-y-2 sm:px-3">
                       <div className="px-2 pb-3 mb-2 border-b border-gray-700">
                           <OrganizationSwitcher />
@@ -133,41 +130,31 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* Rotas de Admin com prioridade */}
-                <Route path="/admin/*" element={<AdminAuth />} />
-
-                {/* Rotas Públicas Estáticas */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
-                <Route path="/status" element={<StatusCheck />} />
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/suporte" element={<SupportPage />} />
-                <Route path="/planos" element={<PricingPage />} />
-                <Route path="/apple-test" element={<AppleTestRegistration />} />
-                <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
+                <Route path="/:organizationId" element={<StateSelection />} />
+                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 
-                {/* Divulgadoras */}
+                <Route path="/admin/*" element={<AdminAuth />} />
+                <Route path="/status" element={<StatusCheck />} />
                 <Route path="/posts" element={<PostCheck />} />
                 <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
                 <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
-
-                {/* Rotas de Organização (Captura apenas se não for admin) */}
-                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
-                <Route path="/:organizationId" element={<StateSelection />} />
-
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </ErrorBoundary>
           </main>
-          <footer className="text-center py-6 text-gray-400 text-sm mt-auto">
+          <footer className="text-center py-4 text-gray-400 text-sm">
               <p>
                   &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
                   <span className="mx-2">|</span> 
-                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Privacidade</Link>
+                  <Link to="/como-funciona" className="hover:text-white underline">Como Funciona</Link>
+                  <span className="mx-2">|</span> 
+                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Política de Privacidade</Link>
                   <span className="mx-2">|</span> 
                   <Link to="/suporte" className="hover:text-white underline">Suporte</Link>
               </p>

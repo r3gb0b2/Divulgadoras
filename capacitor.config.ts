@@ -4,21 +4,15 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.equipecerta.app',
   appName: 'Equipe Certa',
-  webDir: 'dist',
-  bundledWebRuntime: false,
+  webDir: 'dist', // Certifique-se de que sua pasta de build se chama 'dist'
   server: {
-    androidScheme: 'https',
-    iosScheme: 'https'
+    androidScheme: 'https'
   },
   plugins: {
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
-    }
+    },
   },
-  ios: {
-    contentInset: 'always',
-    allowsLinkPreview: true
-  }
 };
 
 export default config;

@@ -95,11 +95,8 @@ const AdminLoginPage: React.FC = () => {
 
                 <div className="mt-8 pt-6 border-t border-gray-700 text-center space-y-3">
                     <p className="text-sm text-gray-400">
-                        Ainda não utiliza o Equipe Certa?
+                        Ferramenta de uso exclusivo para organizadores cadastrados.
                     </p>
-                    <Link to="/planos" className="inline-block text-primary hover:text-primary-dark font-semibold text-sm">
-                        Conheça nossos planos &rarr;
-                    </Link>
                 </div>
             </div>
             

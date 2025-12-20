@@ -7,15 +7,6 @@ export type FieldValue = firebase.firestore.FieldValue;
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 
-export interface AppleTestRegistrant {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  createdAt: Timestamp | FieldValue;
-  organizationId: string;
-}
-
 export interface Promoter {
   id: string;
   name: string;
@@ -40,14 +31,7 @@ export interface Promoter {
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
-  fcmToken?: string; 
-  lastTokenUpdate?: Timestamp | FieldValue;
-  pushDiagnostics?: {
-    lastError?: string;
-    platform?: string;
-    pluginStatus?: string;
-    updatedAt: Timestamp | FieldValue;
-  };
+  fcmToken?: string; // Token para Push Notifications
 }
 
 export interface PromoterApplicationData {
@@ -108,6 +92,7 @@ export interface Organization {
   id: string;
   name: string;
   ownerName?: string;
+  // FIX: Cannot find name 'owner'. Changed to 'string'.
   ownerEmail: string;
   ownerUid: string;
   status: OrganizationStatus;
@@ -249,8 +234,8 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guestNames: string[]; 
-    guests?: { name: string; email: string }[]; 
+    guestNames: string[]; // Legacy support
+    guests?: { name: string; email: string }[]; // New structure
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;
@@ -378,6 +363,8 @@ export interface GuestListChangeRequest {
   actionTakenBy?: string;
 }
 
+// --- Follow Loop Types ---
+
 export interface FollowLoop {
   id: string;
   organizationId: string;
@@ -389,7 +376,7 @@ export interface FollowLoop {
 }
 
 export interface FollowLoopParticipant {
-  id: string; 
+  id: string; // Composite ID: loopId_promoterId
   loopId: string;
   promoterId: string;
   promoterName: string;
@@ -421,6 +408,7 @@ export interface FollowInteraction {
   followedInstagram?: string;
 }
 
+// --- WhatsApp Reminder Types ---
 export interface WhatsAppReminder {
   id: string;
   promoterId: string;
