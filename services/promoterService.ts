@@ -17,24 +17,32 @@ const toMillisSafe = (timestamp: any): number => {
 
 /**
  * Salva o token FCM no perfil da divulgadora.
- * Impede o salvamento de tokens nulos ou strings inválidas.
+ * Impede o salvamento de tokens que não sigam o padrão do Firebase (FCM).
  */
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
-    if (!token || token === 'undefined' || token === 'null' || token.length < 20) {
-        console.warn(`Push: Abortando salvamento de token inválido para ${promoterId}: "${token}"`);
+    if (!token || token === 'undefined' || token === 'null') {
         return;
     }
 
-    console.log(`Push: Tentando salvar token no Firestore para ${promoterId} (${platform})...`);
+    // Validação de formato: Tokens FCM geralmente são bem longos (>100 caracteres)
+    // Se for iOS e o token for hexadecimal de 64 chars, é um token APNs (inválido para o Firebase Admin SDK)
+    const isLikelyApns = platform === 'ios' && /^[0-9a-fA-F]{64}$/.test(token);
+    
+    if (isLikelyApns || token.length < 30) {
+        console.warn(`Push: O token recebido ("${token}") parece ser APNs ou inválido. O envio via Cloud Functions falhará.`);
+        // Mesmo assim salvamos para diagnóstico, mas no envio a Cloud Function irá filtrar.
+    }
+
+    console.log(`Push: Salvando token para ${promoterId}...`);
     try {
         await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: token,
             platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log("Push: Token salvo com sucesso no banco.");
+        console.log("Push: Token atualizado com sucesso.");
     } catch (error) {
-        console.error("Push: Erro ao salvar token no Firestore:", error);
+        console.error("Push: Erro ao gravar token no banco:", error);
         throw error;
     }
 };

@@ -35,7 +35,7 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 /**
  * Envio de Campanhas Push para dispositivos móveis.
- * Filtra tokens inválidos para evitar erros de 'invalid registration token'.
+ * Utiliza sendEach para isolar falhas de tokens individuais malformados.
  */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -46,7 +46,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
     }
 
     try {
-        const tokens = [];
+        const messages = [];
         const CHUNK_SIZE = 30;
         
         for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
@@ -59,47 +59,52 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                 const p = doc.data();
                 const token = p.fcmToken;
                 
-                // Validação rigorosa do token FCM
+                // Validação rigorosa: FCM tokens não são hexadecimais puros de 64 chars (APNs)
+                // e costumam ter mais de 100 caracteres no iOS/Android moderno
                 if (token && 
                     typeof token === 'string' && 
                     token !== 'undefined' && 
                     token !== 'null' && 
-                    token.length > 20) {
-                    tokens.push(token);
+                    token.length > 40) {
+                    
+                    messages.push({
+                        token: token,
+                        notification: { title, body },
+                        data: { url: url || '/#/posts' },
+                        android: {
+                            priority: "high",
+                            notification: { sound: "default", color: "#e83a93" }
+                        },
+                        apns: {
+                            payload: {
+                                aps: { sound: "default", badge: 1, contentAvailable: true }
+                            }
+                        }
+                    });
                 }
             });
         }
 
-        if (tokens.length === 0) {
-            return { success: false, message: "Nenhum dispositivo com token válido encontrado para este grupo." };
+        if (messages.length === 0) {
+            return { success: false, message: "Nenhum dispositivo com token FCM válido (longo) encontrado para este grupo." };
         }
 
-        const messagePayload = {
-            notification: { title, body },
-            data: { url: url || '/#/posts' },
-            tokens: tokens,
-            android: {
-                priority: "high",
-                notification: { sound: "default", color: "#e83a93" }
-            },
-            apns: {
-                payload: {
-                    aps: { sound: "default", badge: 1, contentAvailable: true }
-                }
-            }
-        };
-
-        const response = await admin.messaging().sendEachForMulticast(messagePayload);
+        // Usar sendEach para garantir que um token inválido não derrube o envio dos outros
+        const response = await admin.messaging().sendEach(messages);
         
+        const successCount = response.responses.filter(r => r.success).length;
+        const failureCount = response.responses.length - successCount;
+
         let errorDetail = "";
-        if (response.failureCount > 0) {
+        if (failureCount > 0) {
             const firstError = response.responses.find(r => !r.success);
-            errorDetail = firstError ? firstError.error.message : "Tokens inválidos detectados e ignorados.";
+            errorDetail = firstError ? firstError.error.message : "Erro desconhecido em alguns dispositivos.";
+            console.error("Push partial failure:", errorDetail);
         }
 
         return { 
-            success: response.successCount > 0, 
-            message: `${response.successCount} enviadas, ${response.failureCount} falhas.`,
+            success: successCount > 0, 
+            message: `${successCount} enviadas, ${failureCount} falhas.`,
             errorDetail
         };
 

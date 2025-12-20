@@ -29,20 +29,28 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
             }
         }
 
-        // Limpa ouvintes antigos para evitar vazamento de memória e chamadas duplicadas
+        // Importante: Remover listeners antigos antes de registrar novos para evitar duplicidade
         await PushNotifications.removeAllListeners();
 
         return new Promise(async (resolve) => {
             // Sucesso no Registro
             await PushNotifications.addListener('registration', async (token) => {
-                console.log("Push: Token capturado com sucesso.");
+                const tokenValue = token.value;
+                console.log("Push: Token nativo recebido:", tokenValue);
+                
+                // Verificação de segurança: Tokens APNs (iOS) puros são hexadecimais de 64 chars.
+                // O FCM costuma ser bem mais longo e ter caracteres como ":".
+                if (platform === 'ios' && tokenValue.length < 100 && !tokenValue.includes(':')) {
+                    console.warn("Push: Detectado token APNs puro. O Firebase nativo pode não estar configurado corretamente no Xcode.");
+                }
+
                 try {
-                    // Tenta salvar, mas não trava o resolve se falhar a rede
-                    await savePushToken(promoterId, token.value, platform);
-                    resolve({ success: true, token: token.value });
+                    // Tenta salvar no Firestore
+                    await savePushToken(promoterId, tokenValue, platform);
+                    resolve({ success: true, token: tokenValue });
                 } catch (e: any) {
-                    console.error("Push: Falha ao persistir token no Firestore", e);
-                    resolve({ success: false, error: "Token gerado, mas falha ao salvar no banco." });
+                    console.error("Push: Erro ao persistir token no Firestore", e);
+                    resolve({ success: false, error: "Token capturado, mas erro ao salvar no banco." });
                 }
             });
 
@@ -52,7 +60,7 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
                 resolve({ success: false, error: error.error });
             });
 
-            console.log("Push: Solicitando registro no serviço de notificações...");
+            console.log("Push: Disparando registro no SO...");
             await PushNotifications.register();
         });
 
