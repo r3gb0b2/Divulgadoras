@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon, CheckCircleIcon, DownloadIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -46,14 +46,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         // 1. Inicia o Firebase
         FirebaseApp.configure()
         
-        // 2. Configura os delegados
+        // 2. Configura os delegados de notificação
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
         
         return true
     }
 
-    // 3. MÁGICA AQUI: Converte o Token de 64 caracteres da Apple para o Token longo do Firebase
+    // 3. Converte o Token de 64 caracteres da Apple (APNs) para o Token do Firebase (FCM)
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
         Messaging.messaging().token { token, error in
@@ -75,7 +75,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         NotificationCenter.default.post(name: Notification.Name("FCMToken"), object: nil, userInfo: dataDict)
     }
 
-    // 5. Suporte para notificações em primeiro plano
+    // 5. Permite exibir a notificação mesmo com o App aberto
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([[.alert, .sound, .badge]])
     }
@@ -131,10 +131,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         });
     };
 
-    const handleCopyCode = () => {
-        navigator.clipboard.writeText(appDelegateCode).then(() => {
-            alert("Código AppDelegate.swift copiado!");
-        });
+    const handleDownloadFile = () => {
+        const blob = new Blob([appDelegateCode], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'AppDelegate.swift';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     };
 
     const handleDeleteToken = async (promoterId: string) => {
@@ -201,41 +207,47 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                     onClick={() => setShowTroubleshoot(!showTroubleshoot)}
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
-                    <CogIcon className="w-5 h-5" />
-                    {showTroubleshoot ? 'Fechar Guia de Integração' : 'Problemas com iOS / Token de 64 chars? Clique aqui'}
+                    <AlertTriangleIcon className="w-5 h-5 text-yellow-500" />
+                    {showTroubleshoot ? 'Fechar Guia de Integração' : 'ERRO "No such module FirebaseCore" no Xcode? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
                     <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
-                        <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                            <CheckCircleIcon className="w-5 h-5 text-green-400" />
-                            Solução: AppDelegate.swift Configurado
-                        </h3>
-                        <p className="text-sm text-gray-300 mb-4">
-                            Substitua o conteúdo do seu arquivo <code className="text-primary font-mono">ios/App/App/AppDelegate.swift</code> pelo código abaixo. Ele contém os métodos necessários para o Firebase converter o token da Apple (64 chars) em um token válido do Firebase.
-                        </p>
-
-                        <div className="relative group">
-                            <pre className="bg-black/60 p-4 rounded-lg text-[11px] font-mono text-gray-300 overflow-x-auto max-h-[400px] border border-gray-700">
-                                {appDelegateCode}
-                            </pre>
-                            <button 
-                                onClick={handleCopyCode}
-                                className="absolute top-4 right-4 bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-md text-xs font-bold shadow-lg flex items-center gap-2 transition-all opacity-90 group-hover:opacity-100"
-                            >
-                                <DocumentDuplicateIcon className="w-4 h-4" />
-                                COPIAR CÓDIGO
-                            </button>
-                        </div>
-
-                        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <div className="bg-yellow-900/20 p-4 rounded-lg border border-yellow-700/30">
-                                <p className="text-xs font-bold text-yellow-300 mb-2 uppercase tracking-wider">Passo 2: Target Membership</p>
-                                <p className="text-xs text-yellow-100">No Xcode, clique no arquivo <strong>GoogleService-Info.plist</strong> e verifique no painel direito se a caixa do seu App está marcada em "Target Membership".</p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                                    <CheckCircleIcon className="w-5 h-5 text-green-400" />
+                                    1. Baixe e Substitua o Arquivo
+                                </h3>
+                                <p className="text-sm text-gray-300 mb-4">
+                                    Este arquivo já vem configurado para resolver o problema do token curto (APNs) e ativar o Firebase Messaging.
+                                </p>
+                                <button 
+                                    onClick={handleDownloadFile}
+                                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-black shadow-lg transition-all transform hover:scale-105"
+                                >
+                                    <DownloadIcon className="w-5 h-5" />
+                                    BAIXAR APPDELEGATE.SWIFT
+                                </button>
+                                <p className="text-[11px] text-gray-500 mt-3 italic">
+                                    Após baixar, substitua o arquivo original em: <br/>
+                                    <code className="text-indigo-300">ios/App/App/AppDelegate.swift</code>
+                                </p>
                             </div>
-                            <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-700/30">
-                                <p className="text-xs font-bold text-blue-300 mb-2 uppercase tracking-wider">Passo 3: Limpeza</p>
-                                <p className="text-xs text-blue-100">Se o token de 64 caracteres já foi salvo, exclua-o na lixeira abaixo e peça para a divulgadora abrir o App novamente após você publicar a atualização.</p>
+
+                            <div className="bg-black/40 p-4 rounded-xl border border-red-500/50">
+                                <h3 className="text-red-400 font-bold mb-2 flex items-center gap-2 text-sm uppercase">
+                                    ⚠️ Resolvendo o Erro "No such module 'FirebaseCore'"
+                                </h3>
+                                <ol className="text-xs text-gray-300 space-y-3 ml-4 list-decimal">
+                                    <li>Feche o Xcode completamente.</li>
+                                    <li>No VS Code, abra o terminal e digite: <br/> <code className="bg-gray-800 p-1 text-primary">npx cap sync ios</code></li>
+                                    <li>No Finder, vá para a pasta <code className="text-blue-300">ios/App/</code>.</li>
+                                    <li><strong>IMPORTANTE:</strong> Abra o arquivo de ícone BRANCO chamado <strong className="text-white">App.xcworkspace</strong>.</li>
+                                    <li className="text-yellow-400 font-bold underline">NUNCA use o arquivo azul (.xcodeproj), ele não carrega as bibliotecas do Firebase.</li>
+                                    <li>Dentro do Xcode (no Workspace), vá em <strong>Product &rarr; Clean Build Folder</strong>.</li>
+                                    <li>Tente rodar o App novamente.</li>
+                                </ol>
                             </div>
                         </div>
                     </div>
@@ -248,7 +260,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos Ativos
+                                Dispositivos Detectados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -297,7 +309,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">APNs PURO (64)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic font-bold">Precisa de ajuste nativo</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic font-bold">Incompatível / Ajuste Xcode</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
