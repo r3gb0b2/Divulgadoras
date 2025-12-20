@@ -15,7 +15,16 @@ const toMillisSafe = (timestamp: any): number => {
     return isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
+/**
+ * Salva o token FCM no perfil da divulgadora.
+ * Impede o salvamento de tokens nulos ou strings inválidas.
+ */
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
+    if (!token || token === 'undefined' || token === 'null' || token.length < 20) {
+        console.warn(`Push: Abortando salvamento de token inválido para ${promoterId}: "${token}"`);
+        return;
+    }
+
     console.log(`Push: Tentando salvar token no Firestore para ${promoterId} (${platform})...`);
     try {
         await firestore.collection('promoters').doc(promoterId).update({

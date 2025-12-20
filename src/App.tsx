@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
@@ -13,7 +12,6 @@ import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { LogoIcon, MenuIcon, XIcon, LogoutIcon } from './components/Icons';
 import GeminiPage from './pages/Gemini';
 import PostCheck from './pages/PostCheck';
-// FIX: Changed to a named import to resolve module export error.
 import { GuestListCheck } from './pages/GuestListCheck';
 import ProofUploadPage from './pages/ProofUploadPage';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -23,7 +21,6 @@ import LeaveGroupPage from './pages/LeaveGroupPage';
 import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
-import { initPushNotifications, clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
@@ -56,7 +53,7 @@ const Header: React.FC = () => {
   const handleLogout = async () => {
       try {
           await auth.signOut();
-          setIsMenuOpen(false); // Close mobile menu if open
+          setIsMenuOpen(false);
           navigate('/admin/login');
       } catch (error) {
           console.error("Logout failed", error);
@@ -64,14 +61,12 @@ const Header: React.FC = () => {
   };
 
   return (
-      // Added pt-[env(safe-area-inset-top)] for notch support
       <header className="bg-secondary shadow-md sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-8 w-auto text-white" />
               </Link>
               
-              {/* Desktop Menu */}
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
@@ -87,25 +82,17 @@ const Header: React.FC = () => {
                   )}
               </div>
 
-              {/* Mobile Menu Button */}
               <div className="md:hidden flex items-center">
                   <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                     className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
-                    aria-controls="mobile-menu"
-                    aria-expanded={isMenuOpen}
                   >
                       <span className="sr-only">Abrir menu</span>
-                      {isMenuOpen ? (
-                          <XIcon className="h-6 w-6" aria-hidden="true" />
-                      ) : (
-                          <MenuIcon className="h-6 w-6" aria-hidden="true" />
-                      )}
+                      {isMenuOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
                   </button>
               </div>
           </nav>
 
-          {/* Mobile Menu Panel */}
           {isMenuOpen && (
               <div className="md:hidden" id="mobile-menu">
                   <div className="px-2 pt-2 pb-4 space-y-2 sm:px-3">
@@ -132,17 +119,9 @@ const Header: React.FC = () => {
 
 
 const App: React.FC = () => {
-  // Cleanup push listeners on unmount
-  useEffect(() => {
-      return () => {
-          clearPushListeners();
-      }
-  }, []);
-
   return (
     <AdminAuthProvider>
       <Router>
-        {/* Added pb-[env(safe-area-inset-bottom)] for iOS home indicator */}
         <div className="bg-dark text-gray-200 min-h-screen font-sans flex flex-col pb-[env(safe-area-inset-bottom)]">
           <Header />
           <main className="container mx-auto p-4 md:p-8 flex-grow">

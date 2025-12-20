@@ -16,7 +16,6 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
     if (!prompt) throw new functions.https.HttpsError("invalid-argument", "Prompt vazio.");
 
     try {
-        // Inicialização obrigatória: new GoogleGenAI({ apiKey: process.env.API_KEY })
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         const response = await ai.models.generateContent({
@@ -27,7 +26,6 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
             }
         });
 
-        // Retorna a propriedade .text diretamente do objeto de resposta
         return { text: response.text };
     } catch (e) {
         console.error("Gemini Error:", e);
@@ -36,7 +34,8 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 });
 
 /**
- * Envio de Campanhas Push para dispositivos móveis (Capacitor).
+ * Envio de Campanhas Push para dispositivos móveis.
+ * Filtra tokens inválidos para evitar erros de 'invalid registration token'.
  */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -58,11 +57,22 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
             
             snap.forEach(doc => {
                 const p = doc.data();
-                if (p.fcmToken) tokens.push(p.fcmToken);
+                const token = p.fcmToken;
+                
+                // Validação rigorosa do token FCM
+                if (token && 
+                    typeof token === 'string' && 
+                    token !== 'undefined' && 
+                    token !== 'null' && 
+                    token.length > 20) {
+                    tokens.push(token);
+                }
             });
         }
 
-        if (tokens.length === 0) return { success: false, message: "Nenhum dispositivo com App instalado encontrado." };
+        if (tokens.length === 0) {
+            return { success: false, message: "Nenhum dispositivo com token válido encontrado para este grupo." };
+        }
 
         const messagePayload = {
             notification: { title, body },
@@ -74,7 +84,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
             },
             apns: {
                 payload: {
-                    aps: { sound: "default", badge: 1 }
+                    aps: { sound: "default", badge: 1, contentAvailable: true }
                 }
             }
         };
@@ -84,7 +94,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
         let errorDetail = "";
         if (response.failureCount > 0) {
             const firstError = response.responses.find(r => !r.success);
-            errorDetail = firstError ? firstError.error.message : "Erro desconhecido.";
+            errorDetail = firstError ? firstError.error.message : "Tokens inválidos detectados e ignorados.";
         }
 
         return { 

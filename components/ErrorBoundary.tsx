@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,11 +13,11 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors.
  */
-// FIX: Extending Component directly from the react import to ensure TypeScript correctly resolves inherited members like 'state' and 'props'
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Using React.Component explicitly to ensure inherited members like 'state' and 'props' are correctly resolved by the TypeScript compiler
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // FIX: Explicitly initializing state which is now correctly recognized as an inherited property
+    // FIX: Initializing state correctly using the inherited member from React.Component
     this.state = {
       hasError: false,
       error: null,
@@ -33,7 +33,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // FIX: Accessing this.state from inherited Component member
+    // FIX: Properly accessing state member inherited from React.Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -56,7 +56,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: Accessing this.props from inherited Component member
+    // FIX: Properly accessing props member inherited from React.Component
     return this.props.children;
   }
 }
