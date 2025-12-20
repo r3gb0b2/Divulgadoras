@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -125,7 +126,7 @@ const AdminPushCampaignPage: React.FC = () => {
                 setBody('');
             } else {
                 setError(res.message);
-                setDebugError("Tokens de 64 caracteres detectados. O Firebase não aceita tokens Apple (APNs) diretamente, apenas tokens FCM.");
+                setDebugError("Token nativo Apple (APNs) detectado. O Firebase não consegue converter sem o Plist correto.");
             }
         } catch (err: any) {
             setError(err.message);
@@ -146,40 +147,45 @@ const AdminPushCampaignPage: React.FC = () => {
                 </button>
             </div>
 
-            {/* Troubleshooting Section Atualizada com as dúvidas do usuário */}
+            {/* Troubleshooting Section - Refinada para quem não acha o File Inspector */}
             <div className="mb-6">
                 <button 
                     onClick={() => setShowTroubleshoot(!showTroubleshoot)}
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
                     <CogIcon className="w-5 h-5" />
-                    {showTroubleshoot ? 'Fechar Guia de Correção' : 'Aparece o erro de "Tokens APNs" no iOS? Clique aqui para resolver'}
+                    {showTroubleshoot ? 'Fechar Guia de Correção' : 'Não encontra o "File Inspector" no Xcode? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
                     <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
-                        <h3 className="text-lg font-bold text-white mb-4">Resolvendo o erro de Token de 64 caracteres:</h3>
+                        <h3 className="text-lg font-bold text-white mb-4">Guia Rápido: Localizando os menus no Xcode</h3>
                         <div className="space-y-6 text-sm text-gray-300">
-                            <div>
-                                <p className="font-bold text-indigo-300 mb-1">1. Sobre o Target Membership:</p>
-                                <p>No Xcode, clique no arquivo <code className="text-white bg-black/40 px-1 rounded">GoogleService-Info.plist</code>. Na barra lateral <strong className="text-white">direita</strong>, procure <strong className="text-white">"Target Membership"</strong> e certifique-se de que a caixa ao lado do nome do seu App (Target) está <strong className="text-green-400">MARCADA</strong>. Se não estiver marcada, o Firebase não funciona.</p>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
+                                    <p className="font-bold text-white mb-2">Passo 1: Abrir a Barra Lateral Direita</p>
+                                    <p>Se a parte direita do Xcode está vazia ou fechada:</p>
+                                    <p className="mt-2 text-primary font-mono bg-dark p-2 rounded">Teclado: Command (⌘) + Option (⌥) + 0</p>
+                                    <p className="mt-2 text-xs text-gray-400">Ou clique no ícone de "janela com barra lateral" no topo superior direito do Xcode.</p>
+                                </div>
+
+                                <div className="bg-black/40 p-4 rounded-lg border-l-4 border-green-500">
+                                    <p className="font-bold text-white mb-2">Passo 2: Selecionar o "File Inspector"</p>
+                                    <p>Com a barra aberta, o File Inspector é o **primeiro ícone** (folha de papel) no topo da barra.</p>
+                                    <p className="mt-2 text-green-400 font-mono bg-dark p-2 rounded">Teclado: Command (⌘) + Option (⌥) + 1</p>
+                                </div>
                             </div>
 
-                            <div>
-                                <p className="font-bold text-indigo-300 mb-1">2. Sobre a chave FirebaseAppDelegateProxyEnabled:</p>
-                                <p>Se ela <strong className="text-white">não aparece</strong> no seu <code className="text-white bg-black/40 px-1 rounded">Info.plist</code>, <strong className="text-green-400">está correto</strong>. O padrão é ativado (YES). Você só deve adicioná-la se quiser desativar o proxy, o que não é o caso agora.</p>
+                            <div className="bg-indigo-800/30 p-4 rounded-lg border border-indigo-500/30">
+                                <p className="font-bold text-indigo-300 mb-2">Passo 3: Target Membership</p>
+                                <p>Agora que você apertou <code className="bg-black px-1 rounded text-white">Cmd+Opt+1</code>, olhe para o meio da barra lateral: O quadrado **"Target Membership"** estará visível.</p>
+                                <p className="mt-2 text-white font-bold">Certifique-se de que a caixinha ao lado do nome do seu App (ex: "App") está MARCADA.</p>
                             </div>
 
-                            <div>
-                                <p className="font-bold text-indigo-300 mb-1">3. Verificação de Capabilities:</p>
-                                <p>No Xcode, clique no ícone azul do projeto (raiz), vá em <strong className="text-white">Signing & Capabilities</strong>. Você <strong className="text-white">precisa</strong> ter "Push Notifications" e "Background Modes" (com <strong className="text-white">Remote notifications</strong> marcado) na lista.</p>
-                            </div>
-
-                            <div className="bg-black/40 p-3 rounded border border-indigo-500/30">
-                                <p className="text-indigo-200 font-bold mb-1">Após corrigir no Xcode:</p>
-                                <p>1. Delete o token da divulgadora na tabela abaixo usando o ícone da lixeira vermelha.</p>
-                                <p>2. Peça para ela fechar e abrir o App novamente.</p>
-                                <p>3. Se o novo token tiver <strong className="text-white">mais de 100 caracteres</strong>, o envio vai funcionar!</p>
+                            <div className="bg-red-900/20 p-4 rounded-lg border border-red-500/30 text-xs">
+                                <p className="font-bold text-red-400 mb-1">Ainda não aparece?</p>
+                                <p>Se você fizer isso e não aparecer nada, clique com o botão direito no <code className="text-white">GoogleService-Info.plist</code> na lista da esquerda, escolha **"Delete" -> "Remove Reference"** e depois arraste o arquivo de volta para dentro do Xcode, certificando-se de marcar a opção **"Add to targets"** na janelinha que abrir.</p>
                             </div>
                         </div>
                     </div>
@@ -192,7 +198,7 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                1. Dispositivos Registrados
+                                1. Dispositivos Identificados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -212,7 +218,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status do Token</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Diagnóstico</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
                                     </tr>
                                 </thead>
@@ -241,7 +247,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars (Token Nativo)</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars. Xcode incompleto.</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
@@ -268,17 +274,17 @@ const AdminPushCampaignPage: React.FC = () => {
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
-                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">2. Disparar Notificação</h2>
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">2. Mensagem Rápida</h2>
                         <div className="space-y-4">
                             <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Mensagem" value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+                            <textarea placeholder="Sua mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
                                 <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
                                     <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1">
-                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO NO ENVIO
+                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO TÉCNICO
                                     </div>
                                     <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
                                 </div>
@@ -293,11 +299,11 @@ const AdminPushCampaignPage: React.FC = () => {
                                 {isSending ? (
                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
                                 ) : (
-                                    'ENVIAR AGORA'
+                                    'DISPARAR AGORA'
                                 )}
                             </button>
                             <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">
-                                Selecionados: {selectedPromoterIds.size}
+                                Alvos: {selectedPromoterIds.size}
                             </p>
                         </div>
                     </div>
