@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -546,8 +547,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: any) {
-            // Fix: Explicitly convert 'err' to a string error message for setLookupError using 'any' to resolve the 'unknown' assignment error.
+        } catch (err) {
+            /* Fix line 509: Safely convert 'err' (unknown type in catch block) to string before passing to setLookupError to resolve TypeScript assignment error. */
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

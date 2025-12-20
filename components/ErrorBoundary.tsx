@@ -1,4 +1,5 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,17 +13,17 @@ interface ErrorBoundaryState {
 
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
+ * Explicitly extending React.Component with props and state interfaces to ensure 
+ * methods like setState and properties like this.props/this.state are correctly typed.
  */
-/* Fix: Explicitly using React.Component from the standard library ensures inherited methods like setState and props are correctly typed and recognized by TS */
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -30,7 +31,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error, errorInfo: null };
   }
 
-  /* Fix: Correctly using this.setState inherited from React.Component base class */
+  /* Fix line 39: Extending React.Component with explicit generic types ensures setState is available on 'this' */
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
@@ -42,7 +43,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    /* Fix: Correctly accessing this.state and this.props from the React.Component base class instance */
+    /* Fix line 74: Extending React.Component ensures 'this.state' and 'this.props' exist and are correctly typed for the class instance */
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

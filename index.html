@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Equipe Certa</title>
-    
+    <title>Equipe Certa | Divulgadoras</title>
     <script type="importmap">
 {
   "imports": {
@@ -14,11 +13,11 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
-    "html5-qrcode": "https://aistudiocdn.com/html5-qrcode@^2.3.8",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@6.2.0",
-    "@capacitor/core": "https://esm.sh/@capacitor/core@6.2.0",
-    "@capacitor/push-notifications": "https://esm.sh/@capacitor/push-notifications@6.0.3",
-    "@capacitor-community/fcm": "https://esm.sh/@capacitor-community/fcm@6.0.0"
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0",
+    "html5-qrcode": "https://esm.sh/html5-qrcode@^2.3.8",
+    "@capacitor/core": "https://esm.sh/@capacitor/core@^8.0.0",
+    "@capacitor/push-notifications": "https://esm.sh/@capacitor/push-notifications@^8.0.0",
+    "@capacitor-community/fcm": "https://esm.sh/@capacitor-community/fcm@^8.0.1"
   }
 }
 </script>
@@ -31,39 +30,52 @@
             colors: {
               primary: '#e83a93',
               'primary-dark': '#c82a7a',
-              secondary: '#1a1a2e',
-              dark: '#16213e',
+              secondary: '#0f0f1a',
+              dark: '#05050a',
+            },
+            animation: {
+              'fadeIn': 'fadeIn 0.5s ease-out forwards',
+              'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' }
+              },
+              shake: {
+                '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+              }
             }
           }
         }
       }
     </script>
     <style>
-      /* Estilos para comportamento de App Nativo */
-      body {
-        -webkit-user-select: none; /* Desativa seleção de texto no iOS */
-        user-select: none;
-        -webkit-tap-highlight-color: transparent; /* Remove highlight de clique no Android */
-        overscroll-behavior-y: none; /* Evita o efeito de "bounce" ao rolar além do limite */
+      body { background-color: #05050a; color: #fff; }
+      .input-field {
+        width: 100%;
+        background-color: #1a1a2e;
+        border: 1px solid #2a2a4a;
+        border-radius: 1rem;
+        padding: 1rem;
+        color: #fff;
+        transition: all 0.3s;
       }
-      /* Permite seleção em inputs e textareas */
-      input, textarea {
-        -webkit-user-select: text;
-        user-select: text;
+      .input-field:focus {
+        outline: none;
+        border-color: #e83a93;
+        background-color: #1f1f3a;
+        box-shadow: 0 0 0 4px rgba(232, 58, 147, 0.1);
       }
-      /* Ajuste para Safe Area (Notch) */
-      :root {
-        --sat: env(safe-area-inset-top);
-        --sab: env(safe-area-inset-bottom);
-        --sal: env(safe-area-inset-left);
-        --sar: env(safe-area-inset-right);
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
       }
     </style>
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>
