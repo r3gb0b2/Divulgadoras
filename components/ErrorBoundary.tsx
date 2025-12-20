@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -12,10 +13,9 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors.
  */
-// Fix: Explicitly inherit from Component<P, S> using named import to ensure this.props and this.state are correctly recognized by TypeScript
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Explicitly inherit from React.Component to ensure this.props and this.state are correctly recognized by TypeScript
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
-  // Fix: Use public state declaration instead of constructor initialization to resolve property recognition issues
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,

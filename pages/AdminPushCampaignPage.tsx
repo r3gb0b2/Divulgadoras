@@ -1,12 +1,12 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
-import { getAllCampaigns } from '../services/settingsService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
-import { Organization, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, ClockIcon } from '../components/Icons';
+import { Organization, Promoter } from '../types';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -78,18 +78,17 @@ const AdminPushCampaignPage: React.FC = () => {
     const handleCopyToken = (token: string) => {
         if (!token) return;
         navigator.clipboard.writeText(token).then(() => {
-            alert("Token copiado! Você pode testá-lo no Firebase Console ou comparar formatos.");
+            alert("Token copiado!");
         });
     };
 
     const handleDeleteToken = async (promoterId: string) => {
-        if (!window.confirm("Isso removerá o token inválido do banco. A divulgadora precisará abrir o App para gerar um novo token FCM válido. Prosseguir?")) return;
+        if (!window.confirm("Isso removerá o token do banco. A divulgadora precisará abrir o App novamente para tentar gerar um novo. Prosseguir?")) return;
         
         setIsDeletingToken(promoterId);
         try {
             await deletePushToken(promoterId);
             setPromoters(prev => prev.filter(p => p.id !== promoterId));
-            alert("Token removido com sucesso.");
         } catch (e: any) {
             alert("Erro: " + e.message);
         } finally {
@@ -99,19 +98,14 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
-            setError("Preencha título, mensagem e selecione ao menos uma divulgadora.");
+            setError("Preencha todos os campos e selecione os alvos.");
             return;
         }
 
-        // Fix: Explicitly cast Array.from to string[] to resolve "unknown[]" inference issues in the current TS environment
-        const idsToSend: string[] = (Array.from(selectedPromoterIds) as string[]).filter(id => 
+        // Fix: Use spread operator on Set<string> to ensure the filtered array is correctly typed as string[]
+        const idsToSend: string[] = [...selectedPromoterIds].filter(id => 
             filteredPromoters.some(p => p.id === id)
         );
-
-        if (idsToSend.length === 0) {
-            setError("Nenhuma selecionada na plataforma atual.");
-            return;
-        }
 
         setIsSending(true);
         setResult(null);
@@ -132,7 +126,7 @@ const AdminPushCampaignPage: React.FC = () => {
                 setTitle('');
                 setBody('');
             } else {
-                setError("Ocorreu uma falha no envio parcial.");
+                setError("Falha no envio.");
                 setDebugError(res.message);
             }
         } catch (err: any) {
@@ -154,6 +148,22 @@ const AdminPushCampaignPage: React.FC = () => {
                 </button>
             </div>
 
+            {/* Alerta Educativo sobre APNs vs FCM */}
+            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 mb-8 rounded-r-lg">
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-blue-500 rounded-full text-white mt-1">
+                        <FaceIdIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-blue-300">Dica Técnica: APNs vs FCM</h3>
+                        <p className="text-sm text-gray-300 mt-1">
+                            Se um iPhone aparece com um token de exatamente <strong className="text-white">64 caracteres</strong>, ele é um token nativo (APNs) e o Firebase <strong className="text-red-400">irá rejeitá-lo</strong>. 
+                            O App precisa gerar um token <strong className="text-green-400">FCM</strong> (muito mais longo) para funcionar aqui.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
@@ -168,19 +178,6 @@ const AdminPushCampaignPage: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                            <div className="relative flex-grow">
-                                <SearchIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-                                <input type="text" placeholder="Filtrar por nome..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:ring-1 focus:ring-primary" />
-                            </div>
-                            {isSuperAdmin && (
-                                <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="bg-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white min-w-[200px]">
-                                    <option value="">Escolher Organização...</option>
-                                    {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                </select>
-                            )}
-                        </div>
-
                         <div className="overflow-x-auto border border-gray-700 rounded-lg">
                             <table className="min-w-full divide-y divide-gray-700">
                                 <thead className="bg-dark">
@@ -192,21 +189,21 @@ const AdminPushCampaignPage: React.FC = () => {
                                                 setSelectedPromoterIds(newSet);
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Divulgadora / Evento</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Info Token</th>
-                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status do Token</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700 bg-gray-800/20">
                                     {isLoadingData ? (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Carregando dispositivos...</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Buscando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum token {activePlatformTab.toUpperCase()} encontrado nesta busca.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum token encontrado nesta aba.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => {
-                                            const isAPNsLength = p.fcmToken?.length === 64;
+                                            const isAPNs = p.fcmToken?.length === 64;
                                             return (
-                                                <tr key={p.id} className="hover:bg-gray-700/30 transition-colors group">
+                                                <tr key={p.id} className={`hover:bg-gray-700/30 transition-colors ${isAPNs ? 'bg-red-900/10' : ''}`}>
                                                     <td className="px-4 py-3">
                                                         <input type="checkbox" checked={selectedPromoterIds.has(p.id)} onChange={() => {
                                                             const n = new Set(selectedPromoterIds);
@@ -215,41 +212,26 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <p className="text-sm font-bold text-white group-hover:text-primary transition-colors">{p.name}</p>
-                                                        <p className="text-[10px] text-gray-500 uppercase font-semibold">{p.campaignName || 'Geral'}</p>
+                                                        <p className="text-sm font-bold text-white">{p.name}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase">{p.campaignName || 'Geral'}</p>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isAPNsLength ? 'bg-red-900/40 text-red-400 border border-red-800' : 'bg-green-900/40 text-green-400 border border-green-800'}`}>
-                                                                    {p.fcmToken?.length || 0} chars
-                                                                </span>
-                                                                <span className="text-[10px] text-gray-400 font-mono">{p.fcmToken?.substring(0, 8)}...</span>
+                                                        {isAPNs ? (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic">Token nativo Apple. Firebase não aceita.</span>
                                                             </div>
-                                                            {isAPNsLength && (
-                                                                <span className="text-[9px] text-red-500 font-bold flex items-center gap-1">
-                                                                    <AlertTriangleIcon className="w-3 h-3" /> PROVÁVEL APNs (INVÁLIDO)
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        ) : (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">VÁLIDO (FCM)</span>
+                                                                <span className="text-[9px] text-green-400 mt-1">{p.fcmToken?.length} caracteres</span>
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex justify-end gap-2">
-                                                            <button 
-                                                                onClick={() => handleCopyToken(p.fcmToken || '')}
-                                                                className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-                                                                title="Copiar para Comparar"
-                                                            >
-                                                                <DocumentDuplicateIcon className="w-4 h-4" />
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleDeleteToken(p.id)}
-                                                                disabled={isDeletingToken === p.id}
-                                                                className="p-2 bg-red-900/30 text-red-400 rounded-lg hover:bg-red-900/50 disabled:opacity-30 border border-red-900/50"
-                                                                title="Deletar Token Problemático"
-                                                            >
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
+                                                            <button onClick={() => handleCopyToken(p.fcmToken || '')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"><DocumentDuplicateIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleDeleteToken(p.id)} disabled={isDeletingToken === p.id} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50"><TrashIcon className="w-4 h-4" /></button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -266,42 +248,26 @@ const AdminPushCampaignPage: React.FC = () => {
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
                         <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">2. Disparar Notificação</h2>
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Título da Notificação</label>
-                                <input type="text" placeholder="Ex: Nova tarefa liberada! 🚀" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2.5 text-white font-bold focus:ring-2 focus:ring-primary/50 outline-none" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-wider">Corpo da Mensagem</label>
-                                <textarea placeholder="Olá, você tem uma nova postagem aguardando comprovação..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-primary/50 outline-none resize-none" />
-                            </div>
+                            <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
+                            <textarea placeholder="Mensagem" value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
                         </div>
 
-                        <div className="mt-6 pt-4 border-t border-gray-700 space-y-4">
+                        <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
-                                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg">
-                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1">
-                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO NO ENVIO
-                                    </div>
-                                    <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
-                                    {debugError && <p className="text-[10px] text-red-500 mt-2 font-mono">Detalhe: {debugError}</p>}
+                                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
+                                    <p className="text-red-300 text-xs italic">{error}</p>
+                                    {debugError && <p className="text-[9px] text-red-500 mt-1 font-mono">Erro técnico: {debugError}</p>}
                                 </div>
                             )}
                             {result && (
-                                <div className="p-3 bg-green-900/30 border border-green-800 rounded-lg">
-                                    <p className="text-green-400 text-xs font-bold text-center">🎉 {result}</p>
+                                <div className="p-3 bg-green-900/30 border border-green-800 rounded-lg mb-4 text-center">
+                                    <p className="text-green-400 text-xs font-bold">🎉 {result}</p>
                                 </div>
                             )}
 
-                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all transform active:scale-95 disabled:opacity-30 disabled:grayscale">
-                                {isSending ? (
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                ) : (
-                                    <><span className="uppercase">Enviar Push</span><FaceIdIcon className="w-6 h-6" /></>
-                                )}
+                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all disabled:opacity-30">
+                                {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : 'ENVIAR AGORA'}
                             </button>
-                            <p className="text-[10px] text-gray-500 text-center uppercase font-bold tracking-widest">
-                                Alvos selecionados: {selectedPromoterIds.size}
-                            </p>
                         </div>
                     </div>
                 </div>

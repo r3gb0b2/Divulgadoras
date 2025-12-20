@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -13,10 +14,9 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Inherit from Component<P, S> to ensure proper typing of this.state, this.props and this.setState
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Inherit from React.Component to ensure proper typing of this.state, this.props and this.setState
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
-  // Fix: Declare public state instead of constructor initialization to resolve property recognition errors
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
