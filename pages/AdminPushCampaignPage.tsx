@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon, CheckCircleIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -32,6 +32,55 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
+    const appDelegateCode = `import UIKit
+import Capacitor
+import FirebaseCore
+import FirebaseMessaging
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUserNotificationCenterDelegate {
+
+    var window: UIWindow?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // 1. Inicia o Firebase
+        FirebaseApp.configure()
+        
+        // 2. Configura os delegados
+        Messaging.messaging().delegate = self
+        UNUserNotificationCenter.current().delegate = self
+        
+        return true
+    }
+
+    // 3. MÁGICA AQUI: Converte o Token de 64 caracteres da Apple para o Token longo do Firebase
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Messaging.messaging().apnsToken = deviceToken
+        Messaging.messaging().token { token, error in
+            if let token = token {
+                print("Firebase registration token: \\(token)")
+                NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+            }
+        }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    // 4. Recebimento do Token do Firebase
+    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        print("Firebase registration token: \\(String(describing: fcmToken))")
+        let dataDict: [String: String] = ["token": fcmToken ?? ""]
+        NotificationCenter.default.post(name: Notification.Name("FCMToken"), object: nil, userInfo: dataDict)
+    }
+
+    // 5. Suporte para notificações em primeiro plano
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([[.alert, .sound, .badge]])
+    }
+}`;
+
     useEffect(() => {
         if (isSuperAdmin) {
             getOrganizations().then(orgs => setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name))));
@@ -41,13 +90,14 @@ const AdminPushCampaignPage: React.FC = () => {
     }, [isSuperAdmin, selectedOrgId]);
 
     const fetchPromoters = useCallback(async () => {
-        if (!targetOrgId) return;
+        const orgId = isSuperAdmin ? targetOrgId : selectedOrgId;
+        if (!orgId) return;
         setIsLoadingData(true);
         try {
             const { getAllPromoters } = await import('../services/promoterService');
             const fetched = await getAllPromoters({
-                organizationId: targetOrgId,
-                filterOrgId: targetOrgId,
+                organizationId: orgId,
+                filterOrgId: orgId,
                 filterState: 'all',
                 selectedCampaign: 'all',
                 status: 'approved',
@@ -60,7 +110,7 @@ const AdminPushCampaignPage: React.FC = () => {
         } finally {
             setIsLoadingData(false);
         }
-    }, [targetOrgId]);
+    }, [isSuperAdmin, targetOrgId, selectedOrgId]);
 
     useEffect(() => {
         fetchPromoters();
@@ -78,6 +128,12 @@ const AdminPushCampaignPage: React.FC = () => {
         if (!token) return;
         navigator.clipboard.writeText(token).then(() => {
             alert("Token copiado!");
+        });
+    };
+
+    const handleCopyCode = () => {
+        navigator.clipboard.writeText(appDelegateCode).then(() => {
+            alert("Código AppDelegate.swift copiado!");
         });
     };
 
@@ -101,8 +157,6 @@ const AdminPushCampaignPage: React.FC = () => {
             return;
         }
 
-        const idsToSend: string[] = Array.from(selectedPromoterIds);
-
         setIsSending(true);
         setResult(null);
         setError(null);
@@ -112,8 +166,8 @@ const AdminPushCampaignPage: React.FC = () => {
                 title,
                 body,
                 url: '/#/posts',
-                promoterIds: idsToSend,
-                organizationId: targetOrgId
+                promoterIds: Array.from(selectedPromoterIds),
+                organizationId: targetOrgId || (selectedOrgId || '')
             });
             
             if (res.success) {
@@ -148,42 +202,41 @@ const AdminPushCampaignPage: React.FC = () => {
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
                     <CogIcon className="w-5 h-5" />
-                    {showTroubleshoot ? 'Fechar Guia Técnico' : 'Erro no Xcode ou Token de 64 chars? Clique aqui'}
+                    {showTroubleshoot ? 'Fechar Guia de Integração' : 'Problemas com iOS / Token de 64 chars? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
                     <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
-                        <h3 className="text-lg font-bold text-white mb-4">Resolvendo Erros de Compilação e Token de 64 chars</h3>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-gray-300">
-                            
-                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-red-500">
-                                <p className="font-bold text-white mb-2 underline">ERRO: "No such module FirebaseCore"</p>
-                                <p>Isso significa que o Xcode não encontrou os arquivos do Firebase. Resolva assim:</p>
-                                <ol className="mt-2 ml-4 list-decimal space-y-2">
-                                    <li>Feche o Xcode.</li>
-                                    <li>No terminal do VS Code, digite: <br/><code className="bg-black p-1 text-primary">npx cap sync ios</code></li>
-                                    <li>Abra o Finder na pasta do projeto, vá em <code className="text-blue-300">ios/App/</code>.</li>
-                                    <li><strong>ABRA O ARQUIVO BRANCO</strong> chamado <strong className="text-white">App.xcworkspace</strong>. Nunca use o azul.</li>
-                                    <li>No Xcode, vá em <strong className="text-white">Product &rarr; Clean Build Folder</strong> e tente rodar.</li>
-                                </ol>
-                            </div>
+                        <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                            <CheckCircleIcon className="w-5 h-5 text-green-400" />
+                            Solução: AppDelegate.swift Configurado
+                        </h3>
+                        <p className="text-sm text-gray-300 mb-4">
+                            Substitua o conteúdo do seu arquivo <code className="text-primary font-mono">ios/App/App/AppDelegate.swift</code> pelo código abaixo. Ele contém os métodos necessários para o Firebase converter o token da Apple (64 chars) em um token válido do Firebase.
+                        </p>
 
-                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
-                                <p className="font-bold text-white mb-2 underline">POR QUE O TOKEN TEM 64 CHARS?</p>
-                                <p>Se o token salvo no banco tem 64 letras/números, ele é APNs puro. Para o Firebase converter ele em FCM (token longo):</p>
-                                <ul className="mt-2 ml-4 list-disc space-y-1">
-                                    <li>Verifique se o arquivo <strong className="text-white">GoogleService-Info.plist</strong> está com a caixinha do App marcada no "Target Membership" (Xcode, painel direito).</li>
-                                    <li>Verifique se em <strong className="text-white">Signing & Capabilities</strong> você adicionou "Push Notifications".</li>
-                                    <li>Certifique-se que o <code className="text-blue-300">FirebaseApp.configure()</code> está no seu AppDelegate.</li>
-                                </ul>
-                            </div>
+                        <div className="relative group">
+                            <pre className="bg-black/60 p-4 rounded-lg text-[11px] font-mono text-gray-300 overflow-x-auto max-h-[400px] border border-gray-700">
+                                {appDelegateCode}
+                            </pre>
+                            <button 
+                                onClick={handleCopyCode}
+                                className="absolute top-4 right-4 bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-md text-xs font-bold shadow-lg flex items-center gap-2 transition-all opacity-90 group-hover:opacity-100"
+                            >
+                                <DocumentDuplicateIcon className="w-4 h-4" />
+                                COPIAR CÓDIGO
+                            </button>
                         </div>
 
-                        <div className="mt-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
-                            <p className="text-sm text-yellow-200 leading-relaxed italic">
-                                <strong>Dica:</strong> Se você fez alterações no Xcode, apague o token da divulgadora na lista abaixo (ícone da lixeira). Peça para ela fechar e abrir o App. Se o token novo que aparecer for bem longo (+100 caracteres), o problema está resolvido!
-                            </p>
+                        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div className="bg-yellow-900/20 p-4 rounded-lg border border-yellow-700/30">
+                                <p className="text-xs font-bold text-yellow-300 mb-2 uppercase tracking-wider">Passo 2: Target Membership</p>
+                                <p className="text-xs text-yellow-100">No Xcode, clique no arquivo <strong>GoogleService-Info.plist</strong> e verifique no painel direito se a caixa do seu App está marcada em "Target Membership".</p>
+                            </div>
+                            <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-700/30">
+                                <p className="text-xs font-bold text-blue-300 mb-2 uppercase tracking-wider">Passo 3: Limpeza</p>
+                                <p className="text-xs text-blue-100">Se o token de 64 caracteres já foi salvo, exclua-o na lixeira abaixo e peça para a divulgadora abrir o App novamente após você publicar a atualização.</p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -195,7 +248,7 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos Detectados
+                                Dispositivos Ativos
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -243,13 +296,13 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     <td className="px-4 py-3">
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic">Firebase não ativado. Verifique Xcode.</span>
+                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">APNs PURO (64)</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic font-bold">Precisa de ajuste nativo</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">VÁLIDO (FCM)</span>
-                                                                <span className="text-[9px] text-green-400 mt-1">Pronto para receber.</span>
+                                                                <span className="text-[9px] text-green-400 mt-1">Sincronizado.</span>
                                                             </div>
                                                         )}
                                                     </td>
@@ -273,16 +326,13 @@ const AdminPushCampaignPage: React.FC = () => {
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
                         <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Disparar Agora</h2>
                         <div className="space-y-4">
-                            <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+                            <input type="text" placeholder="Título do Alerta" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
+                            <textarea placeholder="Sua mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
                                 <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
-                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1">
-                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO TÉCNICO
-                                    </div>
                                     <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
                                 </div>
                             )}
