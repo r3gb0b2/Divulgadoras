@@ -47,6 +47,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
     try {
         const messages = [];
         const promoterMapByToken = {}; 
+        let apnsOnlyFound = false;
         
         const snapshot = await db.collection('promoters')
             .where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 500)) 
@@ -59,7 +60,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
             if (token && typeof token === 'string') {
                 token = token.trim().replace(/["']/g, "");
                 
-                // DETECÇÃO CRÍTICA: Se o token tem 64 chars hex, ele é APNs puro e vai falhar.
+                // DETECÇÃO CRÍTICA: Se o token tem 64 chars hex, ele é APNs puro e vai falhar no FCM.
                 const isAPNsOnly = /^[0-9a-fA-F]{64}$/.test(token);
 
                 if (!isAPNsOnly && token.length > 20) {
@@ -82,15 +83,20 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                     });
                     promoterMapByToken[token] = { id: doc.id, name: p.name };
                 } else if (isAPNsOnly) {
-                    console.warn(`Token APNs nativo detectado e ignorado para ${p.name}. O Firebase exige conversão para FCM.`);
+                    apnsOnlyFound = true;
+                    console.warn(`Token APNs nativo detectado e ignorado para ${p.name}. O Firebase exige conversão para FCM via Xcode.`);
                 }
             }
         });
 
         if (messages.length === 0) {
+            const errorMsg = apnsOnlyFound 
+                ? "Erro: Tokens nativos Apple (64 chars) detectados. O Firebase não consegue enviar mensagens para esses tokens. Verifique o guia técnico no Xcode no painel de admin."
+                : "Nenhum token válido encontrado para os alvos selecionados.";
+            
             return { 
                 success: false, 
-                message: "Nenhum token FCM válido encontrado. Os dispositivos registrados parecem ter apenas tokens APNs nativos que o Firebase rejeita. Verifique a configuração nativa do App." 
+                message: errorMsg
             };
         }
 
@@ -137,7 +143,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
         return { 
             success: successCount > 0, 
-            message: `${successCount} enviadas com sucesso. ${failureCount} falhas removidas.`,
+            message: `${successCount} enviadas. ${failureCount} falhas removidas.`,
             errorDetail: failureCount > 0 ? lastError : null
         };
 

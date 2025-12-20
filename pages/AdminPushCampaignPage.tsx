@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -6,7 +5,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon, CogIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -29,6 +28,7 @@ const AdminPushCampaignPage: React.FC = () => {
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [debugError, setDebugError] = useState<string | null>(null);
+    const [showTroubleshoot, setShowTroubleshoot] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -52,7 +52,6 @@ const AdminPushCampaignPage: React.FC = () => {
                 selectedCampaign: 'all',
                 status: 'approved',
             });
-            // Apenas quem tem token
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
             setSelectedPromoterIds(new Set(withToken.map(p => p.id)));
@@ -83,7 +82,7 @@ const AdminPushCampaignPage: React.FC = () => {
     };
 
     const handleDeleteToken = async (promoterId: string) => {
-        if (!window.confirm("Isso removerá o token do banco. A divulgadora precisará abrir o App novamente para tentar gerar um novo. Prosseguir?")) return;
+        if (!window.confirm("Isso removerá o token inválido do banco. A divulgadora precisará abrir o App após você corrigir a configuração no Xcode para gerar um token válido.")) return;
         
         setIsDeletingToken(promoterId);
         try {
@@ -98,11 +97,10 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
-            setError("Preencha todos os campos e selecione os alvos.");
+            setError("Preencha todos os campos.");
             return;
         }
 
-        // Fix: Use spread operator on Set<string> to ensure the filtered array is correctly typed as string[]
         const idsToSend: string[] = [...selectedPromoterIds].filter(id => 
             filteredPromoters.some(p => p.id === id)
         );
@@ -126,8 +124,8 @@ const AdminPushCampaignPage: React.FC = () => {
                 setTitle('');
                 setBody('');
             } else {
-                setError("Falha no envio.");
-                setDebugError(res.message);
+                setError(res.message);
+                setDebugError("Tokens de 64 caracteres detectados. O Firebase não aceita tokens Apple (APNs) diretamente, apenas tokens FCM.");
             }
         } catch (err: any) {
             setError(err.message);
@@ -148,20 +146,44 @@ const AdminPushCampaignPage: React.FC = () => {
                 </button>
             </div>
 
-            {/* Alerta Educativo sobre APNs vs FCM */}
-            <div className="bg-blue-900/20 border-l-4 border-blue-500 p-4 mb-8 rounded-r-lg">
-                <div className="flex items-start gap-3">
-                    <div className="p-2 bg-blue-500 rounded-full text-white mt-1">
-                        <FaceIdIcon className="w-4 h-4" />
+            {/* Troubleshooting Section Atualizada com as dúvidas do usuário */}
+            <div className="mb-6">
+                <button 
+                    onClick={() => setShowTroubleshoot(!showTroubleshoot)}
+                    className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
+                >
+                    <CogIcon className="w-5 h-5" />
+                    {showTroubleshoot ? 'Fechar Guia de Correção' : 'Aparece o erro de "Tokens APNs" no iOS? Clique aqui para resolver'}
+                </button>
+                
+                {showTroubleshoot && (
+                    <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
+                        <h3 className="text-lg font-bold text-white mb-4">Resolvendo o erro de Token de 64 caracteres:</h3>
+                        <div className="space-y-6 text-sm text-gray-300">
+                            <div>
+                                <p className="font-bold text-indigo-300 mb-1">1. Sobre o Target Membership:</p>
+                                <p>No Xcode, clique no arquivo <code className="text-white bg-black/40 px-1 rounded">GoogleService-Info.plist</code>. Na barra lateral <strong className="text-white">direita</strong>, procure <strong className="text-white">"Target Membership"</strong> e certifique-se de que a caixa ao lado do nome do seu App (Target) está <strong className="text-green-400">MARCADA</strong>. Se não estiver marcada, o Firebase não funciona.</p>
+                            </div>
+
+                            <div>
+                                <p className="font-bold text-indigo-300 mb-1">2. Sobre a chave FirebaseAppDelegateProxyEnabled:</p>
+                                <p>Se ela <strong className="text-white">não aparece</strong> no seu <code className="text-white bg-black/40 px-1 rounded">Info.plist</code>, <strong className="text-green-400">está correto</strong>. O padrão é ativado (YES). Você só deve adicioná-la se quiser desativar o proxy, o que não é o caso agora.</p>
+                            </div>
+
+                            <div>
+                                <p className="font-bold text-indigo-300 mb-1">3. Verificação de Capabilities:</p>
+                                <p>No Xcode, clique no ícone azul do projeto (raiz), vá em <strong className="text-white">Signing & Capabilities</strong>. Você <strong className="text-white">precisa</strong> ter "Push Notifications" e "Background Modes" (com <strong className="text-white">Remote notifications</strong> marcado) na lista.</p>
+                            </div>
+
+                            <div className="bg-black/40 p-3 rounded border border-indigo-500/30">
+                                <p className="text-indigo-200 font-bold mb-1">Após corrigir no Xcode:</p>
+                                <p>1. Delete o token da divulgadora na tabela abaixo usando o ícone da lixeira vermelha.</p>
+                                <p>2. Peça para ela fechar e abrir o App novamente.</p>
+                                <p>3. Se o novo token tiver <strong className="text-white">mais de 100 caracteres</strong>, o envio vai funcionar!</p>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="font-bold text-blue-300">Dica Técnica: APNs vs FCM</h3>
-                        <p className="text-sm text-gray-300 mt-1">
-                            Se um iPhone aparece com um token de exatamente <strong className="text-white">64 caracteres</strong>, ele é um token nativo (APNs) e o Firebase <strong className="text-red-400">irá rejeitá-lo</strong>. 
-                            O App precisa gerar um token <strong className="text-green-400">FCM</strong> (muito mais longo) para funcionar aqui.
-                        </p>
-                    </div>
-                </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -170,7 +192,7 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                1. Inspetor de Dispositivos
+                                1. Dispositivos Registrados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -189,16 +211,16 @@ const AdminPushCampaignPage: React.FC = () => {
                                                 setSelectedPromoterIds(newSet);
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status do Token</th>
-                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Divulgadora</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status do Token</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700 bg-gray-800/20">
                                     {isLoadingData ? (
                                         <tr><td colSpan={4} className="text-center py-8 text-gray-500">Buscando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum token encontrado nesta aba.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum dispositivo encontrado nesta aba.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => {
                                             const isAPNs = p.fcmToken?.length === 64;
@@ -219,7 +241,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic">Token nativo Apple. Firebase não aceita.</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars (Token Nativo)</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
@@ -230,8 +252,8 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex justify-end gap-2">
-                                                            <button onClick={() => handleCopyToken(p.fcmToken || '')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"><DocumentDuplicateIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeleteToken(p.id)} disabled={isDeletingToken === p.id} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50"><TrashIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleCopyToken(p.fcmToken || '')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Copiar Token"><DocumentDuplicateIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleDeleteToken(p.id)} disabled={isDeletingToken === p.id} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50" title="Excluir Token"><TrashIcon className="w-4 h-4" /></button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -255,8 +277,10 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
                                 <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
-                                    <p className="text-red-300 text-xs italic">{error}</p>
-                                    {debugError && <p className="text-[9px] text-red-500 mt-1 font-mono">Erro técnico: {debugError}</p>}
+                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1">
+                                        <AlertTriangleIcon className="w-4 h-4"/> ERRO NO ENVIO
+                                    </div>
+                                    <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
                                 </div>
                             )}
                             {result && (
@@ -266,8 +290,15 @@ const AdminPushCampaignPage: React.FC = () => {
                             )}
 
                             <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all disabled:opacity-30">
-                                {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : 'ENVIAR AGORA'}
+                                {isSending ? (
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                                ) : (
+                                    'ENVIAR AGORA'
+                                )}
                             </button>
+                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">
+                                Selecionados: {selectedPromoterIds.size}
+                            </p>
                         </div>
                     </div>
                 </div>
