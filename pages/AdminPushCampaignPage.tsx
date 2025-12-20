@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon, CogIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -148,38 +148,41 @@ const AdminPushCampaignPage: React.FC = () => {
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
                     <CogIcon className="w-5 h-5" />
-                    {showTroubleshoot ? 'Fechar Guia Técnico' : 'A chave .p8 está certa mas o erro de 64 chars continua? Clique aqui'}
+                    {showTroubleshoot ? 'Fechar Guia Técnico' : 'Erro no Xcode ou Token de 64 chars? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
                     <div className="mt-4 bg-indigo-900/30 border border-indigo-500/50 p-6 rounded-xl animate-fadeIn">
-                        <h3 className="text-lg font-bold text-white mb-4">Checklist de Integração Nativa (iOS)</h3>
+                        <h3 className="text-lg font-bold text-white mb-4">Resolvendo Erros de Compilação e Token de 64 chars</h3>
+                        
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-gray-300">
                             
-                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
-                                <p className="font-bold text-white mb-2">1. Xcode: GoogleService-Info.plist</p>
-                                <p>Mesmo que o arquivo esteja no projeto, ele pode não estar sendo compilado:</p>
-                                <ul className="mt-2 ml-4 list-disc space-y-1">
-                                    <li>Clique no arquivo no Xcode.</li>
-                                    <li>No painel da direita (File Inspector), veja a seção <strong className="text-white">"Target Membership"</strong>.</li>
-                                    <li>A caixa ao lado do nome do seu App <strong className="text-green-400">DEVE estar marcada</strong>.</li>
-                                </ul>
+                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-red-500">
+                                <p className="font-bold text-white mb-2 underline">ERRO: "No such module FirebaseCore"</p>
+                                <p>Isso significa que o Xcode não encontrou os arquivos do Firebase. Resolva assim:</p>
+                                <ol className="mt-2 ml-4 list-decimal space-y-2">
+                                    <li>Feche o Xcode.</li>
+                                    <li>No terminal do VS Code, digite: <br/><code className="bg-black p-1 text-primary">npx cap sync ios</code></li>
+                                    <li>Abra o Finder na pasta do projeto, vá em <code className="text-blue-300">ios/App/</code>.</li>
+                                    <li><strong>ABRA O ARQUIVO BRANCO</strong> chamado <strong className="text-white">App.xcworkspace</strong>. Nunca use o azul.</li>
+                                    <li>No Xcode, vá em <strong className="text-white">Product &rarr; Clean Build Folder</strong> e tente rodar.</li>
+                                </ol>
                             </div>
 
-                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-green-500">
-                                <p className="font-bold text-white mb-2">2. AppDelegate.swift</p>
-                                <p>O Firebase precisa ser iniciado no arranque do App nativo:</p>
+                            <div className="bg-black/40 p-4 rounded-lg border-l-4 border-primary">
+                                <p className="font-bold text-white mb-2 underline">POR QUE O TOKEN TEM 64 CHARS?</p>
+                                <p>Se o token salvo no banco tem 64 letras/números, ele é APNs puro. Para o Firebase converter ele em FCM (token longo):</p>
                                 <ul className="mt-2 ml-4 list-disc space-y-1">
-                                    <li>Verifique se tem <code className="text-blue-300">import FirebaseCore</code> no topo.</li>
-                                    <li>No <code className="text-blue-300">didFinishLaunchingWithOptions</code>, deve ter a linha:</li>
-                                    <li className="font-mono text-xs bg-black p-1 mt-1">FirebaseApp.configure()</li>
+                                    <li>Verifique se o arquivo <strong className="text-white">GoogleService-Info.plist</strong> está com a caixinha do App marcada no "Target Membership" (Xcode, painel direito).</li>
+                                    <li>Verifique se em <strong className="text-white">Signing & Capabilities</strong> você adicionou "Push Notifications".</li>
+                                    <li>Certifique-se que o <code className="text-blue-300">FirebaseApp.configure()</code> está no seu AppDelegate.</li>
                                 </ul>
                             </div>
                         </div>
 
                         <div className="mt-6 p-4 bg-yellow-900/20 rounded-lg border border-yellow-500/30">
-                            <p className="text-sm text-yellow-200 leading-relaxed">
-                                <strong>O que causa o erro:</strong> Quando o App registra para Push, a Apple entrega um token de 64 caracteres. Se o Firebase estiver bem configurado no Xcode, ele detecta esse evento, "pega" esse token e troca por um token do Firebase (que é bem maior). Se você está recebendo 64 caracteres, significa que o <strong className="text-white">Firebase SDK não está inicializando</strong> no seu código nativo.
+                            <p className="text-sm text-yellow-200 leading-relaxed italic">
+                                <strong>Dica:</strong> Se você fez alterações no Xcode, apague o token da divulgadora na lista abaixo (ícone da lixeira). Peça para ela fechar e abrir o App. Se o token novo que aparecer for bem longo (+100 caracteres), o problema está resolvido!
                             </p>
                         </div>
                     </div>
@@ -192,7 +195,7 @@ const AdminPushCampaignPage: React.FC = () => {
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos
+                                Dispositivos Detectados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -241,7 +244,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">INVÁLIDO (APNs)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic">64 chars. Firebase inativo no App.</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic">Firebase não ativado. Verifique Xcode.</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">

@@ -13,8 +13,8 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Inherit from Component directly to ensure 'state', 'props', and 'setState' are correctly recognized by TypeScript.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Explicitly extend React.Component to ensure 'props', 'state', and 'setState' are recognized by TypeScript.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicitly define the state property to resolve "Property 'state' does not exist" errors.
   public state: ErrorBoundaryState = {
     hasError: false,
