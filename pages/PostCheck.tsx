@@ -5,7 +5,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -234,7 +234,7 @@ const PostCheck: React.FC = () => {
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
     
-    const [isPushRegistered, setIsPushRegistered] = useState(false);
+    const [pushStatus, setPushStatus] = useState<'pending' | 'success' | 'failed'>('pending');
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -246,11 +246,14 @@ const PostCheck: React.FC = () => {
             const activePromoter = promoterProfiles[0];
             setPromoter(activePromoter);
             
-            // Push Notification Registration - Improved logic
+            // Push Notification Registration
             if (Capacitor.isNativePlatform()) {
+                setPushStatus('pending');
                 const token = await initPushNotifications(activePromoter.id);
                 if (token) {
-                    setIsPushRegistered(true);
+                    setPushStatus('success');
+                } else {
+                    setPushStatus('failed');
                 }
             }
 
@@ -297,9 +300,18 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-3 rounded-lg border flex items-center gap-3 transition-colors duration-500 ${isPushRegistered ? 'bg-green-900/20 border-green-800 text-green-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
-                            <FaceIdIcon className={`w-5 h-5 ${isPushRegistered ? 'animate-bounce' : ''}`} />
-                            <span className="text-sm font-medium">{isPushRegistered ? 'Celular vinculado para notificações push!' : 'Vinculando dispositivo para notificações...'}</span>
+                        <div className={`p-3 rounded-lg border flex items-center justify-between transition-colors duration-500 ${pushStatus === 'success' ? 'bg-green-900/20 border-green-800 text-green-400' : pushStatus === 'failed' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                            <div className="flex items-center gap-3">
+                                <FaceIdIcon className={`w-5 h-5 ${pushStatus === 'success' ? 'animate-bounce' : ''}`} />
+                                <span className="text-sm font-medium">
+                                    {pushStatus === 'success' ? 'Celular vinculado para notificações!' : pushStatus === 'failed' ? 'Falha ao vincular dispositivo.' : 'Vinculando dispositivo para notificações...'}
+                                </span>
+                            </div>
+                            {pushStatus === 'failed' && (
+                                <button onClick={() => performSearch(email)} className="text-xs bg-red-800 text-white px-2 py-1 rounded flex items-center gap-1">
+                                    <RefreshIcon className="w-3 h-3" /> Tentar Novamente
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

@@ -9,42 +9,68 @@ export const initPushNotifications = async (promoterId: string): Promise<string 
         return null;
     }
 
+    // Se estiver no simulador iOS, o registro vai travar. Vamos avisar.
+    if (Capacitor.getPlatform() === 'ios' && !Capacitor.isNativePlatform()) {
+        console.warn("Push: Notificações não funcionam em simuladores iOS.");
+        return null;
+    }
+
     return new Promise(async (resolve) => {
-        try {
-            let permStatus = await PushNotifications.checkPermissions();
+        let isResolved = false;
 
-            if (permStatus.receive === 'prompt') {
-                permStatus = await PushNotifications.requestPermissions();
-            }
-
-            if (permStatus.receive !== 'granted') {
-                console.warn("Push: Permissão negada.");
+        // Timeout de segurança: se o sistema não responder em 10s, cancela.
+        const timeout = setTimeout(() => {
+            if (!isResolved) {
+                console.error("Push: Tempo limite de registro atingido.");
+                isResolved = true;
                 resolve(null);
-                return;
+            }
+        }, 10000);
+
+        try {
+            const permStatus = await PushNotifications.checkPermissions();
+            
+            if (permStatus.receive !== 'granted') {
+                const request = await PushNotifications.requestPermissions();
+                if (request.receive !== 'granted') {
+                    console.warn("Push: Permissão negada pelo usuário.");
+                    clearTimeout(timeout);
+                    resolve(null);
+                    return;
+                }
             }
 
             await PushNotifications.removeAllListeners();
 
-            // Listener de sucesso no registro
+            // Ouvinte de Sucesso
             PushNotifications.addListener('registration', async (token) => {
+                console.log("Push: Registro bem sucedido via hardware.");
                 const platform = Capacitor.getPlatform().toLowerCase() as 'ios' | 'android';
-                console.log(`Push: Token recebido para ${platform}`);
                 
-                if (promoterId) {
+                if (promoterId && !isResolved) {
                     await savePushToken(promoterId, token.value, platform);
+                    clearTimeout(timeout);
+                    isResolved = true;
+                    resolve(token.value);
                 }
-                resolve(token.value);
             });
 
+            // Ouvinte de Erro (Geralmente por falta de configuração no Xcode)
             PushNotifications.addListener('registrationError', (error) => {
-                console.error('Push: Erro nativo:', error);
-                resolve(null);
+                console.error('Push: Erro de registro no sistema:', error);
+                if (!isResolved) {
+                    clearTimeout(timeout);
+                    isResolved = true;
+                    resolve(null);
+                }
             });
 
+            // Ouvinte de Notificação Recebida
             PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                console.log('Push: Recebida:', notification);
+                console.log('Push: Recebida em primeiro plano:', notification);
             });
 
+            // Ouvinte de Ação (Clique na notificação)
             PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                 const data = notification.notification.data;
                 if (data && data.url) {
@@ -54,10 +80,12 @@ export const initPushNotifications = async (promoterId: string): Promise<string 
                 }
             });
 
+            console.log("Push: Solicitando token ao sistema operacional...");
             await PushNotifications.register();
 
         } catch (error) {
-            console.error("Push: Falha fatal:", error);
+            console.error("Push: Falha fatal no setup:", error);
+            clearTimeout(timeout);
             resolve(null);
         }
     });

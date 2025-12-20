@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,10 +12,10 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Extending Component directly from the named import to ensure proper inheritance chain detection by the TypeScript compiler.
+ * FIXED: Extending React.Component to ensure proper inheritance chain detection by the TypeScript compiler.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Removed 'override' keyword as the compiler was failing to verify the base class member.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Initialize state as a member variable.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -30,20 +30,20 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // FIX: Removed 'override' keyword to resolve compilation error when inheritance is not correctly detected.
+  // FIX: ComponentDidCatch handles runtime errors and updates state using the inherited setState.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: setState is now correctly recognized as a member of the base class.
+    // FIX: this.setState is correctly identified when extending React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  // FIX: Removed 'override' keyword to resolve compilation error.
+  // FIX: Standard render method.
   public render() {
-    // FIX: state is now correctly recognized as a member of the base class.
+    // FIX: Accessing hasError from state.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -71,7 +71,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: props is now correctly recognized as a member of the base class.
+    // FIX: Using this.props which is correctly defined in React.Component.
     return this.props.children;
   }
 }
