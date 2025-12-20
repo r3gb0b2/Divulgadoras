@@ -44,23 +44,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Inicializa o Firebase
+        // Inicializa o SDK do Firebase
         FirebaseApp.configure()
         return true
     }
 
+    // Handlers para Notificações Push
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Repassa o token APNs para o Firebase Messaging
         Messaging.messaging().apnsToken = deviceToken
-        // Informa ao Capacitor sobre o registro (para plugins de Push)
         NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // Informa ao Capacitor sobre a falha
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
+    // Handlers para Deep Links (Links que abrem o App)
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
@@ -151,7 +150,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 </div>
             </div>
 
-            {/* Seção Técnica para Super Admin - Botão de Download Direto Aqui */}
+            {/* Seção Técnica para Super Admin */}
             {isSuperAdmin && (
                 <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl p-8">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">

@@ -13,8 +13,8 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-/* Fix: Explicitly using Component from named import ensures inherited methods like setState and props are correctly typed and recognized by TS */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+/* Fix: Explicitly using React.Component from the standard library ensures inherited methods like setState and props are correctly typed and recognized by TS */
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -30,7 +30,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  /* Fix: Correctly using this.setState inherited from Component base class */
+  /* Fix: Correctly using this.setState inherited from React.Component base class */
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
@@ -42,7 +42,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
-    /* Fix: Correctly accessing this.state and this.props from the Component base class instance */
+    /* Fix: Correctly accessing this.state and this.props from the React.Component base class instance */
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
