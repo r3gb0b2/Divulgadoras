@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon, CheckCircleIcon, DownloadIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CogIcon, CheckCircleIcon, DownloadIcon, RefreshIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -43,7 +43,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 1. Inicia o Firebase
+        // 1. Inicializa o Firebase
         FirebaseApp.configure()
         
         // 2. Configura os delegados de notificação
@@ -53,7 +53,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         return true
     }
 
-    // 3. Converte o Token de 64 caracteres da Apple (APNs) para o Token do Firebase (FCM)
+    // 3. CONVERSÃO: Transforma o Token APNs (64 chars) no Token FCM (Longo)
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Messaging.messaging().apnsToken = deviceToken
         Messaging.messaging().token { token, error in
@@ -124,13 +124,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         });
     }, [promoters, activePlatformTab, searchQuery]);
 
-    const handleCopyToken = (token: string) => {
-        if (!token) return;
-        navigator.clipboard.writeText(token).then(() => {
-            alert("Token copiado!");
-        });
-    };
-
     const handleDownloadFile = () => {
         const blob = new Blob([appDelegateCode], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
@@ -141,6 +134,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+    };
+
+    const handleCopyCode = () => {
+        navigator.clipboard.writeText(appDelegateCode).then(() => {
+            alert("Código copiado!");
+        });
+    };
+
+    // Fix: Added handleCopyToken function to handle copying individual tokens
+    const handleCopyToken = (token: string) => {
+        if (!token) return;
+        navigator.clipboard.writeText(token).then(() => {
+            alert("Token copiado!");
+        });
     };
 
     const handleDeleteToken = async (promoterId: string) => {
@@ -208,7 +215,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                     className="flex items-center gap-2 text-indigo-400 font-bold hover:text-indigo-300 transition-colors bg-indigo-900/20 px-4 py-2 rounded-lg border border-indigo-500/30"
                 >
                     <AlertTriangleIcon className="w-5 h-5 text-yellow-500" />
-                    {showTroubleshoot ? 'Fechar Guia de Integração' : 'ERRO "No such module FirebaseCore" no Xcode? Clique aqui'}
+                    {showTroubleshoot ? 'Fechar Guia de Integração' : 'ERRO "No such module FirebaseCore"? Clique aqui'}
                 </button>
                 
                 {showTroubleshoot && (
@@ -217,36 +224,55 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                             <div>
                                 <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                                     <CheckCircleIcon className="w-5 h-5 text-green-400" />
-                                    1. Baixe e Substitua o Arquivo
+                                    1. Baixe o Código Correto
                                 </h3>
                                 <p className="text-sm text-gray-300 mb-4">
-                                    Este arquivo já vem configurado para resolver o problema do token curto (APNs) e ativar o Firebase Messaging.
+                                    Este arquivo contém as pontes necessárias entre o iOS e o Firebase Messaging.
                                 </p>
-                                <button 
-                                    onClick={handleDownloadFile}
-                                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-black shadow-lg transition-all transform hover:scale-105"
-                                >
-                                    <DownloadIcon className="w-5 h-5" />
-                                    BAIXAR APPDELEGATE.SWIFT
-                                </button>
-                                <p className="text-[11px] text-gray-500 mt-3 italic">
-                                    Após baixar, substitua o arquivo original em: <br/>
+                                <div className="flex flex-col gap-2">
+                                    <button 
+                                        onClick={handleDownloadFile}
+                                        className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-black shadow-lg transition-all"
+                                    >
+                                        <DownloadIcon className="w-5 h-5" />
+                                        BAIXAR APPDELEGATE.SWIFT
+                                    </button>
+                                    <button 
+                                        onClick={handleCopyCode}
+                                        className="text-xs text-indigo-300 hover:text-white underline py-2"
+                                    >
+                                        Ou apenas copiar o código
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-4 italic">
+                                    Local no Mac: <br/>
                                     <code className="text-indigo-300">ios/App/App/AppDelegate.swift</code>
                                 </p>
                             </div>
 
-                            <div className="bg-black/40 p-4 rounded-xl border border-red-500/50">
-                                <h3 className="text-red-400 font-bold mb-2 flex items-center gap-2 text-sm uppercase">
-                                    ⚠️ Resolvendo o Erro "No such module 'FirebaseCore'"
+                            <div className="bg-black/40 p-5 rounded-xl border border-red-500/50">
+                                <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2 text-sm uppercase">
+                                    ⚠️ Resolvendo "No such module 'FirebaseCore'"
                                 </h3>
-                                <ol className="text-xs text-gray-300 space-y-3 ml-4 list-decimal">
-                                    <li>Feche o Xcode completamente.</li>
-                                    <li>No VS Code, abra o terminal e digite: <br/> <code className="bg-gray-800 p-1 text-primary">npx cap sync ios</code></li>
-                                    <li>No Finder, vá para a pasta <code className="text-blue-300">ios/App/</code>.</li>
-                                    <li><strong>IMPORTANTE:</strong> Abra o arquivo de ícone BRANCO chamado <strong className="text-white">App.xcworkspace</strong>.</li>
-                                    <li className="text-yellow-400 font-bold underline">NUNCA use o arquivo azul (.xcodeproj), ele não carrega as bibliotecas do Firebase.</li>
-                                    <li>Dentro do Xcode (no Workspace), vá em <strong>Product &rarr; Clean Build Folder</strong>.</li>
-                                    <li>Tente rodar o App novamente.</li>
+                                <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
+                                    Se o Xcode diz que o módulo não existe, siga estas ordens EXATAMENTE:
+                                </p>
+                                <ol className="text-xs text-gray-300 space-y-4 ml-4 list-decimal">
+                                    <li><strong>FECHE O XCODE:</strong> Encerre-o totalmente (Cmd+Q).</li>
+                                    <li><strong>TERMINAL (Raiz do Projeto):</strong> Rode estes comandos:
+                                        <pre className="bg-gray-800 p-2 mt-1 rounded text-primary font-mono overflow-x-auto">
+                                            npx cap sync ios
+                                        </pre>
+                                    </li>
+                                    <li><strong>TERMINAL (Pasta iOS):</strong> Rode este comando de força:
+                                        <pre className="bg-gray-800 p-2 mt-1 rounded text-primary font-mono overflow-x-auto">
+                                            cd ios/App && pod install
+                                        </pre>
+                                    </li>
+                                    <li><strong>ABRIR O CORRETO:</strong> Vá na pasta <code className="text-blue-300">ios/App/</code> e abra o arquivo <strong className="text-white underline">App.xcworkspace</strong> (o ícone branco).
+                                        <br/><span className="text-red-400 font-bold">NÃO abra o arquivo azul (.xcodeproj).</span>
+                                    </li>
+                                    <li><strong>BUILD:</strong> No Xcode, aperte <kbd className="bg-gray-700 px-1 rounded">Cmd + B</kbd>. O erro deve sumir após a primeira compilação.</li>
                                 </ol>
                             </div>
                         </div>
@@ -260,7 +286,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos Detectados
+                                Dispositivos Registrados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone (iOS)</button>
@@ -280,7 +306,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Status Token</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider">Tipo Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Ações</th>
                                     </tr>
                                 </thead>
@@ -308,13 +334,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                                     <td className="px-4 py-3">
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">APNs PURO (64)</span>
-                                                                <span className="text-[9px] text-red-400 mt-1 italic font-bold">Incompatível / Ajuste Xcode</span>
+                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit animate-pulse">APNs (INVÁLIDO)</span>
+                                                                <span className="text-[9px] text-red-400 mt-1 italic font-bold">Corrigir Xcode</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">VÁLIDO (FCM)</span>
-                                                                <span className="text-[9px] text-green-400 mt-1">Sincronizado.</span>
+                                                                <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">FCM (VÁLIDO)</span>
+                                                                <span className="text-[9px] text-green-400 mt-1">Pronto.</span>
                                                             </div>
                                                         )}
                                                     </td>
@@ -336,16 +362,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
-                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Disparar Agora</h2>
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Enviar Push</h2>
                         <div className="space-y-4">
-                            <input type="text" placeholder="Título do Alerta" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Sua mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+                            <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
+                            <textarea placeholder="Mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
                             {error && (
-                                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4">
-                                    <p className="text-red-300 text-[11px] leading-relaxed italic">{error}</p>
+                                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4 text-[11px] text-red-300 italic">
+                                    {error}
                                 </div>
                             )}
                             {result && (
@@ -358,12 +384,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                 {isSending ? (
                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
                                 ) : (
-                                    'ENVIAR AGORA'
+                                    'DISPARAR'
                                 )}
                             </button>
-                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">
-                                Selecionados: {selectedPromoterIds.size}
-                            </p>
                         </div>
                     </div>
                 </div>

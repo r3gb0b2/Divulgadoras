@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,8 +13,8 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors.
  */
-// Fix: Explicitly use React.Component to ensure props and state are correctly inherited and typed
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Use Component from react to ensure props and state are correctly inherited and typed
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicitly define the state property to resolve "Property 'state' does not exist" errors.
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -58,7 +58,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: props is correctly recognized when extending React.Component
+    // Fix: props is correctly recognized when extending Component
     return this.props.children;
   }
 }

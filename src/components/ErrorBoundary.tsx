@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -14,8 +14,8 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Explicitly use React.Component to ensure props, state and setState are correctly inherited and typed
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Use Component from react to ensure props, state and setState are correctly inherited and typed
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -34,7 +34,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fix: setState is now correctly inherited from React.Component
+    // Fix: setState is now correctly inherited from Component
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +42,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render(): ReactNode {
-    // Fix: Access state member inherited from React.Component
+    // Fix: Access state member inherited from Component base class.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: props is correctly recognized when extending React.Component
+    // Fix: props is correctly recognized when extending Component
     return this.props.children;
   }
 }
