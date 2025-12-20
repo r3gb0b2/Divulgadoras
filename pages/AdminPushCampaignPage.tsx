@@ -32,7 +32,8 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
-    // Código Swift corrigido para forçar a conversão de APNs para FCM
+    // CÓDIGO SWIFT ULTRA-CORRIGIDO:
+    // Ele aguarda o Firebase gerar o token STRING antes de notificar o Capacitor.
     const appDelegateCode = `import UIKit
 import Capacitor
 import FirebaseCore
@@ -44,40 +45,40 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 1. Configuração do Firebase
         FirebaseApp.configure()
         
-        // 2. Configurar Delegados (ESSENCIAL)
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
         
-        // Registrar para notificações remotas
         UIApplication.shared.registerForRemoteNotifications()
         
         return true
     }
 
-    // 3. O PONTO CHAVE: Converte o Token de 64 chars em Token FCM
+    // didRegisterForRemoteNotifications: O SEGREDO ESTÁ AQUI
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // Mapeia o token nativo da Apple para o Firebase
+        // 1. Vincula o token físico ao Firebase
         Messaging.messaging().apnsToken = deviceToken
         
-        // Avisa o Capacitor que o registro APNs foi feito
-        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+        // 2. BUSCA O TOKEN FCM (LONG) E ENVIA PARA O CAPACITOR
+        Messaging.messaging().token { token, error in
+            if let fcmToken = token {
+                print("FCM Token Gerado com Sucesso: \(fcmToken)")
+                // ENVIAMOS A STRING (fcmToken) E NÃO O BINÁRIO (deviceToken)
+                NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: fcmToken)
+            }
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
-    // 4. Recebe o Token FCM (Longo) e envia para o App
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        print("Firebase registration token: \(String(describing: fcmToken))")
         let dataDict: [String: String] = ["token": fcmToken ?? ""]
         NotificationCenter.default.post(name: Notification.Name("FCMToken"), object: nil, userInfo: dataDict)
     }
 
-    // Exibir notificação com App aberto
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([[.alert, .sound, .badge]])
     }
@@ -126,7 +127,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         });
     }, [promoters, activePlatformTab, searchQuery]);
 
-    // Identifica tokens de 64 caracteres (APNs puro)
     const invalidTokens = useMemo(() => {
         return promoters.filter(p => (p.fcmToken?.length || 0) === 64);
     }, [promoters]);
@@ -143,7 +143,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         document.body.removeChild(a);
     };
 
-    // Fix: Added handleCopyToken function to fix "Cannot find name 'handleCopyToken'" error
     const handleCopyToken = (token: string) => {
         if (!token) return;
         navigator.clipboard.writeText(token).then(() => {
@@ -216,14 +215,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
             return;
         }
         
-        // Verifica se há tokens inválidos entre os selecionados
         const hasInvalidSelected = Array.from(selectedPromoterIds).some(id => {
             const p = promoters.find(prom => prom.id === id);
             return p && (p.fcmToken?.length || 0) === 64;
         });
 
         if (hasInvalidSelected) {
-            setError("Erro: Você selecionou dispositivos com Token nativo Apple (64 chars). O Firebase não envia para eles. Delete os tokens vermelhos antes.");
+            setError("Erro: Você selecionou dispositivos com Token nativo Apple (64 chars). Delete os tokens vermelhos antes de enviar.");
             return;
         }
 
@@ -268,14 +266,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
             {/* TROUBLESHOOTING UI */}
             <div className="mb-8">
                 <button 
-                    onClick={() => showTroubleshoot ? setShowTroubleshoot(false) : setShowTroubleshoot(true)}
+                    onClick={() => setShowTroubleshoot(!showTroubleshoot)}
                     className="w-full flex items-center justify-between text-left gap-2 text-white font-black bg-red-600 px-6 py-4 rounded-xl shadow-xl hover:bg-red-700 transition-all border-2 border-red-400"
                 >
                     <div className="flex items-center gap-3">
                         <AlertTriangleIcon className="w-6 h-6 animate-pulse" />
                         <div>
-                            <p className="text-lg">SOLUÇÃO: TOKENS DE 64 CARACTERES (APNs)</p>
-                            <p className="text-xs font-normal opacity-80">Se o Firebase dá erro de token inválido no iOS, clique aqui.</p>
+                            <p className="text-lg">AINDA CONTINUA COM 64 CARACTERES? CLIQUE AQUI</p>
+                            <p className="text-xs font-normal opacity-80">O segredo está no envio da String para o Capacitor.</p>
                         </div>
                     </div>
                     <span>{showTroubleshoot ? '▲' : '▼'}</span>
@@ -287,32 +285,35 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                             <div className="space-y-4">
                                 <h3 className="text-red-400 font-black flex items-center gap-2">
                                     <span className="w-6 h-6 bg-red-400 text-black rounded-full flex items-center justify-center text-xs">1</span>
-                                    POR QUE OCORRE?
+                                    POR QUE NÃO FUNCIONOU?
                                 </h3>
-                                <p className="text-sm text-gray-300">
-                                    O iOS envia um token nativo (64 chars hex) para o servidor. O Firebase **não sabe** ler esse token. Ele precisa que o App converta para um token FCM (longo).
+                                <p className="text-sm text-gray-300 leading-relaxed">
+                                    O Capacitor por padrão captura o <code className="text-blue-400">deviceToken</code> binário e envia para o JS. O Firebase precisa de tempo para trocar esse token por um FCM longo.
                                 </p>
-                                <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg">
-                                    <p className="text-xs font-bold text-red-300">SINTOMA:</p>
-                                    <p className="text-[10px] text-gray-400">Tokens na tabela abaixo aparecem com apenas 64 letras/números e destacados em vermelho.</p>
+                                <div className="p-4 bg-black/50 rounded-lg border border-red-900/50">
+                                    <p className="text-xs font-bold text-red-400 underline mb-2">ERRO COMUM:</p>
+                                    <p className="text-[11px] text-gray-400 italic">"Postar a notificação para o Capacitor usando o objeto binário puro faz com que ele salve o token APNs nativo (64 chars) que o Firebase não aceita."</p>
                                 </div>
                             </div>
 
                             <div className="space-y-4">
                                 <h3 className="text-red-400 font-black flex items-center gap-2">
                                     <span className="w-6 h-6 bg-red-400 text-black rounded-full flex items-center justify-center text-xs">2</span>
-                                    COMO CORRIGIR NO XCODE
+                                    A SOLUÇÃO DEFINITIVA
                                 </h3>
                                 <p className="text-sm text-gray-300">
-                                    Você deve garantir que o <code className="text-blue-400">Messaging.messaging().delegate = self</code> esteja no seu AppDelegate e que o método <code className="text-green-400">didRegisterForRemoteNotifications</code> repasse o token para o Firebase.
+                                    Substitua o conteúdo do seu arquivo <code className="text-blue-400">AppDelegate.swift</code> pelo botão abaixo. Ele aguarda a String do Firebase ser gerada antes de avisar o App.
                                 </p>
                                 <button 
                                     onClick={handleDownloadFile}
-                                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold text-xs transition-all"
+                                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-black text-sm shadow-xl transition-all w-full justify-center"
                                 >
-                                    <DownloadIcon className="w-4 h-4" />
-                                    BAIXAR APPDELEGATE.SWIFT CORRIGIDO
+                                    <DownloadIcon className="w-5 h-5" />
+                                    BAIXAR APPDELEGATE CORRIGIDO V2
                                 </button>
+                                <div className="mt-2 p-3 bg-indigo-900/20 border border-indigo-500/50 rounded text-[10px] text-indigo-300">
+                                    <strong>IMPORTANTE:</strong> Após trocar o arquivo, apague o App do iPhone, instale de novo via Xcode e verifique se o token na tabela abaixo ficou longo.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -329,18 +330,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                 Diagnóstico de Dispositivos
                             </h2>
                             <span className={`text-xs px-3 py-1 rounded-full font-black ${invalidTokens.length > 0 ? 'bg-red-600 text-white animate-pulse' : 'bg-green-900/30 text-green-400'}`}>
-                                {invalidTokens.length} Tokens Inválidos
+                                {invalidTokens.length} Tokens Inválidos (64 chars)
                             </span>
                         </div>
-                        <p className="text-xs text-gray-400 mb-4">
-                            Se você já corrigiu o código no Xcode, use o botão abaixo para limpar os tokens antigos. Isso forçará o App a gerar novos tokens na próxima vez que a divulgadora abri-lo.
+                        <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                            Tokens vermelhos <strong>não recebem push</strong>. Se você já trocou o arquivo no Xcode, use o botão abaixo para limpar a base e peça para as divulgadoras abrirem o app para gerar o token novo e longo.
                         </p>
                         <button 
                             onClick={handleCleanInvalid}
                             disabled={!!isDeletingToken || invalidTokens.length === 0}
-                            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-black rounded-lg transition-all disabled:opacity-30 disabled:grayscale"
+                            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-black rounded-lg transition-all disabled:opacity-30"
                         >
-                            {isDeletingToken === 'clean-invalid' ? 'Limpando...' : 'LIMPAR TODOS OS TOKENS VERMELHOS (64 CHARS)'}
+                            {isDeletingToken === 'clean-invalid' ? 'Limpando...' : 'LIMPAR TODOS OS TOKENS DE 64 CARACTERES'}
                         </button>
                     </div>
 
@@ -387,7 +388,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                             />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status do Token</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
@@ -420,13 +421,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                                     <td className="px-4 py-3">
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit">APNs (INVÁLIDO)</span>
-                                                                <span className="text-[8px] text-red-400 font-mono mt-1">64 chars - Não envia</span>
+                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit">APNs (64 CHARS)</span>
+                                                                <span className="text-[8px] text-red-400 font-mono mt-1">Inválido - Não envia</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">FCM OK</span>
-                                                                <span className="text-[8px] text-gray-500 font-mono mt-1">Token Válido</span>
+                                                                <span className="text-[8px] text-gray-500 font-mono mt-1">Válido</span>
                                                             </div>
                                                         )}
                                                     </td>
@@ -489,7 +490,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                             >
                                 {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : 'DISPARAR PUSH'}
                             </button>
-                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">Destinos: {selectedPromoterIds.size}</p>
+                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">Destinos Selecionados: {selectedPromoterIds.size}</p>
                         </div>
                     </div>
                 </div>
