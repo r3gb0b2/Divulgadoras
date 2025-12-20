@@ -11,9 +11,9 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Properly extending from Component and initializing state to resolve setState and props issues.
+ * FIXED: Properly extending from React.Component and initializing state to resolve setState and props issues.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // FIX: Explicitly define state property for better type inference from React.Component.
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -34,7 +34,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Use this.setState from inherited base class.
+    // FIX: Use this.setState from inherited base class correctly.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +42,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
-    // FIX: Access state from class component.
+    // FIX: Access state from class component correctly.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +70,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: Access props from class component.
+    // FIX: Access props from class component correctly.
     return this.props.children;
   }
 }

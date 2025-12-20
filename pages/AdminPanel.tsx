@@ -88,7 +88,7 @@ const formatDate = (timestamp: any): string => {
     let date: Date;
     if (typeof timestamp.toDate === 'function') {
         date = timestamp.toDate();
-    } else if (timestamp && typeof timestamp === 'object' && typeof timestamp.seconds === 'number') {
+    } else if (timestamp && typeof timestamp === 'object' && timestamp.seconds === 'number') {
         date = new Date(timestamp.seconds * 1000);
     } else {
         date = new Date(timestamp);
@@ -681,12 +681,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         let searchString = '';
         if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
-        } else if (lookupEmail) {
+        } else if (lookupEmail && typeof lookupEmail === 'string') {
             // FIX: Ensuring lookupEmail is treated as a string to avoid 'unknown' assignment issues.
-            searchString = String(lookupEmail);
+            searchString = lookupEmail;
         }
         
-        const finalEmail = searchString.trim();
+        const finalEmail: string = searchString.trim();
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -694,8 +694,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Explicitly cast finalEmail to string for robustness and ensure it's not null/undefined.
-            const results = await findPromotersByEmail(String(finalEmail));
+            // FIX: Explicitly pass finalEmail as string for robustness and ensure it's not null/undefined.
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
             // FIX: Changed err: unknown to err: any to resolve property access error and used a type-safe message extraction.

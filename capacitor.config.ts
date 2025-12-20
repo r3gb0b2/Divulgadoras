@@ -7,8 +7,11 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    iosScheme: 'https', // Garante que o app rode em um contexto seguro
-    allowNavigation: ['*'] // Permite carregar recursos externos como Firebase e Tailwind
+    iosScheme: 'https',
+    allowNavigation: ['*']
+  },
+  ios: {
+    contentInset: 'always'
   },
   plugins: {
     PushNotifications: {
