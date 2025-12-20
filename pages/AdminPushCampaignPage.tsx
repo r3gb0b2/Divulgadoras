@@ -32,6 +32,7 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
+    // Código Swift corrigido para forçar a conversão de APNs para FCM
     const appDelegateCode = `import UIKit
 import Capacitor
 import FirebaseCore
@@ -43,39 +44,40 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 1. Inicializa o Firebase (Aqui que dá o erro se o Pod não estiver instalado)
+        // 1. Configuração do Firebase
         FirebaseApp.configure()
         
-        // 2. Configura os delegados de notificação
+        // 2. Configurar Delegados (ESSENCIAL)
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self
+        
+        // Registrar para notificações remotas
+        UIApplication.shared.registerForRemoteNotifications()
         
         return true
     }
 
-    // 3. CONVERSÃO: Transforma o Token APNs (64 chars) no Token FCM (Longo)
+    // 3. O PONTO CHAVE: Converte o Token de 64 chars em Token FCM
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // Mapeia o token nativo da Apple para o Firebase
         Messaging.messaging().apnsToken = deviceToken
-        Messaging.messaging().token { token, error in
-            if let token = token {
-                print("Firebase registration token: \(token)")
-                NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
-            }
-        }
+        
+        // Avisa o Capacitor que o registro APNs foi feito
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
-    // 4. Recebimento do Token do Firebase
+    // 4. Recebe o Token FCM (Longo) e envia para o App
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         print("Firebase registration token: \(String(describing: fcmToken))")
         let dataDict: [String: String] = ["token": fcmToken ?? ""]
         NotificationCenter.default.post(name: Notification.Name("FCMToken"), object: nil, userInfo: dataDict)
     }
 
-    // 5. Permite exibir a notificação mesmo com o App aberto
+    // Exibir notificação com App aberto
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([[.alert, .sound, .badge]])
     }
@@ -104,7 +106,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
             });
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
-            setSelectedPromoterIds(new Set()); // Reset selection on fetch
+            setSelectedPromoterIds(new Set()); 
         } catch (err) {
             setError("Erro ao buscar dispositivos.");
         } finally {
@@ -124,6 +126,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         });
     }, [promoters, activePlatformTab, searchQuery]);
 
+    // Identifica tokens de 64 caracteres (APNs puro)
+    const invalidTokens = useMemo(() => {
+        return promoters.filter(p => (p.fcmToken?.length || 0) === 64);
+    }, [promoters]);
+
     const handleDownloadFile = () => {
         const blob = new Blob([appDelegateCode], { type: 'text/plain' });
         const url = window.URL.createObjectURL(blob);
@@ -136,10 +143,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         document.body.removeChild(a);
     };
 
+    // Fix: Added handleCopyToken function to fix "Cannot find name 'handleCopyToken'" error
     const handleCopyToken = (token: string) => {
         if (!token) return;
         navigator.clipboard.writeText(token).then(() => {
-            alert("Token copiado!");
+            alert("Token copiado para a área de transferência!");
+        }).catch(err => {
+            console.error("Erro ao copiar token:", err);
         });
     };
 
@@ -162,13 +172,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         }
     };
 
+    const handleCleanInvalid = async () => {
+        if (invalidTokens.length === 0) {
+            alert("Nenhum token nativo Apple (64 chars) detectado para limpeza.");
+            return;
+        }
+        if (!window.confirm(`Deseja apagar os ${invalidTokens.length} tokens de 64 caracteres? Eles não funcionam no Firebase. Após apagar, peça para as divulgadoras abrirem o App novamente.`)) return;
+
+        setIsDeletingToken('clean-invalid');
+        try {
+            const ids = invalidTokens.map(p => p.id);
+            await Promise.all(ids.map(id => deletePushToken(id)));
+            setPromoters(prev => prev.filter(p => (p.fcmToken?.length || 0) !== 64));
+            alert("Limpeza concluída!");
+        } catch (err: any) {
+            alert("Erro na limpeza: " + err.message);
+        } finally {
+            setIsDeletingToken(null);
+        }
+    };
+
     const handleBulkDelete = async () => {
         if (selectedPromoterIds.size === 0) return;
         if (!window.confirm(`Tem certeza que deseja remover os tokens de ${selectedPromoterIds.size} dispositivos selecionados?`)) return;
 
         setIsDeletingToken('bulk');
         try {
-            // Fix: Explicitly type IDs to string to avoid "unknown" inference in some environments
             const ids: string[] = Array.from(selectedPromoterIds);
             await Promise.all(ids.map(id => deletePushToken(id)));
             setPromoters(prev => prev.filter(p => !selectedPromoterIds.has(p.id)));
@@ -186,6 +215,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
             setError("Preencha título, mensagem e selecione pelo menos um destino.");
             return;
         }
+        
+        // Verifica se há tokens inválidos entre os selecionados
+        const hasInvalidSelected = Array.from(selectedPromoterIds).some(id => {
+            const p = promoters.find(prom => prom.id === id);
+            return p && (p.fcmToken?.length || 0) === 64;
+        });
+
+        if (hasInvalidSelected) {
+            setError("Erro: Você selecionou dispositivos com Token nativo Apple (64 chars). O Firebase não envia para eles. Delete os tokens vermelhos antes.");
+            return;
+        }
+
         setIsSending(true);
         setResult(null);
         setError(null);
@@ -224,16 +265,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                 </button>
             </div>
 
+            {/* TROUBLESHOOTING UI */}
             <div className="mb-8">
                 <button 
-                    onClick={() => setShowTroubleshoot(!showTroubleshoot)}
+                    onClick={() => showTroubleshoot ? setShowTroubleshoot(false) : setShowTroubleshoot(true)}
                     className="w-full flex items-center justify-between text-left gap-2 text-white font-black bg-red-600 px-6 py-4 rounded-xl shadow-xl hover:bg-red-700 transition-all border-2 border-red-400"
                 >
                     <div className="flex items-center gap-3">
                         <AlertTriangleIcon className="w-6 h-6 animate-pulse" />
                         <div>
-                            <p className="text-lg">SOLUÇÃO PARA O ERRO: "No such module 'FirebaseCore'"</p>
-                            <p className="text-xs font-normal opacity-80">Clique aqui se o seu Xcode não está compilando.</p>
+                            <p className="text-lg">SOLUÇÃO: TOKENS DE 64 CARACTERES (APNs)</p>
+                            <p className="text-xs font-normal opacity-80">Se o Firebase dá erro de token inválido no iOS, clique aqui.</p>
                         </div>
                     </div>
                     <span>{showTroubleshoot ? '▲' : '▼'}</span>
@@ -245,58 +287,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                             <div className="space-y-4">
                                 <h3 className="text-red-400 font-black flex items-center gap-2">
                                     <span className="w-6 h-6 bg-red-400 text-black rounded-full flex items-center justify-center text-xs">1</span>
-                                    INSTALAÇÃO FORÇADA
+                                    POR QUE OCORRE?
                                 </h3>
                                 <p className="text-sm text-gray-300">
-                                    O erro acontece porque o Capacitor não baixou as bibliotecas do Firebase. Feche o Xcode e rode isto no seu terminal:
+                                    O iOS envia um token nativo (64 chars hex) para o servidor. O Firebase **não sabe** ler esse token. Ele precisa que o App converta para um token FCM (longo).
                                 </p>
-                                <div className="bg-black p-4 rounded-lg border border-gray-700">
-                                    <code className="text-green-400 text-sm block">cd ios/App && pod install</code>
+                                <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg">
+                                    <p className="text-xs font-bold text-red-300">SINTOMA:</p>
+                                    <p className="text-[10px] text-gray-400">Tokens na tabela abaixo aparecem com apenas 64 letras/números e destacados em vermelho.</p>
                                 </div>
-                                <p className="text-xs text-gray-500 italic">
-                                    * Se dar erro de comando não encontrado, você precisa instalar o CocoaPods no seu Mac.
-                                </p>
                             </div>
 
                             <div className="space-y-4">
                                 <h3 className="text-red-400 font-black flex items-center gap-2">
                                     <span className="w-6 h-6 bg-red-400 text-black rounded-full flex items-center justify-center text-xs">2</span>
-                                    ABRA O ARQUIVO BRANCO
+                                    COMO CORRIGIR NO XCODE
                                 </h3>
                                 <p className="text-sm text-gray-300">
-                                    Após rodar o comando acima, vá na pasta <code className="text-blue-400">ios/App</code> e procure pelo ícone **BRANCO** chamado:
+                                    Você deve garantir que o <code className="text-blue-400">Messaging.messaging().delegate = self</code> esteja no seu AppDelegate e que o método <code className="text-green-400">didRegisterForRemoteNotifications</code> repasse o token para o Firebase.
                                 </p>
-                                <div className="flex items-center gap-4 bg-white/10 p-3 rounded-lg">
-                                    <div className="w-10 h-10 bg-white rounded flex items-center justify-center shadow-lg">
-                                        <div className="w-6 h-6 border-2 border-blue-500 rotate-45"></div>
-                                    </div>
-                                    <span className="text-white font-bold">App.xcworkspace</span>
-                                </div>
-                                <p className="text-xs text-red-400 font-bold underline">
-                                    NUNCA abra o arquivo azul (.xcodeproj). Ele não carrega o Firebase.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="mt-8 pt-6 border-t border-gray-800 flex flex-col md:flex-row gap-6">
-                            <div className="flex-1">
-                                <h3 className="text-white font-bold mb-2">3. Substitua o AppDelegate</h3>
-                                <p className="text-xs text-gray-400 mb-4">Baixe o arquivo configurado e coloque em: <br/> <code className="text-red-300">ios/App/App/AppDelegate.swift</code></p>
                                 <button 
                                     onClick={handleDownloadFile}
-                                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-black transition-all"
+                                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold text-xs transition-all"
                                 >
-                                    <DownloadIcon className="w-5 h-5" />
-                                    BAIXAR APPDELEGATE.SWIFT
+                                    <DownloadIcon className="w-4 h-4" />
+                                    BAIXAR APPDELEGATE.SWIFT CORRIGIDO
                                 </button>
-                            </div>
-                            <div className="flex-1 bg-black/50 p-4 rounded-lg">
-                                <h3 className="text-white font-bold mb-2 text-sm">4. Verifique o Podfile</h3>
-                                <p className="text-[11px] text-gray-400">Abra o arquivo <code className="text-blue-300">ios/App/Podfile</code> e garanta que ele tenha estas linhas dentro do target 'App':</p>
-                                <pre className="text-[10px] text-green-500 mt-2">
-                                    pod 'Firebase/Core'<br/>
-                                    pod 'Firebase/Messaging'
-                                </pre>
                             </div>
                         </div>
                     </div>
@@ -305,11 +321,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
+                    {/* FERRAMENTA DE LIMPEZA */}
+                    <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <RefreshIcon className="w-5 h-5 text-primary" />
+                                Diagnóstico de Dispositivos
+                            </h2>
+                            <span className={`text-xs px-3 py-1 rounded-full font-black ${invalidTokens.length > 0 ? 'bg-red-600 text-white animate-pulse' : 'bg-green-900/30 text-green-400'}`}>
+                                {invalidTokens.length} Tokens Inválidos
+                            </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mb-4">
+                            Se você já corrigiu o código no Xcode, use o botão abaixo para limpar os tokens antigos. Isso forçará o App a gerar novos tokens na próxima vez que a divulgadora abri-lo.
+                        </p>
+                        <button 
+                            onClick={handleCleanInvalid}
+                            disabled={!!isDeletingToken || invalidTokens.length === 0}
+                            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-black rounded-lg transition-all disabled:opacity-30 disabled:grayscale"
+                        >
+                            {isDeletingToken === 'clean-invalid' ? 'Limpando...' : 'LIMPAR TODOS OS TOKENS VERMELHOS (64 CHARS)'}
+                        </button>
+                    </div>
+
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos com App
+                                Dispositivos Registrados
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iOS (iPhone)</button>
@@ -326,7 +365,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                     className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-xs font-black transition-all disabled:opacity-50"
                                 >
                                     <TrashIcon className="w-4 h-4" />
-                                    DELETAR TOKENS SELECIONADOS
+                                    DELETAR SELECIONADOS
                                 </button>
                             </div>
                         )}
@@ -348,7 +387,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                             />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status do Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
@@ -382,10 +421,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                                         {isAPNs ? (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit">APNs (INVÁLIDO)</span>
+                                                                <span className="text-[8px] text-red-400 font-mono mt-1">64 chars - Não envia</span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex flex-col">
                                                                 <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">FCM OK</span>
+                                                                <span className="text-[8px] text-gray-500 font-mono mt-1">Token Válido</span>
                                                             </div>
                                                         )}
                                                     </td>
@@ -420,7 +461,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
-                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Enviar Alerta</h2>
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Disparar Alerta</h2>
                         <div className="space-y-4">
                             <input 
                                 type="text" 

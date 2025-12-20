@@ -14,8 +14,9 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Extending Component directly and using property initializer for state to resolve "Property 'state' does not exist" errors
+// Fix: Explicitly extending Component and using class property initialization for state
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fix: Explicitly initialize state property
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -26,7 +27,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
-  // Fix: Static method to update state when an error is caught
+  // Static method to update state when an error is caught
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
   }
@@ -34,7 +35,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fix: setState is now correctly recognized as inherited from Component
+    // Fix: setState is correctly recognized as inherited from Component
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // Fix: state and props are now correctly recognized as inherited members of Component
+    // Fix: Access state property correctly
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,6 +71,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
+    // Fix: Access props property correctly
     return this.props.children;
   }
 }
