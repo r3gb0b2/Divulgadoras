@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 const createIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVGElement>> => (props) => (
@@ -43,10 +44,6 @@ export const GripDotsIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
 
 export const FaceIdIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 0M15.59 14.37a15.953 15.953 0 00-5.84 0m5.84 0a15.953 15.953 0 01-2.92 0m2.92 0a15.953 15.953 0 00-2.92 0M3 10.5a11.96 11.96 0 011.664-5.993 11.96 11.96 0 0110.672 0 11.96 11.96 0 011.664 5.993M19.34 10.5a11.96 11.96 0 01-1.664 5.993 11.96 11.96 0 01-10.672 0 11.96 11.96 0 01-1.664-5.993m13.992-5.993a11.96 11.96 0 00-10.672 0" />
-);
-
-export const CodeBracketIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
 );
 
 export const InstagramIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -174,7 +171,7 @@ export const MapPinIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const KeyIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M15.75 1.5a6.75 6.75 0 00-6.651 7.906c-1.067.322-2.02 1.018-2.741 1.996l-1.09.918a.75.75 0 00-.268.564v2.641a.75.75 0 00.75.75h2.642a.75.75 0 00.564-.268l.918-1.09a5.99 5.99 0 001.996-2.741A6.75 6.75 0 1015.75 1.5zm0 10.5a3.75 3.75 0 1 1 0-7.5 3.75 3.75 0 0 1 0 7.5z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M15.75 1.5a6.75 6.75 0 00-6.651 7.906c-1.067.322-2.02 1.018-2.741 1.996l-1.09.918a.75.75 0 00-.268.564v2.641a.75.75 0 00.75.75h2.642a.75.75 0 00.564-.268l.918-1.09a5.99 5.99 0 001.996-2.741A6.75 6.75 0 1015.75 1.5zm0 10.5a3.75 3.75 0 110-7.5 3.75 3.75 0 010 7.5z" clipRule="evenodd" />
 );
 
 export const DocumentDuplicateIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -182,7 +179,7 @@ export const DocumentDuplicateIcon: React.FC<React.SVGProps<SVGSVGElement>> = cr
 );
 
 export const UserPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M5.25 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM2.25 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM18.75 7.5a.75.75 0 00-1.5 0v2.25H15a.75.75 0 000 1.5h2.25v2.25a.75.75 0 001.5 0v-2.25H21a.75.75 0 000-1.5h-2.25V7.5z" />
+    <path d="M5.25 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM2.25 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM18.75 7.5a.75.75 0 00-1.5 0v2.25H15a.75.75 0 000 1.5h2.25v2.25a.75.75 0 001.5 0v-2.25H21a.75.75 0 000-1.5h-2.25V7.5z" />
 );
 
 export const QrCodeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -207,6 +204,10 @@ export const ListBulletIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIco
 
 export const ListNumberedIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M2.625 6.75a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H3.375a.75.75 0 01-.75-.75V6.75zM7.5 6a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12A.75.75 0 017.5 6zm-4.875 5.25a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H3.375a.75.75 0 01-.75-.75v-.008zm4.875-.75a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+);
+
+export const CodeBracketIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
+    <path fillRule="evenodd" d="M14.447 3.027a.75.75 0 01.527.92l-4.5 16.5a.75.75 0 01-1.448-.394l4.5-16.5a.75.75 0 01.921-.526zM16.72 6.22a.75.75 0 011.06 0l5.25 5.25a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 11-1.06-1.06L21.44 12l-4.72-4.72a.75.75 0 010-1.06zm-9.44 0a.75.75 0 010 1.06L2.56 12l4.72 4.72a.75.75 0 11-1.06 1.06L.97 12.53a.75.75 0 010-1.06l5.25-5.25a.75.75 0 011.06 0z" clipRule="evenodd" />
 );
 
 export const EyeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(

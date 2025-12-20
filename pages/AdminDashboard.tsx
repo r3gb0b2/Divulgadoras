@@ -2,7 +2,21 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, ClipboardDocumentListIcon, MegaphoneIcon, ChartBarIcon, ClockIcon, TicketIcon, LogoutIcon, HeartIcon, CogIcon, SearchIcon, FaceIdIcon } from '../components/Icons';
+import { 
+    UsersIcon, 
+    MapPinIcon, 
+    ClipboardDocumentListIcon, 
+    MegaphoneIcon, 
+    ChartBarIcon, 
+    ClockIcon, 
+    TicketIcon, 
+    LogoutIcon, 
+    HeartIcon, 
+    CogIcon, 
+    FaceIdIcon,
+    CodeBracketIcon,
+    DownloadIcon
+} from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const AdminDashboard: React.FC = () => {
@@ -18,9 +32,60 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const handleDownloadAppDelegate = () => {
+        const appDelegateContent = `import UIKit
+import Capacitor
+import FirebaseCore
+import FirebaseMessaging
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+    var window: UIWindow?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Inicializa o Firebase
+        FirebaseApp.configure()
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        // Repassa o token APNs para o Firebase Messaging
+        Messaging.messaging().apnsToken = deviceToken
+        // Informa ao Capacitor sobre o registro (para plugins de Push)
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        // Informa ao Capacitor sobre a falha
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    }
+
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+    }
+}
+`;
+        const blob = new Blob([appDelegateContent], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'AppDelegate.swift';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    };
+
+    const isSuperAdmin = adminData?.role === 'superadmin';
+
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Painel Administrativo</h1>
                 <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2">
                     <LogoutIcon className="w-5 h-5" />
@@ -41,8 +106,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Divulgadoras</h2>
                         </div>
-                        <p className="mt-3 text-gray-400">Aprovar cadastros, ver lista completa, fotos e gerenciar equipe.</p>
-                        <div className="text-sm text-primary mt-4 font-semibold group-hover:underline">Acessar Lista &rarr;</div>
+                        <p className="mt-3 text-gray-400">Aprovar cadastros, ver lista completa e fotos.</p>
                     </Link>
 
                     <Link to="/admin/posts" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
@@ -50,34 +114,23 @@ const AdminDashboard: React.FC = () => {
                             <MegaphoneIcon className="w-8 h-8 text-primary" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Posts e Tarefas</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Criar publicações, verificar prints e gerenciar conteúdo.</p>
+                        <p className="mt-2 text-gray-400">Criar publicações e verificar prints de comprovação.</p>
                     </Link>
 
-                    {/* NOVO CARD: NOTIFICAÇÕES PUSH */}
-                    <Link to="/admin/push-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300 border border-transparent hover:border-indigo-500">
+                    <Link to="/admin/push-campaign" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
-                            <div className="p-3 rounded-full bg-indigo-500/20 text-indigo-400">
-                                <FaceIdIcon className="w-8 h-8" />
-                            </div>
+                            <FaceIdIcon className="w-8 h-8 text-indigo-400" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Notificações Push</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Envie avisos urgentes diretamente para a tela do celular das divulgadoras.</p>
+                        <p className="mt-2 text-gray-400">Envie alertas diretamente para o celular das meninas.</p>
                     </Link>
 
                     <Link to="/admin/lists" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
                             <ClipboardDocumentListIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Listas de Convidados</h2>
+                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Listas VIP</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Gerenciar listas VIP, aniversariantes e gerar links.</p>
-                    </Link>
-
-                    <Link to="/admin/dashboard" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <ChartBarIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Desempenho</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Ver ranking, estatísticas e engajamento da equipe.</p>
+                        <p className="mt-2 text-gray-400">Gerenciar listas de convidados e gerar links.</p>
                     </Link>
 
                     <Link to="/admin/checkin-dashboard" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
@@ -87,32 +140,40 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <p className="mt-2 text-gray-400">Controlar entrada no evento e ler QR Codes.</p>
                     </Link>
-                    
-                    <Link to="/admin/scheduled-posts" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <ClockIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Agendamentos</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Ver e editar publicações programadas.</p>
-                    </Link>
-
-                    <Link to="/admin/connect" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                        <div className="flex items-center">
-                            <HeartIcon className="w-8 h-8 text-primary" />
-                            <h2 className="ml-4 text-xl font-semibold text-gray-100">Conexão (Follow Loop)</h2>
-                        </div>
-                        <p className="mt-2 text-gray-400">Gerenciar dinâmica de seguidores.</p>
-                    </Link>
 
                     <Link to="/admin/settings" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                         <div className="flex items-center">
                             <CogIcon className="w-8 h-8 text-primary" />
                             <h2 className="ml-4 text-xl font-semibold text-gray-100">Configurações</h2>
                         </div>
-                        <p className="mt-2 text-gray-400">Dados da organização, equipe, regiões e planos.</p>
+                        <p className="mt-2 text-gray-400">Dados da organização, equipe e regiões.</p>
                     </Link>
                 </div>
             </div>
+
+            {/* Seção Técnica para Super Admin - Botão de Download Direto Aqui */}
+            {isSuperAdmin && (
+                <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-xl p-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex gap-4">
+                            <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400">
+                                <CodeBracketIcon className="w-8 h-8" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-white uppercase tracking-tight">Arquivos Técnicos (iOS)</h2>
+                                <p className="text-gray-400 text-sm mt-1">Substitua o arquivo <code className="bg-black/40 px-1 rounded text-indigo-300">AppDelegate.swift</code> no seu Xcode para habilitar o Firebase Push.</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleDownloadAppDelegate}
+                            className="flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 w-full md:w-auto"
+                        >
+                            <DownloadIcon className="w-6 h-6" />
+                            BAIXAR APPDELEGATE.SWIFT
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

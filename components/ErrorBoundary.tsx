@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode, Component } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -14,9 +13,8 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fixed: Explicitly extending Component with Props and State interfaces to resolve property visibility issues.
+/* Fix: Explicitly using Component from named import ensures inherited methods like setState and props are correctly typed and recognized by TS */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fixed: Initialize state as a class property to ensure it is recognized by TypeScript on 'this'.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -32,7 +30,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fixed: Correctly using this.setState within the class component.
+  /* Fix: Correctly using this.setState inherited from Component base class */
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
@@ -44,7 +42,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
-    // Fixed: Correctly accessing this.state within the render method.
+    /* Fix: Correctly accessing this.state and this.props from the Component base class instance */
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -72,7 +70,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: Correctly accessing this.props within the class component to return children.
     return this.props.children;
   }
 }
