@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { addPromoter, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
-import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon } from '../components/Icons';
+import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, LockClosedIcon, CheckCircleIcon, XIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
 const compressImage = (file: File): Promise<Blob> => {
@@ -14,8 +14,8 @@ const compressImage = (file: File): Promise<Blob> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
         let width = img.width;
         let height = img.height;
 
@@ -37,7 +37,7 @@ const compressImage = (file: File): Promise<Blob> => {
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject(new Error('Erro na compressão'));
-        }, 'image/jpeg', 0.8);
+        }, 'image/jpeg', 0.7);
       };
     };
   });
@@ -55,12 +55,19 @@ const RegistrationForm: React.FC = () => {
     whatsapp: '',
     instagram: '',
     tiktok: '',
+    cpf: '',
+    rg: '',
     dateOfBirth: ''
   });
   
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [docPreviews, setDocPreviews] = useState<string[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -74,6 +81,8 @@ const RegistrationForm: React.FC = () => {
             whatsapp: data.whatsapp,
             instagram: data.instagram,
             tiktok: data.tiktok || '',
+            cpf: data.cpf || '',
+            rg: data.rg || '',
             dateOfBirth: data.dateOfBirth
           });
         }
@@ -81,34 +90,55 @@ const RegistrationForm: React.FC = () => {
     }
   }, [editId]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'profile' | 'docs') => {
     if (e.target.files) {
       setIsProcessingPhotos(true);
       const files = Array.from(e.target.files) as File[];
-      const compressedFiles: File[] = [];
-      const previews: string[] = [];
+      const newCompressedFiles: File[] = [];
+      const newPreviews: string[] = [];
 
       for (const file of files) {
         try {
           const blob = await compressImage(file);
           const compressedFile = new File([blob], file.name, { type: 'image/jpeg' });
-          compressedFiles.push(compressedFile);
-          previews.push(URL.createObjectURL(compressedFile));
+          newCompressedFiles.push(compressedFile);
+          newPreviews.push(URL.createObjectURL(compressedFile));
         } catch (err) {
           console.error("Erro ao processar foto", err);
         }
       }
-      setPhotoFiles(compressedFiles);
-      setPhotoPreviews(previews);
+
+      if (type === 'profile') {
+        setPhotoFiles(prev => [...prev, ...newCompressedFiles]);
+        setPhotoPreviews(prev => [...prev, ...newPreviews]);
+      } else {
+        setDocFiles(prev => [...prev, ...newCompressedFiles]);
+        setDocPreviews(prev => [...prev, ...newPreviews]);
+      }
       setIsProcessingPhotos(false);
+    }
+  };
+
+  const removePhoto = (index: number, type: 'profile' | 'docs') => {
+    if (type === 'profile') {
+      setPhotoFiles(prev => prev.filter((_, i) => i !== index));
+      setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setDocFiles(prev => prev.filter((_, i) => i !== index));
+      setDocPreviews(prev => prev.filter((_, i) => i !== index));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (photoFiles.length === 0 && !editId) {
-      setSubmitError("Por favor, envie pelo menos uma foto sua.");
+      setSubmitError("Por favor, envie pelo menos uma foto de perfil.");
       return;
+    }
+
+    if (docFiles.length === 0 && !editId) {
+        setSubmitError("Por favor, envie uma foto do seu documento de identificação.");
+        return;
     }
     
     setIsSubmitting(true);
@@ -125,18 +155,33 @@ const RegistrationForm: React.FC = () => {
         await addPromoter({
           ...formData,
           photos: photoFiles,
+          documentPhotos: docFiles,
           state: state!,
           organizationId: organizationId!,
           campaignName: campaignName ? decodeURIComponent(campaignName) : undefined
         });
       }
-      navigate('/status?email=' + encodeURIComponent(formData.email));
+      setIsSuccess(true);
+      setTimeout(() => navigate('/status?email=' + encodeURIComponent(formData.email)), 3000);
     } catch (err: any) {
       setSubmitError(err.message || "Erro ao enviar cadastro.");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (isSuccess) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
+        <div className="bg-secondary p-10 rounded-3xl border border-green-500 shadow-2xl">
+          <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6" />
+          <h1 className="text-3xl font-bold text-white mb-4">Cadastro Enviado!</h1>
+          <p className="text-gray-300 text-lg">Sua solicitação foi recebida com sucesso. Nossa equipe entrará em contato em breve.</p>
+          <p className="text-gray-500 mt-4 text-sm">Redirecionando para a consulta de status...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
@@ -152,8 +197,21 @@ const RegistrationForm: React.FC = () => {
             
             <div className="relative">
               <UserIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-              <input type="text" placeholder="Seu nome completo" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none" 
+              <input type="text" placeholder="Nome Completo" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none" 
                 value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="relative">
+                    <LockClosedIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                    <input type="text" placeholder="CPF" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                        value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} required />
+                </div>
+                <div className="relative">
+                    <LockClosedIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+                    <input type="text" placeholder="RG" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                        value={formData.rg} onChange={e => setFormData({...formData, rg: e.target.value})} required />
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -187,31 +245,56 @@ const RegistrationForm: React.FC = () => {
               </div>
               <div className="relative">
                 <TikTokIcon className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-                <input type="text" placeholder="Seu @ no TikTok (opcional)" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
+                <input type="text" placeholder="Seu @ no TikTok" className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary outline-none"
                   value={formData.tiktok} onChange={e => setFormData({...formData, tiktok: e.target.value})} />
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Sua Foto</h3>
+            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Fotos de Perfil</h3>
             <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center bg-gray-800/50 hover:bg-gray-800 transition-colors">
               <CameraIcon className="w-12 h-12 text-primary mx-auto mb-3" />
               <p className="text-gray-300 font-medium">Fotos são fundamentais para sua aprovação!</p>
-              <p className="text-xs text-gray-500 mb-4">Mínimo 1 foto de rosto ou corpo inteiro.</p>
               
-              <input type="file" multiple accept="image/*" className="hidden" id="photo-input" onChange={handleFileChange} />
-              <label htmlFor="photo-input" className="cursor-pointer inline-block bg-primary px-6 py-2 rounded-full text-white font-bold hover:bg-primary-dark transition-all">
-                {photoFiles.length > 0 ? 'Trocar Fotos' : 'Selecionar Fotos'}
+              <input type="file" multiple accept="image/*" className="hidden" id="photo-input" onChange={e => handleFileChange(e, 'profile')} />
+              <label htmlFor="photo-input" className="cursor-pointer inline-block bg-primary px-6 py-2 rounded-full text-white font-bold hover:bg-primary-dark transition-all mb-4">
+                Adicionar Fotos de Perfil
               </label>
 
-              <div className="flex flex-wrap gap-2 mt-6 justify-center">
+              <div className="flex flex-wrap gap-3 mt-4 justify-center">
                 {photoPreviews.map((src, i) => (
-                  <img key={i} src={src} className="w-24 h-32 object-cover rounded-lg border-2 border-primary shadow-lg" alt="Preview" />
+                  <div key={i} className="relative group">
+                    <img src={src} className="w-24 h-32 object-cover rounded-lg border-2 border-primary shadow-lg" alt="Preview" />
+                    <button type="button" onClick={() => removePhoto(i, 'profile')} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-700">
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
-                {isProcessingPhotos && (
-                  <div className="w-24 h-32 bg-gray-700 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-400">Processando...</div>
-                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold text-white border-b border-gray-700 pb-2">Documento de Identificação</h3>
+            <div className="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center bg-gray-800/50 hover:bg-gray-800 transition-colors">
+              <LockClosedIcon className="w-12 h-12 text-indigo-400 mx-auto mb-3" />
+              <p className="text-gray-300 font-medium mb-4">Foto do Documento (RG ou CNH)</p>
+              
+              <input type="file" multiple accept="image/*" className="hidden" id="doc-input" onChange={e => handleFileChange(e, 'docs')} />
+              <label htmlFor="doc-input" className="cursor-pointer inline-block bg-indigo-600 px-6 py-2 rounded-full text-white font-bold hover:bg-indigo-700 transition-all mb-4">
+                Adicionar Documento
+              </label>
+
+              <div className="flex flex-wrap gap-3 mt-4 justify-center">
+                {docPreviews.map((src, i) => (
+                  <div key={i} className="relative group">
+                    <img key={i} src={src} className="w-32 h-24 object-cover rounded-lg border-2 border-indigo-500 shadow-lg" alt="Doc Preview" />
+                    <button type="button" onClick={() => removePhoto(i, 'docs')} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-md hover:bg-red-700">
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

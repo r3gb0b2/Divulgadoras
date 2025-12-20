@@ -4,9 +4,11 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.equipecerta.app',
   appName: 'Equipe Certa',
-  webDir: 'dist', // Certifique-se de que sua pasta de build se chama 'dist'
+  webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    iosScheme: 'https', // Garante que o app rode em um contexto seguro
+    allowNavigation: ['*'] // Permite carregar recursos externos como Firebase e Tailwind
   },
   plugins: {
     PushNotifications: {

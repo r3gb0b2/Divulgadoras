@@ -117,6 +117,7 @@ const Header: React.FC = () => {
 
 const App: React.FC = () => {
   useEffect(() => {
+      // Limpa os ouvintes quando o App for destruído
       return () => {
           clearPushListeners();
       }

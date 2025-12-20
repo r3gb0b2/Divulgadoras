@@ -5,7 +5,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { stateMap } from '../constants/states';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { FaceIdIcon } from './Icons';
+import { FaceIdIcon, LockClosedIcon } from './Icons';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -80,6 +80,22 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             )}
           </div>
 
+          <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+             <h3 className="text-sm font-bold text-indigo-400 mb-3 flex items-center gap-2">
+                <LockClosedIcon className="w-4 h-4" /> DADOS SENSÍVEIS
+             </h3>
+             <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                    <p className="text-gray-500 uppercase text-[10px] font-bold">CPF</p>
+                    <p className="text-white font-mono">{promoter.cpf || 'Não informado'}</p>
+                </div>
+                <div>
+                    <p className="text-gray-500 uppercase text-[10px] font-bold">RG</p>
+                    <p className="text-white font-mono">{promoter.rg || 'Não informado'}</p>
+                </div>
+             </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-500 uppercase font-bold">Status Atual</label>
@@ -105,7 +121,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
           </div>
 
           <div className="border-t border-gray-700 pt-4">
-            <h3 className="text-white font-bold mb-2">Fotos enviadas</h3>
+            <h3 className="text-white font-bold mb-2">Fotos de Perfil</h3>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {promoter.photoUrls.map((url, i) => (
                 <a key={i} href={url} target="_blank" rel="noreferrer" className="flex-shrink-0">
@@ -114,6 +130,19 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               ))}
             </div>
           </div>
+
+          {promoter.documentUrls && promoter.documentUrls.length > 0 && (
+            <div className="border-t border-gray-700 pt-4">
+                <h3 className="text-white font-bold mb-2 text-indigo-300">Documentos de Identidade</h3>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                {promoter.documentUrls.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noreferrer" className="flex-shrink-0">
+                    <img src={url} className="w-32 h-24 object-cover rounded-lg border-2 border-indigo-900 hover:border-indigo-500" alt="Documento" />
+                    </a>
+                ))}
+                </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3 border-t border-gray-700 pt-4">

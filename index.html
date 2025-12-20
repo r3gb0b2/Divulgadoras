@@ -40,17 +40,16 @@
     <style>
       /* Estilos para comportamento de App Nativo */
       body {
-        -webkit-user-select: none; /* Desativa seleção de texto no iOS */
+        -webkit-user-select: none;
         user-select: none;
-        -webkit-tap-highlight-color: transparent; /* Remove highlight de clique no Android */
-        overscroll-behavior-y: none; /* Evita o efeito de "bounce" ao rolar além do limite */
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none;
+        background-color: #16213e; /* Cor de fundo padrão para evitar flash branco */
       }
-      /* Permite seleção em inputs e textareas */
       input, textarea {
         -webkit-user-select: text;
         user-select: text;
       }
-      /* Ajuste para Safe Area (Notch) */
       :root {
         --sat: env(safe-area-inset-top);
         --sab: env(safe-area-inset-bottom);
@@ -64,6 +63,7 @@
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <!-- FIXED: Usando caminho relativo para funcionar no WebView do iOS -->
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

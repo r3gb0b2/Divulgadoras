@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -12,14 +11,19 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Importing Component explicitly to resolve setState and props resolution issues.
+ * FIXED: Explicitly extending React.Component and ensuring state and props are correctly resolved.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Explicitly define state property for better type inference from React.Component.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
   };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
 
   public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
@@ -30,7 +34,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    // Explicitly using this.setState as Component is extended.
+    // FIX: Use this.setState from inherited React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -38,6 +42,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render() {
+    // FIX: Access state from inherited React.Component.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -65,7 +70,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Accessing this.props.children correctly as Component is extended.
+    // FIX: Access props from inherited React.Component.
     return this.props.children;
   }
 }

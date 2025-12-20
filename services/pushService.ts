@@ -3,9 +3,13 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { savePushToken } from './promoterService';
 
+/**
+ * Inicializa as notificações push no dispositivo físico.
+ * No iOS, isso solicitará a permissão "Deseja receber notificações?".
+ */
 export const initPushNotifications = async (promoterId: string) => {
     if (!Capacitor.isNativePlatform()) {
-        console.log("Push notifications: Apenas em dispositivos nativos (App).");
+        console.log("Push: Operação ignorada. Notificações nativas requerem um iPhone físico.");
         return false;
     }
 
@@ -18,60 +22,67 @@ export const initPushNotifications = async (promoterId: string) => {
         }
 
         if (permStatus.receive !== 'granted') {
-            console.warn("Push notifications: Permissão negada pelo usuário.");
+            console.warn("Push: Permissão negada pelo usuário.");
             return false;
         }
 
-        // 2. Registrar Listeners antes de chamar o register()
-        
-        // Remove listeners antigos para evitar duplicidade
+        // 2. Limpar listeners para evitar registros duplicados em re-renders
         await PushNotifications.removeAllListeners();
 
-        // Listener de Sucesso
+        // 3. Listener de Registro (Sucesso)
+        // O token recebido aqui é o que o Firebase usará para enviar via Apple APNs
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Token capturado com sucesso:', token.value);
+            const deviceToken = token.value;
+            console.log('Push: Dispositivo registrado com sucesso. Token:', deviceToken);
             try {
-                await savePushToken(promoterId, token.value);
-                console.log('Push: Token salvo no Firestore para o ID:', promoterId);
+                // Salva o token no perfil da divulgadora para permitir envios segmentados
+                await savePushToken(promoterId, deviceToken);
             } catch (e) {
                 console.error("Push: Erro ao salvar token no Firestore:", e);
             }
         });
 
-        // Listener de Erro
+        // 4. Listener de Erro no Registro
         PushNotifications.addListener('registrationError', (error) => {
-            console.error('Push: Erro no registro do FCM:', JSON.stringify(error));
+            console.error('Push: Erro nativo no registro do serviço:', JSON.stringify(error));
         });
 
-        // Listener de Recebimento (App Aberto)
+        // 5. Listener de Recebimento (App aberto/Foreground)
         PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push: Notificação recebida (foreground):', notification);
+            console.log('Push: Notificação recebida em primeiro plano:', notification);
         });
 
-        // Listener de Clique na Notificação
+        // 6. Listener de Ação (Usuário clicou na notificação)
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
             const data = notification.notification.data;
+            console.log('Push: Usuário clicou na notificação. Dados recebidos:', data);
+            
             if (data && data.url) {
-                // Redireciona usando o hash do React Router se necessário
-                window.location.hash = data.url.replace('/#', '');
+                // Redireciona para a rota enviada (ex: /#/posts)
+                let target = data.url;
+                if (target.startsWith('/#')) target = target.substring(2);
+                window.location.hash = target;
             }
         });
 
-        // 3. Solicitar registro ao Firebase/Google
+        // 7. Efetuar o registro no sistema da Apple/Google
         await PushNotifications.register();
         return true;
 
     } catch (error) {
-        console.error("Push: Erro geral na inicialização:", error);
+        console.error("Push: Falha crítica na inicialização:", error);
         return false;
     }
 };
 
+/**
+ * Remove todos os ouvintes do sistema.
+ */
 export const clearPushListeners = async () => {
     if (!Capacitor.isNativePlatform()) return;
     try {
         await PushNotifications.removeAllListeners();
     } catch (e) {
-        console.error("Push: Erro ao limpar listeners", e);
+        console.error("Push: Erro ao remover listeners", e);
     }
 };

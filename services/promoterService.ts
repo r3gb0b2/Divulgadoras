@@ -63,22 +63,35 @@ export const addPromoter = async (promoterData: PromoterApplicationData): Promis
         }
     }
 
+    // Upload das fotos de perfil
     const photoUrls = await Promise.all(
       promoterData.photos.map(async (photo) => {
-        const fileExtension = photo.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+        const fileExtension = photo.name.split('.').pop() || 'jpg';
+        const fileName = `profile/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
         const storageRef = storage.ref(`promoters-photos/${fileName}`);
         await storageRef.put(photo);
         return await storageRef.getDownloadURL();
       })
     );
 
-    const { photos, facePhoto, ...rest } = promoterData;
+    // Upload das fotos de documentos
+    const documentUrls = await Promise.all(
+      promoterData.documentPhotos.map(async (photo) => {
+        const fileExtension = photo.name.split('.').pop() || 'jpg';
+        const fileName = `docs/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+        const storageRef = storage.ref(`promoters-photos/${fileName}`);
+        await storageRef.put(photo);
+        return await storageRef.getDownloadURL();
+      })
+    );
+
+    const { photos, documentPhotos, facePhoto, ...rest } = promoterData;
     const newPromoter: Omit<Promoter, 'id' | 'createdAt'> & { createdAt: firebase.firestore.FieldValue } = {
       ...rest,
       email: normalizedEmail,
       campaignName: promoterData.campaignName || null,
       photoUrls,
+      documentUrls,
       status: 'pending' as const,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       allCampaigns: promoterData.campaignName ? [promoterData.campaignName] : [],
@@ -277,7 +290,7 @@ export const checkPromoterStatus = async (email: string, organizationId?: string
         const querySnapshot = await q.get();
         if (querySnapshot.empty) return null;
         const promoters = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        promoters.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
+        promoters.sort((a, b) => toMillisSafe(a.createdAt) - toMillisSafe(b.createdAt));
         return promoters;
     } catch (error) {
         console.error("Error checking status: ", error);

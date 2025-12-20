@@ -14,8 +14,11 @@ export interface Promoter {
   whatsapp: string;
   instagram: string;
   tiktok?: string;
+  cpf?: string;
+  rg?: string;
   dateOfBirth: string;
   photoUrls: string[];
+  documentUrls?: string[]; // Para fotos do RG/CNH
   facePhotoUrl?: string;
   status: PromoterStatus;
   createdAt: Timestamp | FieldValue;
@@ -40,8 +43,11 @@ export interface PromoterApplicationData {
   email: string;
   instagram: string;
   tiktok: string;
+  cpf: string;
+  rg: string;
   dateOfBirth: string;
   photos: File[];
+  documentPhotos: File[];
   facePhoto?: File | null;
   state: string;
   campaignName?: string;
@@ -92,7 +98,6 @@ export interface Organization {
   id: string;
   name: string;
   ownerName?: string;
-  // FIX: Cannot find name 'owner'. Changed to 'string'.
   ownerEmail: string;
   ownerUid: string;
   status: OrganizationStatus;
