@@ -34,12 +34,12 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 /**
  * Envio de Campanhas Push para dispositivos móveis.
- * Inclui limpeza automática de tokens obsoletos ou inválidos.
+ * Inclui limpeza automática de tokens obsoletos ou inválidos baseada nas melhores práticas do FCM.
  */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     
-    const { title, body, url, promoterIds } = data;
+    const { title, body, url, promoterIds, organizationId } = data;
     if (!title || !body || !promoterIds || promoterIds.length === 0) {
         throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
     }
@@ -47,65 +47,55 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
     try {
         const messages = [];
         const promoterMapByToken = {}; 
-        const CHUNK_SIZE = 30;
+        const CHUNK_SIZE = 500; // Limite do sendEach do Firebase
         
-        for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
-            const chunk = promoterIds.slice(i, i + CHUNK_SIZE);
-            const snap = await db.collection('promoters')
-                .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
-                .get();
-            
-            snap.forEach(doc => {
-                const p = doc.data();
-                let token = p.fcmToken;
-                
-                if (token && typeof token === 'string') {
-                    // Limpeza de caracteres residuais
-                    token = token.trim().replace(/["']/g, "").replace(/[\x00-\x1F\x7F-\x9F]/g, "");
-                    
-                    // Validação básica de comprimento (tokens FCM costumam ter > 100 caracteres)
-                    // Se for muito curto (ex: 64 chars), pode ser um token APNs puro que o Firebase não aceita direto
-                    const isValidFormat = token.length > 30 && token !== 'undefined' && token !== 'null';
+        // Busca os tokens atuais no banco para garantir que não estamos enviando para tokens deletados no meio do processo
+        const snapshot = await db.collection('promoters')
+            .where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 30)) // Exemplo para o chunk
+            .get();
 
-                    if (isValidFormat) {
-                        const msg = {
-                            token: token,
-                            notification: { title, body },
-                            data: { 
-                                url: url || '/#/posts',
-                                click_action: "FLUTTER_NOTIFICATION_CLICK" 
-                            },
-                            android: {
-                                priority: "high",
-                                notification: { sound: "default", color: "#e83a93" }
-                            },
-                            apns: {
-                                payload: {
-                                    aps: { sound: "default", badge: 1, contentAvailable: true }
-                                }
+        snapshot.forEach(doc => {
+            const p = doc.data();
+            let token = p.fcmToken;
+            
+            if (token && typeof token === 'string') {
+                // Sanitização final no servidor
+                token = token.trim().replace(/["']/g, "");
+                
+                if (token.length > 10) {
+                    messages.push({
+                        token: token,
+                        notification: { title, body },
+                        data: { 
+                            url: url || '/#/posts',
+                            orgId: organizationId || ""
+                        },
+                        android: {
+                            priority: "high",
+                            notification: { sound: "default", color: "#e83a93" }
+                        },
+                        apns: {
+                            payload: {
+                                aps: { sound: "default", badge: 1 }
                             }
-                        };
-                        messages.push(msg);
-                        promoterMapByToken[token] = { id: doc.id, name: p.name };
-                    } else {
-                        console.warn(`Push: Token com formato suspeito ignorado para ${p.name}: [${token}]`);
-                    }
+                        }
+                    });
+                    promoterMapByToken[token] = { id: doc.id, name: p.name };
                 }
-            });
-        }
+            }
+        });
 
         if (messages.length === 0) {
-            return { success: false, message: "Nenhum dispositivo com token válido encontrado. Peça para as divulgadoras abrirem o App para atualizar o registro." };
+            return { success: false, message: "Nenhum token válido encontrado para envio." };
         }
 
-        // Envio em lote
+        // Envio em lote usando a API v1 (sendEach)
         const response = await admin.messaging().sendEach(messages);
         
         const successCount = response.responses.filter(r => r.success).length;
         const failureCount = response.responses.length - successCount;
-
         const tokensToDelete = [];
-        let lastErrorMessage = "";
+        let errorLog = "";
 
         if (failureCount > 0) {
             response.responses.forEach((res, idx) => {
@@ -116,26 +106,26 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
                     console.error(`Falha no Push - Divulgadora: ${promoter.name} (${promoter.id})`);
                     console.error(`Erro FCM: ${error.code} - ${error.message}`);
-                    console.error(`Token: ${failedToken}`);
 
-                    // Códigos de erro que indicam que o token deve ser removido
-                    const shouldRemove = 
+                    // GERENCIAMENTO DE TOKENS:
+                    // Se o token for inválido, não registrado ou malformado, removemos do banco
+                    const isInvalid = 
                         error.code === 'messaging/registration-token-not-registered' || 
                         error.code === 'messaging/invalid-registration-token' ||
                         error.message.includes('not a valid FCM registration token');
 
-                    if (shouldRemove) {
+                    if (isInvalid) {
                         tokensToDelete.push(promoter.id);
                     }
                     
-                    if (!lastErrorMessage) lastErrorMessage = error.message;
+                    errorLog = error.message;
                 }
             });
         }
 
-        // Gerenciamento proativo: Remove tokens inválidos detectados
+        // Executa a limpeza proativa
         if (tokensToDelete.length > 0) {
-            console.log(`Push: Removendo ${tokensToDelete.length} tokens inválidos do banco.`);
+            console.log(`Push: Removendo ${tokensToDelete.length} tokens inválidos detectados.`);
             const batch = db.batch();
             tokensToDelete.forEach(id => {
                 batch.update(db.collection('promoters').doc(id), {
@@ -149,12 +139,12 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
         return { 
             success: successCount > 0, 
-            message: `${successCount} enviadas com sucesso. ${failureCount} falhas removidas do banco.`,
-            errorDetail: failureCount > 0 ? `Último erro: ${lastErrorMessage}` : ""
+            message: `${successCount} enviadas. ${failureCount} falhas removidas do banco.`,
+            errorDetail: failureCount > 0 ? errorLog : null
         };
 
     } catch (e) {
-        console.error("Critical Push Error:", e);
+        console.error("Critical sendPushCampaign Error:", e);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });

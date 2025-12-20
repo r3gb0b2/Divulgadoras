@@ -1,5 +1,4 @@
-
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -14,18 +13,15 @@ interface ErrorBoundaryState {
 /**
  * ErrorBoundary component to catch runtime errors in the component tree.
  */
-// Fix: Inherit from React.Component for correct type resolution of props, state, and methods like setState
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Inherit from Component<P, S> to ensure proper typing of this.state, this.props and this.setState
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
-  // Fix: Explicitly initialize state in constructor and call super(props) to ensure proper inheritance
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+  // Fix: Declare public state instead of constructor initialization to resolve property recognition errors
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
@@ -35,7 +31,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fix: Using setState from inherited React.Component class
+    // Fix: Using setState inherited from Component class
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -43,7 +39,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render(): ReactNode {
-    // Fix: Access state member inherited from React.Component
+    // Fix: Access state inherited from Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,7 +48,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/* Fix: Checking error state using inherited state member from React.Component */}
+            {/* Fix: Access state inherited from Component */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -72,7 +68,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: Access props member inherited from React.Component
+    // Fix: Access props inherited from Component
     return this.props.children;
   }
 }

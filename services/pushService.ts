@@ -9,7 +9,7 @@ export interface PushResult {
 }
 
 /**
- * Inicializa as notificações push.
+ * Inicializa as notificações push e verifica a validade do token.
  */
 export const initPushNotifications = async (promoterId: string): Promise<PushResult> => {
     const platform = Capacitor.getPlatform() as 'ios' | 'android' | 'web';
@@ -19,7 +19,7 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
     }
 
     try {
-        console.log(`Push: Verificando permissões para ${promoterId}...`);
+        console.log(`Push: Solicitando permissões para divulgadora ${promoterId}...`);
         const permStatus = await PushNotifications.checkPermissions();
         
         if (permStatus.receive !== 'granted') {
@@ -29,49 +29,55 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
             }
         }
 
-        // Limpar ouvintes para garantir que apenas um processo trate o registro
+        // Limpar ouvintes antigos para evitar duplicidade
         await PushNotifications.removeAllListeners();
 
         return new Promise(async (resolve) => {
-            // Sucesso no Registro: Este evento dispara logo após o .register()
+            // Evento disparado quando o registro no SO é concluído
             await PushNotifications.addListener('registration', async (token) => {
                 const tokenValue = token.value;
                 
-                // LOG PARA DEBUG (Requisito: Registre e Compare)
+                // DIAGNÓSTICO DE FORMATO (Registre e Compare)
+                // Tokens APNs (iOS) puros costumam ter 64 caracteres hexadecimais.
+                // Tokens FCM costumam ser muito mais longos (140+) e conter delimitadores.
+                const isLikelyAPNs = /^[0-9a-fA-F]{64}$/.test(tokenValue);
+                
                 console.log("-----------------------------------------");
-                console.log("PUSH TOKEN GERADO NO CLIENTE:");
-                console.log("ID:", promoterId);
-                console.log("TOKEN:", tokenValue);
+                console.log("PUSH TOKEN REGISTRADO:");
+                console.log("VALOR:", tokenValue);
                 console.log("COMPRIMENTO:", tokenValue.length);
-                console.log("PLATAFORMA:", platform);
+                console.log("PROVÁVEL APNs (iOS Nativo):", isLikelyAPNs ? "SIM (Problema)" : "NÃO (OK)");
                 console.log("-----------------------------------------");
+
+                if (isLikelyAPNs && platform === 'ios') {
+                    console.warn("ALERTA: O token recebido parece ser um token APNs puro. " +
+                                 "Se as notificações falharem no servidor, verifique se o arquivo " +
+                                 "GoogleService-Info.plist está correto e se o Firebase Messaging " +
+                                 "está devidamente linkado no Xcode.");
+                }
                 
                 try {
-                    // Salva no Firestore com a limpeza rigorosa já implementada no promoterService
+                    // Salva no Firestore com higienização rigorosa
                     await savePushToken(promoterId, tokenValue, platform);
-                    
-                    // Feedback visual discreto para o console, alerta apenas se necessário
-                    console.log("Push: Dispositivo vinculado com sucesso.");
-                    
+                    console.log("Push: Token sincronizado com sucesso.");
                     resolve({ success: true, token: tokenValue });
                 } catch (e: any) {
-                    console.error("Push: Erro ao salvar no banco:", e);
-                    resolve({ success: false, error: "Token gerado, mas falha ao sincronizar com o servidor." });
+                    console.error("Push: Erro ao salvar token no banco:", e);
+                    resolve({ success: false, error: "Erro ao gravar registro no servidor." });
                 }
             });
 
-            // Erro no Registro Nativo
             await PushNotifications.addListener('registrationError', (error) => {
-                console.error("Push: Erro nativo reportado pelo SO:", error.error);
+                console.error("Push: Erro nativo no registro:", error.error);
                 resolve({ success: false, error: error.error });
             });
 
-            console.log("Push: Solicitando registro ao sistema operacional...");
+            // Inicia o processo de registro
             await PushNotifications.register();
         });
 
     } catch (error: any) {
-        console.error("Push: Exceção no processo de setup:", error);
+        console.error("Push: Falha crítica no setup:", error);
         return { success: false, error: error.message };
     }
 };

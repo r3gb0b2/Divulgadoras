@@ -20,11 +20,11 @@ const toMillisSafe = (timestamp: any): number => {
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
     if (!token || typeof token !== 'string') return;
 
-    // LIMPEZA: Remove espaços, quebras de linha, caracteres de controle e ASPAS extras
+    // LIMPEZA: Remove espaços, quebras de linha, caracteres de controle e ASPAS extras (causa comum de erro de token inválido)
     const cleanToken = token
         .trim()
-        .replace(/["']/g, "") // Remove aspas que podem vir de parsers JSON
-        .replace(/[\x00-\x1F\x7F-\x9F]/g, ""); // Remove caracteres invisíveis
+        .replace(/["']/g, "") 
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, ""); 
 
     if (cleanToken === '' || cleanToken === 'undefined' || cleanToken === 'null' || cleanToken.length < 10) {
         console.warn("Push: Tentativa de salvar token inválido descartada.");
@@ -37,7 +37,7 @@ export const savePushToken = async (promoterId: string, token: string, platform:
             platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log("Push: Token FCM salvo com sucesso para o ID:", promoterId);
+        console.log("Push: Token higienizado e salvo para o ID:", promoterId);
     } catch (error) {
         console.error("Push: Erro ao gravar token no banco:", error);
         throw error;
