@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -6,7 +5,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon, AlertTriangleIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon, AlertTriangleIcon, DocumentDuplicateIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -82,6 +81,15 @@ const AdminPushCampaignPage: React.FC = () => {
             return matchesPlatform && matchesSearch;
         });
     }, [promoters, activePlatformTab, searchQuery]);
+
+    const handleCopyToken = (token: string) => {
+        if (!token) return;
+        navigator.clipboard.writeText(token).then(() => {
+            alert("Token copiado para a área de transferência!");
+        }).catch(() => {
+            alert("Erro ao copiar token.");
+        });
+    };
 
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
@@ -173,7 +181,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                             }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Plataforma</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
@@ -197,9 +205,14 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     <p className="text-xs text-gray-500">{p.campaignName || 'Geral'}</p>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${p.platform === 'ios' ? 'bg-white text-black' : p.platform === 'android' ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}>
-                                                        {p.platform || 'indefinido'}
-                                                    </span>
+                                                    <button 
+                                                        onClick={() => handleCopyToken(p.fcmToken || '')}
+                                                        className="flex items-center gap-1.5 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-gray-300 transition-colors"
+                                                        title="Copiar token FCM para debug"
+                                                    >
+                                                        <DocumentDuplicateIcon className="w-3 h-3" />
+                                                        <span className="truncate max-w-[80px]">{p.fcmToken?.substring(0, 8)}...</span>
+                                                    </button>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex justify-end gap-2">

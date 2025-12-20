@@ -29,43 +29,43 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
             }
         }
 
-        // Importante: Remover listeners antigos antes de registrar novos para evitar duplicidade
+        // Limpar ouvintes para garantir que apenas um processo trate o registro
         await PushNotifications.removeAllListeners();
 
         return new Promise(async (resolve) => {
-            // Sucesso no Registro
+            // Sucesso no Registro: Este evento dispara logo após o .register()
             await PushNotifications.addListener('registration', async (token) => {
                 const tokenValue = token.value;
-                console.log("Push: Token nativo recebido:", tokenValue);
+                console.log("Push: Token recebido do SO:", tokenValue);
                 
-                // Verificação de segurança: Tokens APNs (iOS) puros são hexadecimais de 64 chars.
-                // O FCM costuma ser bem mais longo e ter caracteres como ":".
-                if (platform === 'ios' && tokenValue.length < 100 && !tokenValue.includes(':')) {
-                    console.warn("Push: Detectado token APNs puro. O Firebase nativo pode não estar configurado corretamente no Xcode.");
-                }
-
                 try {
                     // Tenta salvar no Firestore
                     await savePushToken(promoterId, tokenValue, platform);
+                    
+                    // Feedback para o usuário final
+                    alert("Notificações ativadas! Seu dispositivo foi vinculado com sucesso para receber avisos.");
+                    
                     resolve({ success: true, token: tokenValue });
                 } catch (e: any) {
-                    console.error("Push: Erro ao persistir token no Firestore", e);
-                    resolve({ success: false, error: "Token capturado, mas erro ao salvar no banco." });
+                    console.error("Push: Erro ao salvar no banco:", e);
+                    resolve({ success: false, error: "Token gerado, mas falha ao salvar no perfil." });
                 }
             });
 
             // Erro no Registro Nativo
             await PushNotifications.addListener('registrationError', (error) => {
-                console.error("Push: Erro nativo reportado:", error.error);
+                console.error("Push: Erro nativo reportado pelo SO:", error.error);
+                alert("Erro ao ativar notificações: " + error.error);
                 resolve({ success: false, error: error.error });
             });
 
-            console.log("Push: Disparando registro no SO...");
+            console.log("Push: Solicitando token ao sistema operacional...");
+            // Disparar o registro APÓS configurar os listeners
             await PushNotifications.register();
         });
 
     } catch (error: any) {
-        console.error("Push: Exceção no setup:", error);
+        console.error("Push: Exceção no processo de setup:", error);
         return { success: false, error: error.message };
     }
 };
