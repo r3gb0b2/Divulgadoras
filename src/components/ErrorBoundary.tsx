@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode, Component } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -12,38 +12,35 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Extending React.Component to ensure proper inheritance chain detection by the TypeScript compiler.
+ * ErrorBoundary component to catch runtime errors in the component tree.
+ * Inherits from React.Component to provide standard error handling behavior.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Initialize state as a member variable.
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
-
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Fix: Explicitly initializing state in constructor to resolve TS inheritance issues
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // FIX: ComponentDidCatch handles runtime errors and updates state using the inherited setState.
+  // Fix: setState is now correctly identified as an inherited method from Component
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: this.setState is correctly identified when extending React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  // FIX: Standard render method.
   public render() {
-    // FIX: Accessing hasError from state.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -71,7 +68,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Using this.props which is correctly defined in React.Component.
+    // Fix: props is now correctly identified as an inherited property from Component
     return this.props.children;
   }
 }

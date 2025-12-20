@@ -3,29 +3,30 @@ import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { savePushToken } from './promoterService';
 
-export const initPushNotifications = async (promoterId: string): Promise<string | null> => {
+export interface PushResult {
+    success: boolean;
+    token?: string;
+    error?: string;
+}
+
+export const initPushNotifications = async (promoterId: string): Promise<PushResult> => {
     if (!Capacitor.isNativePlatform()) {
-        console.log("Push: Ambiente web detectado.");
-        return null;
+        return { success: false, error: "Web não suporta Push nativo." };
     }
 
-    // Se estiver no simulador iOS, o registro vai travar. Vamos avisar.
     if (Capacitor.getPlatform() === 'ios' && !Capacitor.isNativePlatform()) {
-        console.warn("Push: Notificações não funcionam em simuladores iOS.");
-        return null;
+        return { success: false, error: "Push não funciona no simulador." };
     }
 
     return new Promise(async (resolve) => {
         let isResolved = false;
 
-        // Timeout de segurança: se o sistema não responder em 10s, cancela.
         const timeout = setTimeout(() => {
             if (!isResolved) {
-                console.error("Push: Tempo limite de registro atingido.");
                 isResolved = true;
-                resolve(null);
+                resolve({ success: false, error: "Tempo esgotado (APNs não respondeu)." });
             }
-        }, 10000);
+        }, 12000);
 
         try {
             const permStatus = await PushNotifications.checkPermissions();
@@ -33,9 +34,8 @@ export const initPushNotifications = async (promoterId: string): Promise<string 
             if (permStatus.receive !== 'granted') {
                 const request = await PushNotifications.requestPermissions();
                 if (request.receive !== 'granted') {
-                    console.warn("Push: Permissão negada pelo usuário.");
                     clearTimeout(timeout);
-                    resolve(null);
+                    resolve({ success: false, error: "Permissão de notificação negada." });
                     return;
                 }
             }
@@ -44,49 +44,36 @@ export const initPushNotifications = async (promoterId: string): Promise<string 
 
             // Ouvinte de Sucesso
             PushNotifications.addListener('registration', async (token) => {
-                console.log("Push: Registro bem sucedido via hardware.");
+                if (isResolved) return;
                 const platform = Capacitor.getPlatform().toLowerCase() as 'ios' | 'android';
                 
-                if (promoterId && !isResolved) {
+                try {
                     await savePushToken(promoterId, token.value, platform);
-                    clearTimeout(timeout);
                     isResolved = true;
-                    resolve(token.value);
+                    clearTimeout(timeout);
+                    resolve({ success: true, token: token.value });
+                } catch (e) {
+                    isResolved = true;
+                    resolve({ success: false, error: "Falha ao salvar no banco." });
                 }
             });
 
-            // Ouvinte de Erro (Geralmente por falta de configuração no Xcode)
+            // Ouvinte de Erro do Sistema (IMPORTANTE PARA O XCODE)
             PushNotifications.addListener('registrationError', (error) => {
-                console.error('Push: Erro de registro no sistema:', error);
-                if (!isResolved) {
-                    clearTimeout(timeout);
-                    isResolved = true;
-                    resolve(null);
-                }
+                if (isResolved) return;
+                isResolved = true;
+                clearTimeout(timeout);
+                console.error("Erro APNs:", error);
+                resolve({ success: false, error: `Erro do iOS: ${error.error}` });
             });
 
-            // Ouvinte de Notificação Recebida
-            PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                console.log('Push: Recebida em primeiro plano:', notification);
-            });
-
-            // Ouvinte de Ação (Clique na notificação)
-            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-                const data = notification.notification.data;
-                if (data && data.url) {
-                    let target = data.url;
-                    if (target.startsWith('/#')) target = target.substring(2);
-                    window.location.hash = target;
-                }
-            });
-
-            console.log("Push: Solicitando token ao sistema operacional...");
             await PushNotifications.register();
 
-        } catch (error) {
-            console.error("Push: Falha fatal no setup:", error);
+        } catch (error: any) {
+            if (isResolved) return;
+            isResolved = true;
             clearTimeout(timeout);
-            resolve(null);
+            resolve({ success: false, error: error.message || "Falha no setup." });
         }
     });
 };
