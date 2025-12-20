@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -15,15 +15,18 @@ interface ErrorBoundaryState {
  * ErrorBoundary component to catch runtime errors in the component tree.
  * Inherits from Component to provide standard error handling behavior.
  */
-// Fix: Use Component directly from react import for better type resolution of props, state, and methods like setState
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Use React.Component directly for better type resolution of props, state, and methods like setState
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
-  // Fix: Explicitly initialize state as a class property for better type inference
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  // Fix: Explicitly initialize state in constructor and call super(props) to ensure proper inheritance of Component members
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error, errorInfo: null };
@@ -33,7 +36,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fix: Using setState from inherited Component class
+    // Fix: Using setState from inherited React.Component class
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -41,7 +44,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // Fix: Access state member inherited from Component
+    // Fix: Access state member inherited from React.Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +73,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fix: Access props member inherited from Component
+    // Fix: Access props member inherited from React.Component
     return this.props.children;
   }
 }

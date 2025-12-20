@@ -15,26 +15,29 @@ const toMillisSafe = (timestamp: any): number => {
 };
 
 /**
- * Salva o token FCM no perfil da divulgadora com limpeza de string.
+ * Salva o token FCM no perfil da divulgadora com limpeza rigorosa.
  */
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
     if (!token || typeof token !== 'string') return;
 
-    // LIMPEZA: Remove espaços, quebras de linha e caracteres de controle invisíveis
-    const cleanToken = token.trim().replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+    // LIMPEZA: Remove espaços, quebras de linha, caracteres de controle e ASPAS extras
+    const cleanToken = token
+        .trim()
+        .replace(/["']/g, "") // Remove aspas que podem vir de parsers JSON
+        .replace(/[\x00-\x1F\x7F-\x9F]/g, ""); // Remove caracteres invisíveis
 
-    if (cleanToken === '' || cleanToken === 'undefined' || cleanToken === 'null') {
+    if (cleanToken === '' || cleanToken === 'undefined' || cleanToken === 'null' || cleanToken.length < 10) {
+        console.warn("Push: Tentativa de salvar token inválido descartada.");
         return;
     }
 
-    console.log(`Push: Salvando token limpo para ${promoterId}...`);
     try {
         await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: cleanToken,
             platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log("Push: Token atualizado com sucesso no banco.");
+        console.log("Push: Token FCM salvo com sucesso para o ID:", promoterId);
     } catch (error) {
         console.error("Push: Erro ao gravar token no banco:", error);
         throw error;

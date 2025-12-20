@@ -34,7 +34,7 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
 
 /**
  * Envio de Campanhas Push para dispositivos móveis.
- * Sanitização rigorosa de tokens para evitar erro de token inválido.
+ * Limpeza agressiva de tokens para evitar erro de formato.
  */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -59,18 +59,16 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                 const p = doc.data();
                 let token = p.fcmToken;
                 
-                // SANITIZAÇÃO RIGOROSA
                 if (token && typeof token === 'string') {
-                    // Remove espaços, quebras de linha e caracteres invisíveis de controle
-                    token = token.trim().replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+                    // LIMPEZA TOTAL: Remove aspas, espaços e caracteres invisíveis
+                    token = token.trim()
+                        .replace(/["']/g, "") 
+                        .replace(/[\x00-\x1F\x7F-\x9F]/g, "");
                     
-                    // Validação de formato FCM:
-                    // 1. Não pode ser apenas hexadecimal de 64 caracteres (isso é APNs puro, FCM não aceita direto)
-                    // 2. Tokens FCM reais costumam ter mais de 100 caracteres e estrutura base64
-                    const isRawApns = /^[0-9a-fA-F]{64}$/.test(token);
-                    const isValidFormat = token.length > 50 && !isRawApns && token !== 'undefined' && token !== 'null';
+                    // Validação mínima: apenas garante que não é nulo/vazio
+                    const isPotentiallyValid = token.length > 20 && token !== 'undefined' && token !== 'null';
 
-                    if (isValidFormat) {
+                    if (isPotentiallyValid) {
                         const msg = {
                             token: token,
                             notification: { title, body },
@@ -91,37 +89,43 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
                         messages.push(msg);
                         promoterMapByToken[token] = { id: doc.id, name: p.name };
                     } else {
-                        console.warn(`Push: Token descartado por formato inválido. Divulgadora: ${p.name} (ID: ${doc.id}). Comprimento: ${token.length}. Token: ${token.substring(0, 10)}...`);
+                        console.warn(`Push: Token ignorado (muito curto ou inválido). Divulgadora: ${p.name}. Token: ${token}`);
                     }
                 }
             });
         }
 
         if (messages.length === 0) {
-            return { success: false, message: "Nenhum dispositivo com token FCM válido encontrado. Verifique se as divulgadoras usam a versão mais recente do App." };
+            return { success: false, message: "Nenhum dispositivo com token encontrado. Peça para as divulgadoras abrirem o App para registrar o dispositivo." };
         }
 
+        // Tenta enviar cada mensagem individualmente
         const response = await admin.messaging().sendEach(messages);
         
         const successCount = response.responses.filter(r => r.success).length;
         const failureCount = response.responses.length - successCount;
 
-        let errorDetail = "";
+        let lastErrorMessage = "";
         if (failureCount > 0) {
             response.responses.forEach((res, idx) => {
                 if (!res.success) {
                     const failedToken = messages[idx].token;
                     const promoter = promoterMapByToken[failedToken];
-                    console.error(`Falha no Push - Divulgadora: ${promoter.name} (ID: ${promoter.id}). Erro FCM: ${res.error.message}. Token Length: ${failedToken.length}`);
-                    if (!errorDetail) errorDetail = res.error.message;
+                    
+                    // LOG CRÍTICO PARA DEBUG: Mostra o token real que o Firebase rejeitou
+                    console.error(`ERRO FCM - Divulgadora: ${promoter.name} (ID: ${promoter.id})`);
+                    console.error(`Erro do SDK: ${res.error.message}`);
+                    console.error(`Token Rejeitado: [${failedToken}] (Len: ${failedToken.length})`);
+                    
+                    if (!lastErrorMessage) lastErrorMessage = res.error.message;
                 }
             });
         }
 
         return { 
             success: successCount > 0, 
-            message: `${successCount} enviadas com sucesso. ${failureCount} falhas.`,
-            errorDetail: failureCount > 0 ? `Erro no envio: ${errorDetail}` : ""
+            message: `${successCount} enviadas. ${failureCount} falhas.`,
+            errorDetail: failureCount > 0 ? `Erro: ${lastErrorMessage}` : ""
         };
 
     } catch (e) {
