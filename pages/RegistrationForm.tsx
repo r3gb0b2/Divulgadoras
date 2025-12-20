@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
 import { 
@@ -11,7 +11,8 @@ import {
   CalendarIcon, 
   CameraIcon, 
   ArrowLeftIcon,
-  CheckCircleIcon 
+  CheckCircleIcon,
+  XIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
 
@@ -39,6 +40,13 @@ const RegistrationForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
+  // Limpeza de memória das URLs de preview para evitar crash no iPhone
+  useEffect(() => {
+    return () => {
+      previews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [previews]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -46,20 +54,28 @@ const RegistrationForm: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files).slice(0, 5);
-      setPhotos(filesArray);
+      const updatedPhotos = [...photos, ...filesArray].slice(0, 5);
+      setPhotos(updatedPhotos);
       
-      // Gerar previews
-      // Fix line 52: Cast 'file' to 'Blob' to resolve 'unknown' type error in URL.createObjectURL
-      const newPreviews = filesArray.map(file => URL.createObjectURL(file as Blob));
+      const newPreviews = updatedPhotos.map(file => URL.createObjectURL(file as Blob));
       setPreviews(newPreviews);
     }
+  };
+
+  const removePhoto = (index: number) => {
+    const updatedPhotos = photos.filter((_, i) => i !== index);
+    setPhotos(updatedPhotos);
+    const updatedPreviews = previews.filter((_, i) => i !== index);
+    URL.revokeObjectURL(previews[index]);
+    setPreviews(updatedPreviews);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organizationId || !state) return;
+    
     if (photos.length === 0) {
-      setError("Por favor, envie ao menos uma foto sua.");
+      setError("Por favor, envie ao menos uma foto nítida para o casting.");
       return;
     }
 
@@ -85,20 +101,20 @@ const RegistrationForm: React.FC = () => {
 
   if (isSuccess) {
     return (
-      <div className="max-w-md mx-auto text-center py-20 animate-fadeIn">
+      <div className="max-w-md mx-auto text-center py-20 animate-fadeIn px-4">
         <div className="bg-secondary p-10 rounded-[2.5rem] shadow-2xl border border-green-500/30">
           <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500">
             <CheckCircleIcon className="w-12 h-12" />
           </div>
-          <h1 className="text-3xl font-black text-white mb-4">CADASTRO ENVIADO!</h1>
-          <p className="text-gray-400 mb-8">
-            Recebemos seus dados. Agora nossa equipe de casting fará a análise do seu perfil.
+          <h1 className="text-3xl font-black text-white mb-4 uppercase">Sucesso!</h1>
+          <p className="text-gray-400 mb-8 font-medium">
+            Seu casting foi enviado. Analisaremos seu perfil em breve.
           </p>
           <button 
             onClick={() => navigate('/status')}
-            className="w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all"
+            className="w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all shadow-xl shadow-primary/20"
           >
-            VER MEU STATUS
+            ACOMPANHAR MEU STATUS
           </button>
         </div>
       </div>
@@ -115,143 +131,108 @@ const RegistrationForm: React.FC = () => {
       </button>
 
       <div className="bg-secondary shadow-2xl rounded-[2.5rem] overflow-hidden border border-gray-800">
-        <div className="bg-gradient-to-r from-primary/20 to-purple-600/20 p-8 text-center border-b border-gray-800">
-          <h1 className="text-3xl font-black text-white uppercase tracking-tight">Seja uma Divulgadora</h1>
-          <p className="text-primary font-bold mt-1 tracking-widest">
+        <div className="bg-gradient-to-br from-primary/20 to-purple-600/10 p-8 text-center border-b border-gray-800">
+          <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Casting Divulgadoras</h1>
+          <p className="text-primary font-bold mt-1 tracking-widest text-xs uppercase">
             {stateFullName} {campaignName ? `• ${decodeURIComponent(campaignName)}` : ''}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           {error && (
-            <div className="bg-red-900/40 border border-red-800 text-red-200 p-4 rounded-2xl text-sm font-bold animate-shake">
+            <div className="bg-red-900/40 border border-red-800 text-red-200 p-4 rounded-2xl text-sm font-bold animate-shake text-center">
               {error}
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">Nome Completo</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Nome Completo</label>
               <div className="relative">
-                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="text" 
-                  name="name" 
-                  required 
-                  value={formData.name} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                  placeholder="Maria Silva..." 
-                />
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="text" name="name" required value={formData.name} onChange={handleChange} className="input-field w-full pl-12" placeholder="Nome Sobrenome" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">WhatsApp</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">WhatsApp</label>
               <div className="relative">
-                <PhoneIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="tel" 
-                  name="whatsapp" 
-                  required 
-                  value={formData.whatsapp} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                  placeholder="(00) 00000-0000" 
-                />
+                <PhoneIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="tel" name="whatsapp" required value={formData.whatsapp} onChange={handleChange} className="input-field w-full pl-12" placeholder="(00) 00000-0000" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">E-mail</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">E-mail</label>
               <div className="relative">
-                <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="email" 
-                  name="email" 
-                  required 
-                  value={formData.email} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                  placeholder="seu@email.com" 
-                />
+                <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="email" name="email" required value={formData.email} onChange={handleChange} className="input-field w-full pl-12" placeholder="seu@email.com" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">Nascimento</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Nascimento</label>
               <div className="relative">
-                <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="date" 
-                  name="dateOfBirth" 
-                  required 
-                  value={formData.dateOfBirth} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                />
+                <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="date" name="dateOfBirth" required value={formData.dateOfBirth} onChange={handleChange} className="input-field w-full pl-12" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">Instagram</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">Instagram</label>
               <div className="relative">
-                <InstagramIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="text" 
-                  name="instagram" 
-                  required 
-                  value={formData.instagram} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                  placeholder="@seu_perfil" 
-                />
+                <InstagramIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="text" name="instagram" required value={formData.instagram} onChange={handleChange} className="input-field w-full pl-12" placeholder="@seu_perfil" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black text-gray-500 uppercase ml-2">TikTok (Opcional)</label>
+              <label className="text-[10px] font-black text-gray-500 uppercase ml-2 tracking-widest">TikTok (Opcional)</label>
               <div className="relative">
-                <TikTokIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input 
-                  type="text" 
-                  name="tiktok" 
-                  value={formData.tiktok} 
-                  onChange={handleChange}
-                  className="input-field w-full pl-12" 
-                  placeholder="@seu_tiktok" 
-                />
+                <TikTokIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="text" name="tiktok" value={formData.tiktok} onChange={handleChange} className="input-field w-full pl-12" placeholder="@seu_tiktok" />
               </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <label className="text-xs font-black text-gray-500 uppercase ml-2">Suas Fotos (Envie até 5)</label>
+          <div className="space-y-4 pt-4">
+            <div className="flex justify-between items-end ml-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Fotos para o Casting (Até 5)</label>
+                <span className="text-[10px] text-primary font-bold uppercase">{previews.length}/5 Fotos</span>
+            </div>
+            
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
               {previews.map((src, i) => (
-                <div key={i} className="aspect-square rounded-2xl overflow-hidden border-2 border-primary shadow-lg">
+                <div key={i} className="relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-primary/50 shadow-xl group">
                   <img src={src} className="w-full h-full object-cover" alt="Preview" />
+                  <button 
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
               {previews.length < 5 && (
-                <label className="aspect-square flex flex-col items-center justify-center bg-gray-800 rounded-2xl border-2 border-dashed border-gray-700 cursor-pointer hover:border-primary transition-all group">
-                  <CameraIcon className="w-8 h-8 text-gray-500 group-hover:text-primary transition-colors" />
-                  <span className="text-[10px] text-gray-500 font-bold mt-1 group-hover:text-primary uppercase">Adicionar</span>
+                <label className="aspect-[3/4] flex flex-col items-center justify-center bg-gray-800 rounded-2xl border-2 border-dashed border-gray-700 cursor-pointer hover:border-primary transition-all group active:scale-95">
+                  <CameraIcon className="w-8 h-8 text-gray-600 group-hover:text-primary transition-colors" />
+                  <span className="text-[9px] text-gray-500 font-black mt-2 group-hover:text-primary uppercase">Adicionar</span>
                   <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
                 </label>
               )}
             </div>
-            <p className="text-[10px] text-gray-500 text-center uppercase tracking-tighter">
-              Envie fotos nítidas de rosto e corpo inteiro para facilitar sua aprovação.
+            <p className="text-[9px] text-gray-500 text-center uppercase font-bold tracking-tight">
+              Dica: Use fotos sem filtros exagerados, mostrando bem o rosto e corpo.
             </p>
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-5 bg-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all transform active:scale-95 disabled:opacity-50"
+            className="w-full py-5 bg-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-2xl shadow-primary/30 hover:bg-primary-dark transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
           >
-            {isSubmitting ? 'PROCESSANDO...' : 'FINALIZAR MEU CADASTRO'}
+            {isSubmitting ? 'Processando Cadastro...' : 'Enviar meu Perfil'}
           </button>
         </form>
       </div>

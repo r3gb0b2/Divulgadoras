@@ -1,6 +1,6 @@
 {
   "name": "Equipe Certa",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Plataforma de recrutamento e gestão de divulgadoras.",
   "requestFramePermissions": [
     "camera"
