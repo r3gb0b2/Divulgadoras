@@ -5,7 +5,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon, ShieldCheckIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -285,6 +285,8 @@ const PostCheck: React.FC = () => {
     const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
     const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
 
+    const isApsTimeout = pushErrorDetail?.toLowerCase().includes('apns');
+
     return (
         <div className="max-w-3xl mx-auto">
             {!searched || !promoter ? (
@@ -303,22 +305,39 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-3 rounded-lg border flex flex-col transition-colors duration-500 ${pushStatus === 'success' ? 'bg-green-900/20 border-green-800 text-green-400' : pushStatus === 'failed' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                        <div className={`p-4 rounded-lg border flex flex-col transition-colors duration-500 ${pushStatus === 'success' ? 'bg-green-900/20 border-green-800 text-green-400' : pushStatus === 'failed' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-3">
                                     <FaceIdIcon className={`w-5 h-5 ${pushStatus === 'success' ? 'animate-bounce' : ''}`} />
-                                    <span className="text-sm font-medium">
-                                        {pushStatus === 'success' ? 'Celular vinculado para notificações!' : pushStatus === 'failed' ? 'Falha ao vincular dispositivo.' : 'Vinculando dispositivo para notificações...'}
+                                    <span className="text-sm font-bold uppercase tracking-wider">
+                                        {pushStatus === 'success' ? 'Notificações Ativas!' : pushStatus === 'failed' ? 'Falha na Vinculação' : 'Vinculando Dispositivo...'}
                                     </span>
                                 </div>
                                 {pushStatus === 'failed' && (
-                                    <button onClick={() => performSearch(email)} className="text-xs bg-red-800 text-white px-2 py-1 rounded flex items-center gap-1">
+                                    <button onClick={() => performSearch(email)} className="text-xs bg-red-800 text-white px-3 py-1 rounded-full flex items-center gap-1 font-bold">
                                         <RefreshIcon className="w-3 h-3" /> Tentar Novamente
                                     </button>
                                 )}
                             </div>
-                            {pushStatus === 'failed' && pushErrorDetail && (
-                                <p className="text-[10px] mt-1 opacity-70 italic pl-8">{pushErrorDetail}</p>
+                            
+                            {pushStatus === 'failed' && (
+                                <div className="mt-3 pl-8">
+                                    <p className="text-xs opacity-90 leading-relaxed">
+                                        Erro: <span className="font-mono italic">{pushErrorDetail}</span>
+                                    </p>
+                                    {isApsTimeout && (
+                                        <div className="mt-3 p-3 bg-red-900/40 rounded-md border border-red-700/50">
+                                            <p className="text-[11px] font-bold flex items-center gap-2 text-white">
+                                                <ShieldCheckIcon className="w-3 h-3 text-yellow-400" /> DICA DO DESENVOLVEDOR:
+                                            </p>
+                                            <p className="text-[10px] mt-1 text-gray-200">
+                                                A Apple (APNs) não respondeu ao pedido de registro. 
+                                                No <strong>Xcode</strong>, vá em <span className="text-white">Signing & Capabilities</span>, 
+                                                clique em <span className="text-white">+ Capability</span> e adicione <span className="text-white font-mono">"Push Notifications"</span>.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     )}

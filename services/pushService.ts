@@ -10,6 +10,8 @@ export interface PushResult {
 }
 
 export const initPushNotifications = async (promoterId: string): Promise<PushResult> => {
+    console.log("Push: Iniciando processo para", promoterId);
+
     if (!Capacitor.isNativePlatform()) {
         return { success: false, error: "Web não suporta Push nativo." };
     }
@@ -21,59 +23,68 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
     return new Promise(async (resolve) => {
         let isResolved = false;
 
+        // Aumentado para 30s para casos de rede lenta no primeiro registro
         const timeout = setTimeout(() => {
             if (!isResolved) {
                 isResolved = true;
-                resolve({ success: false, error: "Tempo esgotado (APNs não respondeu)." });
+                console.error("Push: APNs não respondeu após 30 segundos.");
+                resolve({ 
+                    success: false, 
+                    error: "APNs Timeout: O celular não recebeu resposta da Apple. Verifique o AppDelegate.swift no Xcode." 
+                });
             }
-        }, 12000);
+        }, 30000);
 
         try {
+            console.log("Push: Verificando permissões...");
             const permStatus = await PushNotifications.checkPermissions();
             
             if (permStatus.receive !== 'granted') {
+                console.log("Push: Solicitando permissões ao usuário...");
                 const request = await PushNotifications.requestPermissions();
                 if (request.receive !== 'granted') {
                     clearTimeout(timeout);
-                    resolve({ success: false, error: "Permissão de notificação negada." });
+                    resolve({ success: false, error: "Permissão de notificação negada no iOS." });
                     return;
                 }
             }
 
+            console.log("Push: Removendo listeners antigos...");
             await PushNotifications.removeAllListeners();
 
-            // Ouvinte de Sucesso
+            // SUCESSO
             PushNotifications.addListener('registration', async (token) => {
-                if (isResolved) return;
-                const platform = Capacitor.getPlatform().toLowerCase() as 'ios' | 'android';
-                
-                try {
-                    await savePushToken(promoterId, token.value, platform);
-                    isResolved = true;
-                    clearTimeout(timeout);
-                    resolve({ success: true, token: token.value });
-                } catch (e) {
-                    isResolved = true;
-                    resolve({ success: false, error: "Falha ao salvar no banco." });
-                }
-            });
-
-            // Ouvinte de Erro do Sistema (IMPORTANTE PARA O XCODE)
-            PushNotifications.addListener('registrationError', (error) => {
+                console.log("Push: SUCESSO! Token recebido do iOS:", token.value);
                 if (isResolved) return;
                 isResolved = true;
                 clearTimeout(timeout);
-                console.error("Erro APNs:", error);
-                resolve({ success: false, error: `Erro do iOS: ${error.error}` });
+                
+                try {
+                    await savePushToken(promoterId, token.value, 'ios');
+                    resolve({ success: true, token: token.value });
+                } catch (e) {
+                    resolve({ success: false, error: "Falha ao salvar no banco (Firestore)." });
+                }
             });
 
+            // ERRO NATIVO
+            PushNotifications.addListener('registrationError', (error) => {
+                console.error("Push: Erro retornado pelo iOS:", error);
+                if (isResolved) return;
+                isResolved = true;
+                clearTimeout(timeout);
+                resolve({ success: false, error: `Erro iOS: ${error.error}` });
+            });
+
+            console.log("Push: Disparando PushNotifications.register()...");
             await PushNotifications.register();
 
         } catch (error: any) {
+            console.error("Push: Exceção no try/catch:", error);
             if (isResolved) return;
             isResolved = true;
             clearTimeout(timeout);
-            resolve({ success: false, error: error.message || "Falha no setup." });
+            resolve({ success: false, error: error.message || "Erro no setup." });
         }
     });
 };

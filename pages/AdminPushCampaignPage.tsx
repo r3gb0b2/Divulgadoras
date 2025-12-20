@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon, AlertTriangleIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -17,14 +17,12 @@ const AdminPushCampaignPage: React.FC = () => {
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
-    // Filter State
     const [targetOrgId, setTargetOrgId] = useState('');
     const [targetCampaignName, setTargetCampaignName] = useState('all');
     const [activePlatformTab, setActivePlatformTab] = useState<'ios' | 'android' | 'unknown'>('ios');
     const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Message State
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [targetUrl, setTargetUrl] = useState('/#/posts');
@@ -32,6 +30,7 @@ const AdminPushCampaignPage: React.FC = () => {
     const [isSending, setIsSending] = useState(false);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [debugError, setDebugError] = useState<string | null>(null);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -61,7 +60,6 @@ const AdminPushCampaignPage: React.FC = () => {
                 selectedCampaign: targetCampaignName,
                 status: 'approved',
             });
-            // Filtra apenas quem tem token
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
             setSelectedPromoterIds(new Set(withToken.map(p => p.id)));
@@ -105,26 +103,28 @@ const AdminPushCampaignPage: React.FC = () => {
         setIsSending(true);
         setResult(null);
         setError(null);
+        setDebugError(null);
 
         try {
-            const res = await sendPushCampaign({
+            const res: any = await sendPushCampaign({
                 title,
                 body,
                 url: targetUrl,
                 promoterIds: idsToNotify,
                 organizationId: targetOrgId
             });
-            setResult(res.message);
+            
+            if (res.success) {
+                setResult(res.message);
+            } else {
+                setError(res.message);
+                setDebugError(res.errorDetail || "Causa desconhecida.");
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
             setIsSending(false);
         }
-    };
-
-    const handleCopyToken = (token: string) => {
-        navigator.clipboard.writeText(token);
-        alert("Token copiado!");
     };
 
     return (
@@ -140,41 +140,19 @@ const AdminPushCampaignPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Coluna 1: Audiência e Lista de Dispositivos */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-lg shadow-lg border border-gray-700">
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
                             <h2 className="text-xl font-bold text-white">1. Selecionar Dispositivos</h2>
                             <div className="flex bg-dark p-1 rounded-lg">
-                                <button 
-                                    onClick={() => setActivePlatformTab('ios')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
-                                >
-                                    iPhone
-                                </button>
-                                <button 
-                                    onClick={() => setActivePlatformTab('android')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                                >
-                                    Android
-                                </button>
-                                <button 
-                                    onClick={() => setActivePlatformTab('unknown')}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'unknown' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}
-                                >
-                                    Outros
-                                </button>
+                                <button onClick={() => setActivePlatformTab('ios')} className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iPhone</button>
+                                <button onClick={() => setActivePlatformTab('android')} className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}>Android</button>
+                                <button onClick={() => setActivePlatformTab('unknown')} className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'unknown' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}>Outros</button>
                             </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                            <input 
-                                type="text" 
-                                placeholder="Buscar por nome..." 
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="flex-grow bg-dark border border-gray-600 rounded px-3 py-2 text-sm text-white"
-                            />
+                            <input type="text" placeholder="Buscar por nome..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-grow bg-dark border border-gray-600 rounded px-3 py-2 text-sm text-white" />
                             {isSuperAdmin && (
                                 <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="bg-dark border border-gray-600 rounded px-3 py-2 text-sm text-white min-w-[200px]">
                                     <option value="">Filtrar Organização...</option>
@@ -188,16 +166,11 @@ const AdminPushCampaignPage: React.FC = () => {
                                 <thead className="bg-dark">
                                     <tr>
                                         <th className="px-4 py-3 text-left w-10">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={filteredPromoters.length > 0 && filteredPromoters.every(p => selectedPromoterIds.has(p.id))}
-                                                onChange={(e) => {
-                                                    const newSet = new Set(selectedPromoterIds);
-                                                    filteredPromoters.forEach(p => e.target.checked ? newSet.add(p.id) : newSet.delete(p.id));
-                                                    setSelectedPromoterIds(newSet);
-                                                }}
-                                                className="rounded border-gray-600 text-primary focus:ring-primary"
-                                            />
+                                            <input type="checkbox" checked={filteredPromoters.length > 0 && filteredPromoters.every(p => selectedPromoterIds.has(p.id))} onChange={(e) => {
+                                                const newSet = new Set(selectedPromoterIds);
+                                                filteredPromoters.forEach(p => e.target.checked ? newSet.add(p.id) : newSet.delete(p.id));
+                                                setSelectedPromoterIds(newSet);
+                                            }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Plataforma</th>
@@ -208,21 +181,16 @@ const AdminPushCampaignPage: React.FC = () => {
                                     {isLoadingData ? (
                                         <tr><td colSpan={4} className="text-center py-8 text-gray-500">Carregando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Nenhum dispositivo encontrado nesta aba.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Nenhum dispositivo com App instalado aqui.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => (
                                             <tr key={p.id} className="hover:bg-gray-700/30 transition-colors">
                                                 <td className="px-4 py-3">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedPromoterIds.has(p.id)}
-                                                        onChange={() => {
-                                                            const n = new Set(selectedPromoterIds);
-                                                            if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
-                                                            setSelectedPromoterIds(n);
-                                                        }}
-                                                        className="rounded border-gray-600 text-primary focus:ring-primary"
-                                                    />
+                                                    <input type="checkbox" checked={selectedPromoterIds.has(p.id)} onChange={() => {
+                                                        const n = new Set(selectedPromoterIds);
+                                                        if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
+                                                        setSelectedPromoterIds(n);
+                                                    }} className="rounded border-gray-600 text-primary focus:ring-primary" />
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <p className="text-sm font-bold text-white">{p.name}</p>
@@ -235,7 +203,6 @@ const AdminPushCampaignPage: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={() => handleCopyToken(p.fcmToken!)} className="text-[10px] text-primary hover:underline font-bold uppercase">Token</button>
                                                         <a href={`https://instagram.com/${p.instagram?.replace('@', '')}`} target="_blank" className="text-gray-500 hover:text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
                                                         <a href={`https://wa.me/55${p.whatsapp?.replace(/\D/g, '')}`} target="_blank" className="text-gray-500 hover:text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
                                                     </div>
@@ -249,63 +216,28 @@ const AdminPushCampaignPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Coluna 2: Formulário da Mensagem */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-lg shadow-lg border border-gray-700 space-y-4">
                         <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-2">2. Criar Notificação</h2>
-                        
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Título</label>
-                            <input 
-                                type="text" 
-                                placeholder="Ex: Nova tarefa liberada! 🚀" 
-                                value={title} 
-                                onChange={e => setTitle(e.target.value)} 
-                                className="w-full bg-dark border border-gray-600 rounded px-3 py-2 text-white font-bold focus:ring-1 focus:ring-primary outline-none" 
-                            />
+                            <input type="text" placeholder="Ex: Nova tarefa liberada! 🚀" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-600 rounded px-3 py-2 text-white font-bold focus:ring-1 focus:ring-primary outline-none" />
                         </div>
-
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Conteúdo da Mensagem</label>
-                            <textarea 
-                                placeholder="Olá, você tem uma nova postagem aguardando..." 
-                                value={body} 
-                                onChange={e => setBody(e.target.value)} 
-                                className="w-full h-32 bg-dark border border-gray-600 rounded px-3 py-2 text-white text-sm focus:ring-1 focus:ring-primary outline-none" 
-                            />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mensagem</label>
+                            <textarea placeholder="Olá, você tem uma nova postagem aguardando..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded px-3 py-2 text-white text-sm focus:ring-1 focus:ring-primary outline-none" />
                         </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Redirecionar para:</label>
-                            <select value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-dark border border-gray-600 rounded px-3 py-2 text-white text-sm">
-                                <option value="/#/posts">Página de Postagens (Minhas Tarefas)</option>
-                                <option value="/#/status">Minha Conta (Status)</option>
-                                <option value="/#/connect">Conexão Divulgadoras</option>
-                            </select>
-                        </div>
-
                         <div className="pt-4 space-y-3">
-                            <div className="bg-blue-900/10 p-3 rounded border border-blue-900/30">
-                                <p className="text-xs text-blue-400 font-medium">Plataforma Alvo: <strong className="uppercase">{activePlatformTab}</strong></p>
-                                <p className="text-xs text-gray-500 mt-1">Selecionados: {selectedPromoterIds.size} aparelhos</p>
-                            </div>
-
-                            {error && <p className="text-red-400 text-sm font-bold animate-pulse">{error}</p>}
+                            {error && (
+                                <div className="p-3 bg-red-900/40 border border-red-800 rounded">
+                                    <p className="text-red-300 text-xs font-bold flex items-center gap-1"><AlertTriangleIcon className="w-4 h-4"/> {error}</p>
+                                    {debugError && <p className="text-[10px] text-red-400 mt-1 font-mono">Log: {debugError}</p>}
+                                </div>
+                            )}
                             {result && <p className="text-green-400 text-sm font-bold">{result}</p>}
 
-                            <button 
-                                onClick={handleSend} 
-                                disabled={isSending || selectedPromoterIds.size === 0} 
-                                className={`w-full py-4 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 ${activePlatformTab === 'ios' ? 'bg-primary hover:bg-primary-dark' : activePlatformTab === 'android' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'} text-white disabled:opacity-30`}
-                            >
-                                {isSending ? (
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                                ) : (
-                                    <>
-                                        <span>Disparar Push</span>
-                                        <FaceIdIcon className="w-6 h-6" />
-                                    </>
-                                )}
+                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className={`w-full py-4 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 ${activePlatformTab === 'ios' ? 'bg-primary hover:bg-primary-dark' : activePlatformTab === 'android' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'} text-white disabled:opacity-30`}>
+                                {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : <><span className="uppercase">Disparar Push</span><FaceIdIcon className="w-6 h-6" /></>}
                             </button>
                         </div>
                     </div>
