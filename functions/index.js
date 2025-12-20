@@ -47,6 +47,7 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
     try {
         const messages = [];
+        const promoterMapByToken = {}; // Para identificar quem falhou depois
         const CHUNK_SIZE = 30;
         
         for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
@@ -57,36 +58,40 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
             
             snap.forEach(doc => {
                 const p = doc.data();
-                const token = p.fcmToken;
+                let token = p.fcmToken;
                 
-                // Validação rigorosa: FCM tokens não são hexadecimais puros de 64 chars (APNs)
-                // e costumam ter mais de 100 caracteres no iOS/Android moderno
-                if (token && 
-                    typeof token === 'string' && 
-                    token !== 'undefined' && 
-                    token !== 'null' && 
-                    token.length > 40) {
+                // SANITIZAÇÃO: Remove espaços, quebras de linha e valida tipo
+                if (token && typeof token === 'string') {
+                    token = token.trim();
                     
-                    messages.push({
-                        token: token,
-                        notification: { title, body },
-                        data: { url: url || '/#/posts' },
-                        android: {
-                            priority: "high",
-                            notification: { sound: "default", color: "#e83a93" }
-                        },
-                        apns: {
-                            payload: {
-                                aps: { sound: "default", badge: 1, contentAvailable: true }
+                    // Verifica se o token parece válido (FCM tokens são longos e não-hex puros)
+                    if (token !== 'undefined' && token !== 'null' && token.length > 40) {
+                        const msg = {
+                            token: token,
+                            notification: { title, body },
+                            data: { 
+                                url: url || '/#/posts',
+                                click_action: "FLUTTER_NOTIFICATION_CLICK" // Compatibilidade extra
+                            },
+                            android: {
+                                priority: "high",
+                                notification: { sound: "default", color: "#e83a93" }
+                            },
+                            apns: {
+                                payload: {
+                                    aps: { sound: "default", badge: 1, contentAvailable: true }
+                                }
                             }
-                        }
-                    });
+                        };
+                        messages.push(msg);
+                        promoterMapByToken[token] = { id: doc.id, name: p.name };
+                    }
                 }
             });
         }
 
         if (messages.length === 0) {
-            return { success: false, message: "Nenhum dispositivo com token FCM válido (longo) encontrado para este grupo." };
+            return { success: false, message: "Nenhum dispositivo com token válido encontrado na seleção." };
         }
 
         // Usar sendEach para garantir que um token inválido não derrube o envio dos outros
@@ -97,15 +102,21 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 
         let errorDetail = "";
         if (failureCount > 0) {
-            const firstError = response.responses.find(r => !r.success);
-            errorDetail = firstError ? firstError.error.message : "Erro desconhecido em alguns dispositivos.";
-            console.error("Push partial failure:", errorDetail);
+            // Log detalhado no Firebase Console para saber QUEM falhou
+            response.responses.forEach((res, idx) => {
+                if (!res.success) {
+                    const failedToken = messages[idx].token;
+                    const promoter = promoterMapByToken[failedToken];
+                    console.error(`Falha no Push - Divulgadora: ${promoter.name} (ID: ${promoter.id}). Erro: ${res.error.message}`);
+                    if (!errorDetail) errorDetail = res.error.message;
+                }
+            });
         }
 
         return { 
             success: successCount > 0, 
-            message: `${successCount} enviadas, ${failureCount} falhas.`,
-            errorDetail
+            message: `${successCount} enviadas com sucesso. ${failureCount} falhas detectadas.`,
+            errorDetail: failureCount > 0 ? `Erro no primeiro dispositivo falho: ${errorDetail}` : ""
         };
 
     } catch (e) {
