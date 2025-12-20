@@ -35,6 +35,7 @@ export interface Promoter {
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
   fcmToken?: string; // Token para Push Notifications
+  platform?: 'ios' | 'android' | 'web'; // Plataforma do dispositivo
 }
 
 export interface PromoterApplicationData {

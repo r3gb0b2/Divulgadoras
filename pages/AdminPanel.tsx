@@ -462,7 +462,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
 
         setAllPromoters(prev => prev.map(p => {
-            if (idsToUpdate.includes(p.id)) {
+            if (idsToNotify.includes(p.id)) {
                 return { ...p, ...optimisticUpdate };
             }
             return p;
@@ -682,8 +682,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
         } else if (lookupEmail && typeof lookupEmail === 'string') {
-            // FIX: Ensuring lookupEmail is treated as a string to avoid 'unknown' assignment issues.
-            searchString = lookupEmail;
+            // FIX: Explicitly ensuring lookupEmail is a string and handling optional param.
+            searchString = String(lookupEmail);
         }
         
         const finalEmail: string = searchString.trim();
@@ -698,7 +698,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Changed err: unknown to err: any to resolve property access error and used a type-safe message extraction.
+            // FIX: Using any for error type to handle safe message extraction.
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

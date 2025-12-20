@@ -26,8 +26,9 @@ export const initPushNotifications = async (promoterId: string) => {
 
         PushNotifications.addListener('registration', async (token) => {
             console.log('Push: Dispositivo registrado com sucesso.');
+            const platform = Capacitor.getPlatform() as 'ios' | 'android';
             if (promoterId) {
-                await savePushToken(promoterId, token.value);
+                await savePushToken(promoterId, token.value, platform);
             }
         });
 

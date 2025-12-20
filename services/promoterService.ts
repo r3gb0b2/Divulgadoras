@@ -16,10 +16,11 @@ const toMillisSafe = (timestamp: any): number => {
     return isNaN(date.getTime()) ? 0 : date.getTime();
 };
 
-export const savePushToken = async (promoterId: string, token: string): Promise<void> => {
+export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
     try {
         await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: token,
+            platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch (error) {
