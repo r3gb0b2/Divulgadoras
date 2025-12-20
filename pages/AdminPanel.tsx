@@ -462,7 +462,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         }
 
         setAllPromoters(prev => prev.map(p => {
-            if (idsToNotify.includes(p.id)) {
+            // FIX: Corrected variable name from idsToNotify to idsToUpdate.
+            if (idsToUpdate.includes(p.id)) {
                 return { ...p, ...optimisticUpdate };
             }
             return p;
@@ -506,11 +507,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 });
             }
 
-            const promises = idsToUpdate.map(id => updatePromoter(id, updatePayload));
+            // FIX: Explicitly typing id as string to avoid unknown type error in some TS environments.
+            const promises = idsToUpdate.map((id: string) => updatePromoter(id, updatePayload));
             
             if (actionType === 'remove') {
                 const removePromoterStatusToRemoved = functions.httpsCallable('setPromoterStatusToRemoved');
-                const removePromises = idsToUpdate.map(id => removePromoterStatusToRemoved({ promoterId: id }));
+                // FIX: Explicitly typing id as string to avoid unknown type error in some TS environments.
+                const removePromises = idsToUpdate.map((id: string) => removePromoterStatusToRemoved({ promoterId: id }));
                 await Promise.all(removePromises);
             } else {
                 await Promise.all(promises);
@@ -682,7 +685,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (typeof emailToSearch === 'string') {
             searchString = emailToSearch;
         } else if (lookupEmail && typeof lookupEmail === 'string') {
-            // FIX: Explicitly ensuring lookupEmail is a string and handling optional param.
             searchString = String(lookupEmail);
         }
         
@@ -694,11 +696,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Explicitly pass finalEmail as string for robustness and ensure it's not null/undefined.
+            // FIX: Explicitly ensuring results call uses a string from finalEmail to avoid unknown assignment errors.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Using any for error type to handle safe message extraction.
             const errorMessage = err instanceof Error ? err.message : String(err);
             setLookupError(errorMessage);
         } finally {

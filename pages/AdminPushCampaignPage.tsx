@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -77,7 +78,11 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const filteredPromoters = useMemo(() => {
         return promoters.filter(p => {
-            const matchesPlatform = p.platform === activePlatformTab || (activePlatformTab === 'ios' && !p.platform); // Fallback p/ antigos sem plataforma p/ iOS
+            // Correção da lógica de plataforma:
+            // 1. Se p.platform existe, deve bater com a aba.
+            // 2. Se p.platform NÃO existe (registros antigos), vamos assumir Android por ser a maioria dos casos antigos.
+            const pPlatform = p.platform || 'android'; 
+            const matchesPlatform = pPlatform === activePlatformTab;
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesPlatform && matchesSearch;
         });
@@ -89,7 +94,6 @@ const AdminPushCampaignPage: React.FC = () => {
             return;
         }
 
-        // FIX: Explicitly cast Array.from result to string[] to resolve TypeScript unknown array errors.
         const idsToNotify = (Array.from(selectedPromoterIds) as string[]).filter((id: string) => 
             filteredPromoters.some(p => p.id === id)
         );
@@ -123,7 +127,7 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const handleCopyToken = (token: string) => {
         navigator.clipboard.writeText(token);
-        alert("Token copiado para o clipboard!");
+        alert("Token copiado!");
     };
 
     return (
@@ -195,9 +199,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                             />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        {activePlatformTab === 'ios' && (
-                                            <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Token APNS</th>
-                                        )}
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Plataforma</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
@@ -205,7 +207,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                     {isLoadingData ? (
                                         <tr><td colSpan={4} className="text-center py-8 text-gray-500">Carregando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Nenhum dispositivo encontrado para esta categoria.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Nenhum dispositivo encontrado nesta aba.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => (
                                             <tr key={p.id} className="hover:bg-gray-700/30 transition-colors">
@@ -225,18 +227,16 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     <p className="text-sm font-bold text-white">{p.name}</p>
                                                     <p className="text-xs text-gray-500">{p.campaignName || 'Geral'}</p>
                                                 </td>
-                                                {activePlatformTab === 'ios' && (
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <code className="text-[10px] bg-dark px-2 py-1 rounded text-gray-400 font-mono truncate max-w-[120px]">{p.fcmToken}</code>
-                                                            <button onClick={() => handleCopyToken(p.fcmToken!)} className="text-xs text-primary hover:underline">Copiar</button>
-                                                        </div>
-                                                    </td>
-                                                )}
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${p.platform === 'ios' ? 'bg-white text-black' : 'bg-green-600 text-white'}`}>
+                                                        {p.platform || 'android'}
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex justify-end gap-2">
-                                                        <a href={`https://instagram.com/${p.instagram?.replace('@', '')}`} target="_blank" className="text-gray-500 hover:text-pink-500 transition-colors"><InstagramIcon className="w-4 h-4" /></a>
-                                                        <a href={`https://wa.me/55${p.whatsapp?.replace(/\D/g, '')}`} target="_blank" className="text-gray-500 hover:text-green-500 transition-colors"><WhatsAppIcon className="w-4 h-4" /></a>
+                                                        <button onClick={() => handleCopyToken(p.fcmToken!)} className="text-[10px] text-primary hover:underline font-bold uppercase">Token</button>
+                                                        <a href={`https://instagram.com/${p.instagram?.replace('@', '')}`} target="_blank" className="text-gray-500 hover:text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
+                                                        <a href={`https://wa.me/55${p.whatsapp?.replace(/\D/g, '')}`} target="_blank" className="text-gray-500 hover:text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
                                                     </div>
                                                 </td>
                                             </tr>

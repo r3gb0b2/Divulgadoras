@@ -11,11 +11,11 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Properly extending from Component class to ensure setState and props are inherited correctly.
+ * FIXED: Explicitly using React.Component to ensure type inference for setState and props.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Explicitly define state property for better type inference from React Component.
-  public state: ErrorBoundaryState = {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Properly initialized state with types matching React.Component requirements.
+  public override state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -26,23 +26,21 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render will show the fallback UI.
     return { hasError: true, error, errorInfo: null };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // You can also log the error to an error reporting service
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Use this.setState from Component inherited base class.
+    // FIX: setState now correctly resolved from React.Component base class.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  public render() {
-    // FIX: Access inherited state in class component.
+  public override render() {
+    // FIX: state correctly resolved from React.Component base class.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +68,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: Access inherited props in class component.
+    // FIX: props now correctly resolved from React.Component base class.
     return this.props.children;
   }
 }

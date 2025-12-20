@@ -25,8 +25,11 @@ export const initPushNotifications = async (promoterId: string) => {
         await PushNotifications.removeAllListeners();
 
         PushNotifications.addListener('registration', async (token) => {
-            console.log('Push: Dispositivo registrado com sucesso.');
-            const platform = Capacitor.getPlatform() as 'ios' | 'android';
+            // No iOS, Capacitor.getPlatform() retorna 'ios'
+            // No Android, Capacitor.getPlatform() retorna 'android'
+            const platform = Capacitor.getPlatform().toLowerCase() as 'ios' | 'android';
+            console.log(`Push: Registrando dispositivo ${platform} com token.`);
+            
             if (promoterId) {
                 await savePushToken(promoterId, token.value, platform);
             }
@@ -37,7 +40,7 @@ export const initPushNotifications = async (promoterId: string) => {
         });
 
         PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log('Push: Recebida:', notification);
+            console.log('Push: Recebida em primeiro plano:', notification);
         });
 
         PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
