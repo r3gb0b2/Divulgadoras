@@ -7,7 +7,7 @@ const db = admin.firestore();
 
 /**
  * Função para integração com a IA Gemini do Google.
- * Utiliza a chave de API da variável de ambiente process.env.API_KEY.
+ * Exclusivamente utiliza process.env.API_KEY.
  */
 exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
@@ -16,10 +16,10 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
     if (!prompt) throw new functions.https.HttpsError("invalid-argument", "Prompt vazio.");
 
     try {
-        // Inicialização seguindo as diretrizes de "Always use new GoogleGenAI({apiKey: process.env.API_KEY})"
-        const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // Inicialização obrigatória: new GoogleGenAI({ apiKey: process.env.API_KEY })
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        const response = await genAI.models.generateContent({
+        const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
@@ -27,10 +27,11 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
             }
         });
 
+        // Retorna a propriedade .text diretamente do objeto de resposta
         return { text: response.text };
     } catch (e) {
         console.error("Gemini Error:", e);
-        throw new functions.https.HttpsError("internal", "Falha na IA: " + e.message);
+        throw new functions.https.HttpsError("internal", "Falha na IA: " + (e.message || "Erro desconhecido"));
     }
 });
 
@@ -99,12 +100,11 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
 });
 
 /**
- * Atualiza o status de uma divulgadora e sincroniza com as tarefas ativas.
+ * Funções auxiliares de sincronização e status
  */
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId, data: updateData } = data;
-    
     try {
         await db.collection('promoters').doc(promoterId).update({
             ...updateData,
@@ -116,71 +116,20 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     }
 });
 
-/**
- * Remove divulgadora de todas as tarefas e marca como 'Removida'.
- */
 exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId } = data;
-
     try {
         const batch = db.batch();
         const assignments = await db.collection('postAssignments').where('promoterId', '==', promoterId).get();
         assignments.forEach(doc => batch.delete(doc.ref));
-        
         batch.update(db.collection('promoters').doc(promoterId), {
             status: 'removed',
             hasJoinedGroup: false
         });
-
         await batch.commit();
         return { success: true };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
     }
-});
-
-// Stubs para evitar erros 404 no frontend enquanto as funções complexas não são implementadas
-exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { postData, assignedPromoters } = data;
-    const postRef = await db.collection('posts').add({
-        ...postData,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    for (const p of assignedPromoters) {
-        await db.collection('postAssignments').add({
-            postId: postRef.id,
-            promoterId: p.id,
-            promoterName: p.name,
-            promoterEmail: p.email,
-            status: 'pending',
-            organizationId: postData.organizationId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            post: postData
-        });
-    }
-    return { success: true, postId: postRef.id };
-});
-
-exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { postId, promoterIds } = data;
-    const postSnap = await db.collection('posts').doc(postId).get();
-    const postData = postSnap.data();
-
-    for (const pid of promoterIds) {
-        const pSnap = await db.collection('promoters').doc(pid).get();
-        const p = pSnap.data();
-        await db.collection('postAssignments').add({
-            postId,
-            promoterId: pid,
-            promoterName: p.name,
-            promoterEmail: p.email,
-            status: 'pending',
-            organizationId: postData.organizationId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            post: postData
-        });
-    }
-    return { success: true };
 });

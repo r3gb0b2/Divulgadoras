@@ -1,7 +1,7 @@
 {
   "functions": {
     "source": "functions",
-    "predeploy": "cd functions && npm install"
+    "predeploy": "npm --prefix functions install"
   },
   "hosting": {
     "public": ".",

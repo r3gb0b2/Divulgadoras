@@ -7,62 +7,47 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
 /**
- * ErrorBoundary component to catch runtime errors in the component tree.
- * Inherits from Component to provide standard error handling behavior.
+ * ErrorBoundary component to catch runtime errors.
  */
-// Fix: Use the imported Component directly instead of React.Component to resolve inheritance and member access issues
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Explicit constructor with props to ensure proper initialization
+// FIX: Explicitly using React.Component to ensure TypeScript correctly resolves inherited members like 'state' and 'props'
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    // FIX: Initialize state correctly within the constructor
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null,
     };
   }
 
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error };
   }
 
-  // Handle errors during lifecycle
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    
-    // Fix: setState is now correctly identified as an inherited member
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
   }
 
   public render(): ReactNode {
-    // Fix: state is now correctly identified as an inherited member
+    // FIX: Access state property from inherited member
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
+          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500 text-center">
             <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
-            <p className="mb-4 text-gray-300">
-              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
+            <p className="mb-6 text-gray-300">
+              Ocorreu um erro inesperado na aplicação.
             </p>
-            {this.state.error && (
-              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                <p className="text-red-400">{this.state.error.toString()}</p>
-              </div>
-            )}
              <button
               onClick={() => window.location.reload()}
-              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
+              className="w-full py-3 px-4 bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors font-bold shadow-lg"
             >
               Recarregar Página
             </button>
-             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
+             <a href="/" className="block mt-6 text-sm text-gray-400 hover:text-white underline">
                 Voltar para a Página Inicial
             </a>
           </div>
@@ -70,7 +55,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fix: props is now correctly identified as an inherited member
+    // FIX: Access props property from inherited member
     return this.props.children;
   }
 }
