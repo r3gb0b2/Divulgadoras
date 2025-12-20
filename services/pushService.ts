@@ -1,4 +1,3 @@
-
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { savePushToken } from './promoterService';
@@ -9,34 +8,34 @@ export interface PushResult {
     error?: string;
 }
 
+/**
+ * Inicializa as notificações push para um promoter específico.
+ */
 export const initPushNotifications = async (promoterId: string): Promise<PushResult> => {
-    console.log("Push: Iniciando processo para", promoterId);
+    const platform = Capacitor.getPlatform() as 'ios' | 'android' | 'web';
+    console.log(`Push: Iniciando processo para ${promoterId} na plataforma ${platform}`);
 
     if (!Capacitor.isNativePlatform()) {
         return { success: false, error: "Web não suporta Push nativo." };
     }
 
-    if (Capacitor.getPlatform() === 'ios' && !Capacitor.isNativePlatform()) {
-        return { success: false, error: "Push não funciona no simulador." };
-    }
-
     return new Promise(async (resolve) => {
         let isResolved = false;
 
-        // Aumentado para 30s para casos de rede lenta no primeiro registro
+        // Timeout de 30 segundos para resposta dos serviços nativos (APNs/FCM)
         const timeout = setTimeout(() => {
             if (!isResolved) {
                 isResolved = true;
-                console.error("Push: APNs não respondeu após 30 segundos.");
+                console.error("Push: Tempo limite atingido aguardando resposta nativa.");
                 resolve({ 
                     success: false, 
-                    error: "APNs Timeout: O celular não recebeu resposta da Apple. Verifique o AppDelegate.swift no Xcode." 
+                    error: "Serviço de notificações demorou a responder. Verifique sua conexão ou configurações do sistema." 
                 });
             }
         }, 30000);
 
         try {
-            console.log("Push: Verificando permissões...");
+            console.log("Push: Verificando permissões atuais...");
             const permStatus = await PushNotifications.checkPermissions();
             
             if (permStatus.receive !== 'granted') {
@@ -44,47 +43,51 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
                 const request = await PushNotifications.requestPermissions();
                 if (request.receive !== 'granted') {
                     clearTimeout(timeout);
-                    resolve({ success: false, error: "Permissão de notificação negada no iOS." });
+                    isResolved = true;
+                    resolve({ success: false, error: "Permissão de notificação negada pelo usuário." });
                     return;
                 }
             }
 
-            console.log("Push: Removendo listeners antigos...");
-            await PushNotifications.removeAllListeners();
-
-            // SUCESSO
-            PushNotifications.addListener('registration', async (token) => {
-                console.log("Push: SUCESSO! Token recebido do iOS:", token.value);
+            // IMPORTANTE: Adicionar o listener ANTES de chamar o register()
+            console.log("Push: Configurando ouvintes de evento...");
+            
+            // Sucesso no Registro
+            const regListener = await PushNotifications.addListener('registration', async (token) => {
+                console.log("Push: Sucesso! Token recebido:", token.value);
                 if (isResolved) return;
                 isResolved = true;
                 clearTimeout(timeout);
                 
                 try {
-                    await savePushToken(promoterId, token.value, 'ios');
+                    // Salva no banco usando a plataforma detectada
+                    await savePushToken(promoterId, token.value, platform);
                     resolve({ success: true, token: token.value });
-                } catch (e) {
-                    resolve({ success: false, error: "Falha ao salvar no banco (Firestore)." });
+                } catch (e: any) {
+                    console.error("Push: Erro ao salvar no Firestore:", e);
+                    resolve({ success: false, error: "O token foi gerado, mas não pôde ser salvo no banco de dados." });
                 }
             });
 
-            // ERRO NATIVO
-            PushNotifications.addListener('registrationError', (error) => {
-                console.error("Push: Erro retornado pelo iOS:", error);
+            // Erro no Registro
+            const errListener = await PushNotifications.addListener('registrationError', (error) => {
+                console.error("Push: Erro nativo retornado:", error);
                 if (isResolved) return;
                 isResolved = true;
                 clearTimeout(timeout);
-                resolve({ success: false, error: `Erro iOS: ${error.error}` });
+                resolve({ success: false, error: `Erro nativo: ${error.error}` });
             });
 
-            console.log("Push: Disparando PushNotifications.register()...");
+            console.log("Push: Disparando registro nativo...");
             await PushNotifications.register();
 
         } catch (error: any) {
-            console.error("Push: Exceção no try/catch:", error);
-            if (isResolved) return;
-            isResolved = true;
-            clearTimeout(timeout);
-            resolve({ success: false, error: error.message || "Erro no setup." });
+            console.error("Push: Exceção crítica no setup:", error);
+            if (!isResolved) {
+                isResolved = true;
+                clearTimeout(timeout);
+                resolve({ success: false, error: error.message || "Erro interno no setup de notificações." });
+            }
         }
     });
 };
@@ -92,6 +95,7 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
 export const clearPushListeners = async () => {
     if (Capacitor.isNativePlatform()) {
         try {
+            console.log("Push: Removendo todos os ouvintes.");
             await PushNotifications.removeAllListeners();
         } catch (e) {
             console.error("Push: Erro ao limpar listeners:", e);

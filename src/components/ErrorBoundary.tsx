@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -14,12 +15,12 @@ interface ErrorBoundaryState {
  * ErrorBoundary component to catch runtime errors in the component tree.
  * Inherits from Component to provide standard error handling behavior.
  */
-// FIX: Use React.Component explicitly to ensure the compiler recognizes inherited members like state, props, and setState
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Extending Component directly from the react import to ensure TypeScript correctly resolves inherited members like 'state', 'props' and 'setState'
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Fix: Explicit constructor with props to ensure proper initialization
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // FIX: Initialize state correctly
+    // FIX: Explicitly initializing state which is now correctly recognized as an inherited property
     this.state = {
       hasError: false,
       error: null,
@@ -35,7 +36,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Access setState from inherited React.Component members
+    // FIX: Accessing setState which is now correctly inherited from Component
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -43,7 +44,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render(): ReactNode {
-    // FIX: Access state from inherited React.Component members
+    // FIX: Accessing this.state from inherited Component member
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,6 +53,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
+            {/* FIX: Using correctly inherited this.state to check for error presence */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -71,7 +73,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Access props from inherited React.Component members
+    // FIX: Accessing this.props from inherited Component member
     return this.props.children;
   }
 }

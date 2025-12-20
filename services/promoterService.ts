@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, RejectionReason, PromoterStatus, Timestamp, GroupRemovalRequest } from '../types';
@@ -17,14 +16,17 @@ const toMillisSafe = (timestamp: any): number => {
 };
 
 export const savePushToken = async (promoterId: string, token: string, platform: 'ios' | 'android' | 'web'): Promise<void> => {
+    console.log(`Push: Tentando salvar token no Firestore para ${promoterId} (${platform})...`);
     try {
         await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: token,
             platform: platform,
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
         });
+        console.log("Push: Token salvo com sucesso no banco.");
     } catch (error) {
-        console.error("Error saving FCM token:", error);
+        console.error("Push: Erro ao salvar token no Firestore:", error);
+        throw error;
     }
 };
 

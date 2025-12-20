@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
@@ -234,7 +233,7 @@ const PostCheck: React.FC = () => {
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
     
-    const [pushStatus, setPushStatus] = useState<'pending' | 'success' | 'failed'>('pending');
+    const [pushStatus, setPushStatus] = useState<'pending' | 'success' | 'failed' | 'idle'>('idle');
     const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
@@ -246,26 +245,45 @@ const PostCheck: React.FC = () => {
             
             const activePromoter = promoterProfiles[0];
             setPromoter(activePromoter);
-            
-            // Push Notification Registration
-            if (Capacitor.isNativePlatform()) {
-                setPushStatus('pending');
-                setPushErrorDetail(null);
-                const pushResult = await initPushNotifications(activePromoter.id);
-                if (pushResult.success) {
-                    setPushStatus('success');
-                } else {
-                    setPushStatus('failed');
-                    setPushErrorDetail(pushResult.error || "Erro desconhecido.");
-                }
-            }
 
             const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
             setAssignments(assignmentsWithGroupStatus); setScheduledPosts(fetchedScheduled);
         } catch (err: any) { setError(err.message || 'Ocorreu um erro ao buscar.'); } finally { setIsLoading(false); }
     }, []);
 
-    useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
+    // Efeito dedicado para Registro de Push - Executa apenas uma vez quando o promoter é encontrado
+    useEffect(() => {
+        if (promoter && Capacitor.isNativePlatform() && pushStatus === 'idle') {
+            const registerPush = async () => {
+                console.log("Push: Iniciando registro automático para", promoter.id);
+                setPushStatus('pending');
+                setPushErrorDetail(null);
+                
+                try {
+                    const pushResult = await initPushNotifications(promoter.id);
+                    if (pushResult.success) {
+                        setPushStatus('success');
+                    } else {
+                        setPushStatus('failed');
+                        setPushErrorDetail(pushResult.error || "Falha na comunicação nativa.");
+                    }
+                } catch (e: any) {
+                    setPushStatus('failed');
+                    setPushErrorDetail(e.message);
+                }
+            };
+            registerPush();
+        }
+    }, [promoter, pushStatus]);
+
+    useEffect(() => { 
+        const queryParams = new URLSearchParams(location.search); 
+        const emailFromQuery = queryParams.get('email'); 
+        if (emailFromQuery) { 
+            setEmail(emailFromQuery); 
+            performSearch(emailFromQuery); 
+        } 
+    }, [location.search, performSearch]);
     
     const handleConfirmAssignment = async () => { performSearch(email); };
     const handleReminderRequested = async () => { performSearch(email); };
@@ -285,15 +303,13 @@ const PostCheck: React.FC = () => {
     const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
     const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
 
-    const isApsTimeout = pushErrorDetail?.toLowerCase().includes('apns');
-
     return (
         <div className="max-w-3xl mx-auto">
             {!searched || !promoter ? (
                 <div className="bg-secondary shadow-2xl rounded-lg p-8">
                     <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Minhas Publicações</h1>
                     <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver suas tarefas.</p>
-                    <form onSubmit={(e) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); }}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" required /><button type="submit" disabled={isLoading} className="mt-4 w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Ver Tarefas'}</button></form>
+                    <form onSubmit={(e) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); }}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white" required /><button type="submit" disabled={isLoading} className="mt-4 w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Ver Tarefas'}</button></form>
                 </div>
             ) : (
                 <div className="flex flex-col gap-4 mb-6">
@@ -305,38 +321,26 @@ const PostCheck: React.FC = () => {
                         <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
                     </div>
                     {Capacitor.isNativePlatform() && (
-                        <div className={`p-4 rounded-lg border flex flex-col transition-colors duration-500 ${pushStatus === 'success' ? 'bg-green-900/20 border-green-800 text-green-400' : pushStatus === 'failed' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
+                        <div className={`p-4 rounded-lg border flex flex-col transition-all duration-500 ${pushStatus === 'success' ? 'bg-green-900/20 border-green-800 text-green-400' : pushStatus === 'failed' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-blue-900/20 border-blue-800 text-blue-400'}`}>
                             <div className="flex items-center justify-between w-full">
                                 <div className="flex items-center gap-3">
-                                    <FaceIdIcon className={`w-5 h-5 ${pushStatus === 'success' ? 'animate-bounce' : ''}`} />
+                                    <FaceIdIcon className={`w-5 h-5 ${pushStatus === 'success' ? 'animate-pulse' : ''}`} />
                                     <span className="text-sm font-bold uppercase tracking-wider">
-                                        {pushStatus === 'success' ? 'Notificações Ativas!' : pushStatus === 'failed' ? 'Falha na Vinculação' : 'Vinculando Dispositivo...'}
+                                        {pushStatus === 'success' ? 'Notificações Push Ativas!' : pushStatus === 'failed' ? 'Falha nas Notificações' : 'Configurando App...'}
                                     </span>
                                 </div>
                                 {pushStatus === 'failed' && (
-                                    <button onClick={() => performSearch(email)} className="text-xs bg-red-800 text-white px-3 py-1 rounded-full flex items-center gap-1 font-bold">
-                                        <RefreshIcon className="w-3 h-3" /> Tentar Novamente
+                                    <button onClick={() => setPushStatus('idle')} className="text-xs bg-red-800 text-white px-3 py-1 rounded-full flex items-center gap-1 font-bold">
+                                        <RefreshIcon className="w-3 h-3" /> Tentar Reativar
                                     </button>
                                 )}
                             </div>
                             
                             {pushStatus === 'failed' && (
                                 <div className="mt-3 pl-8">
-                                    <p className="text-xs opacity-90 leading-relaxed">
-                                        Erro: <span className="font-mono italic">{pushErrorDetail}</span>
+                                    <p className="text-[11px] opacity-90 leading-relaxed italic">
+                                        Erro: {pushErrorDetail}
                                     </p>
-                                    {isApsTimeout && (
-                                        <div className="mt-3 p-3 bg-red-900/40 rounded-md border border-red-700/50">
-                                            <p className="text-[11px] font-bold flex items-center gap-2 text-white">
-                                                <ShieldCheckIcon className="w-3 h-3 text-yellow-400" /> DICA DO DESENVOLVEDOR:
-                                            </p>
-                                            <p className="text-[10px] mt-1 text-gray-200">
-                                                A Apple (APNs) não respondeu ao pedido de registro. 
-                                                No <strong>Xcode</strong>, vá em <span className="text-white">Signing & Capabilities</span>, 
-                                                clique em <span className="text-white">+ Capability</span> e adicione <span className="text-white font-mono">"Push Notifications"</span>.
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
