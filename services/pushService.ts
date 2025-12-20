@@ -36,31 +36,37 @@ export const initPushNotifications = async (promoterId: string): Promise<PushRes
             // Sucesso no Registro: Este evento dispara logo após o .register()
             await PushNotifications.addListener('registration', async (token) => {
                 const tokenValue = token.value;
-                console.log("Push: Token recebido do SO:", tokenValue);
+                
+                // LOG PARA DEBUG (Requisito: Registre e Compare)
+                console.log("-----------------------------------------");
+                console.log("PUSH TOKEN GERADO NO CLIENTE:");
+                console.log("ID:", promoterId);
+                console.log("TOKEN:", tokenValue);
+                console.log("COMPRIMENTO:", tokenValue.length);
+                console.log("PLATAFORMA:", platform);
+                console.log("-----------------------------------------");
                 
                 try {
-                    // Tenta salvar no Firestore
+                    // Salva no Firestore com a limpeza rigorosa já implementada no promoterService
                     await savePushToken(promoterId, tokenValue, platform);
                     
-                    // Feedback para o usuário final
-                    alert("Notificações ativadas! Seu dispositivo foi vinculado com sucesso para receber avisos.");
+                    // Feedback visual discreto para o console, alerta apenas se necessário
+                    console.log("Push: Dispositivo vinculado com sucesso.");
                     
                     resolve({ success: true, token: tokenValue });
                 } catch (e: any) {
                     console.error("Push: Erro ao salvar no banco:", e);
-                    resolve({ success: false, error: "Token gerado, mas falha ao salvar no perfil." });
+                    resolve({ success: false, error: "Token gerado, mas falha ao sincronizar com o servidor." });
                 }
             });
 
             // Erro no Registro Nativo
             await PushNotifications.addListener('registrationError', (error) => {
                 console.error("Push: Erro nativo reportado pelo SO:", error.error);
-                alert("Erro ao ativar notificações: " + error.error);
                 resolve({ success: false, error: error.error });
             });
 
-            console.log("Push: Solicitando token ao sistema operacional...");
-            // Disparar o registro APÓS configurar os listeners
+            console.log("Push: Solicitando registro ao sistema operacional...");
             await PushNotifications.register();
         });
 
