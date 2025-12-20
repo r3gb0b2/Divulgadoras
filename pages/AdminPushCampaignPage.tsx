@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon, DownloadIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, CheckCircleIcon, DownloadIcon, RefreshIcon, XIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -58,7 +58,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         Messaging.messaging().apnsToken = deviceToken
         Messaging.messaging().token { token, error in
             if let token = token {
-                print("Firebase registration token: \\(token)")
+                print("Firebase registration token: \(token)")
                 NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
             }
         }
@@ -70,7 +70,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
     // 4. Recebimento do Token do Firebase
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-        print("Firebase registration token: \\(String(describing: fcmToken))")
+        print("Firebase registration token: \(String(describing: fcmToken))")
         let dataDict: [String: String] = ["token": fcmToken ?? ""]
         NotificationCenter.default.post(name: Notification.Name("FCMToken"), object: nil, userInfo: dataDict)
     }
@@ -104,7 +104,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
             });
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
-            setSelectedPromoterIds(new Set(withToken.map(p => p.id)));
+            setSelectedPromoterIds(new Set()); // Reset selection on fetch
         } catch (err) {
             setError("Erro ao buscar dispositivos.");
         } finally {
@@ -143,9 +143,47 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         });
     };
 
+    const handleDeleteToken = async (promoterId: string) => {
+        if (!window.confirm("Isso removerá o token atual. Após corrigir no Xcode, peça para a divulgadora abrir o App de novo.")) return;
+        
+        setIsDeletingToken(promoterId);
+        try {
+            await deletePushToken(promoterId);
+            setPromoters(prev => prev.filter(p => p.id !== promoterId));
+            setSelectedPromoterIds(prev => {
+                const n = new Set(prev);
+                n.delete(promoterId);
+                return n;
+            });
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setIsDeletingToken(null);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedPromoterIds.size === 0) return;
+        if (!window.confirm(`Tem certeza que deseja remover os tokens de ${selectedPromoterIds.size} dispositivos selecionados?`)) return;
+
+        setIsDeletingToken('bulk');
+        try {
+            // Fix: Explicitly type IDs to string to avoid "unknown" inference in some environments
+            const ids: string[] = Array.from(selectedPromoterIds);
+            await Promise.all(ids.map(id => deletePushToken(id)));
+            setPromoters(prev => prev.filter(p => !selectedPromoterIds.has(p.id)));
+            setSelectedPromoterIds(new Set());
+            alert("Tokens removidos com sucesso!");
+        } catch (e: any) {
+            alert("Erro ao remover alguns tokens: " + e.message);
+        } finally {
+            setIsDeletingToken(null);
+        }
+    };
+
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
-            setError("Preencha todos os campos.");
+            setError("Preencha título, mensagem e selecione pelo menos um destino.");
             return;
         }
         setIsSending(true);
@@ -163,6 +201,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                 setResult(res.message);
                 setTitle('');
                 setBody('');
+                setSelectedPromoterIds(new Set());
             } else {
                 setError(res.message);
             }
@@ -174,7 +213,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
     };
 
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto pb-20">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <FaceIdIcon className="w-8 h-8 text-primary" />
@@ -185,7 +224,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                 </button>
             </div>
 
-            {/* PAINEL DE DIAGNÓSTICO CRÍTICO PARA O XCODE */}
             <div className="mb-8">
                 <button 
                     onClick={() => setShowTroubleshoot(!showTroubleshoot)}
@@ -216,7 +254,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                                     <code className="text-green-400 text-sm block">cd ios/App && pod install</code>
                                 </div>
                                 <p className="text-xs text-gray-500 italic">
-                                    * Se der erro de comando não encontrado, você precisa instalar o CocoaPods no seu Mac.
+                                    * Se dar erro de comando não encontrado, você precisa instalar o CocoaPods no seu Mac.
                                 </p>
                             </div>
 
@@ -271,7 +309,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                 <SearchIcon className="w-5 h-5 text-gray-400" />
-                                Dispositivos com App Instalado
+                                Dispositivos com App
                             </h2>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iOS (iPhone)</button>
@@ -279,45 +317,100 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                             </div>
                         </div>
 
+                        {selectedPromoterIds.size > 0 && (
+                            <div className="mb-4 p-3 bg-indigo-900/40 border border-indigo-500/50 rounded-lg flex items-center justify-between animate-fadeIn">
+                                <span className="text-sm font-bold text-indigo-200">{selectedPromoterIds.size} selecionadas</span>
+                                <button 
+                                    onClick={handleBulkDelete}
+                                    disabled={!!isDeletingToken}
+                                    className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-xs font-black transition-all disabled:opacity-50"
+                                >
+                                    <TrashIcon className="w-4 h-4" />
+                                    DELETAR TOKENS SELECIONADOS
+                                </button>
+                            </div>
+                        )}
+
                         <div className="overflow-x-auto border border-gray-700 rounded-lg">
                             <table className="min-w-full divide-y divide-gray-700">
                                 <thead className="bg-dark">
                                     <tr>
                                         <th className="px-4 py-3 text-left w-10">
-                                            <input type="checkbox" checked={filteredPromoters.length > 0 && filteredPromoters.every(p => selectedPromoterIds.has(p.id))} onChange={(e) => {
-                                                const newSet = new Set(selectedPromoterIds);
-                                                filteredPromoters.forEach(p => e.target.checked ? newSet.add(p.id) : newSet.delete(p.id));
-                                                setSelectedPromoterIds(newSet);
-                                            }} className="rounded border-gray-600 text-primary" />
+                                            <input 
+                                                type="checkbox" 
+                                                checked={filteredPromoters.length > 0 && filteredPromoters.every(p => selectedPromoterIds.has(p.id))} 
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedPromoterIds);
+                                                    filteredPromoters.forEach(p => e.target.checked ? newSet.add(p.id) : newSet.delete(p.id));
+                                                    setSelectedPromoterIds(newSet);
+                                                }} 
+                                                className="rounded border-gray-600 text-primary" 
+                                            />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Token</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700 bg-gray-800/20">
                                     {isLoadingData ? (
-                                        <tr><td colSpan={3} className="text-center py-8 text-gray-500">Buscando...</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Buscando...</td></tr>
                                     ) : filteredPromoters.length === 0 ? (
-                                        <tr><td colSpan={3} className="text-center py-12 text-gray-500">Nenhum dispositivo registrado.</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum dispositivo registrado.</td></tr>
                                     ) : (
-                                        filteredPromoters.map(p => (
-                                            <tr key={p.id} className="hover:bg-gray-700/30">
-                                                <td className="px-4 py-3">
-                                                    <input type="checkbox" checked={selectedPromoterIds.has(p.id)} onChange={() => {
-                                                        const n = new Set(selectedPromoterIds);
-                                                        if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
-                                                        setSelectedPromoterIds(n);
-                                                    }} className="rounded border-gray-600 text-primary" />
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <p className="text-sm font-bold text-white">{p.name}</p>
-                                                    <p className="text-[10px] text-gray-500 uppercase">{p.campaignName || 'Geral'}</p>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black">FCM OK</span>
-                                                </td>
-                                            </tr>
-                                        ))
+                                        filteredPromoters.map(p => {
+                                            const isAPNs = (p.fcmToken?.length || 0) === 64;
+                                            return (
+                                                <tr key={p.id} className={`hover:bg-gray-700/30 ${isAPNs ? 'bg-red-900/10' : ''}`}>
+                                                    <td className="px-4 py-3">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedPromoterIds.has(p.id)} 
+                                                            onChange={() => {
+                                                                const n = new Set(selectedPromoterIds);
+                                                                if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
+                                                                setSelectedPromoterIds(n);
+                                                            }} 
+                                                            className="rounded border-gray-600 text-primary" 
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <p className="text-sm font-bold text-white">{p.name}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase">{p.campaignName || 'Geral'}</p>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        {isAPNs ? (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black w-fit">APNs (INVÁLIDO)</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black w-fit">FCM OK</span>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <button 
+                                                                onClick={() => handleCopyToken(p.fcmToken || '')} 
+                                                                className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" 
+                                                                title="Copiar Token"
+                                                            >
+                                                                <DocumentDuplicateIcon className="w-4 h-4" />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleDeleteToken(p.id)} 
+                                                                disabled={isDeletingToken === p.id} 
+                                                                className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 transition-all disabled:opacity-50" 
+                                                                title="Excluir Token"
+                                                            >
+                                                                {isDeletingToken === p.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
@@ -327,20 +420,35 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
-                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Enviar Agora</h2>
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Enviar Alerta</h2>
                         <div className="space-y-4">
-                            <input type="text" placeholder="Título do Alerta" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Sua mensagem aqui..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+                            <input 
+                                type="text" 
+                                placeholder="Título do Alerta" 
+                                value={title} 
+                                onChange={e => setTitle(e.target.value)} 
+                                className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold focus:ring-2 focus:ring-primary outline-none" 
+                            />
+                            <textarea 
+                                placeholder="Sua mensagem aqui..." 
+                                value={body} 
+                                onChange={e => setBody(e.target.value)} 
+                                className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm resize-none focus:ring-2 focus:ring-primary outline-none" 
+                            />
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
-                            {error && <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4 text-red-300 text-xs">{error}</div>}
-                            {result && <div className="p-3 bg-green-900/30 border border-green-800 rounded-lg mb-4 text-green-400 text-xs text-center">{result}</div>}
+                            {error && <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4 text-red-300 text-xs font-bold italic">{error}</div>}
+                            {result && <div className="p-3 bg-green-900/30 border border-green-800 rounded-lg mb-4 text-green-400 text-xs text-center font-bold">🎉 {result}</div>}
 
-                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all disabled:opacity-30">
+                            <button 
+                                onClick={handleSend} 
+                                disabled={isSending || selectedPromoterIds.size === 0} 
+                                className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl flex items-center justify-center gap-3 transition-all disabled:opacity-30 disabled:grayscale"
+                            >
                                 {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : 'DISPARAR PUSH'}
                             </button>
-                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">Selecionadas: {selectedPromoterIds.size}</p>
+                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold">Destinos: {selectedPromoterIds.size}</p>
                         </div>
                     </div>
                 </div>
