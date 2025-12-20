@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
+import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon, AlertTriangleIcon, DocumentDuplicateIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, WhatsAppIcon, InstagramIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -27,6 +28,7 @@ const AdminPushCampaignPage: React.FC = () => {
     const [targetUrl, setTargetUrl] = useState('/#/posts');
 
     const [isSending, setIsSending] = useState(false);
+    const [isDeletingToken, setIsDeletingToken] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [debugError, setDebugError] = useState<string | null>(null);
@@ -89,6 +91,21 @@ const AdminPushCampaignPage: React.FC = () => {
         }).catch(() => {
             alert("Erro ao copiar token.");
         });
+    };
+
+    const handleDeleteToken = async (promoterId: string) => {
+        if (!window.confirm("Deseja deletar este token de notificação? Faça isso apenas se o envio falhar persistentemente. A divulgadora precisará abrir o App novamente para gerar um novo.")) return;
+        
+        setIsDeletingToken(promoterId);
+        try {
+            await deletePushToken(promoterId);
+            setPromoters(prev => prev.filter(p => p.id !== promoterId));
+            alert("Token removido!");
+        } catch (e: any) {
+            alert("Erro ao deletar: " + e.message);
+        } finally {
+            setIsDeletingToken(null);
+        }
     };
 
     const handleSend = async () => {
@@ -205,14 +222,24 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     <p className="text-xs text-gray-500">{p.campaignName || 'Geral'}</p>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <button 
-                                                        onClick={() => handleCopyToken(p.fcmToken || '')}
-                                                        className="flex items-center gap-1.5 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-gray-300 transition-colors"
-                                                        title="Copiar token FCM para debug"
-                                                    >
-                                                        <DocumentDuplicateIcon className="w-3 h-3" />
-                                                        <span className="truncate max-w-[80px]">{p.fcmToken?.substring(0, 8)}...</span>
-                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <button 
+                                                            onClick={() => handleCopyToken(p.fcmToken || '')}
+                                                            className="flex items-center gap-1.5 px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-gray-300 transition-colors"
+                                                            title="Copiar token FCM para debug"
+                                                        >
+                                                            <DocumentDuplicateIcon className="w-3 h-3" />
+                                                            <span className="truncate max-w-[60px]">{p.fcmToken?.substring(0, 8)}...</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDeleteToken(p.id)}
+                                                            disabled={isDeletingToken === p.id}
+                                                            className="p-1.5 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 disabled:opacity-30"
+                                                            title="Apagar Token Inválido"
+                                                        >
+                                                            <TrashIcon className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex justify-end gap-2">

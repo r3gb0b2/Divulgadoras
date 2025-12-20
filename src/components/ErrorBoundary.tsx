@@ -1,5 +1,5 @@
 
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -15,10 +15,10 @@ interface ErrorBoundaryState {
  * ErrorBoundary component to catch runtime errors in the component tree.
  * Inherits from Component to provide standard error handling behavior.
  */
-// Fix: Use React.Component directly for better type resolution of props, state, and methods like setState
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fix: Use Component from 'react' for better type resolution of props, state, and methods like setState
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
-  // Fix: Explicitly initialize state in constructor and call super(props) to ensure proper inheritance of Component members
+  // Fix: Explicitly initialize state in constructor and call super(props) to ensure proper inheritance
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -36,7 +36,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fix: Using setState from inherited React.Component class
+    // Fix: Using setState from inherited Component class
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -44,7 +44,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render(): ReactNode {
-    // Fix: Access state member inherited from React.Component
+    // Fix: Access state member inherited from Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -73,7 +73,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: Access props member inherited from React.Component
+    // Fix: Access props member inherited from Component
     return this.props.children;
   }
 }

@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { Promoter, Campaign } from '../types';
 import { getAllCampaigns } from '../services/settingsService';
+import { deletePushToken } from '../services/promoterService';
 import { stateMap } from '../constants/states';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { FaceIdIcon, LockClosedIcon } from './Icons';
+import { FaceIdIcon, LockClosedIcon, TrashIcon } from './Icons';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -18,6 +18,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
   const [formData, setFormData] = useState<Partial<Omit<Promoter, 'id'>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingPush, setIsTestingPush] = useState(false);
+  const [isDeletingToken, setIsDeletingToken] = useState(false);
 
   useEffect(() => {
     if (promoter) {
@@ -53,6 +54,21 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
     }
   };
 
+  const handleDeleteToken = async () => {
+    if (!promoter?.fcmToken || !window.confirm("Deseja deletar este token de notificação? Isso forçará o aplicativo da divulgadora a gerar um novo na próxima vez que ela o abrir.")) return;
+    
+    setIsDeletingToken(true);
+    try {
+      await deletePushToken(promoter.id);
+      alert("Token removido com sucesso!");
+      onClose(); // Fecha para atualizar o estado na lista pai
+    } catch (err: any) {
+      alert("Erro ao deletar token: " + err.message);
+    } finally {
+      setIsDeletingToken(false);
+    }
+  };
+
   if (!isOpen || !promoter) return null;
 
   return (
@@ -73,11 +89,18 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                 <p className="text-xs text-gray-400">{promoter.fcmToken ? 'Dispositivo vinculado e ativo' : 'App não instalado ou permissão negada'}</p>
               </div>
             </div>
-            {promoter.fcmToken && (
-              <button onClick={handleTestPush} disabled={isTestingPush} className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 disabled:opacity-50">
-                {isTestingPush ? 'Enviando...' : 'Enviar Teste'}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {promoter.fcmToken && (
+                <>
+                  <button onClick={handleDeleteToken} disabled={isDeletingToken} className="p-2 bg-red-900/40 text-red-400 rounded hover:bg-red-900/60 disabled:opacity-50" title="Deletar Token Inválido">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                  <button onClick={handleTestPush} disabled={isTestingPush} className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 disabled:opacity-50">
+                    {isTestingPush ? 'Enviando...' : 'Enviar Teste'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">

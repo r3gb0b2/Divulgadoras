@@ -44,6 +44,23 @@ export const savePushToken = async (promoterId: string, token: string, platform:
     }
 };
 
+/**
+ * Deleta o token push de uma divulgadora para forçar nova sincronização.
+ */
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            platform: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.delete()
+        });
+        console.log(`Push: Token removido para ${promoterId}`);
+    } catch (error) {
+        console.error("Push: Erro ao deletar token:", error);
+        throw error;
+    }
+};
+
 export const addPromoter = async (promoterData: PromoterApplicationData): Promise<void> => {
   try {
     const normalizedEmail = promoterData.email.toLowerCase().trim();
