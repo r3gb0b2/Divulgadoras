@@ -11,9 +11,9 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Ensuring correct inheritance from React.Component to resolve setState, props and state property issues.
+ * FIXED: Properly extending from Component and initializing state to resolve setState and props issues.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // FIX: Explicitly initialize state property for better type inference from React.Component.
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -25,16 +25,16 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     super(props);
   }
 
-  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    return { hasError: true, error, errorInfo: null };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Using this.setState correctly from inherited React.Component class.
+    // FIX: Using this.setState correctly from inherited class.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +42,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // FIX: Accessing this.state correctly from inherited React.Component class.
+    // FIX: Accessing this.state correctly from class component.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Accessing this.props correctly from inherited React.Component class.
+    // FIX: Accessing this.props correctly from class component.
     return this.props.children;
   }
 }

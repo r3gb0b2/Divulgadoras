@@ -15,9 +15,9 @@
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "firebase/": "https://aistudiocdn.com/firebase@^12.4.0/",
     "html5-qrcode": "https://aistudiocdn.com/html5-qrcode@^2.3.8",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.0",
-    "@capacitor/core": "https://esm.sh/@capacitor/core@^8.0.0",
-    "@capacitor/push-notifications": "https://esm.sh/@capacitor/push-notifications@^8.0.0"
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^6.0.0",
+    "@capacitor/core": "https://esm.sh/@capacitor/core@^6.0.0",
+    "@capacitor/push-notifications": "https://esm.sh/@capacitor/push-notifications@^6.0.0"
   }
 }
 </script>
@@ -38,32 +38,26 @@
       }
     </script>
     <style>
-      /* Estilos para comportamento de App Nativo */
       body {
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
-        background-color: #16213e; /* Cor de fundo padrão para evitar flash branco */
+        background-color: #16213e;
       }
       input, textarea {
         -webkit-user-select: text;
         user-select: text;
       }
       :root {
-        --sat: env(safe-area-inset-top);
-        --sab: env(safe-area-inset-bottom);
-        --sal: env(safe-area-inset-left);
-        --sar: env(safe-area-inset-right);
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
       }
     </style>
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!-- FIXED: Usando caminho relativo para funcionar no WebView do iOS -->
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>
