@@ -20,7 +20,7 @@ const AdminPushCampaignPage: React.FC = () => {
     // Filter State
     const [targetOrgId, setTargetOrgId] = useState('');
     const [targetCampaignName, setTargetCampaignName] = useState('all');
-    const [activePlatformTab, setActivePlatformTab] = useState<'ios' | 'android'>('ios');
+    const [activePlatformTab, setActivePlatformTab] = useState<'ios' | 'android' | 'unknown'>('ios');
     const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -78,10 +78,7 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const filteredPromoters = useMemo(() => {
         return promoters.filter(p => {
-            // Correção da lógica de plataforma:
-            // 1. Se p.platform existe, deve bater com a aba.
-            // 2. Se p.platform NÃO existe (registros antigos), vamos assumir Android por ser a maioria dos casos antigos.
-            const pPlatform = p.platform || 'android'; 
+            const pPlatform = p.platform || 'unknown'; 
             const matchesPlatform = pPlatform === activePlatformTab;
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesPlatform && matchesSearch;
@@ -103,7 +100,7 @@ const AdminPushCampaignPage: React.FC = () => {
             return;
         }
 
-        if (!window.confirm(`Enviar notificação para ${idsToNotify.length} dispositivos ${activePlatformTab.toUpperCase()}?`)) return;
+        if (!window.confirm(`Enviar notificação para ${idsToNotify.length} dispositivos?`)) return;
 
         setIsSending(true);
         setResult(null);
@@ -146,22 +143,26 @@ const AdminPushCampaignPage: React.FC = () => {
                 {/* Coluna 1: Audiência e Lista de Dispositivos */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-lg shadow-lg border border-gray-700">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
                             <h2 className="text-xl font-bold text-white">1. Selecionar Dispositivos</h2>
                             <div className="flex bg-dark p-1 rounded-lg">
                                 <button 
                                     onClick={() => setActivePlatformTab('ios')}
-                                    className={`px-4 py-1.5 text-sm font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.1 2.48-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .76-3.27.82-1.31.05-2.31-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.24-1.99 1.1-3.15-1.03.04-2.28.67-3.02 1.52-.66.76-1.23 1.93-1.07 3.08 1.13.08 2.25-.63 2.99-1.45z"/></svg>
                                     iPhone
                                 </button>
                                 <button 
                                     onClick={() => setActivePlatformTab('android')}
-                                    className={`px-4 py-1.5 text-sm font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}
                                 >
-                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.523 15.3414C18.423 15.3414 19.166 14.5984 19.166 13.6984C19.166 12.7984 18.423 12.0554 17.523 12.0554C16.623 12.0554 15.88 12.7984 15.88 13.6984C15.88 14.5984 16.623 15.3414 17.523 15.3414ZM17.523 12.9264C17.949 12.9264 18.295 13.2724 18.295 13.6984C18.295 14.1244 17.949 14.4704 17.523 14.4704C17.097 14.4704 16.751 14.1244 16.751 13.6984C16.751 13.2724 17.097 12.9264 17.523 12.9264Z" /></svg>
                                     Android
+                                </button>
+                                <button 
+                                    onClick={() => setActivePlatformTab('unknown')}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-2 transition-all ${activePlatformTab === 'unknown' ? 'bg-gray-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    Outros
                                 </button>
                             </div>
                         </div>
@@ -228,8 +229,8 @@ const AdminPushCampaignPage: React.FC = () => {
                                                     <p className="text-xs text-gray-500">{p.campaignName || 'Geral'}</p>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${p.platform === 'ios' ? 'bg-white text-black' : 'bg-green-600 text-white'}`}>
-                                                        {p.platform || 'android'}
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${p.platform === 'ios' ? 'bg-white text-black' : p.platform === 'android' ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300'}`}>
+                                                        {p.platform || 'indefinido'}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
@@ -295,7 +296,7 @@ const AdminPushCampaignPage: React.FC = () => {
                             <button 
                                 onClick={handleSend} 
                                 disabled={isSending || selectedPromoterIds.size === 0} 
-                                className={`w-full py-4 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 ${activePlatformTab === 'ios' ? 'bg-primary hover:bg-primary-dark' : 'bg-green-600 hover:bg-green-700'} text-white disabled:opacity-30`}
+                                className={`w-full py-4 rounded-xl font-black text-lg shadow-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 ${activePlatformTab === 'ios' ? 'bg-primary hover:bg-primary-dark' : activePlatformTab === 'android' ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600 hover:bg-gray-700'} text-white disabled:opacity-30`}
                             >
                                 {isSending ? (
                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>

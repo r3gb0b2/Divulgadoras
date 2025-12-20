@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -11,11 +12,11 @@ interface ErrorBoundaryState {
 }
 
 /**
- * FIXED: Explicitly using React.Component to ensure type inference for setState and props.
+ * FIXED: Extending Component directly from the named import to ensure proper inheritance chain detection by the TypeScript compiler.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Properly initialized state with types matching React.Component requirements.
-  public override state: ErrorBoundaryState = {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Removed 'override' keyword as the compiler was failing to verify the base class member.
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -29,18 +30,20 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true, error, errorInfo: null };
   }
 
-  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // FIX: Removed 'override' keyword to resolve compilation error when inheritance is not correctly detected.
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: setState now correctly resolved from React.Component base class.
+    // FIX: setState is now correctly recognized as a member of the base class.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  public override render() {
-    // FIX: state correctly resolved from React.Component base class.
+  // FIX: Removed 'override' keyword to resolve compilation error.
+  public render() {
+    // FIX: state is now correctly recognized as a member of the base class.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -68,7 +71,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: props now correctly resolved from React.Component base class.
+    // FIX: props is now correctly recognized as a member of the base class.
     return this.props.children;
   }
 }
