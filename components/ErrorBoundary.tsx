@@ -13,11 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Explicitly extending React.Component to ensure inheritance of state and lifecycle methods.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Using named Component import from 'react' to ensure correct inheritance and resolve 'Property state/props does not exist' errors.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // FIX: Correctly initializing state in the constructor for a React class component.
+    // FIX: Initializing the state correctly in the constructor.
     this.state = {
       hasError: false,
       error: null,
@@ -36,7 +36,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Using inherited setState to update error details.
+    // FIX: Using this.setState which is now recognized as a valid method of the inherited Component class.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -44,7 +44,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // FIX: Accessing inherited state.
+    // FIX: Accessing inherited this.state property.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -53,6 +53,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
+            {/* FIX: Safely handling potential null error state. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -72,7 +73,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Correctly returning children from props.
+    // FIX: Correctly returning children from inherited this.props.
     return this.props.children;
   }
 }

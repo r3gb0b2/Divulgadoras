@@ -563,9 +563,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Using any for the catch block to resolve unknown assignment issues
-            setLookupError(err?.message || String(err));
+        } catch (err: unknown) {
+            // FIX: Use type guard to handle the error as unknown and convert it into a safe string for setLookupError
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
         }
