@@ -37,7 +37,7 @@ const AdminLoginPage: React.FC = () => {
         <div className="min-h-[80vh] flex flex-col items-center justify-center px-4">
             <div className="w-full max-w-md bg-secondary shadow-2xl rounded-2xl p-8 border border-gray-700">
                 <div className="text-center mb-8">
-                    <LogoIcon className="h-32 w-auto mx-auto mb-6" />
+                    <LogoIcon className="w-full max-w-[240px] h-auto mx-auto mb-6" />
                     <h1 className="text-2xl font-bold text-white uppercase tracking-wider">Acesso Administrativo</h1>
                     <p className="text-gray-400 text-sm mt-2">Entre com suas credenciais para gerenciar sua equipe</p>
                 </div>

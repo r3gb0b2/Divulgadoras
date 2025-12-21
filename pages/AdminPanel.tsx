@@ -556,15 +556,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (!finalEmail) return;
         
         setIsLookingUp(true);
+        // FIX: Replaced potentially ambiguous call with more robust error derivation from 'any' catch block below.
         setLookupError(''); 
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Ensure errorMessage is derived safely from any error type to avoid potential 'unknown' assignment issues from catch block.
-            const errorMessage = err instanceof Error ? err.message : (typeof err === 'string' ? err : 'Erro desconhecido');
+        } catch (err: any) {
+            // FIX: Changed 'unknown' to 'any' for consistent property access across environments and simplified errorMessage derivation.
+            const errorMessage = err?.message || (typeof err === 'string' ? err : 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
