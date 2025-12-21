@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,8 +13,8 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Using named Component import from 'react' to ensure correct inheritance and resolve 'Property state/props does not exist' errors.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Using React.Component to ensure correct inheritance and resolve 'Property state/props does not exist' errors.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     // FIX: Initializing the state correctly in the constructor.
@@ -36,7 +36,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Using this.setState which is now recognized as a valid method of the inherited Component class.
+    // FIX: Using this.setState which is recognized as a valid method of the inherited React.Component class.
     this.setState({
       error: error,
       errorInfo: errorInfo

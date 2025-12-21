@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
+import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -191,7 +193,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                             </button>
                         )}
                         <button onClick={() => onJustify(assignment)} className="w-full py-2 bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-900/40 transition-colors">
-                            Não consigo postar hoje
+                            ENVIAR UMA JUSTIFICATIVA
                         </button>
                     </div>
                 )}
@@ -209,8 +211,16 @@ const PostCheck: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+    
+    // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
+    const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
+    const [justificationPreviews, setJustificationPreviews] = useState<string[]>([]);
+    const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
+
+    // Stats modal state
+    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -246,6 +256,35 @@ const PostCheck: React.FC = () => {
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files) {
+            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            setJustificationFiles(fileList);
+            const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
+            setJustificationPreviews(previewUrls);
+        }
+    };
+
+    const handleJustificationSubmit = async () => {
+        if (!justificationAssignment) return;
+        if (!justificationText.trim()) return alert("Por favor, escreva o motivo.");
+        
+        setIsSubmittingJustification(true);
+        try {
+            await submitJustification(justificationAssignment.id, justificationText, justificationFiles);
+            setJustificationAssignment(null);
+            setJustificationText('');
+            setJustificationFiles([]);
+            setJustificationPreviews([]);
+            performSearch(email);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSubmittingJustification(false);
+        }
+    };
+
     const pending = assignments.filter(a => !isHistoryAssignment(a));
     const history = assignments.filter(a => isHistoryAssignment(a));
 
@@ -273,9 +312,12 @@ const PostCheck: React.FC = () => {
                 <div>
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight">Olá, {promoter.name.split(' ')[0]}!</h1>
                     <p className="text-xs text-gray-500 font-mono">{promoter.email}</p>
-                    <Link to="/status" className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all">
-                        <SearchIcon className="w-3 h-3" /> VER MEU STATUS
-                    </Link>
+                    <button 
+                        onClick={() => setIsStatsModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                    >
+                        <ChartBarIcon className="w-3 h-3" /> VER MEU STATUS
+                    </button>
                 </div>
                 <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors">
                     <LogoutIcon className="w-6 h-6" />
@@ -303,19 +345,50 @@ const PostCheck: React.FC = () => {
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setJustificationAssignment(null)}>
                     <div className="bg-secondary w-full max-w-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Justificar Ausência</h3>
-                        <p className="text-gray-400 text-sm mb-6">Explique por que você não poderá realizar esta postagem hoje.</p>
-                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Digite sua justificativa..." rows={4} className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-6" />
+                        <p className="text-gray-400 text-sm mb-6">Explique por que você não poderá realizar esta postagem e anexe comprovantes se necessário.</p>
+                        
+                        <textarea 
+                            value={justificationText} 
+                            onChange={e => setJustificationText(e.target.value)} 
+                            placeholder="Digite sua justificativa..." 
+                            rows={4} 
+                            className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-6" 
+                        />
+
+                        <div className="mb-6">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Anexar Provas (opcional, máx 2)</label>
+                            <div className="flex items-center gap-4">
+                                <label className="flex-shrink-0 cursor-pointer bg-gray-700 p-4 rounded-xl border border-gray-600 text-primary hover:bg-gray-600 transition-colors">
+                                    <CameraIcon className="w-6 h-6" />
+                                    <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                                </label>
+                                <div className="flex gap-2">
+                                    {justificationPreviews.map((p, i) => (
+                                        <img key={i} src={p} className="h-14 w-14 rounded-lg object-cover border border-gray-600" alt="Preview" />
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex gap-4">
                             <button onClick={() => setJustificationAssignment(null)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl">CANCELAR</button>
-                            <button onClick={async () => {
-                                if (!justificationText.trim()) return alert("Escreva o motivo.");
-                                await submitJustification(justificationAssignment.id, justificationText, []);
-                                setJustificationAssignment(null); performSearch(email);
-                            }} className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-900/20">ENVIAR</button>
+                            <button 
+                                onClick={handleJustificationSubmit} 
+                                disabled={isSubmittingJustification}
+                                className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-900/20 disabled:opacity-50"
+                            >
+                                {isSubmittingJustification ? 'ENVIANDO...' : 'ENVIAR'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
+
+            <PromoterPublicStatsModal 
+                isOpen={isStatsModalOpen} 
+                onClose={() => setIsStatsModalOpen(false)} 
+                promoter={promoter} 
+            />
         </div>
     );
 };
