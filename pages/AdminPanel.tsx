@@ -550,8 +550,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      * @param {any} emailToSearch - O e-mail a ser pesquisado (pode ser string ou o evento do clique).
      */
-    // FIX: Change parameter type from any to unknown to improve type safety and fix assignability error at line 518.
-    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+    // FIX: Changed parameter type to any and use defensive narrowing to resolve 'unknown is not assignable to string' errors during internal processing.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
         // Ensure the search input is treated as a string, falling back to lookupEmail if emailToSearch is not a string.
         const searchInput = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
         const finalEmail = (searchInput || '').trim();

@@ -14,8 +14,26 @@ const createStrokeIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVG
 );
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
-        <path fillRule="evenodd" d="M9.315 7.584C12.195 3.883 16.695 1.5 21.75 1.5a.75.75 0 01.75.75c0 5.056-2.383 9.555-6.084 12.436h.003c-.384.32-.78.613-1.183.882l-2.277 1.66c-1.775 1.3-4.343 1.3-6.118 0l-2.277-1.66a13.926 13.926 0 01-1.183-.882C-2.383 11.805 0 7.306 0 2.25a.75.75 0 01.75-.75c5.055 0 9.555 2.383 12.436 6.084.292.375.57.769.832 1.183.263-.414.54-.808.832-1.183z" clipRule="evenodd" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" {...props}>
+        {/* Círculo Externo Grosso */}
+        <circle cx="50" cy="50" r="46" stroke="currentColor" strokeWidth="8" />
+        
+        {/* Pessoas no Topo */}
+        {/* Esquerda */}
+        <circle cx="28" cy="35" r="5" fill="currentColor" opacity="0.6" />
+        <path d="M20 45C20 42.5 22.5 41 28 41C33.5 41 36 42.5 36 45V46H20V45Z" fill="currentColor" opacity="0.6" />
+        
+        {/* Direita */}
+        <circle cx="72" cy="35" r="5" fill="currentColor" opacity="0.6" />
+        <path d="M64 45C64 42.5 66.5 41 72 41C77.5 41 80 42.5 80 45V46H64V45Z" fill="currentColor" opacity="0.6" />
+        
+        {/* Centro (Destaque) */}
+        <circle cx="50" cy="32" r="6" fill="currentColor" />
+        <path d="M40 45C40 41.5 43.5 39.5 50 39.5C56.5 39.5 60 41.5 60 45V46.5H40V45Z" fill="currentColor" />
+        
+        {/* Círculo Interno com Check */}
+        <circle cx="50" cy="62" r="14" fill="currentColor" opacity="0.15" />
+        <path d="M42 62L48 68L59 56" stroke="#fbbd08" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
 );
 
@@ -183,7 +201,7 @@ export const UserPlusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const QrCodeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M3 3.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM4.5 4.5v3h3v-3h-3zM3 15.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM4.5 16.5v3h3v-3h-3zM15 3.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM16.5 4.5v3h3v-3h-3zM15 15.75a.75.75 0 01.75-.75h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-1.5zM18.75 15a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75h-1.5zM15 18.75a.75.75 0 01.75-.75h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-1.5zM18.75 18a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75h-1.5z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M3 3.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM4.5 4.5v3h3v-3h-3zM3 15.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM4.5 16.5v3h3v-3h-3zM15 3.75a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v4.5a.75.75 0 01-.75.75h-4.5a.75.75 0 01-.75-.75v-4.5zM16.5 4.5v3h3v-3h-3zM15 15.75a.75.75 0 01.75h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-1.5zM18.75 15a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75h-1.5zM15 18.75a.75.75 0 01.75-.75h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75v-1.5zM18.75 18a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75h-1.5z" clipRule="evenodd" />
 );
 
 export const BoldIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(

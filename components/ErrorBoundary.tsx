@@ -13,11 +13,8 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Using explicit React.Component to ensure proper inheritance and access to this.state and this.props.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Declare public state and props to resolve TS errors in some environments.
-  public state: ErrorBoundaryState;
-
+// FIX: Using explicit Component import and removing redundant state declaration to resolve TS access errors for setState and props.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {

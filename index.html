@@ -29,10 +29,11 @@
         theme: {
           extend: {
             colors: {
-              primary: '#e83a93',
-              'primary-dark': '#c82a7a',
+              primary: '#7e39d5', // Roxo da nova logo
+              'primary-dark': '#5d1eab',
               secondary: '#1a1a2e',
-              dark: '#16213e',
+              dark: '#0f0f1a', // Escurecido para destacar o roxo
+              accent: '#fbbd08' // Amarelo do check
             }
           }
         }
@@ -41,17 +42,15 @@
     <style>
       /* Estilos para comportamento de App Nativo */
       body {
-        -webkit-user-select: none; /* Desativa seleção de texto no iOS */
+        -webkit-user-select: none;
         user-select: none;
-        -webkit-tap-highlight-color: transparent; /* Remove highlight de clique no Android */
-        overscroll-behavior-y: none; /* Evita o efeito de "bounce" ao rolar além do limite */
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none;
       }
-      /* Permite seleção em inputs e textareas */
       input, textarea {
         -webkit-user-select: text;
         user-select: text;
       }
-      /* Ajuste para Safe Area (Notch) */
       :root {
         --sat: env(safe-area-inset-top);
         --sab: env(safe-area-inset-bottom);
