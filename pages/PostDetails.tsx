@@ -97,7 +97,8 @@ const PostDetails: React.FC = () => {
             const orgAssignments = await getAssignmentsForOrganization(postData.organizationId);
             setAllOrgAssignments(orgAssignments);
 
-            const promoterIds = [...new Set(assignmentsData.map(a => a.promoterId))];
+            // FIX: Explicitly cast mapped result to string[] to ensure compatibility with getPromotersByIds.
+            const promoterIds = [...new Set(assignmentsData.map(a => a.promoterId as string))];
             if (promoterIds.length > 0) {
                 const promoters = await getPromotersByIds(promoterIds);
                 setPromotersMap(new Map(promoters.map(p => [p.id, p])));

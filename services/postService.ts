@@ -2,28 +2,24 @@
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder, AdminUserData } from '../types';
-import { findPromotersByEmail } from './promoterService';
 
-// Helper to safely convert various date formats to a Date object
-const toDateSafe = (timestamp: any): Date | null => {
-    if (!timestamp) return null;
-    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
-    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
-    const date = new Date(timestamp);
-    if (!isNaN(date.getTime())) return date;
-    return null;
+/**
+ * Dispara uma notificação push para todas as divulgadoras de um post específico.
+ */
+export const notifyPostPush = async (postId: string): Promise<{ success: boolean, message: string }> => {
+    try {
+        const notifyFunc = functions.httpsCallable('notifyPostPush');
+        const result = await notifyFunc({ postId });
+        return result.data as { success: boolean, message: string };
+    } catch (error: any) {
+        console.error("Error triggering post push:", error);
+        throw new Error(error.message || "Falha ao enviar notificação.");
+    }
 };
 
-// Helper to safely get milliseconds for sorting
-const toMillisSafe = (timestamp: any): number => {
-    if (!timestamp) return 0;
-    if (typeof timestamp.toMillis === 'function') return timestamp.toMillis();
-    if (typeof timestamp.toDate === 'function') return timestamp.toDate().getTime();
-    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return timestamp.seconds * 1000;
-    const date = new Date(timestamp);
-    return isNaN(date.getTime()) ? 0 : date.getTime();
-};
-
+/**
+ * Cria uma nova publicação e atribui a divulgadoras.
+ */
 export const createPost = async (
   postData: Omit<Post, 'id' | 'createdAt'>,
   assignedPromoters: Promoter[]
@@ -51,697 +47,535 @@ export const createPost = async (
   }
 };
 
-export const getPostsForOrg = async (organizationId?: string, admin?: AdminUserData): Promise<Post[]> => {
-    try {
-        const postsCollection = firestore.collection("posts");
-        let q: firebase.firestore.Query = postsCollection;
-        if (organizationId) {
-            q = q.where("organizationId", "==", organizationId);
-        }
-
-        const snapshot = await q.get();
-        let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-        
-        if (admin) {
-            posts = posts.filter(post => {
-                if (admin.role === 'superadmin') return true;
-                if (post.ownerOnly) return post.createdByEmail === admin.email;
-                return true;
-            });
-        }
-
-        posts.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
-        return posts;
-    } catch (error) {
-        console.error("Error fetching posts for org: ", error);
-        throw new Error("Não foi possível buscar as publicações. Verifique se existem dados corrompidos ou se o índice está sendo criado.");
-    }
-};
-
+/**
+ * Busca todas as tarefas de uma organização.
+ */
 export const getAssignmentsForOrganization = async (organizationId: string): Promise<PostAssignment[]> => {
-    try {
-        const q = firestore.collection("postAssignments").where("organizationId", "==", organizationId);
-        const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-
-        return assignments.filter(a => {
-            if (!a.post) {
-                console.warn(`[Data Integrity] Assignment ${a.id} is missing 'post' data.`);
-                return false;
-            }
-            return true;
-        });
-    } catch (error) {
-        console.error("Error fetching assignments for organization: ", error);
-        throw new Error("Não foi possível buscar as tarefas da organização.");
-    }
+  try {
+    const q = firestore.collection('postAssignments').where('organizationId', '==', organizationId);
+    const snapshot = await q.get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+  } catch (error) {
+    console.error("Error getting assignments:", error);
+    return [];
+  }
 };
 
-export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
-    try {
-        const postDocRef = firestore.collection('posts').doc(postId);
-        const postSnap = await postDocRef.get();
-        if (!postSnap.exists) throw new Error("Publicação não encontrada.");
-        const post = { id: postSnap.id, ...postSnap.data() } as Post;
-
-        const q = firestore.collection("postAssignments").where("postId", "==", postId);
-        const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-
-        return { post, assignments };
-    } catch (error) {
-        console.error("Error fetching post details: ", error);
-        throw new Error("Não foi possível buscar os detalhes da publicação.");
-    }
+/**
+ * Limpa prints antigos de eventos inativos.
+ */
+export const cleanupOldProofs = async (organizationId: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const cleanup = functions.httpsCallable('cleanupOldProofs');
+    const result = await cleanup({ organizationId });
+    return result.data as { success: boolean; message: string };
+  } catch (error: any) {
+    throw new Error(error.message || "Erro na limpeza.");
+  }
 };
 
+/**
+ * Busca tarefas de uma divulgadora pelo email.
+ */
 export const getAssignmentsForPromoterByEmail = async (email: string): Promise<PostAssignment[]> => {
-    try {
-        const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
-        const snapshot = await q.get();
-        const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-        
-        const visibleAssignments = assignments.filter(assignment => !!assignment.post);
-        
-        visibleAssignments.sort((a, b) => {
-            if (a.status === 'pending' && b.status === 'confirmed') return -1;
-            if (a.status === 'confirmed' && b.status === 'pending') return 1;
-            return toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt);
-        });
-        return visibleAssignments;
-    } catch (error) {
-        console.error("Error fetching promoter assignments: ", error);
-        throw new Error("Não foi possível buscar as publicações.");
-    }
-}
+  try {
+    const q = firestore.collection('postAssignments')
+      .where('promoterEmail', '==', email.toLowerCase().trim());
+    const snapshot = await q.get();
+    const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    // Sort by most recent
+    return assignments.sort((a, b) => {
+      const timeA = (a.post?.createdAt as Timestamp)?.toMillis() || 0;
+      const timeB = (b.post?.createdAt as Timestamp)?.toMillis() || 0;
+      return timeB - timeA;
+    });
+  } catch (error) {
+    console.error("Error getting promoter assignments:", error);
+    return [];
+  }
+};
 
+/**
+ * Confirma que a divulgadora realizou a postagem.
+ */
 export const confirmAssignment = async (assignmentId: string): Promise<void> => {
-    try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
-            status: 'confirmed',
-            confirmedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-    } catch (error) {
-        console.error("Error confirming assignment: ", error);
-        throw new Error("Não foi possível confirmar a publicação.");
-    }
-}
+  try {
+    await firestore.collection('postAssignments').doc(assignmentId).update({
+      status: 'confirmed',
+      confirmedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    throw new Error("Falha ao confirmar postagem.");
+  }
+};
 
+/**
+ * Envia justificativa de ausência.
+ */
+export const submitJustification = async (assignmentId: string, text: string, files: File[]): Promise<void> => {
+  try {
+    const imageUrls = await Promise.all(
+      files.map(async (file) => {
+        const fileName = `justifications/${assignmentId}/${Date.now()}-${file.name}`;
+        const ref = storage.ref(fileName);
+        await ref.put(file);
+        return await ref.getDownloadURL();
+      })
+    );
+
+    await firestore.collection('postAssignments').doc(assignmentId).update({
+      justification: text,
+      justificationStatus: 'pending',
+      justificationSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      justificationImageUrls: imageUrls
+    });
+  } catch (error) {
+    throw new Error("Falha ao enviar justificativa.");
+  }
+};
+
+/**
+ * Busca posts agendados para uma divulgadora.
+ */
+export const getScheduledPostsForPromoter = async (email: string): Promise<ScheduledPost[]> => {
+  try {
+    const q = firestore.collection('scheduledPosts')
+      .where('status', '==', 'pending');
+    const snapshot = await q.get();
+    const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
+    return all.filter(p => p.assignedPromoters.some(ap => ap.email === email.toLowerCase().trim()));
+  } catch (error) {
+    return [];
+  }
+};
+
+/**
+ * Atualiza uma tarefa específica.
+ */
+export const updateAssignment = async (assignmentId: string, data: Partial<PostAssignment>): Promise<void> => {
+  try {
+    await firestore.collection('postAssignments').doc(assignmentId).update(data);
+  } catch (error) {
+    throw new Error("Falha ao atualizar tarefa.");
+  }
+};
+
+/**
+ * Agenda lembrete de WhatsApp para uma tarefa.
+ */
 export const scheduleWhatsAppReminder = async (assignmentId: string): Promise<void> => {
   try {
     const func = functions.httpsCallable('scheduleWhatsAppReminder');
-    const result = await func({ assignmentId });
-    const data = result.data as { success: boolean, message: string };
-    if (!data.success) throw new Error(data.message || "A função do servidor falhou.");
-  } catch (error) {
-    console.error("Error requesting WhatsApp reminder: ", error);
-    if (error instanceof Error) throw new Error(`Não foi possível agendar o lembrete. Detalhes: ${error.message}`);
-    throw new Error("Não foi possível agendar o lembrete.");
+    await func({ assignmentId });
+  } catch (error: any) {
+    throw new Error(error.message || "Erro ao agendar lembrete.");
   }
 };
 
-export const getAssignmentById = async (assignmentId: string): Promise<PostAssignment | null> => {
-    try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() } as PostAssignment;
-        return null;
-    } catch (error) {
-        console.error("Error getting assignment by ID: ", error);
-        throw new Error("Não foi possível buscar os dados da tarefa.");
-    }
-};
-
-export const submitProof = async (assignmentId: string, imageFiles: File[]): Promise<string[]> => {
-    if (imageFiles.length === 0 || imageFiles.length > 2) throw new Error("Você deve enviar 1 ou 2 imagens.");
-    try {
-        const proofImageUrls = await Promise.all(
-            imageFiles.map(async (photo) => {
-                const fileExtension = photo.name.split('.').pop();
-                const fileName = `proof-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                const storageRef = storage.ref(`posts-proofs/${fileName}`);
-                await storageRef.put(photo);
-                return await storageRef.getDownloadURL();
-            })
-        );
-        
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
-            proofImageUrls: proofImageUrls,
-            proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        
-        return proofImageUrls;
-    } catch (error) {
-        console.error("Error submitting proof: ", error);
-        throw new Error("Não foi possível enviar a comprovação.");
-    }
-};
-
-const calculatePromoterStats = (assignments: PostAssignment[]) => {
-  let completed = 0;
-  let missed = 0;
-  let justifications = 0;
-  let acceptedJustifications = 0;
-  let pending = 0;
-  const now = new Date();
-
-  assignments.forEach(assignment => {
-    if (!assignment.post) return;
-    
-    if (assignment.proofSubmittedAt) {
-      completed++;
-    } else if (assignment.justificationStatus === 'accepted') {
-      justifications++;
-      acceptedJustifications++;
-    } else if (assignment.justificationStatus === 'rejected') {
-      justifications++;
-      missed++;
-    } else if (assignment.justificationStatus === 'pending' || assignment.justification) {
-      justifications++;
-      pending++;
-    } else {
-      let deadlineHasPassed = false;
-      if (!assignment.post.allowLateSubmissions) {
-          const confirmedAt = toDateSafe(assignment.confirmedAt);
-          if (confirmedAt) {
-              const proofDeadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
-              if (now > proofDeadline) deadlineHasPassed = true;
-          }
-          if (!deadlineHasPassed) {
-              const postExpiresAt = toDateSafe(assignment.post.expiresAt);
-              if (postExpiresAt && now > postExpiresAt) deadlineHasPassed = true;
-          }
-      }
-      if (deadlineHasPassed) missed++;
-      else pending++;
-    }
-  });
-
-  return {
-    assigned: assignments.length,
-    completed,
-    missed,
-    justifications,
-    acceptedJustifications,
-    pending,
-  };
-};
-
-type StatsResult = {
-  stats: {
-    assigned: number;
-    completed: number;
-    missed: number;
-    justifications: number;
-    acceptedJustifications: number;
-    pending: number;
-  };
-  assignments: PostAssignment[];
-};
-
-export const getStatsForPromoter = async (promoterId: string): Promise<StatsResult> => {
+/**
+ * Busca posts de uma organização, opcionalmente filtrando por visibilidade do admin.
+ */
+export const getPostsForOrg = async (organizationId: string, adminData?: AdminUserData): Promise<Post[]> => {
   try {
-    const q = firestore.collection("postAssignments").where("promoterId", "==", promoterId);
+    let q: firebase.firestore.Query = firestore.collection('posts').where('organizationId', '==', organizationId);
     const snapshot = await q.get();
-    const assignments = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
-        .filter(a => !!a.post);
+    let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
     
-    assignments.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
-
-    const stats = calculatePromoterStats(assignments);
-    return { stats, assignments };
+    if (adminData && adminData.role !== 'superadmin') {
+      posts = posts.filter(p => !p.ownerOnly || p.createdByEmail === adminData.email);
+    }
+    
+    return posts.sort((a, b) => (b.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
   } catch (error) {
-    console.error("Error getting promoter stats: ", error);
-    throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
+    return [];
   }
 };
 
-export const getStatsForPromoterByEmail = async (email: string): Promise<StatsResult> => {
+/**
+ * Atualiza um post.
+ */
+export const updatePost = async (postId: string, data: Partial<Post>): Promise<void> => {
   try {
-    const q = firestore.collection("postAssignments").where("promoterEmail", "==", email.toLowerCase().trim());
-    const snapshot = await q.get();
-    const assignments = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment))
-        .filter(a => !!a.post);
-    
-    assignments.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
-
-    const stats = calculatePromoterStats(assignments);
-    return { stats, assignments };
+    await firestore.collection('posts').doc(postId).update(data);
   } catch (error) {
-    console.error("Error getting promoter stats by email: ", error);
-    throw new Error("Não foi possível buscar as estatísticas da divulgadora.");
+    throw new Error("Falha ao atualizar post.");
   }
 };
 
-export const updatePost = async (postId: string, updateData: Partial<Post>): Promise<void> => {
-    try {
-        const updatePostStatus = functions.httpsCallable('updatePostStatus');
-        await updatePostStatus({ postId, updateData });
-    } catch (error) {
-        console.error("Error updating post status:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível atualizar a publicação.");
-    }
+/**
+ * Aceita todas as justificativas pendentes de um post.
+ */
+export const acceptAllJustifications = async (postId: string): Promise<{ success: boolean; count: number; message: string }> => {
+  try {
+    const func = functions.httpsCallable('acceptAllJustifications');
+    const result = await func({ postId });
+    return result.data as { success: boolean; count: number; message: string };
+  } catch (error: any) {
+    throw new Error(error.message || "Erro ao processar justificativas.");
+  }
 };
 
-export const deletePost = async (postId: string): Promise<void> => {
-    const batch = firestore.batch();
-    try {
-        const q = firestore.collection("postAssignments").where("postId", "==", postId);
-        const assignmentsSnapshot = await q.get();
-        assignmentsSnapshot.forEach(doc => batch.delete(doc.ref));
-        const postDocRef = firestore.collection('posts').doc(postId);
-        batch.delete(postDocRef);
-        await batch.commit();
-    } catch (error) {
-        console.error("Error deleting post: ", error);
-        throw new Error("Não foi possível deletar a publicação.");
-    }
-}
-
-export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
-    try {
-        const func = functions.httpsCallable('addAssignmentsToPost');
-        await func({ postId, promoterIds });
-    } catch (error) {
-        console.error("Error adding assignments: ", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível atribuir a publicação.");
-    }
+/**
+ * Busca post e suas atribuições.
+ */
+export const getPostWithAssignments = async (postId: string): Promise<{ post: Post; assignments: PostAssignment[] }> => {
+  try {
+    const postDoc = await firestore.collection('posts').doc(postId).get();
+    if (!postDoc.exists) throw new Error("Post não encontrado.");
+    
+    const assignmentsSnap = await firestore.collection('postAssignments').where('postId', '==', postId).get();
+    const assignments = assignmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
+    
+    return { post: { id: postDoc.id, ...postDoc.data() } as Post, assignments };
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
 };
 
-export const sendPostReminder = async (postId: string): Promise<{count: number, message: string}> => {
-    try {
-        const func = functions.httpsCallable('sendPostReminder');
-        const result = await func({ postId });
-        return result.data as {count: number, message: string};
-    } catch (error) {
-        console.error("Error sending reminder:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível enviar os lembretes.");
-    }
+/**
+ * Agenda um post para envio futuro.
+ */
+export const schedulePost = async (data: any): Promise<void> => {
+  try {
+    await firestore.collection('scheduledPosts').add(data);
+  } catch (error) {
+    throw new Error("Falha ao agendar post.");
+  }
 };
 
-export const sendPendingReminders = async (postId: string): Promise<{count: number, message: string}> => {
-    try {
-        const func = functions.httpsCallable('sendPendingReminders');
-        const result = await func({ postId });
-        return result.data as {count: number, message: string};
-    } catch (error) {
-        console.error("Error sending pending reminders:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível enviar os lembretes para pendentes.");
-    }
-};
-
-export const acceptAllJustifications = async (postId: string): Promise<{count: number, message: string}> => {
-    try {
-        const func = functions.httpsCallable('acceptAllJustifications');
-        const result = await func({ postId });
-        return result.data as {count: number, message: string};
-    } catch (error) {
-        console.error("Error accepting justifications:", error);
-        if (error instanceof Error) throw error;
-        throw new Error("Não foi possível aceitar todas as justificativas.");
-    }
-};
-
-export const removePromoterFromPostAndGroup = async (assignmentId: string, promoterId: string): Promise<void> => {
-    try {
-        const batch = firestore.batch();
-        const promoterDocRef = firestore.collection('promoters').doc(promoterId);
-        batch.update(promoterDocRef, { hasJoinedGroup: false });
-        const assignmentDocRef = firestore.collection('postAssignments').doc(assignmentId);
-        batch.delete(assignmentDocRef);
-        await batch.commit();
-    } catch (error) {
-        console.error("Error removing promoter: ", error);
-        throw new Error("Não foi possível remover a divulgadora.");
-    }
-};
-
-export const renewAssignmentDeadline = async (assignmentId: string): Promise<void> => {
-    try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({ confirmedAt: firebase.firestore.FieldValue.serverTimestamp() });
-    } catch (error) {
-        console.error("Error renewing deadline: ", error);
-        throw new Error("Não foi possível renovar o prazo da tarefa.");
-    }
-};
-
-export const submitJustification = async (assignmentId: string, justification: string, imageFiles: File[]): Promise<void> => {
-    try {
-        let justificationImageUrls: string[] = [];
-        if (imageFiles.length > 0) {
-            justificationImageUrls = await Promise.all(
-                imageFiles.map(async (photo) => {
-                    const fileExtension = photo.name.split('.').pop();
-                    const fileName = `justification-${assignmentId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
-                    const storageRef = storage.ref(`justifications-proofs/${fileName}`);
-                    await storageRef.put(photo);
-                    return await storageRef.getDownloadURL();
-                })
-            );
-        }
-
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update({
-            justification: justification,
-            justificationStatus: 'pending',
-            justificationSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            justificationImageUrls: justificationImageUrls,
-        });
-    } catch (error) {
-        console.error("Error submitting justification: ", error);
-        throw new Error("Não foi possível enviar a justificativa.");
-    }
-};
-
-export const updateAssignment = async (assignmentId: string, data: Partial<Omit<PostAssignment, 'id'>>): Promise<void> => {
-    try {
-        const docRef = firestore.collection('postAssignments').doc(assignmentId);
-        await docRef.update(data);
-    } catch (error) {
-        console.error("Error updating assignment: ", error);
-        throw new Error("Não foi possível atualizar a tarefa.");
-    }
-};
-
-export const cleanupOldProofs = async (organizationId: string): Promise<{ count: number, message: string }> => {
-    try {
-        const func = functions.httpsCallable('cleanupOldProofs');
-        const result = await func({ organizationId });
-        return result.data as { count: number, message: string };
-    } catch (error: any) {
-        console.error("Error cleaning up proofs:", error);
-        const detail = error.details?.message || error.message;
-        throw new Error(`Falha na limpeza: ${detail}`);
-    }
-};
-
-export const analyzeCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ count: number, sizeBytes: number, formattedSize: string }> => {
-    try {
-        const func = functions.httpsCallable('analyzeCampaignProofs');
-        const result = await func({ organizationId, campaignName, postId });
-        return result.data as { count: number, sizeBytes: number, formattedSize: string };
-    } catch (error: any) {
-        console.error("Error analyzing proofs:", error);
-        const detail = error.details?.message || error.message;
-        throw new Error(`Falha na análise: ${detail}`);
-    }
-};
-
-export const deleteCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ success: boolean, deletedFiles: number, updatedDocs: number, hasMore: boolean }> => {
-    try {
-        const func = functions.httpsCallable('deleteCampaignProofs');
-        const result = await func({ organizationId, campaignName, postId });
-        return result.data as { success: boolean, deletedFiles: number, updatedDocs: number, hasMore: boolean };
-    } catch (error: any) {
-        console.error("Error deleting proofs:", error);
-        const detail = error.details?.message || error.message;
-        throw new Error(`Falha na limpeza: ${detail}`);
-    }
-};
-
-// --- Scheduled Post Functions ---
-
-export const schedulePost = async (
-  data: Omit<ScheduledPost, 'id'>
-): Promise<string> => {
-    try {
-        const docRef = await firestore.collection('scheduledPosts').add(data);
-        return docRef.id;
-    } catch (error) {
-        console.error("Error scheduling post: ", error);
-        throw new Error("Não foi possível agendar a publicação.");
-    }
-};
-
-export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
-    try {
-        const q = firestore.collection("scheduledPosts")
-            .where("organizationId", "==", organizationId);
-        const snapshot = await q.get();
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
-        posts.sort((a, b) => toMillisSafe(b.scheduledAt) - toMillisSafe(a.scheduledAt));
-        return posts;
-    } catch (error) {
-        console.error("Error fetching scheduled posts: ", error);
-        throw new Error("Não foi possível buscar as publicações agendadas.");
-    }
-};
-
-export const getAllScheduledPosts = async (): Promise<ScheduledPost[]> => {
-    try {
-        const snapshot = await firestore.collection("scheduledPosts").get();
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost));
-        posts.sort((a, b) => toMillisSafe(b.scheduledAt) - toMillisSafe(a.scheduledAt));
-        return posts;
-    } catch (error) {
-        console.error("Error fetching all scheduled posts: ", error);
-        throw new Error("Não foi possível buscar todas as publicações agendadas.");
-    }
-};
-
-export const sendScheduledPostImmediately = async (postId: string): Promise<void> => {
-    try {
-        const func = functions.httpsCallable('sendScheduledPostImmediately');
-        await func({ postId });
-    } catch (error) {
-        console.error("Error sending scheduled post: ", error);
-        if (error instanceof Error) throw new Error(`Não foi possível enviar o post. Detalhes: ${error.message}`);
-        throw new Error("Não foi possível enviar o post agendado.");
-    }
-};
-
+/**
+ * Busca post agendado por ID.
+ */
 export const getScheduledPostById = async (id: string): Promise<ScheduledPost | null> => {
-    try {
-        const docRef = firestore.collection('scheduledPosts').doc(id);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() } as ScheduledPost;
-        return null;
-    } catch (error) {
-        console.error("Error getting scheduled post: ", error);
-        throw new Error("Não foi possível buscar os dados do agendamento.");
-    }
-};
-
-export const updateScheduledPost = async (id: string, data: Partial<Omit<ScheduledPost, 'id'>>): Promise<void> => {
-    try {
-        const docRef = firestore.collection('scheduledPosts').doc(id);
-        await docRef.update(data);
-    } catch (error) {
-        console.error("Error updating scheduled post: ", error);
-        throw new Error("Não foi possível atualizar o agendamento.");
-    }
-};
-
-export const deleteScheduledPost = async (id: string): Promise<void> => {
-    try {
-        await firestore.collection("scheduledPosts").doc(id).delete();
-    } catch (error) {
-        console.error("Error deleting scheduled post: ", error);
-        throw new Error("Não foi possível cancelar o agendamento.");
-    }
-};
-
-export const getScheduledPostsForPromoter = async (email: string): Promise<ScheduledPost[]> => {
-    try {
-        const promoterProfiles = await findPromotersByEmail(email);
-        if (promoterProfiles.length === 0) return [];
-
-        const orgIds = [...new Set(promoterProfiles.map(p => p.organizationId).filter(id => !!id))];
-        if (orgIds.length === 0) return [];
-
-        const scheduledPosts: ScheduledPost[] = [];
-        const queryPromises = orgIds.map(orgId => {
-            const q = firestore.collection("scheduledPosts")
-                .where("organizationId", "==", orgId)
-                .where("status", "==", "pending");
-            return q.get();
-        });
-
-        const querySnapshots = await Promise.all(queryPromises);
-        querySnapshots.forEach(snapshot => {
-            snapshot.forEach(doc => scheduledPosts.push({ id: doc.id, ...doc.data() } as ScheduledPost));
-        });
-        
-        const promoterIdSet = new Set(promoterProfiles.map(p => p.id));
-        const lowerCaseEmail = email.toLowerCase().trim();
-
-        const promoterScheduledPosts = scheduledPosts.filter(post => 
-            post.assignedPromoters.some(assigned => 
-                assigned && (promoterIdSet.has(assigned.id) || (assigned.email && assigned.email.toLowerCase() === lowerCaseEmail))
-            )
-        );
-        
-        promoterScheduledPosts.sort((a, b) => toMillisSafe(a.scheduledAt) - toMillisSafe(b.scheduledAt));
-        return promoterScheduledPosts;
-    } catch (error) {
-        console.error("Error fetching scheduled posts for promoter: ", error);
-        throw new Error("Não foi possível buscar as publicações agendadas.");
-    }
-};
-
-export const getWhatsAppRemindersPage = async (
-  limitPerPage: number,
-  cursor?: firebase.firestore.QueryDocumentSnapshot
-): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
-    try {
-        let query = firestore.collection("whatsAppReminders").orderBy('createdAt', 'desc').limit(limitPerPage);
-        if (cursor) query = query.startAfter(cursor);
-
-        const snapshot = await query.get();
-        const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
-        const lastVisible = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
-        return { reminders, lastVisible };
-    } catch (error) {
-        console.error("Error fetching reminders: ", error);
-        throw new Error("Não foi possível buscar os lembretes do WhatsApp.");
-    }
-};
-
-export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<void> => {
-    try {
-        const func = functions.httpsCallable('sendWhatsAppReminderNow');
-        const result = await func({ reminderId });
-        const data = result.data as { success: boolean };
-        if (!data.success) throw new Error("A função do servidor falhou ao enviar o lembrete.");
-    } catch (error) {
-        console.error("Error sending reminder: ", error);
-        if (error instanceof Error) throw new Error(`Não foi possível enviar o lembrete. Detalhes: ${error.message}`);
-        throw new Error("Não foi possível enviar o lembrete do WhatsApp.");
-    }
-};
-
-export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdAt'>): Promise<string> => {
   try {
-    const docRef = await firestore.collection('oneTimePosts').add({
-      ...data,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    const doc = await firestore.collection('scheduledPosts').doc(id).get();
+    return doc.exists ? { id: doc.id, ...doc.data() } as ScheduledPost : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+/**
+ * Atualiza um post agendado.
+ */
+export const updateScheduledPost = async (id: string, data: any): Promise<void> => {
+  try {
+    await firestore.collection('scheduledPosts').doc(id).update(data);
+  } catch (error) {
+    throw new Error("Falha ao atualizar agendamento.");
+  }
+};
+
+/**
+ * Envia lembretes para quem confirmou mas não enviou print.
+ */
+export const sendPostReminder = async (postId: string): Promise<{ success: boolean; count: number; message: string }> => {
+  try {
+    const func = functions.httpsCallable('sendPostReminders');
+    const result = await func({ postId, type: 'confirmed_no_proof' });
+    return result.data as { success: boolean; count: number; message: string };
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+/**
+ * Envia lembretes para quem ainda não confirmou o post.
+ */
+export const sendPendingReminders = async (postId: string): Promise<{ success: boolean; count: number; message: string }> => {
+  try {
+    const func = functions.httpsCallable('sendPostReminders');
+    const result = await func({ postId, type: 'pending_confirmation' });
+    return result.data as { success: boolean; count: number; message: string };
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+/**
+ * Deleta um post e suas atribuições.
+ */
+export const deletePost = async (postId: string): Promise<void> => {
+  try {
+    const deletePostAndAssignments = functions.httpsCallable('deletePostAndAssignments');
+    await deletePostAndAssignments({ postId });
+  } catch (error) {
+    throw new Error("Falha ao deletar post.");
+  }
+};
+
+/**
+ * Busca tarefa por ID.
+ */
+export const getAssignmentById = async (id: string): Promise<PostAssignment | null> => {
+  try {
+    const doc = await firestore.collection('postAssignments').doc(id).get();
+    return doc.exists ? { id: doc.id, ...doc.data() } as PostAssignment : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+/**
+ * Envia print de comprovação.
+ */
+export const submitProof = async (assignmentId: string, files: File[]): Promise<void> => {
+  try {
+    const imageUrls = await Promise.all(
+      files.map(async (file) => {
+        const fileName = `proofs/${assignmentId}/${Date.now()}-${file.name}`;
+        const ref = storage.ref(fileName);
+        await ref.put(file);
+        return await ref.getDownloadURL();
+      })
+    );
+
+    await firestore.collection('postAssignments').doc(assignmentId).update({
+      proofImageUrls: imageUrls,
+      proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      status: 'confirmed'
     });
-    return docRef.id;
   } catch (error) {
-    console.error("Error creating one-time post: ", error);
-    if (error instanceof Error) throw new Error(`Não foi possível criar o post único. Detalhes: ${error.message}`);
-    throw new Error("Não foi possível criar o post único. Ocorreu um erro desconhecido.");
+    throw new Error("Falha ao enviar comprovante.");
   }
 };
 
-export const updateOneTimePost = async (postId: string, data: Partial<Omit<OneTimePost, 'id' | 'createdAt'>>): Promise<void> => {
+/**
+ * Busca estatísticas de uma divulgadora pelo email.
+ */
+export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats: any; assignments: PostAssignment[] }> => {
+    try {
+        const assignments = await getAssignmentsForPromoterByEmail(email);
+        const stats = {
+            assigned: assignments.length,
+            completed: assignments.filter(a => !!a.proofSubmittedAt).length,
+            justifications: assignments.filter(a => !!a.justification).length,
+            acceptedJustifications: assignments.filter(a => a.justificationStatus === 'accepted').length,
+            missed: assignments.filter(a => {
+                const isLate = a.post?.expiresAt && (a.post.expiresAt as Timestamp).toDate() < new Date() && !a.post.allowLateSubmissions;
+                return isLate && !a.proofSubmittedAt && a.justificationStatus !== 'accepted';
+            }).length,
+            pending: assignments.filter(a => !a.proofSubmittedAt && a.justificationStatus !== 'accepted').length
+        };
+        return { stats, assignments };
+    } catch (error) {
+        throw new Error("Erro ao calcular estatísticas.");
+    }
+};
+
+/**
+ * Adiciona novas atribuições a um post.
+ */
+export const addAssignmentsToPost = async (postId: string, promoterIds: string[]): Promise<void> => {
   try {
-    const docRef = firestore.collection('oneTimePosts').doc(postId);
-    await docRef.update(data);
-  } catch (error) {
-    console.error("Error updating one-time post: ", error);
-    if (error instanceof Error) throw new Error(`Não foi possível atualizar o post único. Detalhes: ${error.message}`);
-    throw new Error("Não foi possível atualizar o post único. Ocorreu um erro desconhecido.");
+    const func = functions.httpsCallable('addAssignmentsToPost');
+    await func({ postId, promoterIds });
+  } catch (error: any) {
+    throw new Error(error.message);
   }
 };
 
+/**
+ * Busca todos os posts agendados de uma organização.
+ */
+export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
+  try {
+    const q = firestore.collection('scheduledPosts').where('organizationId', '==', organizationId);
+    const snapshot = await q.get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost))
+      .sort((a, b) => (b.scheduledAt as Timestamp)?.toMillis() - (a.scheduledAt as Timestamp)?.toMillis());
+  } catch (error) {
+    return [];
+  }
+};
+
+/**
+ * Deleta agendamento.
+ */
+export const deleteScheduledPost = async (id: string): Promise<void> => {
+  try {
+    await firestore.collection('scheduledPosts').doc(id).delete();
+  } catch (error) {
+    throw new Error("Falha ao deletar agendamento.");
+  }
+};
+
+/**
+ * Busca posts únicos de uma organização.
+ */
 export const getOneTimePostsForOrg = async (organizationId: string): Promise<OneTimePost[]> => {
     try {
-        const q = firestore.collection("oneTimePosts").where("organizationId", "==", organizationId);
+        const q = firestore.collection('oneTimePosts').where('organizationId', '==', organizationId);
         const snapshot = await q.get();
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost));
-        posts.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
-        return posts;
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost))
+            .sort((a, b) => (b.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
     } catch (error) {
-        console.error("Error getting one-time posts: ", error);
-        throw new Error("Não foi possível buscar os posts únicos.");
+        return [];
     }
 };
 
-export const getOneTimePostById = async (postId: string): Promise<OneTimePost | null> => {
+/**
+ * Deleta post único.
+ */
+export const deleteOneTimePost = async (postId: string): Promise<void> => {
     try {
-        const docRef = firestore.collection('oneTimePosts').doc(postId);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() } as OneTimePost;
-        return null;
+        await firestore.collection('oneTimePosts').doc(postId).delete();
     } catch (error) {
-        console.error("Error getting one-time post: ", error);
-        throw new Error("Não foi possível buscar os dados do post.");
+        throw new Error("Erro ao deletar post.");
     }
 };
 
-export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmission, 'id' | 'submittedAt'>): Promise<string> => {
+/**
+ * Atualiza post único.
+ */
+export const updateOneTimePost = async (postId: string, data: Partial<OneTimePost>): Promise<void> => {
     try {
-        const email = data.email ? data.email.toLowerCase().trim() : '';
-        let q;
-        if (email) {
-             q = firestore.collection('oneTimePostSubmissions').where('oneTimePostId', '==', data.oneTimePostId).where('email', '==', email);
-        } else {
-             q = firestore.collection('oneTimePostSubmissions').where('oneTimePostId', '==', data.oneTimePostId).where('instagram', '==', data.instagram);
-        }
-        
-        const snapshot = await q.get();
-        if (!snapshot.empty) {
-            const msg = email ? "Este e-mail já foi utilizado nesta lista." : "Este Instagram já foi utilizado nesta lista.";
-            throw new Error(msg);
-        }
+        await firestore.collection('oneTimePosts').doc(postId).update(data);
+    } catch (error) {
+        throw new Error("Erro ao atualizar post.");
+    }
+};
 
-        const docRef = await firestore.collection('oneTimePostSubmissions').add({
+/**
+ * Cria post único.
+ */
+export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdAt'>): Promise<string> => {
+    try {
+        const docRef = await firestore.collection('oneTimePosts').add({
             ...data,
-            email: email,
-            submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         return docRef.id;
     } catch (error) {
-        console.error("Error creating submission: ", error);
-        if (error instanceof Error) throw new Error(error.message);
-        throw new Error("Não foi possível enviar sua comprovação e nome.");
+        throw new Error("Erro ao criar post único.");
     }
 };
 
+/**
+ * Busca post único por ID.
+ */
+export const getOneTimePostById = async (id: string): Promise<OneTimePost | null> => {
+    try {
+        const doc = await firestore.collection('oneTimePosts').doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } as OneTimePost : null;
+    } catch (error) {
+        return null;
+    }
+};
+
+/**
+ * Busca submissões de um post único.
+ */
 export const getOneTimePostSubmissions = async (postId: string): Promise<OneTimePostSubmission[]> => {
     try {
-        const q = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId);
+        const q = firestore.collection('oneTimePostSubmissions').where('oneTimePostId', '==', postId);
         const snapshot = await q.get();
-        const subs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission));
-        subs.sort((a, b) => toMillisSafe(b.submittedAt) - toMillisSafe(a.submittedAt));
-        return subs;
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission))
+            .sort((a, b) => (b.submittedAt as Timestamp)?.toMillis() - (a.submittedAt as Timestamp)?.toMillis());
     } catch (error) {
-        console.error("Error fetching submissions: ", error);
-        throw new Error("Não foi possível buscar as submissões.");
+        return [];
     }
 };
 
-export const updateOneTimePostSubmission = async (submissionId: string, data: Partial<OneTimePostSubmission>): Promise<void> => {
+/**
+ * Atualiza submissão de post único.
+ */
+export const updateOneTimePostSubmission = async (id: string, data: Partial<OneTimePostSubmission>): Promise<void> => {
     try {
-        const docRef = firestore.collection('oneTimePostSubmissions').doc(submissionId);
-        await docRef.update(data);
+        await firestore.collection('oneTimePostSubmissions').doc(id).update(data);
     } catch (error) {
-        console.error("Error updating submission: ", error);
-        throw new Error("Não foi possível atualizar a submissão.");
+        throw new Error("Erro ao atualizar submissão.");
     }
 };
 
-export const deleteOneTimePostSubmission = async (submissionId: string): Promise<void> => {
+/**
+ * Deleta submissão de post único.
+ */
+export const deleteOneTimePostSubmission = async (id: string): Promise<void> => {
     try {
-        const docRef = firestore.collection('oneTimePostSubmissions').doc(submissionId);
-        await docRef.delete();
+        await firestore.collection('oneTimePostSubmissions').doc(id).delete();
     } catch (error) {
-        console.error("Error deleting submission: ", error);
-        throw new Error("Não foi possível excluir a submissão.");
+        throw new Error("Erro ao deletar submissão.");
     }
 };
 
-export const deleteOneTimePost = async (postId: string): Promise<void> => {
+/**
+ * Realiza submissão em post único.
+ */
+export const submitOneTimePostSubmission = async (data: Omit<OneTimePostSubmission, 'id' | 'submittedAt'>): Promise<void> => {
     try {
-        const batch = firestore.batch();
-        const submissionsQuery = firestore.collection("oneTimePostSubmissions").where("oneTimePostId", "==", postId);
-        const submissionsSnapshot = await submissionsQuery.get();
-        submissionsSnapshot.forEach(doc => batch.delete(doc.ref));
-        const postDocRef = firestore.collection('oneTimePosts').doc(postId);
-        batch.delete(postDocRef);
-        await batch.commit();
+        await firestore.collection('oneTimePostSubmissions').add({
+            ...data,
+            submittedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
     } catch (error) {
-        console.error("Error deleting one-time post: ", error);
-        throw new Error("Não foi possível deletar o post único.");
+        throw new Error("Erro ao enviar submissão.");
     }
+};
+
+/**
+ * Busca estatísticas de uma divulgadora pelo ID.
+ */
+export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: any; assignments: PostAssignment[] }> => {
+    try {
+        const promoterDoc = await firestore.collection('promoters').doc(promoterId).get();
+        const email = promoterDoc.data()?.email;
+        if (!email) throw new Error("Email não encontrado.");
+        return await getStatsForPromoterByEmail(email);
+    } catch (error) {
+        throw new Error("Erro ao buscar estatísticas.");
+    }
+};
+
+/**
+ * Busca página de lembretes de WhatsApp.
+ */
+export const getWhatsAppRemindersPage = async (limit: number, startAfter: any): Promise<{ reminders: WhatsAppReminder[]; lastVisible: any }> => {
+    try {
+        let q = firestore.collection('whatsAppReminders').orderBy('sendAt', 'desc').limit(limit);
+        if (startAfter) q = q.startAfter(startAfter);
+        const snapshot = await q.get();
+        const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+        return { reminders, lastVisible: snapshot.docs[snapshot.docs.length - 1] || null };
+    } catch (error) {
+        return { reminders: [], lastVisible: null };
+    }
+};
+
+/**
+ * Envia lembrete de WhatsApp imediatamente.
+ */
+export const sendWhatsAppReminderImmediately = async (id: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('sendWhatsAppReminderImmediately');
+        await func({ reminderId: id });
+    } catch (error: any) {
+        throw new Error(error.message);
+    }
+};
+
+/**
+ * Analisa prints de uma campanha para limpeza.
+ */
+export const analyzeCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ count: number; sizeBytes: number }> => {
+  try {
+    const func = functions.httpsCallable('analyzeCampaignProofs');
+    const result = await func({ organizationId, campaignName, postId });
+    return result.data as { count: number; sizeBytes: number };
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+/**
+ * Deleta prints de uma campanha.
+ */
+export const deleteCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ updatedDocs: number; hasMore: boolean }> => {
+  try {
+    const func = functions.httpsCallable('deleteCampaignProofs');
+    const result = await func({ organizationId, campaignName, postId });
+    return result.data as { updatedDocs: number; hasMore: boolean };
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
 };
