@@ -14,16 +14,15 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fix: Corrected inheritance from Component and added explicit state type to ensure setState and props are available.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
-
+// Fix for line 40 and 74 (approx): Ensure setState and props are correctly inherited from React.Component by using explicit React.Component and standard state typing.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
   }
 
   // Fix: Static method for error state transformation.

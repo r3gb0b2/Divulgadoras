@@ -66,7 +66,7 @@ const Header: React.FC = () => {
       <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
-                  <LogoIcon className="h-10 w-auto text-white" />
+                  <LogoIcon className="h-10 md:h-12 w-auto text-white" />
               </Link>
               
               <div className='hidden md:flex items-center space-x-4'>

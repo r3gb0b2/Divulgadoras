@@ -14,7 +14,7 @@ const createStrokeIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVG
 );
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg viewBox="0 0 850 180" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg" {...props}>
       <defs>
         <linearGradient id="logoPurple" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style={{ stopColor: '#8B3DFF', stopOpacity: 1 }} />
@@ -26,25 +26,22 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         </linearGradient>
       </defs>
       
-      {/* Círculo do Checkmark */}
-      <circle cx="90" cy="90" r="75" fill="url(#logoPurple)" />
-      <circle cx="90" cy="90" r="60" fill="white" opacity="0.1" />
-      
-      {/* Checkmark */}
-      <path d="M 50 90 L 80 120 L 130 70" 
+      {/* Símbolo do Checkmark */}
+      <circle cx="100" cy="100" r="85" fill="url(#logoPurple)" />
+      <path d="M 55 100 L 90 135 L 145 80" 
             stroke="url(#logoGold)" 
-            strokeWidth="24" 
+            strokeWidth="28" 
             fill="none" 
             strokeLinecap="round" 
             strokeLinejoin="round" />
       
-      {/* Texto Lateral */}
-      <text x="190" y="120" 
-            fontFamily="system-ui, -apple-system, sans-serif" 
-            fontSize="115" 
+      {/* Texto Logo */}
+      <text x="220" y="135" 
+            fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+            fontSize="130" 
             fontWeight="900" 
             fill="white"
-            letterSpacing="-4">
+            letterSpacing="-5">
         Equipe Certa
       </text>
     </svg>
@@ -242,7 +239,7 @@ export const CodeBracketIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIc
 );
 
 export const EyeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M12 15a3 3 0 100-6 3 3 0 0 0 0 6z" />
+    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
 );
 
 export const FaceSmileIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -258,7 +255,7 @@ export const UndoIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const UserMinusIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M10.348 15.472a6.001 6.001 0 0 0-8.098-.67 3 3 0 0 0-.25 4.448l.25.25H21v-2.25a9 9 0 0 0-10.652-1.778zM16.5 4.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
+    <path d="M10.348 15.472a6.001 6.001 0 0 0-8.098-.67 3 3 0 0 0-.25 4.448l.25.25H21v-2.25a9 9 0 0 0-10.652-1.778zM16.5 4.5a3 3 0 11-6 0 3 3 0 0 1 6 0z" />
 );
 
 export const FilterIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
