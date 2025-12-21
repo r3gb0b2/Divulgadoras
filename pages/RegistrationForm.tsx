@@ -61,7 +61,9 @@ const PromoterForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
+  
+  // FIX: Safe state formatting to prevent crashes
+  const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
 
   const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -323,7 +325,8 @@ const RegistrationFlowPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
+    // FIX: Safe state formatting to prevent crashes
+    const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
 
     useEffect(() => {
         if (organizationId && state) {

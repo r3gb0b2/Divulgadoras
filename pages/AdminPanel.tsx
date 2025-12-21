@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -6,7 +5,6 @@ import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getR
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
-// FIX: FollowInteraction imported to resolve "Cannot find name 'FollowInteraction'" errors.
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp, FollowInteraction } from '../types';
 import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
@@ -210,7 +208,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    // FIX: Simplified editingPromoter type to Promoter | null for consistency.
     const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
     
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
@@ -552,8 +549,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    /* FIX: Refining searchInput type logic to ensure string type before calling search methods, resolving the error where 'unknown' could not be assigned to 'string' on line 510. */
     const handleLookupPromoter = async (emailToSearch?: string) => {
+        // FIX: Ensure searchInput is correctly typed as string before use
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
         
@@ -566,17 +563,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            /* FIX: Handling unknown error type by refining it for lookupError state update */
-            let errorMessage = 'Erro desconhecido';
-            if (err instanceof Error) {
-                errorMessage = err.message;
-            } else if (typeof err === 'string') {
-                errorMessage = err;
-            } else {
-                errorMessage = String(err);
-            }
-            setLookupError(errorMessage);
+        } catch (err: any) {
+            // FIX: Using any for the catch block to resolve unknown assignment issues
+            setLookupError(err?.message || String(err));
         } finally {
             setIsLookingUp(false);
         }

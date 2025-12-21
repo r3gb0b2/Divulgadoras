@@ -142,6 +142,9 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
 
     const statusInfo = statusInfoMap[promoter.status] || statusInfoMap.pending;
 
+    // FIX: Safe toUpperCase with fallback to prevent TypeError if state is missing
+    const displayState = promoter.state ? (stateMap[promoter.state.toUpperCase()] || promoter.state) : 'N/A';
+
     return (
         <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md shadow-md animate-fadeIn`}>
             <div className="flex justify-between items-start">
@@ -150,7 +153,7 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
                     <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
                 </div>
                 <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">
-                    {stateMap[promoter.state.toUpperCase()] || promoter.state}
+                    {displayState}
                 </div>
             </div>
             <p className="mt-2 text-sm whitespace-pre-wrap">{promoter.rejectionReason || statusInfo.message}</p>
