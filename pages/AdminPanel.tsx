@@ -568,7 +568,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleGoToPromoter = (promoter: Promoter) => {
-        setFilter(promoter.status);
+        // FIX: Cast promoter.status explicitly to ensure its literal type is correctly recognized by setFilter.
+        setFilter(promoter.status as PromoterStatus);
         setSearchQuery(promoter.email);
         if (isSuperAdmin) {
             setSelectedOrg(promoter.organizationId);
@@ -745,7 +746,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const manuallySendStatusEmail = functions.httpsCallable('manuallySendStatusEmail');
             const result = await manuallySendStatusEmail({ promoterId: promoter.id });
-            // FIX: Added type checking for manuallySendStatusEmail response to avoid 'unknown' errors.
             const data = result.data as { success: boolean, message?: string, provider?: string };
             const providerName = data.provider || 'Brevo (v9.2)';
             alert(`${data.message || 'Notificação enviada com sucesso!'} (Provedor: ${providerName})`);

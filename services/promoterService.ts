@@ -17,20 +17,33 @@ const toMillisSafe = (timestamp: any): number => {
 
 /**
  * Salva o token de notificação Push chamando uma Cloud Function.
- * Isso evita erros de 'permission-denied' no cliente.
  */
 export const savePushToken = async (promoterId: string, token: string): Promise<boolean> => {
     try {
         if (!promoterId || !token) return false;
-        
         const savePromoterToken = functions.httpsCallable('savePromoterToken');
         const result = await savePromoterToken({ promoterId, token });
-        
         const data = result.data as { success: boolean };
         return data.success;
     } catch (error: any) {
         console.error("Push Service: Erro ao invocar savePromoterToken:", error);
         throw error;
+    }
+};
+
+/**
+ * Remove o token de push (desvincula o dispositivo).
+ */
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            pushDiagnostics: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error: any) {
+        console.error("Error deleting push token:", error);
+        throw new Error("Falha ao remover token.");
     }
 };
 

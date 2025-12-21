@@ -1,42 +1,34 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
-import { getAllCampaigns } from '../services/settingsService';
-import { findPromotersByEmail } from '../services/promoterService';
+import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
-import { Organization, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, SparklesIcon, FaceIdIcon, SearchIcon, XIcon, CheckCircleIcon, AlertTriangleIcon, RefreshIcon } from '../components/Icons';
-import { functions } from '../firebase/config';
-import { httpsCallable } from 'firebase/functions';
+import { Organization, Promoter } from '../types';
+import { ArrowLeftIcon, FaceIdIcon, SearchIcon, TrashIcon, DocumentDuplicateIcon, RefreshIcon, CheckCircleIcon, XIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
     
     const [organizations, setOrganizations] = useState<Organization[]>([]);
-    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
     const [targetOrgId, setTargetOrgId] = useState('');
-    const [targetCampaignName, setTargetCampaignName] = useState('all');
-    const [targetState, setTargetState] = useState('all');
+    const [activePlatformTab, setActivePlatformTab] = useState<'ios' | 'android' | 'web'>('ios');
     const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
     const [targetUrl, setTargetUrl] = useState('/#/posts');
-
+    
     const [isSending, setIsSending] = useState(false);
+    const [isDeletingToken, setIsDeletingToken] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-
-    // Diagnostic state
-    const [diagEmail, setDiagEmail] = useState('');
-    const [diagResult, setDiagResult] = useState<Promoter | null>(null);
-    const [isDiagnosing, setIsDiagnosing] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -48,86 +40,97 @@ const AdminPushCampaignPage: React.FC = () => {
         }
     }, [isSuperAdmin, selectedOrgId]);
 
-    useEffect(() => {
-        if (targetOrgId) {
-            getAllCampaigns(targetOrgId).then(camps => setCampaigns(camps.sort((a,b) => a.name.localeCompare(b.name))));
-        }
-    }, [targetOrgId]);
-
     const fetchPromoters = useCallback(async () => {
-        if (!targetOrgId) return;
+        const orgId = isSuperAdmin ? targetOrgId : selectedOrgId;
+        if (!orgId) return;
+
         setIsLoadingData(true);
         try {
             const { getAllPromoters } = await import('../services/promoterService');
+            // Buscamos apenas quem é aprovado para facilitar
             const fetched = await getAllPromoters({
-                organizationId: targetOrgId,
-                filterOrgId: targetOrgId,
-                filterState: targetState,
-                selectedCampaign: targetCampaignName,
+                organizationId: orgId,
+                filterOrgId: orgId,
+                filterState: 'all',
+                selectedCampaign: 'all',
                 status: 'approved',
             });
             
-            setPromoters(fetched);
-            // Pré-seleciona apenas quem tem token
-            const withTokenIds = fetched.filter(p => !!p.fcmToken).map(p => p.id);
-            setSelectedPromoterIds(new Set(withTokenIds));
+            // Filtramos apenas quem tem token para esta tela ser focada em "dispositivos ativos"
+            const withToken = fetched.filter(p => !!p.fcmToken);
+            setPromoters(withToken);
+            setSelectedPromoterIds(new Set()); 
         } catch (err) {
-            setError("Erro ao buscar divulgadoras.");
+            setError("Erro ao buscar dispositivos.");
         } finally {
             setIsLoadingData(false);
         }
-    }, [targetOrgId, targetState, targetCampaignName]);
+    }, [isSuperAdmin, targetOrgId, selectedOrgId]);
 
     useEffect(() => {
         fetchPromoters();
     }, [fetchPromoters]);
 
-    const handleRunDiagnostics = async () => {
-        if (!diagEmail.trim()) return;
-        setIsDiagnosing(true);
-        setDiagResult(null);
+    const filteredPromoters = useMemo(() => {
+        return promoters.filter(p => {
+            const platform = (p.pushDiagnostics?.platform || 'ios').toLowerCase();
+            const matchesPlatform = platform === activePlatformTab;
+            const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+            return matchesPlatform && matchesSearch;
+        });
+    }, [promoters, activePlatformTab, searchQuery]);
+
+    const stats = useMemo(() => {
+        return {
+            ios: promoters.filter(p => (p.pushDiagnostics?.platform || 'ios').toLowerCase() === 'ios').length,
+            android: promoters.filter(p => (p.pushDiagnostics?.platform || '').toLowerCase() === 'android').length,
+        };
+    }, [promoters]);
+
+    const handleDeleteToken = async (promoterId: string) => {
+        if (!window.confirm("Tem certeza que deseja desvincular este dispositivo? A divulgadora precisará abrir o app novamente para registrar um novo token.")) return;
+        
+        setIsDeletingToken(promoterId);
         try {
-            const results = await findPromotersByEmail(diagEmail);
-            if (results.length > 0) setDiagResult(results[0]);
-            else alert("Nenhum cadastro encontrado com este e-mail.");
-        } catch (e) {
-            alert("Erro na busca.");
+            await deletePushToken(promoterId);
+            setPromoters(prev => prev.filter(p => p.id !== promoterId));
+            setSelectedPromoterIds(prev => {
+                const n = new Set(prev);
+                n.delete(promoterId);
+                return n;
+            });
+        } catch (e: any) {
+            alert("Erro: " + e.message);
         } finally {
-            setIsDiagnosing(false);
+            setIsDeletingToken(null);
         }
     };
 
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
-            setError("Preencha todos os campos e selecione divulgadoras com celular vinculado.");
+            setError("Preencha título, mensagem e selecione pelo menos um destino.");
             return;
         }
-
-        const countWithTokens = Array.from(selectedPromoterIds).filter(id => {
-            const p = promoters.find(item => item.id === id);
-            return !!p?.fcmToken;
-        }).length;
-
-        if (countWithTokens === 0) {
-            setError("Nenhuma das divulgadoras selecionadas possui um celular vinculado para receber push.");
-            return;
-        }
-
-        if (!window.confirm(`Enviar notificação para ${countWithTokens} dispositivos vinculados?`)) return;
 
         setIsSending(true);
         setResult(null);
         setError(null);
-
         try {
             const res = await sendPushCampaign({
                 title,
                 body,
                 url: targetUrl,
                 promoterIds: Array.from(selectedPromoterIds),
-                organizationId: targetOrgId
+                organizationId: targetOrgId || (selectedOrgId || '')
             });
-            setResult(res.message);
+            if (res.success) {
+                setResult(res.message);
+                setTitle('');
+                setBody('');
+                setSelectedPromoterIds(new Set());
+            } else {
+                setError(res.message);
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -136,137 +139,185 @@ const AdminPushCampaignPage: React.FC = () => {
     };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex justify-between items-center">
+        <div className="max-w-6xl mx-auto pb-20">
+            <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <FaceIdIcon className="w-8 h-8 text-primary" />
-                    Notificações Push Nativa
+                    Campanhas Push
                 </h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Diagnóstico Individual */}
-                <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-secondary p-6 rounded-lg shadow-lg border border-indigo-500/30">
-                        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2"><SearchIcon className="w-5 h-5 text-indigo-400" /> Diagnóstico Remoto</h2>
-                        <p className="text-xs text-gray-400 mb-4">Insira o e-mail para ver o que o celular da divulgadora reportou ao sistema.</p>
-                        <div className="flex gap-2 mb-6">
-                            <input 
-                                type="email" 
-                                placeholder="E-mail da divulgadora..." 
-                                value={diagEmail}
-                                onChange={e => setDiagEmail(e.target.value)}
-                                className="flex-grow bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
-                            />
-                            <button onClick={handleRunDiagnostics} disabled={isDiagnosing} className="p-2 bg-indigo-600 rounded text-white hover:bg-indigo-700 disabled:opacity-50">
-                                {isDiagnosing ? '...' : <SearchIcon className="w-5 h-5" />}
-                            </button>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                {/* Coluna Esquerda: Listagem e Gerenciamento */}
+                <div className="lg:col-span-2 space-y-6">
+                    
+                    <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
+                        <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                <SearchIcon className="w-5 h-5 text-gray-400" />
+                                Dispositivos Vinculados
+                            </h2>
+                            <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
+                                <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}>iOS ({stats.ios})</button>
+                                <button onClick={() => setActivePlatformTab('android')} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}>Android ({stats.android})</button>
+                            </div>
                         </div>
 
-                        {diagResult && (
-                            <div className="bg-dark/50 p-4 rounded border border-gray-700 space-y-3 animate-fadeIn">
-                                <p className="text-sm font-bold text-white truncate">{diagResult.name}</p>
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">Token FCM (Link):</span>
-                                        {diagResult.fcmToken ? (
-                                            <span className="text-green-400 flex items-center gap-1 font-bold"><CheckCircleIcon className="w-3 h-3" /> ATIVO</span>
-                                        ) : (
-                                            <span className="text-red-400 flex items-center gap-1 font-bold"><XIcon className="w-3 h-3" /> AUSENTE</span>
-                                        )}
-                                    </div>
-                                    {diagResult.pushDiagnostics && (
-                                        <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
-                                            <p className="text-[10px] text-gray-500 uppercase font-bold">Relatório do Dispositivo</p>
-                                            <div className="grid grid-cols-2 gap-2 text-[10px]">
-                                                <div className="bg-gray-800 p-1 rounded">Plataforma: <span className="text-white">{diagResult.pushDiagnostics.platform}</span></div>
-                                                <div className="bg-gray-800 p-1 rounded">Plugin: <span className="text-white">{diagResult.pushDiagnostics.pluginStatus}</span></div>
-                                            </div>
-                                            {diagResult.pushDiagnostics.lastError && (
-                                                <div className="bg-red-900/20 p-2 rounded border border-red-900/50">
-                                                    <p className="text-[9px] text-red-300 font-mono break-all">{diagResult.pushDiagnostics.lastError}</p>
-                                                </div>
-                                            )}
-                                        </div>
+                        <div className="mb-4">
+                            <input 
+                                type="text" 
+                                placeholder="Filtrar por nome..." 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                className="w-full bg-dark border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                            />
+                        </div>
+
+                        <div className="overflow-x-auto border border-gray-700 rounded-lg">
+                            <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-dark">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left w-10">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={filteredPromoters.length > 0 && filteredPromoters.every(p => selectedPromoterIds.has(p.id))} 
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedPromoterIds);
+                                                    filteredPromoters.forEach(p => e.target.checked ? newSet.add(p.id) : newSet.delete(p.id));
+                                                    setSelectedPromoterIds(newSet);
+                                                }} 
+                                                className="rounded border-gray-600 text-primary" 
+                                            />
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Vínculo</th>
+                                        <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700 bg-gray-800/20">
+                                    {isLoadingData ? (
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500 italic">Buscando...</td></tr>
+                                    ) : filteredPromoters.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-12 text-gray-500">Nenhum dispositivo encontrado para esta plataforma.</td></tr>
+                                    ) : (
+                                        filteredPromoters.map(p => (
+                                            <tr key={p.id} className="hover:bg-gray-700/30 transition-colors">
+                                                <td className="px-4 py-3">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedPromoterIds.has(p.id)} 
+                                                        onChange={() => {
+                                                            const n = new Set(selectedPromoterIds);
+                                                            if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
+                                                            setSelectedPromoterIds(n);
+                                                        }} 
+                                                        className="rounded border-gray-600 text-primary" 
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <p className="text-sm font-bold text-white">{p.name}</p>
+                                                    <p className="text-xs text-gray-500">{p.instagram}</p>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] bg-green-900/30 text-green-400 px-2 py-0.5 rounded-full font-bold w-fit flex items-center gap-1">
+                                                            <CheckCircleIcon className="w-3 h-3" /> Token OK
+                                                        </span>
+                                                        <span className="text-[9px] text-gray-500 mt-1 italic">Atualizado: {p.lastTokenUpdate ? new Date((p.lastTokenUpdate as any).seconds * 1000).toLocaleDateString() : 'N/A'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button 
+                                                            onClick={() => handleDeleteToken(p.id)} 
+                                                            disabled={isDeletingToken === p.id} 
+                                                            className="p-2 bg-red-900/20 text-red-400 rounded hover:bg-red-900/40 transition-all disabled:opacity-50" 
+                                                            title="Desvincular Dispositivo"
+                                                        >
+                                                            {isDeletingToken === p.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <TrashIcon className="w-4 h-4" />}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
                                     )}
-                                </div>
-                            </div>
-                        )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                {/* Envio em Massa */}
-                <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-secondary p-6 rounded-lg shadow-lg flex flex-col h-full">
-                        <h2 className="text-xl font-semibold border-b border-gray-700 pb-2 mb-4">1. Destinatários</h2>
-                        <div className="space-y-4 mb-4">
-                            {isSuperAdmin && (
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Organização</label>
-                                    <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
-                                        <option value="">Selecione...</option>
-                                        {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                    </select>
-                                </div>
-                            )}
+                {/* Coluna Direita: Criação do Alerta */}
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
+                        <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-3 mb-4">Nova Campanha</h2>
+                        
+                        {isSuperAdmin && (
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">Organização</label>
+                                <select value={targetOrgId} onChange={e => setTargetOrgId(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg p-2 text-sm text-white">
+                                    <option value="">Selecione...</option>
+                                    {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">Título</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ex: Novo Post Disponível!" 
+                                    value={title} 
+                                    onChange={e => setTitle(e.target.value)} 
+                                    className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold focus:ring-1 focus:ring-primary outline-none" 
+                                />
+                            </div>
 
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Evento</label>
-                                <select value={targetCampaignName} onChange={e => setTargetCampaignName(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white">
-                                    <option value="all">Todos os Eventos</option>
-                                    {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                </select>
+                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">Mensagem</label>
+                                <textarea 
+                                    placeholder="Escreva algo curto e atrativo..." 
+                                    value={body} 
+                                    onChange={e => setBody(e.target.value)} 
+                                    className="w-full h-24 bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none focus:ring-1 focus:ring-primary outline-none" 
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-widest">Ação ao Abrir (Caminho)</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ex: /#/posts" 
+                                    value={targetUrl} 
+                                    onChange={e => setTargetUrl(e.target.value)} 
+                                    className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono focus:ring-1 focus:ring-primary outline-none" 
+                                />
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                    <button onClick={() => setTargetUrl('/#/posts')} className="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-gray-300">Tarefas</button>
+                                    <button onClick={() => setTargetUrl('/#/status')} className="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-gray-300">Status</button>
+                                    <button onClick={() => setTargetUrl('/#/connect')} className="text-[10px] bg-gray-700 hover:bg-gray-600 px-2 py-0.5 rounded text-gray-300">Seguidores</button>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex-grow overflow-y-auto border border-gray-600 rounded bg-gray-800 p-2 min-h-[300px]">
-                            {isLoadingData ? <p className="text-center py-4 text-xs">Carregando dispositivos...</p> : promoters.length === 0 ? <p className="text-center py-4 text-gray-500 text-xs">Ninguém encontrado.</p> : (
-                                promoters.map(p => (
-                                    <label key={p.id} className="flex items-center gap-3 p-2 hover:bg-gray-700 rounded cursor-pointer border-b border-gray-700/50 last:border-0">
-                                        <input type="checkbox" checked={selectedPromoterIds.has(p.id)} onChange={() => {
-                                            const n = new Set(selectedPromoterIds);
-                                            if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
-                                            setSelectedPromoterIds(n);
-                                        }} className="rounded text-primary focus:ring-0" />
-                                        <div className="flex-grow min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-white truncate">{p.name}</span>
-                                                {p.fcmToken ? <CheckCircleIcon className="w-3 h-3 text-green-400 flex-shrink-0" /> : <XIcon className="w-3 h-3 text-red-500 flex-shrink-0" />}
-                                            </div>
-                                            <p className="text-[10px] text-gray-500 truncate">{p.instagram}</p>
-                                        </div>
-                                    </label>
-                                ))
-                            )}
-                        </div>
-                        <div className="flex justify-between items-center mt-3">
-                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">{selectedPromoterIds.size} selecionadas</span>
-                             <button onClick={() => fetchPromoters()} className="text-primary hover:text-white"><RefreshIcon className="w-4 h-4"/></button>
-                        </div>
-                    </div>
+                        <div className="mt-8 pt-4 border-t border-gray-700">
+                            {error && <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg mb-4 text-red-300 text-xs font-bold italic">{error}</div>}
+                            {result && <div className="p-3 bg-green-900/30 border border-green-800 rounded-lg mb-4 text-green-400 text-xs text-center font-bold">🎉 {result}</div>}
 
-                    <div className="bg-secondary p-6 rounded-lg shadow-lg space-y-4">
-                        <h2 className="text-xl font-semibold border-b border-gray-700 pb-2">2. Mensagem</h2>
-                        <input type="text" placeholder="Título da Notificação" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white font-bold focus:ring-1 focus:ring-primary outline-none" />
-                        <textarea placeholder="Corpo da mensagem (curto)..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm focus:ring-1 focus:ring-primary outline-none" />
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-1">Destino ao Abrir</label>
-                            <select value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm">
-                                <option value="/#/posts">Minhas Tarefas (Portal)</option>
-                                <option value="/#/status">Status do Cadastro</option>
-                                <option value="/#/connect">Conexão Seguidores</option>
-                            </select>
+                            <button 
+                                onClick={handleSend} 
+                                disabled={isSending || selectedPromoterIds.size === 0} 
+                                className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all disabled:opacity-30 disabled:grayscale"
+                            >
+                                {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : 'DISPARAR AGORA'}
+                            </button>
+                            <p className="text-[10px] text-gray-500 text-center mt-3 uppercase font-bold tracking-widest">Selecionados: {selectedPromoterIds.size}</p>
                         </div>
-                        
-                        {error && <div className="bg-red-900/20 border border-red-800 text-red-400 p-2 rounded text-[10px] font-bold">{error}</div>}
-                        {result && <div className="bg-green-900/20 border border-green-800 text-green-400 p-2 rounded text-[10px] font-bold">{result}</div>}
-
-                        <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest rounded-xl hover:bg-primary-dark shadow-xl shadow-primary/20 disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-2">
-                            {isSending ? 'Enviando...' : 'Disparar Push'}
-                        </button>
                     </div>
                 </div>
             </div>
