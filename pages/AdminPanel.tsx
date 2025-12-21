@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -6,7 +5,8 @@ import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getR
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
-import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
+// FIX: Added FollowInteraction to the import list to resolve "Cannot find name 'FollowInteraction'" errors on lines 212 and 838
+import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp, FollowInteraction } from '../types';
 import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
@@ -550,7 +550,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // Fixed typing to resolve unknown string parameter error on line 509
+    // FIX: Refined parameter and variable typing to explicitly handle string conversion and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 509.
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
@@ -562,7 +562,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // Added explicit cast to string for safety
+            // FIX: Guaranteed finalEmail is a string via refinement above.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {

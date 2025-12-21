@@ -174,7 +174,7 @@ const AdminAppleTestReview: React.FC = () => {
             
             <div className="mt-4 bg-blue-900/20 border border-blue-800 p-4 rounded-lg">
                 <p className="text-sm text-blue-300">
-                    <strong>Como usar:</strong> Exporte o CSV e importe no painel do App Store Connect (TestFlight > External Testers > clique no "+" > Import from CSV).
+                    <strong>Como usar:</strong> Exporte o CSV e importe no painel do App Store Connect (TestFlight &gt; External Testers &gt; clique no "+" &gt; Import from CSV).
                 </p>
             </div>
         </div>
