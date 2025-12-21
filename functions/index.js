@@ -1,3 +1,4 @@
+
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -84,10 +85,12 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             const orgSnap = await db.collection('organizations').doc(promoter.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
             
+            const eventName = promoter.campaignName || "nosso banco de talentos";
+
             const html = `
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                     <h1 style="color: #7e39d5;">Parabéns, ${promoter.name}!</h1>
-                    <p>Seu perfil foi aprovado para participar da equipe <strong>${org.name}</strong>.</p>
+                    <p>Seu perfil foi aprovado para participar da equipe <strong>${org.name}</strong> para o evento <strong>${eventName}</strong>.</p>
                     <p>Agora você já pode acessar suas tarefas e confirmar sua presença nos eventos.</p>
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="https://divulgadoras.vercel.app/#/status?email=${promoter.email}" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">ACESSAR MEU PORTAL</a>
