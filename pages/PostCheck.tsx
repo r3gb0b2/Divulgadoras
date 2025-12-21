@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment, scheduleWhatsAppReminder } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, getScheduledPostsForPromoter, updateAssignment } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications, syncPushTokenManually } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
@@ -69,14 +69,13 @@ const CountdownTimer: React.FC<{ targetDate: any, prefix?: string }> = ({ target
     return <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}><ClockIcon className="h-4 w-4" /><span>{prefix}{timeLeft}</span></div>;
 };
 
-const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void, onReminderRequested: () => void }> = ({ assignment, onConfirm, onJustify, onReminderRequested }) => {
+const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onConfirm, onJustify }) => {
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
     const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
-    const [isRequestingReminder, setIsRequestingReminder] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     
     const allowJustification = assignment.post.allowJustification !== false;
@@ -125,20 +124,16 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
 
     const handleConfirm = async () => {
         if (isPostExpired) { alert("O tempo para esta postagem foi encerrado."); return; }
-        const wantsReminder = window.confirm("Você postou? Ótimo! Seu próximo passo é enviar o print em 6 horas.\n\nDeseja que a gente te lembre no WhatsApp?");
+        setIsConfirming(true);
         try {
-            if (wantsReminder) {
-                await scheduleWhatsAppReminder(assignment.id);
-                alert("Lembrete agendado com sucesso! Você receberá uma mensagem no WhatsApp.");
-            }
             await confirmAssignment(assignment.id);
-            if (wantsReminder) {
-                await updateAssignment(assignment.id, { whatsAppReminderRequestedAt: firebase.firestore.FieldValue.serverTimestamp() });
-            }
             await onConfirm(assignment);
         } catch (err: any) { alert((err as Error).message); }
+        finally { setIsConfirming(false); }
     };
+
     const handleCopyLink = () => { if (!assignment.post.postLink) return; navigator.clipboard.writeText(assignment.post.postLink).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }); };
+    
     const handleFirebaseDownload = async () => {
         if (!assignment.post.mediaUrl) return;
         setIsDownloading(true);
@@ -157,8 +152,6 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
             document.body.removeChild(link);
         } catch (error) { alert("Erro ao baixar a mídia."); } finally { setIsDownloading(false); }
     };
-
-    const handleRequestReminder = async () => { setIsRequestingReminder(true); try { await scheduleWhatsAppReminder(assignment.id); onReminderRequested(); } catch (err: any) { alert(err.message || "Erro ao agendar lembrete."); setIsRequestingReminder(false); } };
 
     return (
         <div className="bg-dark/70 rounded-lg shadow-md overflow-hidden border border-gray-700/50">
@@ -196,16 +189,13 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                         {assignment.status === 'pending' ? (
                             <div className="flex flex-col sm:flex-row gap-2">
                                 {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
-                                <button onClick={handleConfirm} disabled={isConfirming || isPostExpired} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">Eu postei!</button>
+                                <button onClick={handleConfirm} disabled={isConfirming || isPostExpired} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">{isConfirming ? 'Salvando...' : 'Eu postei!'}</button>
                             </div>
                         ) : (
                             <div className="space-y-3">
                                 <div className="flex flex-col sm:flex-row gap-2">
                                     {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
                                     <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="flex-1 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">Enviar Comprovação</button>
-                                </div>
-                                <div className="flex justify-center gap-3">
-                                    <button onClick={handleRequestReminder} disabled={isRequestingReminder || !!assignment.whatsAppReminderRequestedAt} className="inline-flex items-center gap-2 px-4 py-2 bg-green-900/30 text-green-300 border border-green-700/50 rounded-full hover:bg-green-900/50 text-xs font-semibold disabled:opacity-50"><WhatsAppIcon className="w-4 h-4" />{assignment.whatsAppReminderRequestedAt ? 'Lembrete Agendado!' : 'Lembrete no WhatsApp'}</button>
                                 </div>
                                 <p className={`text-xs ${timeLeftForProof === 'Tempo esgotado' ? 'text-red-400' : 'text-gray-400'}`}>{timeLeftForProof}</p>
                             </div>
@@ -265,7 +255,6 @@ const PostCheck: React.FC = () => {
     useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
     
     const handleConfirmAssignment = async () => { performSearch(email); };
-    const handleReminderRequested = async () => { performSearch(email); };
 
     const handleOpenJustification = (a: PostAssignment) => {
         setJustificationText('');
@@ -377,9 +366,9 @@ const PostCheck: React.FC = () => {
                         </nav>
                     </div>
                     <div className="space-y-6">
-                        {activeTab === 'pending' && (pendingAssignments.length > 0 ? pendingAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} onReminderRequested={handleReminderRequested} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma tarefa pendente! 🎉</p>)}
+                        {activeTab === 'pending' && (pendingAssignments.length > 0 ? pendingAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma tarefa pendente! 🎉</p>)}
                         {activeTab === 'scheduled' && (scheduledPosts.length > 0 ? scheduledPosts.map(p => (<div key={p.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex items-center justify-between"><p className="font-semibold text-white">{p.postData.campaignName}</p><span className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded-full border border-blue-500/30">Agendado</span></div>)) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma publicação agendada.</p>)}
-                        {activeTab === 'history' && (historyAssignments.length > 0 ? historyAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} onReminderRequested={()=>{}} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Seu histórico está vazio.</p>)}
+                        {activeTab === 'history' && (historyAssignments.length > 0 ? historyAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Seu histórico está vazio.</p>)}
                     </div>
                 </div>
             )}

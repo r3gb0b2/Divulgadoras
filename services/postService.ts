@@ -161,15 +161,11 @@ export const updateAssignment = async (assignmentId: string, data: Partial<PostA
 };
 
 /**
- * Agenda lembrete de WhatsApp para uma tarefa.
+ * Agenda lembrete de WhatsApp para uma tarefa. (DESATIVADO CONFORME SOLICITAÇÃO)
  */
 export const scheduleWhatsAppReminder = async (assignmentId: string): Promise<void> => {
-  try {
-    const func = functions.httpsCallable('scheduleWhatsAppReminder');
-    await func({ assignmentId });
-  } catch (error: any) {
-    throw new Error(error.message || "Erro ao agendar lembrete.");
-  }
+  // Desativado por solicitação do usuário
+  return Promise.resolve();
 };
 
 /**
@@ -408,7 +404,7 @@ export const getOneTimePostsForOrg = async (organizationId: string): Promise<One
         const q = firestore.collection('oneTimePosts').where('organizationId', '==', organizationId);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost))
-            .sort((a, b) => (b.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
+            .sort((a, b) => (a.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
     } catch (error) {
         return [];
     }
@@ -471,7 +467,7 @@ export const getOneTimePostSubmissions = async (postId: string): Promise<OneTime
         const q = firestore.collection('oneTimePostSubmissions').where('oneTimePostId', '==', postId);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission))
-            .sort((a, b) => (b.submittedAt as Timestamp)?.toMillis() - (a.submittedAt as Timestamp)?.toMillis());
+            .sort((a, b) => (a.submittedAt as Timestamp)?.toMillis() - (a.submittedAt as Timestamp)?.toMillis());
     } catch (error) {
         return [];
     }

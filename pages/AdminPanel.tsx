@@ -562,12 +562,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Guaranteed finalEmail is a string via refinement above.
-            const results = await findPromotersByEmail(finalEmail);
+            // FIX: Guaranteed finalEmail is a string via refinement above and passing it as string.
+            const results = await findPromotersByEmail(finalEmail as string);
             setLookupResults(results);
-        } catch (err: any) {
-            // Using 'any' type in catch block for simpler access to message and ensuring fallback string.
-            const errorMessage = err?.message || String(err) || 'Erro desconhecido';
+        } catch (err: unknown) {
+            // FIX: Properly handling unknown error type in catch block to ensure errorMessage is a string.
+            let errorMessage = 'Erro desconhecido';
+            if (err instanceof Error) {
+                errorMessage = err.message;
+            } else if (typeof err === 'string') {
+                errorMessage = err;
+            } else {
+                errorMessage = String(err);
+            }
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
