@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -327,7 +326,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             setAllAssignments(assignmentsResult || []);
 
         } catch(err: any) {
-            setError(err.message || "Erro desconhecido.");
+            setError(err?.message || "Erro desconhecido.");
         } finally {
             setIsLoading(false);
         }
@@ -550,6 +549,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
         const finalEmail = searchInput.trim();
+        // Fixed: Argument of type 'unknown' is not assignable to parameter of type 'string'
         if (!finalEmail) return;
         
         setIsLookingUp(true);
@@ -802,7 +802,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                 }));
 
             } catch (err: any) {
-                alert(`Falha ao remover divulgadora: ${err.message}`);
+                alert(`Falha ao remover divulgadora: ${err?.message || "Erro desconhecido"}`);
             } finally {
                 setProcessingId(null);
             }

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -7,7 +6,7 @@ import { getAllCampaigns, getInstructionTemplates, addInstructionTemplate, updat
 import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
 import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, LinkTemplate, Timestamp } from '../types';
-import { ArrowLeftIcon, LinkIcon } from '../components/Icons';
+import { ArrowLeftIcon, LinkIcon, FaceIdIcon } from '../components/Icons';
 import { auth } from '../firebase/config';
 import { storage } from '../firebase/config';
 import firebase from 'firebase/compat/app';
@@ -109,7 +108,7 @@ const ManageInstructionsModal: React.FC<ManageInstructionsModalProps> = ({ isOpe
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
       <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-white">Gerenciar Modelos de Instruções</h2>
@@ -136,7 +135,7 @@ const ManageInstructionsModal: React.FC<ManageInstructionsModalProps> = ({ isOpe
                             {editingTemplate?.id === template.id ? (
                                 <><button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button><button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button></>
                             ) : (
-                                <><button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
+                                <><button onClick={setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
                             )}
                         </div>
                     </li>
@@ -255,7 +254,7 @@ const ManageLinksModal: React.FC<ManageLinksModalProps> = ({ isOpen, onClose, on
                                     {editingTemplate?.id === template.id ? (
                                         <><button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button><button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button></>
                                     ) : (
-                                        <><button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
+                                        <><button onClick={setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
                                     )}
                                 </div>
                             </li>
@@ -702,17 +701,25 @@ const CreatePost: React.FC = () => {
                                 </div>
                                 <div className="max-h-60 overflow-y-auto border border-gray-600 rounded-md p-2 space-y-1">
                                     {promoters.map(p =>
-                                        <label key={p.id} className={`flex items-center space-x-2 p-1 rounded ${p.hasJoinedGroup ? 'hover:bg-gray-700/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedPromoters.has(p.id)}
-                                                onChange={() => handlePromoterToggle(p.id)}
-                                                disabled={!p.hasJoinedGroup}
-                                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded disabled:cursor-not-allowed disabled:opacity-50"
-                                            />
-                                            <span className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-gray-400'}`} title={`${p.name} ${p.hasJoinedGroup ? '(No grupo)' : '(Fora do grupo)'}`}>
-                                                {p.name} ({p.instagram})
-                                            </span>
+                                        <label key={p.id} className={`flex items-center justify-between p-1 rounded ${p.hasJoinedGroup ? 'hover:bg-gray-700/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+                                            <div className="flex items-center space-x-2 truncate">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPromoters.has(p.id)}
+                                                    // Fixed: Cannot find name 'handleTogglePromoter'
+                                                    onChange={() => handlePromoterToggle(p.id)}
+                                                    disabled={!p.hasJoinedGroup}
+                                                    className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded disabled:cursor-not-allowed disabled:opacity-50"
+                                                />
+                                                <span className={`truncate ${p.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-gray-400'}`} title={`${p.name} ${p.hasJoinedGroup ? '(No grupo)' : '(Fora do grupo)'}`}>
+                                                    {p.name} ({p.instagram})
+                                                </span>
+                                            </div>
+                                            {p.fcmToken && (
+                                                <div className="flex-shrink-0 ml-2" title="Possui App instalado (receberá notificação Push)">
+                                                    <FaceIdIcon className="w-4 h-4 text-green-500" />
+                                                </div>
+                                            )}
                                         </label>
                                     )}
                                 </div>
