@@ -8,6 +8,7 @@ import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, C
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
+import { initPushNotifications } from '../services/pushService';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -113,10 +114,8 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         if (!assignment.post.postLink) return;
         
         if (assignment.post.type === 'text') {
-            // Se for interação, abre o link
             window.open(assignment.post.postLink, '_blank');
         } else {
-            // Se for mídia, mantém o copiar
             navigator.clipboard.writeText(assignment.post.postLink);
             setLinkCopied(true);
             setTimeout(() => setLinkCopied(false), 2000);
@@ -267,6 +266,14 @@ const PostCheck: React.FC = () => {
         }
     }, [location.search, performSearch]);
 
+    // ATIVAÇÃO DO PUSH QUANDO O PROMOTER É CARREGADO
+    useEffect(() => {
+        if (promoter?.id) {
+            console.log("Push: Ativando monitoramento para divulgadora:", promoter.id);
+            initPushNotifications(promoter.id).catch(e => console.warn("Push init skipped:", e.message));
+        }
+    }, [promoter?.id]);
+
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
@@ -275,7 +282,7 @@ const PostCheck: React.FC = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
-            const fileList = Array.from(files).slice(0, 2); // Max 2 files
+            const fileList = Array.from(files).slice(0, 2);
             setJustificationFiles(fileList);
             const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
             setJustificationPreviews(previewUrls);

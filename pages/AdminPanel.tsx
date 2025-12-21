@@ -562,9 +562,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(inputEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Use robust type narrowing for unknown error to ensure errorMessage is a string.
-            const errorMessage = err instanceof Error ? err.message : (err ? String(err) : 'Erro desconhecido');
+        } catch (err: any) {
+            // FIX: Using "any" for catch block to ensure errorMessage extraction is robust against unknown types.
+            const errorMessage = err?.message || String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
