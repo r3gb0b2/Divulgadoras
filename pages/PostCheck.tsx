@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
@@ -122,7 +121,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 <h3 className="font-bold text-white uppercase">{assignment.post.campaignName}</h3>
                 <p className="text-yellow-500 text-sm mt-1 font-bold">Ação necessária!</p>
                 <p className="text-gray-400 text-xs mt-1">Você precisa entrar no grupo oficial para ver esta tarefa.</p>
-                <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="mt-4 inline-block px-4 py-2 bg-yellow-600 text-white font-bold rounded-lg text-xs">Ir para Status</Link>
+                <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="mt-4 icon-block px-4 py-2 bg-yellow-600 text-white font-bold rounded-lg text-xs">Ir para Status</Link>
             </div>
         );
     }
@@ -138,8 +137,8 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                     {assignment.post.expiresAt && <CountdownTimer targetDate={assignment.post.expiresAt} />}
                     {assignment.proofSubmittedAt || assignment.justificationStatus === 'accepted' ? (
                         <span className="text-[10px] font-bold text-green-400 uppercase bg-green-900/20 px-2 py-0.5 rounded-full">Concluído</span>
-                    ) : assignment.justification ? (
-                        <span className="text-[10px] font-bold text-yellow-400 uppercase bg-yellow-900/20 px-2 py-0.5 rounded-full">Aguardando Aceite</span>
+                    ) : (assignment.justification && (assignment.justificationStatus === 'pending' || !assignment.justificationStatus)) ? (
+                        <span className="text-[10px] font-bold text-yellow-400 uppercase bg-yellow-900/20 px-2 py-0.5 rounded-full">Aguardando Aceite de Justificativa</span>
                     ) : (
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${assignment.status === 'confirmed' ? 'bg-blue-900/20 text-blue-400' : 'bg-yellow-900/20 text-yellow-400'}`}>
                             {assignment.status === 'confirmed' ? 'Aguardando Print' : 'Novo Post'}
@@ -273,13 +272,13 @@ const PostCheck: React.FC = () => {
         }
     };
 
-    const removePreview = (index: number) => {
+    const removePreview = (i: number) => {
         const newFiles = [...justificationFiles];
-        newFiles.splice(index, 1);
+        newFiles.splice(i, 1);
         setJustificationFiles(newFiles);
 
         const newPreviews = [...justificationPreviews];
-        newPreviews.splice(index, 1);
+        newPreviews.splice(i, 1);
         setJustificationPreviews(newPreviews);
     };
 

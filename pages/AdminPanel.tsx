@@ -550,7 +550,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Force search input to be treated as a string to resolve 'unknown' assignment error.
+        // FIX: Ensuring emailToSearch is a string or fallback to lookupEmail to avoid unknown type issues.
         const searchInput: string = typeof emailToSearch === 'string' 
             ? emailToSearch 
             : String(lookupEmail || '');
@@ -559,7 +559,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         if (!finalEmail) return;
         
         setIsLookingUp(true);
-        // FIX: Replaced potentially ambiguous call with more robust error derivation from 'any' catch block below.
         setLookupError(''); 
         setLookupResults(null);
         setIsLookupModalOpen(true);
@@ -567,8 +566,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Explicitly cast error message to string to resolve 'unknown' assignment error.
-            const errorMessage = String(err?.message || (typeof err === 'string' ? err : 'Erro desconhecido'));
+            // FIX: Robustly extracting error message from unknown error in catch block.
+            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

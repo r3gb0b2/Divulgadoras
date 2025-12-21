@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -14,9 +14,9 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Explicitly initialize state as a class property to ensure it exists on the instance.
-  public override state: ErrorBoundaryState = {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Standard property initialization for class components.
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -33,19 +33,19 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   // Standard lifecycle method for side-effects when an error is caught.
-  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Standard usage of setState in a class component subclassing React.Component.
+    // Standard usage of setState in a class component.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  public override render() {
-    // FIX: Accessing state and props via 'this' as expected in React class components.
+  public render() {
+    // Accessing state and props via 'this' as expected in React class components.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
