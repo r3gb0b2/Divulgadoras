@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOneTimePostById, submitOneTimePostSubmission, getOneTimePostSubmissions } from '../services/postService';
@@ -10,7 +9,6 @@ import StorageMedia from '../components/StorageMedia';
 type PageStep = 'view_post' | 'submit_name' | 'complete';
 type CountdownStatus = 'upcoming' | 'open' | 'closed';
 
-// Lista de nomes masculinos para validação
 const MALE_NAMES = [
     'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
     'marcos', 'paulo', 'rodrigo', 'fernando', 'daniel', 'diego', 'thiago', 'tiago', 'andré', 
@@ -60,8 +58,6 @@ const useCountdown = (endDate: Date | null) => {
     return { status, timeLeft };
 };
 
-
-// Helper to extract Google Drive file ID from various URL formats
 const extractGoogleDriveId = (url: string): string | null => {
     let id = null;
     const patterns = [
@@ -87,19 +83,16 @@ const OneTimePostPage: React.FC = () => {
     const [currentSubmissionsCount, setCurrentSubmissionsCount] = useState<number>(0);
     const [step, setStep] = useState<PageStep>('view_post');
     
-    // Step 1 state
     const [proofFiles, setProofFiles] = useState<File[]>([]);
     const [proofPreviews, setProofPreviews] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
 
-    // Step 2 state
     const [uploadedProofUrls, setUploadedProofUrls] = useState<string[]>([]);
     const [guestName, setGuestName] = useState('');
     const [email, setEmail] = useState('');
     const [instagram, setInstagram] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // General state
     const [isLoading, setIsLoading] = useState(true);
     const [isMediaProcessing, setIsMediaProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -109,7 +102,6 @@ const OneTimePostPage: React.FC = () => {
     
     const isLimitReached = post?.submissionLimit ? currentSubmissionsCount >= post.submissionLimit : false;
 
-
     useEffect(() => {
         if (!postId) {
             setError("Link inválido ou post não encontrado.");
@@ -118,7 +110,6 @@ const OneTimePostPage: React.FC = () => {
         }
         const fetchPost = async () => {
             try {
-                // Fetch post details and current submissions in parallel
                 const [postData, submissions] = await Promise.all([
                     getOneTimePostById(postId),
                     getOneTimePostSubmissions(postId)
@@ -181,12 +172,11 @@ const OneTimePostPage: React.FC = () => {
         e.preventDefault();
         if (!post) return;
         
-        // Sanitize instagram handle
         const sanitizedInstagram = instagram.trim().replace(/@/g, '').split('/').pop() || '';
         const trimmedName = guestName.trim();
         const trimmedEmail = email.trim();
         
-        const isAskingEmail = post.askEmail !== false; // Default true
+        const isAskingEmail = post.askEmail !== false;
 
         if (!trimmedName || !sanitizedInstagram) {
             setError("Por favor, preencha todos os campos obrigatórios.");
@@ -195,6 +185,7 @@ const OneTimePostPage: React.FC = () => {
         
         if (isAskingEmail && !trimmedEmail) {
              setError("Por favor, informe seu e-mail.");
+             setIsSubmitting(false);
              return;
         }
 
@@ -203,7 +194,6 @@ const OneTimePostPage: React.FC = () => {
             return;
         }
 
-        // Male Name Validation Logic
         if (post.femaleOnly) {
             const firstName = trimmedName.split(' ')[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             if (MALE_NAMES.includes(firstName)) {
@@ -221,7 +211,7 @@ const OneTimePostPage: React.FC = () => {
                 organizationId: post.organizationId,
                 campaignId: post.campaignId,
                 guestName: trimmedName,
-                email: trimmedEmail, // Will be empty string if not asked
+                email: trimmedEmail,
                 instagram: sanitizedInstagram,
                 proofImageUrls: uploadedProofUrls,
             });
@@ -359,7 +349,7 @@ const OneTimePostPage: React.FC = () => {
                         <h3 className="text-xl font-bold text-center">Ótimo! Agora, seus dados para a lista:</h3>
                         
                         {post.femaleOnly && (
-                            <div className="bg-pink-900/50 text-pink-200 p-3 rounded-md text-center font-semibold mb-4 border border-pink-500">
+                            <div className="bg-purple-900/50 text-purple-200 p-3 rounded-md text-center font-semibold mb-4 border border-primary">
                                 👩 Lista Exclusivamente Feminina
                             </div>
                         )}
@@ -382,7 +372,7 @@ const OneTimePostPage: React.FC = () => {
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
                                     placeholder="Seu E-mail"
-                                    className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                                    className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-transparent transition-all bg-gray-700 text-gray-200"
                                     required
                                 />
                             </div>
@@ -397,7 +387,7 @@ const OneTimePostPage: React.FC = () => {
                                 value={instagram}
                                 onChange={e => setInstagram(e.target.value)}
                                 placeholder="Seu usuário do Instagram"
-                                className="w-full pl-10 pr-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
+                                className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-transparent transition-all bg-gray-700 text-gray-200"
                                 required
                             />
                         </div>

@@ -58,7 +58,7 @@ const PublicHome: React.FC = () => {
                 <span className="block font-extrabold text-white text-xl md:text-2xl uppercase tracking-tight group-hover:text-white transition-colors truncate mb-1">
                   {org.name}
                 </span>
-                <span className="text-gray-400 font-bold text-xs uppercase tracking-widest group-hover:text-pink-100 flex items-center gap-2">
+                <span className="text-gray-400 font-bold text-xs uppercase tracking-widest group-hover:text-purple-100 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-primary rounded-full group-hover:bg-white"></span>
                     Cadastrar agora
                 </span>

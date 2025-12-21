@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -39,11 +38,10 @@ const FollowLoopPage: React.FC = () => {
   const [rejectedByMe, setRejectedByMe] = useState<FollowInteraction[]>([]);
   const [validationView, setValidationView] = useState<'pending' | 'rejected'>('pending');
   
-  const [isLoading, setIsLoading] = useState(true); // Start loading to check loopId
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasClickedLink, setHasClickedLink] = useState(false);
 
-  // Check Loop ID validity on mount
   useEffect(() => {
     const checkLoop = async () => {
         if (!loopId) {
@@ -65,7 +63,6 @@ const FollowLoopPage: React.FC = () => {
     checkLoop();
   }, [loopId]);
 
-  // --- Auth / Entry ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !loopId || !loopData) return;
@@ -76,7 +73,6 @@ const FollowLoopPage: React.FC = () => {
 
     try {
       const profiles = await findPromotersByEmail(email);
-      // Filter for approved in THIS organization
       const approved = profiles.find(p => p.status === 'approved' && p.organizationId === loopData.organizationId);
       
       if (!approved) {
@@ -101,7 +97,6 @@ const FollowLoopPage: React.FC = () => {
       setPromoter(approved);
       setIsLoggedIn(true);
       
-      // Check existing participation in THIS loop
       const partStatus = await getParticipantStatus(approved.id, loopId);
       setParticipant(partStatus);
       
@@ -118,7 +113,6 @@ const FollowLoopPage: React.FC = () => {
   };
 
   const loadAllData = async (pid: string, loopId: string, orgId: string, state: string) => {
-      // Need participant composite ID for queries
       const participantId = `${loopId}_${pid}`;
       loadNextTarget(pid, loopId, orgId, state);
       loadValidations(participantId);
@@ -139,8 +133,6 @@ const FollowLoopPage: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  // --- Core Logic ---
 
   const loadNextTarget = useCallback(async (pid: string, loopId: string, orgId: string, state: string) => {
     setTargetProfile(null);
@@ -205,7 +197,6 @@ const FollowLoopPage: React.FC = () => {
     if (!promoter || !targetProfile || !loopId || !participant) return;
     setIsLoading(true);
     try {
-      // Pass composite IDs (participant IDs) to tracking
       await registerFollow(participant.id, targetProfile.id, loopId);
       await loadNextTarget(promoter.id, loopId, promoter.organizationId, promoter.state);
     } catch (err: any) {
@@ -255,8 +246,6 @@ const FollowLoopPage: React.FC = () => {
           alert(err.message);
       }
   };
-
-  // --- Renders ---
   
   if (isLoading && !isLoggedIn) {
       return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -298,7 +287,7 @@ const FollowLoopPage: React.FC = () => {
           <form onSubmit={handleLogin} className="space-y-4">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-4 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none" required />
             {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button type="submit" disabled={isLoading} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50">{isLoading ? 'Verificando...' : 'Acessar'}</button>
+            <button type="submit" disabled={isLoading} className="w-full py-3 bg-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50">{isLoading ? 'Verificando...' : 'Acessar'}</button>
           </form>
         </div>
       </div>
@@ -350,15 +339,15 @@ const FollowLoopPage: React.FC = () => {
            <div className="flex flex-col items-center">
                {targetProfile ? (
                    <div className="w-full bg-secondary rounded-xl shadow-xl overflow-hidden border border-gray-700 relative">
-                       <div className="h-24 bg-gradient-to-r from-purple-800 to-pink-800"></div>
+                       <div className="h-24 bg-gradient-to-r from-primary-dark to-primary"></div>
                        <div className="px-6 pb-8 text-center -mt-12">
                            <img src={targetProfile.photoUrl || 'https://via.placeholder.com/150'} alt={targetProfile.promoterName} className="w-24 h-24 rounded-full border-4 border-secondary mx-auto object-cover bg-gray-900"/>
                            <h3 className="text-2xl font-bold text-white mt-3">{targetProfile.promoterName}</h3>
-                           <p className="text-pink-400 font-medium text-lg mb-6">{targetProfile.instagram}</p>
+                           <p className="text-primary font-medium text-lg mb-6">{targetProfile.instagram}</p>
                            <p className="text-gray-500 text-xs mb-4">{targetProfile.state}</p>
                            <div className="space-y-3">
                                {!hasClickedLink ? (
-                                   <button onClick={handleInstagramClick} className="w-full py-3 bg-white text-pink-600 font-bold rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"><InstagramIcon className="w-5 h-5" /> Abrir Instagram e Seguir</button>
+                                   <button onClick={handleInstagramClick} className="w-full py-3 bg-white text-primary-dark font-bold rounded-full hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"><InstagramIcon className="w-5 h-5" /> Abrir Instagram e Seguir</button>
                                ) : (
                                    <button onClick={handleConfirmFollow} disabled={isLoading} className="w-full py-3 bg-green-600 text-white font-bold rounded-full hover:bg-green-700 transition-colors flex items-center justify-center gap-2 animate-pulse"><HeartIcon className="w-5 h-5" /> {isLoading ? 'Salvando...' : 'Já Segui! Próxima'}</button>
                                )}
@@ -390,7 +379,7 @@ const FollowLoopPage: React.FC = () => {
                            <div key={val.id} className="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-sm">
                                <div className="flex justify-between items-start mb-3">
                                    <div><p className="font-bold text-white text-lg">{val.followerName}</p><p className="text-sm text-gray-400">@{val.followerInstagram.replace('@', '')}</p></div>
-                                   <a href={`https://instagram.com/${val.followerInstagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gradient-to-r from-purple-900 to-pink-900 text-white text-xs font-bold rounded-full border border-pink-700/50 hover:opacity-90 flex items-center gap-1 transition-all"><InstagramIcon className="w-3 h-3" /> Ver / Seguir</a>
+                                   <a href={`https://instagram.com/${val.followerInstagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-gradient-to-r from-primary-dark to-primary text-white text-xs font-bold rounded-full border border-primary/20 hover:opacity-90 flex items-center gap-1 transition-all"><InstagramIcon className="w-3 h-3" /> Ver / Seguir</a>
                                </div>
                                <p className="text-xs text-gray-500 mb-4 flex items-center gap-1"><span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span> Aguardando sua confirmação</p>
                                <div className="flex gap-3">
@@ -437,10 +426,10 @@ const FollowLoopPage: React.FC = () => {
                      <p className="text-center text-gray-400 text-sm mb-2">{followersList.length} seguidora(s) confirmada(s).</p>
                      {followersList.map(f => (
                         <div key={f.id} className="bg-gray-800 p-3 rounded-lg flex items-center gap-4 border border-gray-700">
-                            <div className="w-10 h-10 bg-purple-900 rounded-full flex items-center justify-center flex-shrink-0 text-white"><UsersIcon className="w-5 h-5" /></div>
+                            <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0 text-primary"><UsersIcon className="w-5 h-5" /></div>
                             <div className="flex-grow overflow-hidden">
                                 <p className="font-bold text-white truncate">{f.followerName}</p>
-                                <a href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-pink-400 hover:underline truncate block">{f.followerInstagram}</a>
+                                <a href={`https://instagram.com/${f.followerInstagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline truncate block">{f.followerInstagram}</a>
                             </div>
                             <div className="flex-shrink-0 flex items-center gap-2">
                                 <div className="text-green-400" title="Confirmado"><CheckCircleIcon className="w-5 h-5" /></div>

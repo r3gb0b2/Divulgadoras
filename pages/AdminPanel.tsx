@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -562,9 +563,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(inputEmail);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Using "any" for catch block to ensure errorMessage extraction is robust against unknown types.
-            const errorMessage = err?.message || String(err || 'Erro desconhecido');
+        } catch (err: unknown) {
+            // FIX: Robust error message extraction to fix "unknown to string" error.
+            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

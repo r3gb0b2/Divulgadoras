@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
@@ -62,7 +61,6 @@ const PromoterForm: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // FIX: Safe state formatting to prevent crashes
   const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
 
   const [editId, setEditId] = useState<string | null>(null);
@@ -204,7 +202,6 @@ const PromoterForm: React.FC = () => {
         await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
       }
       
-      // PERSISTE O E-MAIL APÓS O CADASTRO
       localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
       
       setSubmitSuccess(true);
@@ -325,7 +322,6 @@ const RegistrationFlowPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    // FIX: Safe state formatting to prevent crashes
     const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
 
     useEffect(() => {
@@ -371,7 +367,7 @@ const RegistrationFlowPage: React.FC = () => {
                     {campaigns.map(c => (
                         <Link key={c.id} to={`/${organizationId}/register/${state}/${encodeURIComponent(c.name)}`} className="group p-6 bg-gray-800/50 rounded-2xl border border-gray-700 hover:bg-primary transition-all duration-300">
                             <span className="block text-xl font-bold text-white group-hover:text-white">{c.name}</span>
-                            <span className="text-xs text-gray-500 group-hover:text-pink-100">{c.description || 'Clique para se cadastrar'}</span>
+                            <span className="text-xs text-gray-500 group-hover:text-purple-100">{c.description || 'Clique para se cadastrar'}</span>
                         </Link>
                     ))}
                 </div>
