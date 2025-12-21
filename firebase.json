@@ -1,15 +1,14 @@
 {
   "functions": {
     "source": "functions",
-    "predeploy": "npm --prefix functions install"
+    "predeploy": "npm --prefix \"$RESOURCE_DIR\" install"
   },
   "hosting": {
     "public": ".",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**",
-      "functions/**"
+      "**/node_modules/**"
     ],
     "rewrites": [
       {

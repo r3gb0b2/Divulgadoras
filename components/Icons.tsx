@@ -118,6 +118,10 @@ export const ClockIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
 );
 
+export const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+);
+
 export const TicketIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 5.25V4.5z" clipRule="evenodd" />
 );
@@ -212,10 +216,6 @@ export const EyeIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 
 export const FaceSmileIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
     <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-2.625 6c-.54 0-.828.419-.936.634a1.96 1.96 0 00-.189.866c0 .298.059.605.189.866.108.215.395.634.936.634.54 0 .828-.419.936-.634.13-.26.189-.568.189-.866 0-.298-.059-.605-.189-.866-.108-.215-.395-.634-.936-.634zm4.314.634c.108-.215.395-.634.936-.634.54 0 .828.419.936.634.13.26.189.568.189.866 0 .298-.059.605-.189.866-.108.215-.395.634-.936.634-.54 0-.828-.419-.936-.634a1.96 1.96 0 01-.189-.866c0-.298.059-.605.189-.866zm-9 6a.75.75 0 01.75-.75h10.5a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75V15z" clipRule="evenodd" />
-);
-
-export const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h5.5a.75.75 0 00.75-.75v-5.5a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.206 9.349a.75.75 0 001.549.71zm14.49 3.882a7.5 7.5 0 01-12.548 3.364l-1.903-1.903h3.183a.75.75 0 000-1.5h-5.5a.75.75 0 00-.75.75v5.5a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.794-4.229.75.75 0 00-1.549-.71z" clipRule="evenodd" />
 );
 
 export const AlertTriangleIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(

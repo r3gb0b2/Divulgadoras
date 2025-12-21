@@ -1,189 +1,88 @@
-const admin = require("firebase-admin");
-const functions = require("firebase-functions");
-const { GoogleGenAI } = require("@google/genai");
-
-admin.initializeApp();
-const db = admin.firestore();
 
 /**
- * Função para integração com a IA Gemini do Google.
+ * Import and initialize the Firebase Admin SDK.
  */
-exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+const admin = require("firebase-admin");
+const functions = require("firebase-functions");
+
+// Initialize Firebase Admin SDK
+admin.initializeApp();
+const db = admin.firestore();
+db.settings({ ignoreUndefinedProperties: true });
+
+// --- Cloud Messaging (Push Notifications) ---
+
+exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    // Não exigimos auth aqui porque as divulgadoras não usam Firebase Auth
+    const { promoterId, token } = data;
     
-    const { prompt } = data;
-    if (!prompt) throw new functions.https.HttpsError("invalid-argument", "Prompt vazio.");
+    if (!promoterId || !token) {
+        throw new functions.https.HttpsError("invalid-argument", "ID da divulgadora e token são obrigatórios.");
+    }
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: {
-                systemInstruction: "Você é um assistente especializado em marketing de eventos e gestão de divulgadoras. Ajude o organizador a criar textos, regras e estratégias de engajamento.",
-            }
+        await db.collection('promoters').doc(promoterId).update({
+            fcmToken: token,
+            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
         });
-
-        return { text: response.text };
+        
+        return { success: true, message: "Token vinculado com sucesso." };
     } catch (e) {
-        console.error("Gemini Error:", e);
-        throw new functions.https.HttpsError("internal", "Falha na IA: " + (e.message || "Erro desconhecido"));
+        console.error("Error saving token:", e);
+        throw new functions.https.HttpsError("internal", "Erro ao gravar no banco de dados: " + e.message);
     }
 });
 
-/**
- * Envio de Campanhas Push para dispositivos móveis.
- * Inclui limpeza automática de tokens e detecção rigorosa de tokens APNs inválidos para FCM.
- */
 exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     
     const { title, body, url, promoterIds, organizationId } = data;
-    if (!title || !body || !promoterIds || promoterIds.length === 0) {
-        throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+    if (!title || !body || !promoterIds) {
+        throw new functions.https.HttpsError("invalid-argument", "Título, mensagem e destinatários são obrigatórios.");
     }
 
     try {
-        const messages = [];
-        const promoterMapByToken = {}; 
-        let apnsOnlyFound = false;
+        // Busca os tokens das divulgadoras selecionadas
+        const tokens = [];
+        const CHUNK_SIZE = 30;
         
-        const snapshot = await db.collection('promoters')
-            .where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 500)) 
-            .get();
-
-        snapshot.forEach(doc => {
-            const p = doc.data();
-            let token = p.fcmToken;
+        for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
+            const chunk = promoterIds.slice(i, i + CHUNK_SIZE);
+            const snap = await db.collection('promoters')
+                .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
+                .get();
             
-            if (token && typeof token === 'string') {
-                token = token.trim().replace(/["']/g, "");
-                
-                // DETECÇÃO CRÍTICA: Se o token tem 64 chars hex, ele é APNs puro e vai falhar no FCM.
-                const isAPNsOnly = /^[0-9a-fA-F]{64}$/.test(token);
-
-                if (!isAPNsOnly && token.length > 20) {
-                    messages.push({
-                        token: token,
-                        notification: { title, body },
-                        data: { 
-                            url: url || '/#/posts',
-                            orgId: organizationId || ""
-                        },
-                        android: {
-                            priority: "high",
-                            notification: { sound: "default", color: "#e83a93" }
-                        },
-                        apns: {
-                            payload: {
-                                aps: { sound: "default", badge: 1 }
-                            }
-                        }
-                    });
-                    promoterMapByToken[token] = { id: doc.id, name: p.name };
-                } else if (isAPNsOnly) {
-                    apnsOnlyFound = true;
-                    console.warn(`Token APNs nativo detectado e ignorado para ${p.name}. O Firebase exige conversão para FCM via Xcode.`);
-                }
-            }
-        });
-
-        if (messages.length === 0) {
-            const errorMsg = apnsOnlyFound 
-                ? "Erro: Tokens nativos Apple (64 chars) detectados. O Firebase não consegue enviar mensagens para esses tokens. Verifique o guia técnico no Xcode no painel de admin."
-                : "Nenhum token válido encontrado para os alvos selecionados.";
-            
-            return { 
-                success: false, 
-                message: errorMsg
-            };
-        }
-
-        const response = await admin.messaging().sendEach(messages);
-        
-        const successCount = response.responses.filter(r => r.success).length;
-        const failureCount = response.responses.length - successCount;
-        const tokensToDelete = [];
-        let lastError = "";
-
-        if (failureCount > 0) {
-            response.responses.forEach((res, idx) => {
-                if (!res.success) {
-                    const failedToken = messages[idx].token;
-                    const promoter = promoterMapByToken[failedToken];
-                    const error = res.error;
-
-                    console.error(`Falha no Push - Divulgadora: ${promoter.name} (${promoter.id})`);
-                    console.error(`Erro FCM: ${error.code} - ${error.message}`);
-
-                    const isInvalid = 
-                        error.code === 'messaging/registration-token-not-registered' || 
-                        error.code === 'messaging/invalid-registration-token' ||
-                        error.message.includes('not a valid FCM registration token');
-
-                    if (isInvalid) {
-                        tokensToDelete.push(promoter.id);
-                    }
-                    lastError = error.message;
-                }
+            snap.forEach(doc => {
+                const p = doc.data();
+                if (p.fcmToken) tokens.push(p.fcmToken);
             });
         }
 
-        if (tokensToDelete.length > 0) {
-            const batch = db.batch();
-            tokensToDelete.forEach(id => {
-                batch.update(db.collection('promoters').doc(id), {
-                    fcmToken: admin.firestore.FieldValue.delete(),
-                    platform: admin.firestore.FieldValue.delete()
-                });
-            });
-            await batch.commit();
+        if (tokens.length === 0) {
+            return { success: false, message: "Nenhum dispositivo registrado encontrado para estas divulgadoras." };
         }
 
+        const messagePayload = {
+            notification: {
+                title: title,
+                body: body
+            },
+            data: {
+                url: url || '/#/posts'
+            },
+            tokens: tokens
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(messagePayload);
+        
         return { 
-            success: successCount > 0, 
-            message: `${successCount} enviadas. ${failureCount} falhas removidas.`,
-            errorDetail: failureCount > 0 ? lastError : null
+            success: true, 
+            message: `${response.successCount} notificações enviadas com sucesso.`,
+            failureCount: response.failureCount
         };
 
     } catch (e) {
-        console.error("Critical sendPushCampaign Error:", e);
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
-/**
- * Funções auxiliares de sincronização e status
- */
-exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { promoterId, data: updateData } = data;
-    try {
-        await db.collection('promoters').doc(promoterId).update({
-            ...updateData,
-            statusChangedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        return { success: true };
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
-exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { promoterId } = data;
-    try {
-        const batch = db.batch();
-        const assignments = await db.collection('postAssignments').where('promoterId', '==', promoterId).get();
-        assignments.forEach(doc => batch.delete(doc.ref));
-        batch.update(db.collection('promoters').doc(promoterId), {
-            status: 'removed',
-            hasJoinedGroup: false
-        });
-        await batch.commit();
-        return { success: true };
-    } catch (e) {
+        console.error("Error sending push:", e);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });

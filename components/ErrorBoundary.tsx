@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode, Component } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -7,47 +7,62 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
 /**
- * ErrorBoundary component to catch runtime errors.
+ * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fix: Use React.Component explicitly and initialize state in constructor to ensure properties like 'props' and 'state' are correctly inherited and typed.
+// Fixed: Explicitly extending React.Component with Props and State interfaces to resolve property visibility issues.
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    // Initializing state correctly within the constructor
     this.state = {
       hasError: false,
       error: null,
+      errorInfo: null,
     };
   }
 
-  // Static method to update state when an error is caught for derived state updates.
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true, error, errorInfo: null };
   }
 
+  // Fixed: Correctly using this.setState within the class component.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
+    
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
+    });
   }
 
-  public render(): ReactNode {
-    // Fix: Access state property correctly
+  public render() {
+    // Fixed: Correctly accessing this.state within the render method.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
-          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500 text-center">
+          <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
             <h1 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado.</h1>
-            <p className="mb-6 text-gray-300">
-              Ocorreu um erro inesperado na aplicação.
+            <p className="mb-4 text-gray-300">
+              Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
+            {this.state.error && (
+              <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
+                <p className="text-red-400">{this.state.error.toString()}</p>
+              </div>
+            )}
              <button
               onClick={() => window.location.reload()}
-              className="w-full py-3 px-4 bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors font-bold shadow-lg"
+              className="w-full py-2 px-4 bg-primary hover:bg-primary-dark text-white rounded transition-colors font-semibold"
             >
               Recarregar Página
             </button>
-             <a href="/" className="block mt-6 text-sm text-gray-400 hover:text-white underline">
+             <a href="/" className="block text-center mt-4 text-sm text-gray-400 hover:text-white underline">
                 Voltar para a Página Inicial
             </a>
           </div>
@@ -55,7 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fix: Access props property correctly via inheritance from React.Component
+    // Fixed: Correctly accessing this.props within the class component.
     return this.props.children;
   }
 }

@@ -7,6 +7,15 @@ export type FieldValue = firebase.firestore.FieldValue;
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 
+export interface AppleTestRegistrant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  createdAt: Timestamp | FieldValue;
+  organizationId: string;
+}
+
 export interface Promoter {
   id: string;
   name: string;
@@ -14,11 +23,8 @@ export interface Promoter {
   whatsapp: string;
   instagram: string;
   tiktok?: string;
-  cpf?: string;
-  rg?: string;
   dateOfBirth: string;
   photoUrls: string[];
-  documentUrls?: string[]; // Para fotos do RG/CNH
   facePhotoUrl?: string;
   status: PromoterStatus;
   createdAt: Timestamp | FieldValue;
@@ -34,8 +40,14 @@ export interface Promoter {
   statusChangedAt?: Timestamp | FieldValue;
   observation?: string;
   lastManualNotificationAt?: Timestamp | FieldValue | null;
-  fcmToken?: string; // Token para Push Notifications
-  platform?: 'ios' | 'android' | 'web'; // Plataforma do dispositivo
+  fcmToken?: string; 
+  lastTokenUpdate?: Timestamp | FieldValue;
+  pushDiagnostics?: {
+    lastError?: string;
+    platform?: string;
+    pluginStatus?: string;
+    updatedAt: Timestamp | FieldValue;
+  };
 }
 
 export interface PromoterApplicationData {
@@ -44,11 +56,8 @@ export interface PromoterApplicationData {
   email: string;
   instagram: string;
   tiktok: string;
-  cpf: string;
-  rg: string;
   dateOfBirth: string;
   photos: File[];
-  documentPhotos: File[];
   facePhoto?: File | null;
   state: string;
   campaignName?: string;
@@ -240,8 +249,8 @@ export interface GuestListConfirmation {
     promoterEmail: string;
     listName: string;
     isPromoterAttending: boolean;
-    guestNames: string[]; // Legacy support
-    guests?: { name: string; email: string }[]; // New structure
+    guestNames: string[]; 
+    guests?: { name: string; email: string }[]; 
     confirmedAt: Timestamp | FieldValue;
     promoterCheckedInAt?: Timestamp | FieldValue | null;
     promoterCheckedOutAt?: Timestamp | FieldValue | null;
@@ -369,8 +378,6 @@ export interface GuestListChangeRequest {
   actionTakenBy?: string;
 }
 
-// --- Follow Loop Types ---
-
 export interface FollowLoop {
   id: string;
   organizationId: string;
@@ -382,7 +389,7 @@ export interface FollowLoop {
 }
 
 export interface FollowLoopParticipant {
-  id: string; // Composite ID: loopId_promoterId
+  id: string; 
   loopId: string;
   promoterId: string;
   promoterName: string;
@@ -414,7 +421,6 @@ export interface FollowInteraction {
   followedInstagram?: string;
 }
 
-// --- WhatsApp Reminder Types ---
 export interface WhatsAppReminder {
   id: string;
   promoterId: string;

@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import AdminDashboard from './AdminDashboard';
 import SuperAdminDashboard from './SuperAdminDashboard';
-// FIX: Switched to named import for AdminPanel as it is not a default export.
+// FIX: Using named import for AdminPanel to resolve "no default export" error
 import { AdminPanel } from './AdminPanel';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
@@ -36,11 +35,13 @@ import AdminCleanupPage from './AdminCleanupPage';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
 import NewsletterPage from './NewsletterPage';
+import SubscriptionPage from './SubscriptionPage';
 import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
 import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
+import AdminAppleTestReview from './AdminAppleTestReview';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -54,8 +55,10 @@ const AdminAuth: React.FC = () => {
 
     return (
         <Routes>
+            {/* Login deve ser acessível sem proteção, mas redireciona se já logado */}
             <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
 
+            {/* Todas as outras rotas são protegidas */}
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {adminData?.role === 'superadmin' && (
@@ -74,6 +77,7 @@ const AdminAuth: React.FC = () => {
 
             <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData!} /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
             <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData!} /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
@@ -104,11 +108,11 @@ const AdminAuth: React.FC = () => {
             <Route path="guestlist-requests" element={<ProtectedRoute><GuestListChangeRequestsPage /></ProtectedRoute>} />
             <Route path="diagnostics" element={<ProtectedRoute><PromoterDiagnosticsPage /></ProtectedRoute>} />
             <Route path="gemini" element={<ProtectedRoute><GeminiPage /></ProtectedRoute>} />
-            
             <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
-            
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
+            <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
 
+            {/* Catch-all interno do admin redireciona para o dashboard principal */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
     );
