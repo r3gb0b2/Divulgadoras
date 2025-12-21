@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -551,7 +552,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // FIX: Optimized parameter logic to explicitly handle strings and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 510.
+    /* FIX: Refining searchInput type logic to ensure string type before calling search methods, resolving the error where 'unknown' could not be assigned to 'string' on line 510. */
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
@@ -563,11 +564,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Guaranteed finalEmail is a string via refinement above.
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: unknown) {
-            // FIX: Explicitly handling unknown error type to ensure errorMessage is a string.
+            /* FIX: Handling unknown error type by refining it for lookupError state update */
             let errorMessage = 'Erro desconhecido';
             if (err instanceof Error) {
                 errorMessage = err.message;

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { PostAssignment, Promoter, Timestamp } from '../types';
 import { getStatsForPromoterByEmail } from '../services/postService';
@@ -40,18 +41,23 @@ const toDateSafe = (timestamp: any): Date | null => {
 
 const formatDate = (timestamp: any): string => {
     if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    if (isNaN(date.getTime())) return 'Data inválida';
+    const date = toDateSafe(timestamp);
+    if (!date) return 'Data inválida';
     return date.toLocaleDateString('pt-BR');
 };
 
 const getStatusInfo = (assignment: PostAssignment): { text: string; color: string } => {
-    // 1. Proof submitted is always "Concluído"
+    // 1. Post data is missing (Deleted post)
+    if (!assignment.post) {
+        return { text: 'Post Excluído', color: 'bg-gray-800 text-gray-500' };
+    }
+
+    // 2. Proof submitted is always "Concluído"
     if (assignment.proofSubmittedAt) {
         return { text: 'Concluído', color: 'bg-green-900/50 text-green-300' };
     }
 
-    // 2. Handle justifications
+    // 3. Handle justifications
     if (assignment.justification) {
         if (assignment.justificationStatus === 'accepted') {
             return { text: 'Concluído (Justificado)', color: 'bg-green-900/50 text-green-300' };
@@ -62,12 +68,12 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
         return { text: 'Justificativa Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
     }
     
-    // 3. Handle posts without proof or justification
+    // 4. Handle posts without proof or justification
     const now = new Date();
     let isMissed = false;
 
-    if (!assignment.post?.allowLateSubmissions) {
-        const expiresAt = toDateSafe(assignment.post?.expiresAt);
+    if (!assignment.post.allowLateSubmissions) {
+        const expiresAt = toDateSafe(assignment.post.expiresAt);
         const confirmedAt = toDateSafe(assignment.confirmedAt);
 
         // Check against 24h proof window if confirmed
@@ -87,7 +93,7 @@ const getStatusInfo = (assignment: PostAssignment): { text: string; color: strin
         return { text: 'Perdido', color: 'bg-red-900/50 text-red-300' };
     }
 
-    // 4. Default to pending if not missed and not completed
+    // 5. Default to pending if not missed and not completed
     return { text: 'Pendente', color: 'bg-yellow-900/50 text-yellow-300' };
 };
 
@@ -159,9 +165,9 @@ const PromoterPublicStatsModal: React.FC<PromoterPublicStatsModalProps> = ({ isO
                                     return (
                                         <div key={assignment.id} className="bg-gray-800/50 p-3 rounded-md flex justify-between items-center">
                                             <div>
-                                                <p className="font-semibold text-gray-200">{assignment.post?.campaignName}</p>
+                                                <p className="font-semibold text-gray-200">{assignment.post?.campaignName || 'Evento Não Identificado'}</p>
                                                 {assignment.post?.eventName && <p className="text-sm text-gray-300 -mt-1">{assignment.post.eventName}</p>}
-                                                <p className="text-xs text-gray-500">Criado em: {formatDate(assignment.post?.createdAt)}</p>
+                                                <p className="text-xs text-gray-500">Criado em: {assignment.post?.createdAt ? formatDate(assignment.post.createdAt) : 'N/A'}</p>
                                             </div>
                                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>
                                                 {statusInfo.text}

@@ -4,6 +4,29 @@ import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder, AdminUserData } from '../types';
 
 /**
+ * Converte qualquer formato de timestamp do Firebase para milissegundos de forma segura.
+ */
+const toMillisSafe = (ts: any): number => {
+    if (!ts) return 0;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    if (typeof ts === 'object' && ts.seconds !== undefined) return ts.seconds * 1000;
+    const date = new Date(ts);
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+};
+
+/**
+ * Converte qualquer formato de timestamp do Firebase para Date de forma segura.
+ */
+const toDateSafe = (ts: any): Date | null => {
+    if (!ts) return null;
+    if (typeof ts.toDate === 'function') return ts.toDate();
+    if (typeof ts === 'object' && ts.seconds !== undefined) return new Date(ts.seconds * 1000);
+    const date = new Date(ts);
+    return isNaN(date.getTime()) ? null : date;
+};
+
+/**
  * Dispara uma notificação push para todas as divulgadoras de um post específico.
  */
 export const notifyPostPush = async (postId: string): Promise<{ success: boolean, message: string }> => {
@@ -83,10 +106,11 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
       .where('promoterEmail', '==', email.toLowerCase().trim());
     const snapshot = await q.get();
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-    // Sort by most recent
+    
+    // Sort by most recent safely
     return assignments.sort((a, b) => {
-      const timeA = (a.post?.createdAt as Timestamp)?.toMillis() || 0;
-      const timeB = (b.post?.createdAt as Timestamp)?.toMillis() || 0;
+      const timeA = toMillisSafe(a.post?.createdAt);
+      const timeB = toMillisSafe(b.post?.createdAt);
       return timeB - timeA;
     });
   } catch (error) {
@@ -161,14 +185,6 @@ export const updateAssignment = async (assignmentId: string, data: Partial<PostA
 };
 
 /**
- * Agenda lembrete de WhatsApp para uma tarefa. (DESATIVADO CONFORME SOLICITAÇÃO)
- */
-export const scheduleWhatsAppReminder = async (assignmentId: string): Promise<void> => {
-  // Desativado por solicitação do usuário
-  return Promise.resolve();
-};
-
-/**
  * Busca posts de uma organização, opcionalmente filtrando por visibilidade do admin.
  */
 export const getPostsForOrg = async (organizationId: string, adminData?: AdminUserData): Promise<Post[]> => {
@@ -181,7 +197,7 @@ export const getPostsForOrg = async (organizationId: string, adminData?: AdminUs
       posts = posts.filter(p => !p.ownerOnly || p.createdByEmail === adminData.email);
     }
     
-    return posts.sort((a, b) => (b.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
+    return posts.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
   } catch (error) {
     return [];
   }
@@ -342,20 +358,26 @@ export const submitProof = async (assignmentId: string, files: File[]): Promise<
 export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats: any; assignments: PostAssignment[] }> => {
     try {
         const assignments = await getAssignmentsForPromoterByEmail(email);
+        
+        // Filtramos apenas assignments que possuem a informação do post vinculada
+        const validAssignments = assignments.filter(a => !!a.post);
+
         const stats = {
-            assigned: assignments.length,
-            completed: assignments.filter(a => !!a.proofSubmittedAt).length,
-            justifications: assignments.filter(a => !!a.justification).length,
-            acceptedJustifications: assignments.filter(a => a.justificationStatus === 'accepted').length,
-            missed: assignments.filter(a => {
-                const isLate = a.post?.expiresAt && (a.post.expiresAt as Timestamp).toDate() < new Date() && !a.post.allowLateSubmissions;
+            assigned: validAssignments.length,
+            completed: validAssignments.filter(a => !!a.proofSubmittedAt).length,
+            justifications: validAssignments.filter(a => !!a.justification).length,
+            acceptedJustifications: validAssignments.filter(a => a.justificationStatus === 'accepted').length,
+            missed: validAssignments.filter(a => {
+                const expiresDate = toDateSafe(a.post?.expiresAt);
+                const isLate = expiresDate && expiresDate < new Date() && !a.post.allowLateSubmissions;
                 return isLate && !a.proofSubmittedAt && a.justificationStatus !== 'accepted';
             }).length,
-            pending: assignments.filter(a => !a.proofSubmittedAt && a.justificationStatus !== 'accepted').length
+            pending: validAssignments.filter(a => !a.proofSubmittedAt && a.justificationStatus !== 'accepted').length
         };
-        return { stats, assignments };
-    } catch (error) {
-        throw new Error("Erro ao calcular estatísticas.");
+        return { stats, assignments: validAssignments };
+    } catch (error: any) {
+        console.error("Erro detalhado ao calcular estatísticas:", error);
+        throw new Error("Não foi possível calcular suas estatísticas. Verifique seus dados.");
     }
 };
 
@@ -379,7 +401,7 @@ export const getScheduledPosts = async (organizationId: string): Promise<Schedul
     const q = firestore.collection('scheduledPosts').where('organizationId', '==', organizationId);
     const snapshot = await q.get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledPost))
-      .sort((a, b) => (b.scheduledAt as Timestamp)?.toMillis() - (a.scheduledAt as Timestamp)?.toMillis());
+      .sort((a, b) => toMillisSafe(a.scheduledAt) - toMillisSafe(b.scheduledAt));
   } catch (error) {
     return [];
   }
@@ -404,7 +426,7 @@ export const getOneTimePostsForOrg = async (organizationId: string): Promise<One
         const q = firestore.collection('oneTimePosts').where('organizationId', '==', organizationId);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost))
-            .sort((a, b) => (a.createdAt as Timestamp)?.toMillis() - (a.createdAt as Timestamp)?.toMillis());
+            .sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
     } catch (error) {
         return [];
     }
@@ -467,7 +489,7 @@ export const getOneTimePostSubmissions = async (postId: string): Promise<OneTime
         const q = firestore.collection('oneTimePostSubmissions').where('oneTimePostId', '==', postId);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePostSubmission))
-            .sort((a, b) => (a.submittedAt as Timestamp)?.toMillis() - (a.submittedAt as Timestamp)?.toMillis());
+            .sort((a, b) => toMillisSafe(b.submittedAt) - toMillisSafe(a.submittedAt));
     } catch (error) {
         return [];
     }
