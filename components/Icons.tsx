@@ -14,7 +14,7 @@ const createStrokeIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVG
 );
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg viewBox="0 0 1000 200" xmlns="http://www.w3.org/2000/svg" {...props}>
       <defs>
         <linearGradient id="logoPurple" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style={{ stopColor: '#8B3DFF', stopOpacity: 1 }} />
@@ -35,13 +35,13 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
             strokeLinecap="round" 
             strokeLinejoin="round" />
       
-      {/* Texto Logo */}
-      <text x="220" y="135" 
+      {/* Texto Logo - Ajustado x e largura total */}
+      <text x="210" y="135" 
             fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
-            fontSize="130" 
+            fontSize="120" 
             fontWeight="900" 
             fill="white"
-            letterSpacing="-5">
+            letterSpacing="-2">
         Equipe Certa
       </text>
     </svg>
@@ -143,7 +143,7 @@ export const ChartBarIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const ClockIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75-4.365 9.75-9.75 9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
 );
 
 export const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
