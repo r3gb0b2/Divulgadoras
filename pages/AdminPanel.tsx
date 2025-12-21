@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -546,10 +547,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : (lookupEmail || '');
-        const finalEmail = searchInput.trim();
-        // Fixed: Argument of type 'unknown' is not assignable to parameter of type 'string'
+    /**
+     * Busca uma divulgadora globalmente pelo e-mail.
+     * @param {any} emailToSearch - O e-mail a ser pesquisado (pode ser string ou o evento do clique).
+     */
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        // Fix for Error in file pages/AdminPanel.tsx on line 508: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+        // Ensure the search input is treated as a string, falling back to lookupEmail if emailToSearch is not a string.
+        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
+        const finalEmail = (searchInput || '').trim();
+        
         if (!finalEmail) return;
         
         setIsLookingUp(true);
