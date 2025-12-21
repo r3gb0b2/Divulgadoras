@@ -209,7 +209,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editingPromoter, setEditingPromoter] = useState<FollowInteraction | Promoter | null>(null);
+    // FIX: Simplified editingPromoter type to Promoter | null to ensure clean modal interaction.
+    const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
     
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [rejectingPromoter, setRejectingPromoter] = useState<Promoter | null>(null);
@@ -562,8 +563,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Guaranteed finalEmail is a string via refinement above and passing it as string.
-            const results = await findPromotersByEmail(finalEmail as string);
+            // FIX: Guaranteed finalEmail is a string via refinement above.
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: unknown) {
             // FIX: Properly handling unknown error type in catch block to ensure errorMessage is a string.
@@ -842,7 +843,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsPhotoViewerOpen(true);
     };
 
-    const openEditModal = (promoter: FollowInteraction | Promoter) => {
+    const openEditModal = (promoter: Promoter) => {
         setEditingPromoter(promoter);
         setIsEditModalOpen(true);
     };
@@ -1090,7 +1091,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             )}
 
             <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter as Promoter | null} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
             {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />

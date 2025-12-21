@@ -1,4 +1,3 @@
-
 /**
  * Import and initialize the Firebase Admin SDK.
  */
@@ -12,16 +11,27 @@ const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
 // --- Brevo Configuration ---
-const brevoApi = new sib.TransactionalEmailsApi();
-const apiKey = functions.config().brevo ? functions.config().brevo.key : null;
-if (apiKey) {
-    brevoApi.setApiKey(sib.TransactionalEmailsApiApiKeys.apiKey, apiKey);
-}
+const setupBrevo = () => {
+    const config = functions.config().brevo;
+    const key = config ? config.key : null;
+    
+    if (!key) {
+        console.warn("Brevo API Key não configurada no Firebase Config.");
+        return null;
+    }
+
+    const apiInstance = new sib.TransactionalEmailsApi();
+    // O índice 0 é o padrão para a chave de API primária no SDK do Brevo
+    apiInstance.setApiKey(0, key);
+    return apiInstance;
+};
+
+const brevoApi = setupBrevo();
 
 // Helper: Send Email via Brevo
 async function sendEmail({ toEmail, toName, subject, htmlContent }) {
-    if (!apiKey) {
-        console.warn("Brevo API Key not configured. Email not sent.");
+    if (!brevoApi) {
+        console.error("Tentativa de envio de e-mail falhou: Brevo API não inicializada.");
         return { success: false, message: "API Key missing" };
     }
     try {
@@ -33,7 +43,7 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
         await brevoApi.sendTransacEmail(email);
         return { success: true };
     } catch (e) {
-        console.error("Error sending email via Brevo:", e);
+        console.error("Erro ao enviar e-mail via Brevo:", e.response ? e.response.body : e.message);
         return { success: false, error: e.message };
     }
 }
@@ -56,40 +66,8 @@ exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(
     }
 });
 
-exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { title, body, url, promoterIds } = data;
-    if (!title || !body || !promoterIds) {
-        throw new functions.https.HttpsError("invalid-argument", "Campos obrigatórios ausentes.");
-    }
-
-    try {
-        const tokens = [];
-        const CHUNK_SIZE = 30;
-        for (let i = 0; i < promoterIds.length; i += CHUNK_SIZE) {
-            const chunk = promoterIds.slice(i, i + CHUNK_SIZE);
-            const snap = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
-            snap.forEach(doc => {
-                const p = doc.data();
-                if (p.fcmToken && p.fcmToken.length > 64) tokens.push(p.fcmToken);
-            });
-        }
-        if (tokens.length === 0) return { success: false, message: "Nenhum token válido encontrado." };
-
-        const response = await admin.messaging().sendEachForMulticast({
-            notification: { title, body },
-            data: { url: url || '/#/posts' },
-            tokens: tokens
-        });
-        return { success: true, message: `${response.successCount} pushes enviados.` };
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
 // --- EMAIL TRIGGERS ---
 
-// Trigger: On Promoter Approval
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId, data: updateData } = data;
@@ -102,10 +80,9 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
 
         await promoterRef.update(updateData);
 
-        // Se o status mudou para aprovado e não era aprovado antes
         if (updateData.status === 'approved' && promoter.status !== 'approved') {
             const orgSnap = await db.collection('organizations').doc(promoter.organizationId).get();
-            const org = orgSnap.data();
+            const org = orgSnap.data() || { name: "Equipe Certa" };
             
             const html = `
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
@@ -133,7 +110,6 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     }
 });
 
-// Trigger: New Post Assignments
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { postData, assignedPromoters } = data;
@@ -162,10 +138,9 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
         });
         await batch.commit();
 
-        // Envio de E-mails de aviso de post (em background/async para não travar a UI)
         if (assignedPromoters.length > 0) {
             const orgSnap = await db.collection('organizations').doc(postData.organizationId).get();
-            const org = orgSnap.data();
+            const org = orgSnap.data() || { name: "Equipe Certa" };
 
             assignedPromoters.forEach(async (p) => {
                 const html = `
@@ -194,62 +169,4 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
     }
-});
-
-// AUTO-PUSH: Mantido para dispositivos nativos
-exports.onPostActivatedTrigger = functions.region("southamerica-east1").firestore
-    .document('posts/{postId}')
-    .onUpdate(async (change, context) => {
-        const before = change.before.data();
-        const after = change.after.data();
-        if (!before.isActive && after.isActive) {
-            const postId = context.params.postId;
-            const assignmentsSnap = await db.collection('postAssignments').where('postId', '==', postId).get();
-            const promoterIds = [];
-            assignmentsSnap.forEach(doc => promoterIds.push(doc.data().promoterId));
-            if (promoterIds.length === 0) return;
-            const tokens = [];
-            const promoterSnap = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 500)).get();
-            promoterSnap.forEach(doc => {
-                const p = doc.data();
-                if (p.fcmToken && p.fcmToken.length > 64) tokens.push(p.fcmToken);
-            });
-            if (tokens.length === 0) return;
-            await admin.messaging().sendEachForMulticast({
-                notification: {
-                    title: "Nova tarefa disponível! 🚀",
-                    body: `Postagem liberada para: ${after.campaignName}${after.eventName ? ' - ' + after.eventName : ''}`
-                },
-                data: { url: '/#/posts' },
-                tokens: tokens
-            });
-        }
-    });
-
-exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { postId } = data;
-    const postSnap = await db.collection('posts').doc(postId).get();
-    if (!postSnap.exists) throw new functions.https.HttpsError("not-found", "Post não encontrado.");
-    const post = postSnap.data();
-    const assignmentsSnap = await db.collection('postAssignments').where('postId', '==', postId).get();
-    const promoterIds = [];
-    assignmentsSnap.forEach(doc => promoterIds.push(doc.data().promoterId));
-    if (promoterIds.length === 0) return { success: false, message: "Nenhuma divulgadora atribuída." };
-    const tokens = [];
-    const promoterSnap = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 500)).get();
-    promoterSnap.forEach(doc => {
-        const p = doc.data();
-        if (p.fcmToken && p.fcmToken.length > 64) tokens.push(p.fcmToken);
-    });
-    if (tokens.length === 0) return { success: false, message: "Nenhum dispositivo App vinculado encontrado." };
-    await admin.messaging().sendEachForMulticast({
-        notification: {
-            title: "Aviso de Postagem 📢",
-            body: `Verifique sua tarefa para: ${post.campaignName}`
-        },
-        data: { url: '/#/posts' },
-        tokens: tokens
-    });
-    return { success: true, message: `Notificação enviada para ${tokens.length} dispositivos.` };
 });

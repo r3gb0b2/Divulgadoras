@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
@@ -22,6 +21,7 @@ import FollowLoopPage from './pages/FollowLoopPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import SupportPage from './pages/SupportPage';
 import AppleTestRegistration from './pages/AppleTestRegistration';
+import RegisterF1 from './pages/RegisterF1';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -144,6 +144,7 @@ const App: React.FC = () => {
                 <Route path="/suporte" element={<SupportPage />} />
                 <Route path="/planos" element={<PricingPage />} />
                 <Route path="/apple-test" element={<AppleTestRegistration />} />
+                <Route path="/registrar-f1" element={<RegisterF1 />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
                 {/* Divulgadoras */}
