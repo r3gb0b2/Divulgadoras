@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode, Component } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -14,15 +14,16 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Explicitly initialize state as a class property to ensure it exists on the instance.
+  public override state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // Explicitly initialize state to fix 'Property state does not exist' errors.
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
   }
 
   // Static method for error state transformation.
@@ -32,19 +33,19 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   // Standard lifecycle method for side-effects when an error is caught.
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // Explicitly call setState to fix 'Property setState does not exist' error.
+    // FIX: Standard usage of setState in a class component subclassing React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
     });
   }
 
-  public render() {
-    // Correctly accessing state and props from a Component instance.
+  public override render() {
+    // FIX: Accessing state and props via 'this' as expected in React class components.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

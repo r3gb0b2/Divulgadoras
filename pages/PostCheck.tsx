@@ -136,8 +136,10 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 </div>
                 <div className="flex flex-col items-end gap-1">
                     {assignment.post.expiresAt && <CountdownTimer targetDate={assignment.post.expiresAt} />}
-                    {assignment.proofSubmittedAt ? (
+                    {assignment.proofSubmittedAt || assignment.justificationStatus === 'accepted' ? (
                         <span className="text-[10px] font-bold text-green-400 uppercase bg-green-900/20 px-2 py-0.5 rounded-full">Concluído</span>
+                    ) : assignment.justification ? (
+                        <span className="text-[10px] font-bold text-yellow-400 uppercase bg-yellow-900/20 px-2 py-0.5 rounded-full">Aguardando Aceite</span>
                     ) : (
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${assignment.status === 'confirmed' ? 'bg-blue-900/20 text-blue-400' : 'bg-yellow-900/20 text-yellow-400'}`}>
                             {assignment.status === 'confirmed' ? 'Aguardando Print' : 'Novo Post'}

@@ -550,7 +550,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
+        // FIX: Force search input to be treated as a string to resolve 'unknown' assignment error.
+        const searchInput: string = typeof emailToSearch === 'string' 
+            ? emailToSearch 
+            : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
         
         if (!finalEmail) return;
@@ -564,8 +567,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Changed 'unknown' to 'any' for consistent property access across environments and simplified errorMessage derivation.
-            const errorMessage = err?.message || (typeof err === 'string' ? err : 'Erro desconhecido');
+            // FIX: Explicitly cast error message to string to resolve 'unknown' assignment error.
+            const errorMessage = String(err?.message || (typeof err === 'string' ? err : 'Erro desconhecido'));
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
