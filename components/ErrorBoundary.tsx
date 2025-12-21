@@ -1,4 +1,5 @@
-import React, { ErrorInfo, ReactNode, Component } from 'react';
+
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,11 +14,10 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fixed: Explicitly extending React.Component with Props and State interfaces to resolve property visibility issues.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Using named Component import to resolve inheritance and visibility issues for setState and props.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // Initializing state correctly within the constructor
     this.state = {
       hasError: false,
       error: null,
@@ -25,16 +25,17 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     };
   }
 
-  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error };
   }
 
-  // Fixed: Correctly using this.setState within the class component.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
+    // Track the error details for the fallback UI.
+    // FIX: setState now recognized as ErrorBoundary correctly extends Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +43,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // Fixed: Correctly accessing this.state within the render method.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -70,7 +70,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Fixed: Correctly accessing this.props within the class component.
+    // FIX: props.children now recognized as ErrorBoundary correctly extends Component.
     return this.props.children;
   }
 }

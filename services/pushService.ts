@@ -2,24 +2,28 @@
 import { PushNotifications } from '@capacitor/push-notifications';
 import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
-import { functions, firestore } from '../firebase/config';
+import { functions } from '../firebase/config';
 import firebase from 'firebase/compat/app';
 
 /**
- * Registra logs de erro técnicos no perfil da divulgadora para que o admin saiba o que houve.
+ * Reporta o estado técnico do Push para o banco de dados.
+ * Ajuda a identificar por que o token não está chegando no admin.
  */
-const reportTechnicalError = async (promoterId: string, errorMsg: string) => {
+const reportPushStatus = async (promoterId: string, status: { error?: string, token?: string }) => {
     try {
-        await firestore.collection('promoters').doc(promoterId).update({
-            pushDiagnostics: {
-                lastError: errorMsg,
+        const updatePushDiagnostics = functions.httpsCallable('updatePushDiagnostics');
+        await updatePushDiagnostics({
+            promoterId,
+            diagnostics: {
+                lastError: status.error || null,
                 platform: Capacitor.getPlatform(),
-                pluginStatus: (typeof FCM !== 'undefined' && FCM !== null) ? 'LOADED' : 'NOT_LOADED',
+                pluginStatus: (typeof FCM !== 'undefined' && typeof FCM.getToken === 'function') ? 'OK' : 'MISSING',
                 updatedAt: firebase.firestore.Timestamp.now()
-            }
+            },
+            token: status.token || null
         });
     } catch (e) {
-        console.error("Falha ao salvar log de erro:", e);
+        console.error("Push Service: Falha ao reportar diagnóstico:", e);
     }
 };
 
@@ -27,45 +31,45 @@ export const getTokenAndSave = async (promoterId: string, retryCount = 0): Promi
     if (!Capacitor.isNativePlatform()) return null;
 
     try {
-        // No iOS, o plugin pode demorar alguns milissegundos para injetar o bridge.
-        // Verificamos se o objeto FCM existe e se o método getToken está implementado
-        const isFCMAvailable = (typeof FCM !== 'undefined' && FCM !== null);
+        console.log(`Push: Tentando capturar token FCM... (Tentativa ${retryCount + 1})`);
+        
+        // Verifica se o plugin FCM está realmente carregado no binário
+        const isFCMAvailable = typeof FCM !== 'undefined' && FCM !== null && typeof (FCM as any).getToken === 'function';
 
         if (!isFCMAvailable) {
-            console.warn(`Push: Plugin FCM não detectado na tentativa ${retryCount + 1}`);
-            if (retryCount < 3) {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                return await getTokenAndSave(promoterId, retryCount + 1);
-            }
-            throw new Error("PLUGIN_FCM_NOT_LOADED");
+            const error = "PLUGIN_FCM_NOT_DETECTED";
+            await reportPushStatus(promoterId, { error });
+            throw new Error(error);
         }
 
-        // Tenta obter o token. Se der "not implemented", o try/catch pegará.
         const res = await FCM.getToken();
         const fcmToken = res.token;
 
         if (fcmToken) {
-            console.log('Push: Token obtido com sucesso.');
-            const savePromoterToken = functions.httpsCallable('savePromoterToken');
-            await savePromoterToken({ promoterId, token: fcmToken });
-            
-            await firestore.collection('promoters').doc(promoterId).update({
-                "pushDiagnostics.lastError": firebase.firestore.FieldValue.delete()
-            }).catch(() => {});
-
+            console.log('Push: Token FCM obtido:', fcmToken);
+            await reportPushStatus(promoterId, { token: fcmToken });
             return fcmToken;
         }
 
+        // Retry logic for cases where the token takes time to generate
+        if (retryCount < 2) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            return await getTokenAndSave(promoterId, retryCount + 1);
+        }
+
+        await reportPushStatus(promoterId, { error: "EMPTY_TOKEN_AFTER_RETRIES" });
         return null;
     } catch (e: any) {
-        const errorMsg = e.message || "Erro nativo desconhecido";
-        console.error("Push: Erro ao obter token:", errorMsg);
+        const errorMsg = e.message || "Unknown native error";
+        console.error("Push: Erro fatal ao obter token:", errorMsg);
         
-        if (errorMsg.includes("not implemented")) {
-            await reportTechnicalError(promoterId, "FCM_NOT_IMPLEMENTED_ON_NATIVE_SIDE");
-        } else {
-            await reportTechnicalError(promoterId, errorMsg);
+        // Se o erro for "not implemented", significa que o plugin não foi compilado no App
+        if (errorMsg.includes("not implemented") || errorMsg === "PLUGIN_FCM_NOT_DETECTED") {
+            await reportPushStatus(promoterId, { error: "NATIVE_BRIDGE_FAILURE_NOT_IMPLEMENTED" });
+            throw new Error("DETECTION_FAILED");
         }
+        
+        await reportPushStatus(promoterId, { error: errorMsg });
         throw e;
     }
 };
@@ -77,32 +81,30 @@ export const initPushNotifications = async (promoterId: string) => {
         const permStatus = await PushNotifications.requestPermissions();
 
         if (permStatus.receive !== 'granted') {
-            await reportTechnicalError(promoterId, "USER_DENIED_PERMISSIONS");
+            await reportPushStatus(promoterId, { error: "USER_DENIED_PERMISSIONS" });
             return false;
         }
 
         await PushNotifications.removeAllListeners();
 
-        // No iOS, o fluxo correto é:
-        // 1. Registrar no APNs (PushNotifications.register)
-        // 2. O evento 'registration' dispara
-        // 3. O plugin FCM converte o token APNs em token FCM automaticamente
-        PushNotifications.addListener('registration', async () => {
+        PushNotifications.addListener('registration', async (token) => {
+            console.log('Push: Registro nativo concluído.');
             try {
                 await getTokenAndSave(promoterId);
             } catch (err) {
-                console.warn("Push: Registro nativo OK, mas falha ao converter para FCM.");
+                console.warn("Push: Registro nativo OK, mas conversão para FCM falhou.");
             }
         });
 
-        PushNotifications.addListener('registrationError', (error) => {
-            reportTechnicalError(promoterId, `NATIVE_REG_ERROR: ${error.error}`);
+        PushNotifications.addListener('registrationError', async (error) => {
+            console.error('Push: Erro no registro nativo:', error);
+            await reportPushStatus(promoterId, { error: `NATIVE_REG_ERROR: ${error.error}` });
         });
 
         await PushNotifications.register();
         return true;
     } catch (error: any) {
-        await reportTechnicalError(promoterId, `INIT_FAILED: ${error.message}`);
+        await reportPushStatus(promoterId, { error: `INIT_EXCEPTION: ${error.message}` });
         return false;
     }
 };
@@ -110,11 +112,11 @@ export const initPushNotifications = async (promoterId: string) => {
 export const syncPushTokenManually = async (promoterId: string): Promise<string | null> => {
     if (!Capacitor.isNativePlatform()) return null;
     try {
+        // Força novo registro no sistema nativo
         await PushNotifications.register();
-        // Aguarda um pouco para o bridge nativo processar o token
-        await new Promise(resolve => setTimeout(resolve, 1000));
         return await getTokenAndSave(promoterId);
     } catch (e) {
+        console.error("Push: Sincronização manual falhou.");
         throw e;
     }
 };
