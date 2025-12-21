@@ -550,11 +550,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Ensuring emailToSearch is a string or fallback to lookupEmail to avoid unknown type issues.
-        const searchInput: string = typeof emailToSearch === 'string' 
-            ? emailToSearch 
-            : String(lookupEmail || '');
-        const finalEmail: string = searchInput.trim();
+        // FIX: Explicitly cast lookupEmail or emailToSearch to string to resolve 'unknown' type assignment error on line 508.
+        const providedEmail = typeof emailToSearch === 'string' ? emailToSearch : '';
+        const stateEmail = typeof lookupEmail === 'string' ? lookupEmail : '';
+        const searchInput = (providedEmail || stateEmail || '').trim();
+        const finalEmail: string = searchInput;
         
         if (!finalEmail) return;
         

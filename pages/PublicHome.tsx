@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublicOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
-import { UsersIcon, SearchIcon, SparklesIcon } from '../components/Icons';
+import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon } from '../components/Icons';
 
 const PublicHome: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -95,9 +95,12 @@ const PublicHome: React.FC = () => {
                     </h2>
                     <p className="text-gray-400 font-medium text-sm md:text-base">Selecione para qual equipe você deseja se candidatar hoje.</p>
                   </div>
-                  <div className="flex justify-center w-full">
+                  <div className="flex flex-wrap justify-center gap-3 w-full">
                      <Link to="/status" className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-2xl hover:bg-gray-700 transition-all flex items-center gap-2 border border-white/5 text-sm">
                         <SearchIcon className="w-4 h-4" /> MEU STATUS
+                    </Link>
+                    <Link to="/posts" className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-2xl hover:bg-gray-700 transition-all flex items-center gap-2 border border-white/5 text-sm">
+                        <MegaphoneIcon className="w-4 h-4" /> CONFERIR POSTAGENS
                     </Link>
                   </div>
               </div>
