@@ -1,7 +1,7 @@
 {
   "name": "Equipe Certa",
-  "version": "1.0.1",
-  "description": "Equipe Certa: A ferramenta definitiva para produtores de eventos. Gerencie divulgadoras, listas VIP, check-in com QR Code e visualize relatórios em tempo real.",
+  "version": "1.1.0",
+  "description": "Plataforma profissional para gestão de divulgadoras e produtores de eventos. Controle de presença, listas VIP personalizadas e relatórios de desempenho em tempo real para produções de alto nível.",
   "requestFramePermissions": [
     "camera"
   ]
