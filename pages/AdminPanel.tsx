@@ -550,8 +550,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // Fix: Parameter type to any for safer handling of arguments from UI that might be passed incorrectly as objects by React event handlers if not wrapped.
-    // Fix for line 509 (approx): Argument of type 'unknown' is not assignable to parameter of type 'string'. Explicitly type error in catch block and ensure message is a string.
     const handleLookupPromoter = async (emailToSearch?: any) => {
         const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail = (searchInput || '').trim();
@@ -565,8 +563,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
+        } catch (err: any) {
+            // Fix for line 509 (approx): Argument of type 'unknown' is not assignable to parameter of type 'string'.
+            // Using 'any' type in catch block for simpler access to message and ensuring fallback string.
+            const errorMessage = err?.message || String(err) || 'Erro desconhecido';
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

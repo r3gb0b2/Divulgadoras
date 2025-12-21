@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService';
+import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService.ts';
 import { AppleTestRegistrant } from '../types';
 import { ArrowLeftIcon, DownloadIcon, TrashIcon, LinkIcon } from '../components/Icons';
 
@@ -17,8 +17,8 @@ const AdminAppleTestReview: React.FC = () => {
 
     const fetchData = async () => {
         setIsLoading(true);
+        setError(null);
         try {
-            // Busca todos os inscritos ou filtrados por org
             const data = await getAppleTestRegistrants(selectedOrgId || undefined);
             setRegistrants(data);
         } catch (err: any) {
@@ -33,7 +33,6 @@ const AdminAppleTestReview: React.FC = () => {
     }, [selectedOrgId]);
 
     const handleCopyLink = () => {
-        // Agora o link de inscrição é fixo e público
         const link = `${window.location.origin}/#/apple-test`;
         navigator.clipboard.writeText(link).then(() => {
             setCopied(true);
@@ -118,6 +117,8 @@ const AdminAppleTestReview: React.FC = () => {
                 </div>
             </div>
 
+            {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 border border-red-800">{error}</div>}
+
             <div className="bg-secondary rounded-xl shadow-lg border border-gray-700 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -173,7 +174,7 @@ const AdminAppleTestReview: React.FC = () => {
             
             <div className="mt-4 bg-blue-900/20 border border-blue-800 p-4 rounded-lg">
                 <p className="text-sm text-blue-300">
-                    <strong>Como usar:</strong> Exporte o CSV e importe no painel do App Store Connect (TestFlight &gt; External Testers &gt; clique no "+" &gt; Import from CSV).
+                    <strong>Como usar:</strong> Exporte o CSV e importe no painel do App Store Connect (TestFlight > External Testers > clique no "+" > Import from CSV).
                 </p>
             </div>
         </div>

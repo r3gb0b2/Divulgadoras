@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { registerForAppleTest } from '../services/testRegistrationService';
-import { getPublicOrganizations } from '../services/organizationService';
+import React, { useState } from 'react';
+import { registerForAppleTest } from '../services/testRegistrationService.ts';
 import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon } from '../components/Icons';
 import { useNavigate } from 'react-router-dom';
 
@@ -46,7 +45,7 @@ const AppleTestRegistration: React.FC = () => {
                         <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">Inscrição Realizada!</h2>
-                    <p className="text-gray-400">Seu e-mail foi adicionado à fila de convites do TestFlight. Verifique sua caixa de entrada (e o spam) nas próximas horas para o convite da Apple.</p>
+                    <p className="text-gray-400">Seu e-mail foi adicionado à fila de convites do TestFlight. Verifique sua caixa de entrada (e o spam) nas próximas horas para o convite oficial da Apple.</p>
                     <button onClick={() => navigate('/')} className="mt-6 text-primary hover:underline font-semibold">Voltar ao Início</button>
                 </div>
             </div>
