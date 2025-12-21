@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -13,7 +14,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-/* Fixed inheritance: extending Component directly and removed override modifiers which were causing compilation errors */
+// Fix: Corrected inheritance from Component and added explicit state type to ensure setState and props are available.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
@@ -25,12 +26,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     super(props);
   }
 
-  public static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+  // Fix: Static method for error state transformation.
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    return { hasError: true, error, errorInfo: null };
   }
 
-  /* Removed override modifier as it was causing errors and is not strictly required here */
+  // Fix: Standard lifecycle method for side-effects when an error is caught.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
@@ -41,7 +43,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     });
   }
 
-  /* Removed override modifier to resolve "does not extend another class" error */
   public render() {
     if (this.state.hasError) {
       return (

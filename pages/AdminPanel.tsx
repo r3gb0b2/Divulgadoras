@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -549,6 +550,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
+    // Fix: Parameter type to any for safer handling of arguments from UI that might be passed incorrectly as objects by React event handlers if not wrapped.
     const handleLookupPromoter = async (emailToSearch?: any) => {
         const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail = (searchInput || '').trim();
@@ -571,7 +573,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleGoToPromoter = (promoter: Promoter) => {
-        /* Fixed: explicitly typing targetStatus to satisfy union and literals */
         const targetStatus = promoter.status as PromoterStatus;
         setFilter(targetStatus);
         setSearchQuery(String(promoter.email || ''));
