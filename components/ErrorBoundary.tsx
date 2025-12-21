@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -13,7 +14,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Explicitly inheriting from React.Component with generics to ensure TS recognizes state, setState, and props.
+// FIX: Using React.Component explicitly with generic props and state to ensure properties are correctly recognized by the compiler.
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -35,6 +36,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
+    // FIX: setState is now correctly inherited from React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -42,7 +44,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // FIX: Using this.state and this.props now works as expected after proper class inheritance setup.
+    // FIX: state and props are now correctly recognized by inheriting from React.Component.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

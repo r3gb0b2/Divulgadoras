@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -550,10 +551,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // FIX: Refined parameter and variable typing to explicitly handle string conversion and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 509.
+    // FIX: Refined parameter and variable typing to explicitly handle string conversion and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 510.
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
-        const finalEmail: string = searchInput.trim();
+        let finalEmail = '';
+        
+        if (typeof emailToSearch === 'string' && emailToSearch.trim()) {
+            finalEmail = emailToSearch.trim();
+        } else if (typeof lookupEmail === 'string' && lookupEmail.trim()) {
+            finalEmail = lookupEmail.trim();
+        }
         
         if (!finalEmail) return;
         
@@ -562,19 +568,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            // FIX: Guaranteed finalEmail is a string via refinement above and passing it as string.
-            const results = await findPromotersByEmail(finalEmail as string);
+            // FIX: Explicitly ensuring finalEmail is passed as string to match findPromotersByEmail signature.
+            const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Properly handling unknown error type in catch block to ensure errorMessage is a string.
-            let errorMessage = 'Erro desconhecido';
-            if (err instanceof Error) {
-                errorMessage = err.message;
-            } else if (typeof err === 'string') {
-                errorMessage = err;
-            } else {
-                errorMessage = String(err);
-            }
+        } catch (err: any) {
+            // FIX: Properly handling unknown error type in catch block to ensure error is treated correctly.
+            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
@@ -1066,7 +1065,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             {filter === 'approved' && canManage && (
                                 <>
-                                    <button onClick={handleManualNotify} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                         {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
                                     </button>
                                     <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
