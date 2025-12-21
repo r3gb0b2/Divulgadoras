@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService';
+import { getAppleTestRegistrants, deleteAppleTestRegistrant, deleteAllAppleTestRegistrants } from '../services/testRegistrationService';
 import { AppleTestRegistrant } from '../types';
 import { ArrowLeftIcon, DownloadIcon, TrashIcon, LinkIcon } from '../components/Icons';
 
@@ -14,6 +13,7 @@ const AdminAppleTestReview: React.FC = () => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -70,6 +70,22 @@ const AdminAppleTestReview: React.FC = () => {
         }
     };
 
+    const handleDeleteAll = async () => {
+        if (!window.confirm("ATENÇÃO: Você está prestes a apagar TODOS os registros desta lista. Esta ação não pode ser desfeita. Deseja continuar?")) return;
+        
+        setIsDeletingAll(true);
+        try {
+            const count = await deleteAllAppleTestRegistrants(selectedOrgId || undefined);
+            setRegistrants([]);
+            setSelectedIds(new Set());
+            alert(`${count} registros foram removidos com sucesso.`);
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsDeletingAll(false);
+        }
+    };
+
     const handleDownloadCSV = () => {
         const targetList = registrants.filter(r => selectedIds.has(r.id));
         if (targetList.length === 0) {
@@ -93,14 +109,21 @@ const AdminAppleTestReview: React.FC = () => {
 
     return (
         <div className="p-4 max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                     <button onClick={() => navigate('/admin')} className="inline-flex items-center gap-2 text-primary hover:underline text-sm mb-2">
                         <ArrowLeftIcon className="w-4 h-4" /> Voltar ao Painel
                     </button>
                     <h1 className="text-3xl font-bold text-white">Gestão de Beta Testers iOS</h1>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
+                    <button 
+                        onClick={handleDeleteAll}
+                        disabled={registrants.length === 0 || isDeletingAll}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600/20 text-red-400 border border-red-600/50 rounded-md hover:bg-red-600 hover:text-white font-semibold disabled:opacity-30 transition-all"
+                    >
+                        <TrashIcon className="w-4 h-4" /> {isDeletingAll ? 'Limpando...' : 'Limpar Lista'}
+                    </button>
                     <button 
                         onClick={handleCopyLink}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold"

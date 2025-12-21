@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { registerForAppleTest } from '../services/testRegistrationService';
+import { registerForAppleTest, checkAppleEmailExists } from '../services/testRegistrationService';
 import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon } from '../components/Icons';
 import { useNavigate } from 'react-router-dom';
 
@@ -95,19 +94,24 @@ const AppleTestRegistration: React.FC = () => {
                             />
                         </div>
 
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <MailIcon className="h-5 w-5 text-gray-500" />
-                            </span>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                placeholder="E-mail do ID Apple (iCloud)"
-                                className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
-                                required
-                            />
+                        <div className="space-y-2">
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <MailIcon className="h-5 w-5 text-gray-500" />
+                                </span>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    placeholder="E-mail do ID Apple (iCloud)"
+                                    className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
+                                    required
+                                />
+                            </div>
+                            <p className="text-[11px] text-yellow-500 font-medium px-1">
+                                ⚠️ Importante: Utilize o mesmo e-mail que você usa para acessar o iCloud ou baixar aplicativos na App Store.
+                            </p>
                         </div>
                     </div>
 
