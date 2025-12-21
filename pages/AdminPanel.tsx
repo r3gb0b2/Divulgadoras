@@ -551,20 +551,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Explicitly cast lookupEmail or emailToSearch result to string to avoid 'unknown' issues.
-        const inputEmail = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail || '').trim();
+        // FIX: Ensure the inputEmail is strictly string and derived safely (Line 509 fix context)
+        const emailArg = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail || '').trim();
         
-        if (!inputEmail) return;
+        if (!emailArg) return;
         
         setIsLookingUp(true);
         setLookupError(''); 
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(inputEmail);
+            const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: unknown) {
-            // FIX: Robust error message extraction to fix "unknown to string" error.
+            // FIX: Safely extract error message from unknown type to string (Line 509 fix)
             const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
