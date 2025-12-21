@@ -5,7 +5,7 @@ import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getR
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
-// FIX: Added FollowInteraction to the import list to resolve "Cannot find name 'FollowInteraction'" errors on lines 212 and 838
+// FIX: FollowInteraction imported to resolve "Cannot find name 'FollowInteraction'" errors.
 import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp, FollowInteraction } from '../types';
 import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
@@ -209,7 +209,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    // FIX: Simplified editingPromoter type to Promoter | null to ensure clean modal interaction.
+    // FIX: Simplified editingPromoter type to Promoter | null for consistency.
     const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
     
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
@@ -551,7 +551,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // FIX: Refined parameter and variable typing to explicitly handle string conversion and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 509.
+    // FIX: Optimized parameter logic to explicitly handle strings and resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 510.
     const handleLookupPromoter = async (emailToSearch?: string) => {
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
@@ -567,7 +567,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: unknown) {
-            // FIX: Properly handling unknown error type in catch block to ensure errorMessage is a string.
+            // FIX: Explicitly handling unknown error type to ensure errorMessage is a string.
             let errorMessage = 'Erro desconhecido';
             if (err instanceof Error) {
                 errorMessage = err.message;

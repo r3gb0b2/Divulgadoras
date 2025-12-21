@@ -136,7 +136,7 @@ const PromoterForm: React.FC = () => {
         });
         setProfileLoaded(true);
         setPhotoFiles([]);
-        setPhotoPreviews(profile.photoUrls); // Suggest keeping old ones
+        setPhotoPreviews(profile.photoUrls);
         setOriginalPhotoUrls(profile.photoUrls);
       }
     } catch (error) {
@@ -152,7 +152,6 @@ const PromoterForm: React.FC = () => {
       setIsProcessingPhoto(true);
       setSubmitError(null);
       try {
-        // Fix for errors on line 158 and 159: Explicitly type fileList as File[] to resolve unknown parameter issues.
         const fileList = Array.from(files) as File[];
         const processedFiles = await Promise.all(
           fileList.map(async (file) => {
@@ -202,6 +201,10 @@ const PromoterForm: React.FC = () => {
       } else {
         await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
       }
+      
+      // PERSISTE O E-MAIL APÓS O CADASTRO
+      localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
+      
       setSubmitSuccess(true);
       if (window.fbq) window.fbq('track', 'CompleteRegistration');
       setTimeout(() => navigate('/status'), 3000);
@@ -320,7 +323,6 @@ const RegistrationFlowPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    // Fix for error on line 360 (approx 234 here): Define stateFullName within the scope of RegistrationFlowPage.
     const stateFullName = state ? stateMap[state.toUpperCase()] : 'Brasil';
 
     useEffect(() => {

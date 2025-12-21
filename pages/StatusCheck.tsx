@@ -1,10 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon } from '../components/Icons';
+import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
 
@@ -17,54 +17,28 @@ interface RulesModalProps {
 }
 
 const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaignName }) => {
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
-  // Handle ESC key to close modal
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+      if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4"
-      onClick={onClose}
-      aria-modal="true"
-      role="dialog"
-    >
-      <div
-        className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside the modal
-      >
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" onClick={onClose}>
+      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-white">Regras - {campaignName}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
         </div>
-
-        <div className="flex-grow overflow-y-auto pr-2 space-y-4">
-           <div
-             className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-primary prose-strong:text-primary max-w-none"
-             dangerouslySetInnerHTML={{ __html: rules.replace(/\n/g, '<br />') || '<p>Nenhuma regra específica cadastrada para este evento.</p>' }}
-           />
+        <div className="flex-grow overflow-y-auto pr-2 space-y-4 text-gray-300">
+           <div dangerouslySetInnerHTML={{ __html: rules.replace(/\n/g, '<br />') || 'Nenhuma regra cadastrada.' }} />
         </div>
-
         <div className="mt-6 flex justify-end border-t border-gray-700 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
-          >
-            Entendi
-          </button>
+          <button onClick={onClose} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">Entendi</button>
         </div>
       </div>
     </div>
@@ -79,15 +53,12 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
     const handleAcceptRules = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const isChecked = e.target.checked;
         setHasAcceptedRules(isChecked);
-
         if (isChecked && promoter && !promoter.hasJoinedGroup) {
             try {
-                // Use the new direct update function instead of the Admin SDK function
                 await confirmPromoterGroupEntry(promoter.id);
             } catch (updateError) {
-                console.error("Failed to update status:", updateError);
-                setCardError("Não foi possível salvar sua confirmação. Tente novamente.");
-                setHasAcceptedRules(false); // Revert on failure
+                setCardError("Erro ao salvar confirmação.");
+                setHasAcceptedRules(false);
             }
         }
     };
@@ -95,95 +66,47 @@ const ApprovedPromoterSteps: React.FC<{ campaign: Campaign; promoter: Promoter; 
     return (
         <>
             <div className={`mt-4 ${isPrimary ? 'border-t' : 'border-t border-dashed'} border-gray-600/50 pt-4 space-y-4`}>
-                {isPrimary ? (
-                    <h3 className="font-bold text-lg text-white">Próximos Passos</h3>
-                ) : (
-                    <h3 className="font-semibold text-md text-gray-200">Evento Adicional: <span className="text-primary">{campaign.name}</span></h3>
-                )}
-
-                {cardError && <p className="text-red-300 text-sm mt-2">{cardError}</p>}
-
-                {/* Step 1 */}
+                <h3 className="font-bold text-lg text-white">{isPrimary ? 'Próximos Passos' : `Evento Adicional: ${campaign.name}`}</h3>
+                {cardError && <p className="text-red-300 text-sm">{cardError}</p>}
                 <div className="flex items-start gap-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center font-bold text-white border border-gray-500">1</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Leia as Regras</p>
-                        <p className="text-xs text-gray-400 mb-2">Clique no botão para ver todas as regras e informações sobre o evento.</p>
-                        <button
-                            onClick={() => setIsRulesModalOpen(true)}
-                            className="inline-block w-full sm:w-auto text-center bg-gray-700 text-white font-bold py-2 px-4 rounded hover:bg-gray-600 transition-colors text-sm border border-gray-600"
-                        >
-                            Ver Regras de {campaign.name}
-                        </button>
+                        <button onClick={() => setIsRulesModalOpen(true)} className="mt-2 w-full sm:w-auto bg-gray-700 text-white font-bold py-2 px-4 rounded text-sm border border-gray-600">Ver Regras</button>
                     </div>
                 </div>
-
-                {/* Step 2 */}
                 <div className="flex items-start gap-4">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-gray-700 border border-gray-500`}>2</div>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white bg-gray-700 border border-gray-500">2</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Confirme a Leitura</p>
-                        <div className="p-3 border border-gray-600/50 rounded-md bg-black/20 mt-2">
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={hasAcceptedRules}
-                                    onChange={handleAcceptRules}
-                                    className="h-5 w-5 text-primary rounded border-gray-500 bg-gray-700 focus:ring-primary"
-                                />
-                                <span className="ml-3 font-medium text-gray-200">Li e concordo com todas as regras.</span>
-                            </label>
-                        </div>
+                        <label className="flex items-center cursor-pointer p-3 border border-gray-600/50 rounded-md bg-black/20 mt-2">
+                            <input type="checkbox" checked={hasAcceptedRules} onChange={handleAcceptRules} className="h-5 w-5 text-primary rounded bg-gray-700 focus:ring-primary" />
+                            <span className="ml-3 font-medium text-gray-200">Li e concordo com as regras.</span>
+                        </label>
                     </div>
                 </div>
-
-                {/* Step 3 */}
                 <div className="flex items-start gap-4">
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${hasAcceptedRules ? 'bg-green-600' : 'bg-gray-700 border border-gray-500'}`}>3</div>
                     <div className="flex-grow">
                         <p className="font-semibold text-gray-200">Entre no Grupo</p>
-                        <p className="text-xs text-gray-400 mb-2">Entre no grupo oficial para receber os avisos.</p>
-                        <a
-                            href={hasAcceptedRules ? campaign?.whatsappLink || '#' : undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`inline-flex items-center justify-center w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors text-base ${(!hasAcceptedRules || !campaign?.whatsappLink) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            aria-disabled={!hasAcceptedRules || !campaign?.whatsappLink}
-                            onClick={(e) => (!hasAcceptedRules || !campaign?.whatsappLink) && e.preventDefault()}
-                        >
-                            <WhatsAppIcon className="w-6 h-6 mr-2"/>
-                            Entrar no Grupo
+                        <a href={hasAcceptedRules ? campaign?.whatsappLink || '#' : undefined} target="_blank" rel="noopener noreferrer" 
+                           className={`mt-2 inline-flex items-center justify-center w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-4 rounded-lg ${(!hasAcceptedRules || !campaign?.whatsappLink) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`}
+                           onClick={(e) => (!hasAcceptedRules || !campaign?.whatsappLink) && e.preventDefault()}>
+                            <WhatsAppIcon className="w-6 h-6 mr-2"/> Entrar no Grupo
                         </a>
-                        {!campaign?.whatsappLink && hasAcceptedRules && <p className="text-xs text-yellow-400 mt-2">O link para o grupo ainda não foi disponibilizado pelo organizador.</p>}
                     </div>
                 </div>
-
-                {/* Option: View Posts */}
                 <div className="mt-6 pt-6 border-t border-gray-700">
-                    <h4 className="text-white font-semibold mb-3">Já está no grupo?</h4>
-                    <Link
-                        to={`/posts?email=${encodeURIComponent(promoter.email)}`}
-                        className="flex items-center justify-center w-full bg-primary text-white font-bold py-4 px-4 rounded-lg hover:bg-primary-dark transition-colors text-lg shadow-lg"
-                    >
-                        <MegaphoneIcon className="w-6 h-6 mr-2" />
-                        VER MINHAS POSTAGENS
+                    <Link to={`/posts?email=${encodeURIComponent(promoter.email)}`} className="flex items-center justify-center w-full bg-primary text-white font-bold py-4 px-4 rounded-lg hover:bg-primary-dark transition-colors text-lg shadow-lg">
+                        <MegaphoneIcon className="w-6 h-6 mr-2" /> VER MINHAS POSTAGENS
                     </Link>
-                    <p className="text-center text-xs text-gray-400 mt-2">Acesse suas tarefas, envie prints e justifique ausências.</p>
                 </div>
             </div>
-
-            <RulesModal
-                isOpen={isRulesModalOpen}
-                onClose={() => setIsRulesModalOpen(false)}
-                rules={campaign.rules}
-                campaignName={campaign.name}
-            />
+            <RulesModal isOpen={isRulesModalOpen} onClose={() => setIsRulesModalOpen(false)} rules={campaign.rules} campaignName={campaign.name} />
         </>
     );
 };
 
-
-// This component displays the status for a single registration
 const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = ({ promoter, organizationName }) => {
     const [primaryCampaign, setPrimaryCampaign] = useState<Campaign | null>(null);
     const [associatedCampaignsDetails, setAssociatedCampaignsDetails] = useState<Campaign[]>([]);
@@ -193,103 +116,52 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
             if (promoter && promoter.status === 'approved') {
                 try {
                     const allCampaignsForOrg = await getAllCampaigns(promoter.organizationId);
-
                     if (promoter.campaignName) {
                         const foundPrimary = allCampaignsForOrg.find(c => c.name === promoter.campaignName);
                         setPrimaryCampaign(foundPrimary || null);
-                    } else {
-                        setPrimaryCampaign(null);
                     }
-
                     if (promoter.associatedCampaigns && promoter.associatedCampaigns.length > 0) {
                         const foundAssociated = promoter.associatedCampaigns
                             .map(assocName => allCampaignsForOrg.find(c => c.name === assocName))
-                            .filter((c): c is Campaign => !!c); // Filter out any not found
+                            .filter((c): c is Campaign => !!c);
                         setAssociatedCampaignsDetails(foundAssociated);
-                    } else {
-                        setAssociatedCampaignsDetails([]);
                     }
-                } catch (e) {
-                    console.error("Failed to fetch campaign data", e);
-                }
+                } catch (e) { console.error(e); }
             }
         };
         fetchAllCampaignData();
     }, [promoter]);
 
     const statusInfoMap = {
-        pending: {
-            title: 'Cadastro em Análise',
-            message: 'Seu cadastro está sendo avaliado por nossa equipe. Assim que houver uma decisão, você receberá um e-mail. Você também pode continuar consultando esta página.',
-            styles: 'bg-blue-900/50 border-blue-500 text-blue-300'
-        },
-        approved: {
-            title: 'Portal da Divulgadora',
-            message: 'Parabéns, seu cadastro foi aprovado! Siga os passos abaixo ou acesse suas postagens.',
-            styles: 'bg-green-900/50 border-green-500 text-green-300'
-        },
-        rejected: {
-            title: 'Cadastro Não Aprovado',
-            message: 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado. Boa sorte na próxima!',
-            styles: 'bg-red-900/50 border-red-500 text-red-300'
-        },
-        rejected_editable: {
-            title: 'Correção Necessária',
-            message: 'Seu cadastro precisa de correções. Por favor, revise as informações abaixo e clique no botão para editar e reenviar seu cadastro.',
-            styles: 'bg-orange-900/50 border-orange-500 text-orange-300'
-        },
-        removed: {
-            title: 'Cadastro Removido',
-            message: 'Você foi removida da equipe pelo organizador. Para participar de novos eventos, por favor, realize um novo cadastro.',
-            styles: 'bg-gray-800 border-gray-600 text-gray-400'
-        }
+        pending: { title: 'Cadastro em Análise', styles: 'bg-blue-900/50 border-blue-500 text-blue-300', message: 'Seu cadastro está sendo avaliado.' },
+        approved: { title: 'Portal da Divulgadora', styles: 'bg-green-900/50 border-green-500 text-green-300', message: 'Parabéns, você foi aprovada!' },
+        rejected: { title: 'Cadastro Não Selecionado', styles: 'bg-red-900/50 border-red-500 text-red-300', message: 'No momento seu perfil não foi selecionado.' },
+        rejected_editable: { title: 'Correção Necessária', styles: 'bg-orange-900/50 border-orange-500 text-orange-300', message: 'Seu cadastro precisa de ajustes.' },
+        removed: { title: 'Cadastro Removido', styles: 'bg-gray-800 border-gray-600 text-gray-400', message: 'Você foi removida da equipe.' }
     };
 
-    const statusInfo = statusInfoMap[promoter.status];
-
-    if (!statusInfo) {
-         return <div className="bg-red-900/50 border-l-4 border-red-500 text-red-300 p-4 rounded-md"><p>Ocorreu um erro ao verificar o status deste cadastro.</p></div>;
-    }
-
-    const finalMessage = (promoter.status === 'rejected' || promoter.status === 'rejected_editable') && promoter.rejectionReason
-        ? promoter.rejectionReason
-        : statusInfo.message;
-    
-    const editLink = `/${promoter.organizationId}/register/${promoter.state}/${promoter.campaignName ? encodeURIComponent(promoter.campaignName) : ''}?edit_id=${promoter.id}`;
+    const statusInfo = statusInfoMap[promoter.status] || statusInfoMap.pending;
 
     return (
-        <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md`} role="alert">
+        <div className={`${statusInfo.styles} border-l-4 p-4 rounded-md shadow-md animate-fadeIn`}>
             <div className="flex justify-between items-start">
                 <div>
                     <p className="font-bold text-xl">{statusInfo.title}</p>
                     <p className="text-sm font-semibold text-gray-300">{organizationName}</p>
-                    {promoter.campaignName && <p className="text-xs text-primary">{promoter.campaignName} (Principal)</p>}
                 </div>
                 <div className="text-xs font-semibold px-2 py-1 rounded-full bg-black/20">
-                    {promoter.state ? stateMap[promoter.state.toUpperCase()] || promoter.state : 'N/A'}
+                    {stateMap[promoter.state.toUpperCase()] || promoter.state}
                 </div>
             </div>
-
-            <p className="mt-2 text-sm whitespace-pre-wrap">{finalMessage}</p>
-            
+            <p className="mt-2 text-sm whitespace-pre-wrap">{promoter.rejectionReason || statusInfo.message}</p>
             {promoter.status === 'approved' && (
                 <>
                     {primaryCampaign && <ApprovedPromoterSteps campaign={primaryCampaign} promoter={promoter} isPrimary={true} />}
-                    {associatedCampaignsDetails.map(assocCampaign => (
-                        <ApprovedPromoterSteps key={assocCampaign.id} campaign={assocCampaign} promoter={promoter} isPrimary={false} />
-                    ))}
+                    {associatedCampaignsDetails.map(c => <ApprovedPromoterSteps key={c.id} campaign={c} promoter={promoter} isPrimary={false} />)}
                 </>
             )}
-
             {promoter.status === 'rejected_editable' && (
-                 <div className="mt-4 text-center">
-                    <Link
-                        to={editLink}
-                        className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors"
-                    >
-                        Editar Cadastro
-                    </Link>
-                </div>
+                 <Link to={`/${promoter.organizationId}/register/${promoter.state}/${promoter.campaignName}?edit_id=${promoter.id}`} className="mt-4 inline-block w-full text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark">Editar Cadastro</Link>
             )}
         </div>
     );
@@ -298,7 +170,6 @@ const StatusCard: React.FC<{ promoter: Promoter, organizationName: string }> = (
 const StatusCheck: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
-
     const [email, setEmail] = useState('');
     const [promoters, setPromoters] = useState<Promoter[] | null>(null);
     const [orgMap, setOrgMap] = useState<Record<string, string>>({});
@@ -306,106 +177,87 @@ const StatusCheck: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     
-    const performSearch = async (searchEmail: string) => {
+    const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
-        setIsLoading(true);
-        setError(null);
-        setPromoters(null);
-        setSearched(true);
+        setIsLoading(true); setError(null); setSearched(true);
         try {
             const result = await checkPromoterStatus(searchEmail);
             setPromoters(result);
+            if (result && result.length > 0) {
+                // SALVA O E-MAIL PARA ACESSO FUTURO
+                localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
+            }
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
+        getOrganizations().then(orgs => {
+            const map = orgs.reduce((acc, org) => { acc[org.id] = org.name; return acc; }, {} as Record<string, string>);
+            setOrgMap(map);
+        });
+
         const queryParams = new URLSearchParams(location.search);
         const emailFromQuery = queryParams.get('email');
+        const savedEmail = localStorage.getItem('saved_promoter_email');
+
         if (emailFromQuery) {
             setEmail(emailFromQuery);
             performSearch(emailFromQuery);
+        } else if (savedEmail) {
+            setEmail(savedEmail);
+            performSearch(savedEmail);
         }
-    }, [location.search]);
-
-    useEffect(() => {
-        // Fetch all organizations to map IDs to names
-        const fetchOrgs = async () => {
-            try {
-                const orgs = await getOrganizations();
-                const map = orgs.reduce((acc, org) => {
-                    acc[org.id] = org.name;
-                    return acc;
-                }, {} as Record<string, string>);
-                setOrgMap(map);
-            } catch (e) {
-                console.error("Failed to fetch organizations for mapping", e);
-                setError("Não foi possível carregar dados das organizações.");
-            }
-        };
-        fetchOrgs();
-    }, []);
+    }, [location.search, performSearch]);
     
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        performSearch(email);
-    };
-    
-    const renderStatusResult = () => {
-        if (!searched) return null;
-        if (isLoading) {
-            return (
-                <div className="flex justify-center items-center h-24">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                </div>
-            );
-        }
-        if (error) return <p className="text-red-500 mt-4 text-center">{error}</p>;
-        if (!promoters) {
-            return <p className="text-center text-gray-400 mt-4">Nenhum cadastro encontrado para este e-mail.</p>;
-        }
-
-        return (
-            <div className="space-y-4">
-                {promoters.map(p => <StatusCard key={p.id} promoter={p} organizationName={orgMap[p.organizationId] || 'Organização Desconhecida'} />)}
-            </div>
-        );
+    const handleLogout = () => {
+        localStorage.removeItem('saved_promoter_email');
+        setPromoters(null);
+        setSearched(false);
+        setEmail('');
     };
 
     return (
         <div className="max-w-2xl mx-auto">
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors mb-4">
-                <ArrowLeftIcon className="w-5 h-5" />
-                <span>Voltar</span>
-            </button>
-            <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Verificar Status do Cadastro</h1>
-                <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver o status em todas as organizações.</p>
-                
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Seu e-mail de cadastro"
-                        className="w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm placeholder-gray-500 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm bg-gray-700 text-gray-200"
-                        required
-                    />
-                     <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300"
-                    >
-                        {isLoading ? 'Verificando...' : 'Verificar'}
+            <div className="flex justify-between items-center mb-6">
+                <button onClick={() => navigate('/')} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors">
+                    <ArrowLeftIcon className="w-5 h-5" /> <span>Início</span>
+                </button>
+                {searched && promoters && (
+                    <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-bold uppercase tracking-wider">
+                        <LogoutIcon className="w-4 h-4" /> Sair / Trocar E-mail
                     </button>
-                </form>
-                
-                <div className="mt-8">
-                    {renderStatusResult()}
-                </div>
+                )}
+            </div>
+
+            <div className="bg-secondary shadow-2xl rounded-3xl p-8 border border-gray-800">
+                {!searched || isLoading ? (
+                    <>
+                        <h1 className="text-3xl font-black text-center text-white mb-2 uppercase tracking-tighter">Verificar Meu Status</h1>
+                        <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro.</p>
+                        <form onSubmit={(e) => { e.preventDefault(); performSearch(email); }} className="space-y-6">
+                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@email.com" className="w-full px-4 py-4 border border-gray-700 rounded-2xl bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none" required />
+                            <button type="submit" disabled={isLoading} className="w-full py-4 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark shadow-xl shadow-primary/20">
+                                {isLoading ? 'CARREGANDO...' : 'VERIFICAR AGORA'}
+                            </button>
+                        </form>
+                    </>
+                ) : (
+                    <div className="space-y-6">
+                        <div className="text-center mb-6">
+                            <h1 className="text-2xl font-black text-white uppercase">Meus Cadastros</h1>
+                            <p className="text-sm text-gray-500 font-mono mt-1">{email}</p>
+                        </div>
+                        {promoters ? (
+                            <div className="space-y-4">
+                                {promoters.map(p => <StatusCard key={p.id} promoter={p} organizationName={orgMap[p.organizationId] || 'Organização'} />)}
+                            </div>
+                        ) : <p className="text-center text-gray-400 py-8">Nenhum cadastro encontrado.</p>}
+                    </div>
+                )}
             </div>
         </div>
     );

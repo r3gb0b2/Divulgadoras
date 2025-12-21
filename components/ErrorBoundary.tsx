@@ -13,10 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Explicitly inheriting from Component with generics to ensure TS recognizes state, setState, and props.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Using React.Component explicitly to ensure TS recognizes state, setState, and props correctly.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    // FIX: Property 'state' is now recognized as inherited from React.Component.
     this.state = {
       hasError: false,
       error: null,
@@ -35,6 +36,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
+    // FIX: setState is now recognized as inherited from React.Component.
     this.setState({
       error: error,
       errorInfo: errorInfo

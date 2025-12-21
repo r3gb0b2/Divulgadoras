@@ -5,7 +5,7 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail } from '../services/promoterService';
 import { initPushNotifications, syncPushTokenManually } from '../services/pushService';
 import { PostAssignment, Promoter, ScheduledPost, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, CalendarIcon, WhatsAppIcon, MegaphoneIcon, ChartBarIcon, TrashIcon, FaceIdIcon, XIcon, RefreshIcon, AlertTriangleIcon, LogoutIcon } from '../components/Icons';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -51,22 +51,17 @@ const CountdownTimer: React.FC<{ targetDate: any, prefix?: string }> = ({ target
             const now = new Date();
             const difference = target.getTime() - now.getTime();
             if (difference > 0) {
-                const days = Math.floor(difference / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
                 const minutes = Math.floor((difference / 1000 / 60) % 60);
-                let timeString = '';
-                if (days > 0) timeString += `${days}d `;
-                timeString += `${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`;
-                setTimeLeft(timeString); setIsExpired(false);
-            } else {
-                setTimeLeft('Encerrado'); setIsExpired(true);
-            }
+                setTimeLeft(`${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
+                setIsExpired(false);
+            } else { setTimeLeft('Encerrado'); setIsExpired(true); }
         };
         updateTimer(); const timer = setInterval(updateTimer, 60000);
         return () => clearInterval(timer);
     }, [targetDate]);
     if (!timeLeft) return null;
-    return <div className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-2 py-1 ${isExpired ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}><ClockIcon className="h-4 w-4" /><span>{prefix}{timeLeft}</span></div>;
+    return <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isExpired ? 'bg-red-900/30 text-red-400' : 'bg-primary/20 text-primary'}`}><ClockIcon className="h-3 w-3" /><span>{prefix}{timeLeft}</span></div>;
 };
 
 const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onConfirm, onJustify }) => {
@@ -75,14 +70,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const [linkCopied, setLinkCopied] = useState(false);
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
-    const [enableTimeDate, setEnableTimeDate] = useState<Date | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
-    
-    const allowJustification = assignment.post.allowJustification !== false;
-    const isPostExpired = useMemo(() => {
-        const expiresAt = toDateSafe(assignment.post.expiresAt);
-        return (expiresAt && new Date() > expiresAt) || !assignment.post.isActive;
-    }, [assignment.post.expiresAt, assignment.post.isActive]);
     
     useEffect(() => {
         if (assignment.status !== 'confirmed' || !assignment.confirmedAt) return;
@@ -90,116 +78,66 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         if (!confirmationTime) return;
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
         const calculatedEnableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
-        setEnableTimeDate(calculatedEnableTime);
         const timer = setInterval(() => {
             const now = new Date();
             if (now > expireTime) {
-                setTimeLeftForProof(assignment.post.allowLateSubmissions ? 'Envio fora do prazo liberado' : 'Tempo esgotado');
+                setTimeLeftForProof(assignment.post.allowLateSubmissions ? 'Envio liberado (fora do prazo)' : 'Tempo esgotado');
                 setIsProofButtonEnabled(assignment.post.allowLateSubmissions === true);
-                clearInterval(timer);
-                return;
+                clearInterval(timer); return;
             }
-            if (assignment.post.allowImmediateProof) {
-                const diff = expireTime.getTime() - now.getTime();
-                const h = Math.floor(diff / 3600000); const m = Math.floor((diff % 3600000) / 60000);
-                setTimeLeftForProof(`Envio liberado! Expira em: ${h}h ${m}m`); setIsProofButtonEnabled(true); return;
-            }
-            if (now < calculatedEnableTime) {
-                const diff = calculatedEnableTime.getTime() - now.getTime();
-                const h = Math.floor(diff / 3600000); const m = Math.floor((diff % 3600000) / 60000); const s = Math.floor((diff % 60000) / 1000);
-                setTimeLeftForProof(`Print liberado em ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-                setIsProofButtonEnabled(false);
-            } else {
-                const diff = expireTime.getTime() - now.getTime();
-                const h = Math.floor(diff / 3600000); const m = Math.floor((diff % 3600000) / 60000);
-                setTimeLeftForProof(`Expira em: ${h}h ${m}m`); setIsProofButtonEnabled(true);
-            }
+            if (assignment.post.allowImmediateProof) { setTimeLeftForProof('Envio liberado!'); setIsProofButtonEnabled(true); return; }
+            if (now < calculatedEnableTime) { setTimeLeftForProof('Aguardando 6h para print...'); setIsProofButtonEnabled(false); }
+            else { setTimeLeftForProof('Envio liberado!'); setIsProofButtonEnabled(true); }
         }, 1000);
         return () => clearInterval(timer);
     }, [assignment.status, assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof]);
 
     if (!assignment.promoterHasJoinedGroup) {
-        return (<div className="bg-dark/70 p-4 rounded-lg shadow-sm border-l-4 border-yellow-500"><h3 className="font-bold text-lg text-primary">{assignment.post.campaignName}</h3>{assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}<p className="mt-2 text-yellow-300">Você tem uma nova publicação para este evento!</p><p className="mt-2 text-gray-300 text-sm">Para visualizar, primeiro você precisa confirmar a leitura das regras e entrar no grupo do WhatsApp.</p><div className="mt-4 text-center"><Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="inline-block w-full sm:w-auto text-center bg-primary text-white font-bold py-2 px-4 rounded hover:bg-primary-dark transition-colors">Verificar Status e Aceitar Regras</Link></div></div>);
+        return (<div className="bg-dark/50 p-4 rounded-2xl border-2 border-yellow-900/50 mb-4"><h3 className="font-bold text-white">{assignment.post.campaignName}</h3><p className="text-yellow-500 text-sm mt-1 font-bold">Ação necessária!</p><p className="text-gray-400 text-xs mt-1">Para ver este post, você precisa primeiro ler as regras e entrar no grupo no menu Status.</p><Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="mt-4 inline-block px-4 py-2 bg-yellow-600 text-white font-bold rounded-lg text-xs">Ir para Status</Link></div>);
     }
 
     const handleConfirm = async () => {
-        if (isPostExpired) { alert("O tempo para esta postagem foi encerrado."); return; }
         setIsConfirming(true);
-        try {
-            await confirmAssignment(assignment.id);
-            await onConfirm(assignment);
-        } catch (err: any) { alert((err as Error).message); }
-        finally { setIsConfirming(false); }
-    };
-
-    const handleCopyLink = () => { if (!assignment.post.postLink) return; navigator.clipboard.writeText(assignment.post.postLink).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }); };
-    
-    const handleFirebaseDownload = async () => {
-        if (!assignment.post.mediaUrl) return;
-        setIsDownloading(true);
-        try {
-            const path = assignment.post.mediaUrl;
-            let finalUrl = path;
-            if (!path.startsWith('http')) {
-                const storageRef = storage.ref(path);
-                finalUrl = await storageRef.getDownloadURL();
-            }
-            const link = document.createElement('a');
-            link.href = finalUrl; link.target = '_blank';
-            link.setAttribute('download', 'midia_post'); 
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } catch (error) { alert("Erro ao baixar a mídia."); } finally { setIsDownloading(false); }
+        try { await confirmAssignment(assignment.id); await onConfirm(assignment); }
+        catch (err: any) { alert(err.message); } finally { setIsConfirming(false); }
     };
 
     return (
-        <div className="bg-dark/70 rounded-lg shadow-md overflow-hidden border border-gray-700/50">
-            <div className="p-4">
-                <div className="flex justify-between items-start gap-4">
-                    <div>
-                        <p className="font-bold text-lg text-primary">{assignment.post.campaignName}</p>
-                        {assignment.post.eventName && <p className="text-md text-gray-200 font-semibold -mt-1">{assignment.post.eventName}</p>}
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                        {assignment.proofSubmittedAt ? <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300">Concluído</span> : (assignment.justification ? <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Justificativa Enviada</span> : (assignment.status === 'confirmed' ? <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-900/50 text-blue-300">Confirmado</span> : <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300">Pendente</span>))}
-                        {assignment.post.expiresAt && <CountdownTimer targetDate={assignment.post.expiresAt} prefix="Expira em: " />}
-                    </div>
+        <div className="bg-secondary rounded-3xl shadow-xl overflow-hidden border border-gray-800 mb-6 animate-fadeIn">
+            <div className="p-5 flex justify-between items-start bg-white/5">
+                <div>
+                    <p className="font-black text-white uppercase tracking-tight">{assignment.post.campaignName}</p>
+                    <p className="text-xs text-primary font-bold">{assignment.post.eventName || 'Publicação de Equipe'}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    {assignment.post.expiresAt && <CountdownTimer targetDate={assignment.post.expiresAt} />}
+                    {assignment.proofSubmittedAt ? <span className="text-[10px] font-bold text-green-400 uppercase">Concluído</span> : (assignment.status === 'confirmed' ? <span className="text-[10px] font-bold text-blue-400 uppercase">Aguardando Print</span> : <span className="text-[10px] font-bold text-yellow-400 uppercase">Novo Post</span>)}
                 </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border-t border-gray-700/50">
-                <div className="space-y-4">
-                     {(assignment.post.type === 'image' || assignment.post.type === 'video') && (assignment.post.mediaUrl || assignment.post.googleDriveUrl) && (
-                        <div><StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type} controls={assignment.post.type === 'video'} className="w-full h-auto object-contain rounded-md bg-dark" />
-                            <div className="flex justify-center gap-4 mt-2">
-                                {assignment.post.mediaUrl && <button onClick={handleFirebaseDownload} disabled={isDownloading} className="flex items-center gap-2 px-3 py-1 bg-gray-600 text-white rounded-md text-xs font-semibold hover:bg-gray-500 disabled:opacity-50"><DownloadIcon className="w-4 h-4"/>{isDownloading ? 'Baixando...' : 'Link 1'}</button>}
-                                {assignment.post.googleDriveUrl && <button onClick={() => window.open(assignment.post.googleDriveUrl, '_blank')} className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-semibold hover:bg-blue-500"><DownloadIcon className="w-4 h-4"/>Link 2</button>}
-                            </div>
+            <div className="p-5 space-y-4">
+                <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap">{assignment.post.instructions}</div>
+                {(assignment.post.type !== 'text') && (
+                    <div className="relative group rounded-2xl overflow-hidden">
+                        <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type as any} className="w-full h-auto max-h-64 object-contain bg-black" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <a href={assignment.post.mediaUrl || assignment.post.googleDriveUrl} target="_blank" rel="noreferrer" className="p-3 bg-primary text-white rounded-full"><DownloadIcon className="w-6 h-6" /></a>
                         </div>
-                    )}
-                </div>
-                <div className="space-y-4">
-                    <div><h4 className="font-semibold text-gray-200 text-sm mb-1">Instruções:</h4><div className="bg-gray-800/50 p-3 rounded-md text-gray-300 text-sm whitespace-pre-wrap">{assignment.post.instructions}</div></div>
-                    {assignment.post.postLink && <div><h4 className="font-semibold text-gray-200 text-sm mb-1">Link para Postagem:</h4><div className="bg-gray-800/50 p-2 rounded-md flex items-center gap-2"><input type="text" readOnly value={assignment.post.postLink} className="flex-grow w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-900 text-gray-400 text-xs"/><button onClick={handleCopyLink} className="flex-shrink-0 px-2 py-1 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-xs w-20">{linkCopied ? 'Copiado!' : 'Copiar'}</button></div></div>}
-                </div>
+                    </div>
+                )}
             </div>
-            <div className="border-t border-gray-700/50">
+            <div className="px-5 pb-5">
                 {!assignment.proofSubmittedAt && !assignment.justification && (
-                    <div className="p-4 text-center">
-                        {assignment.status === 'pending' ? (
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
-                                <button onClick={handleConfirm} disabled={isConfirming || isPostExpired} className="flex-1 px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 text-lg">{isConfirming ? 'Salvando...' : 'Eu postei!'}</button>
-                            </div>
+                    <div className="flex flex-col gap-3">
+                         {assignment.status === 'pending' ? (
+                            <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-green-600 text-white font-black rounded-2xl shadow-lg shadow-green-900/20 hover:scale-[1.01] transition-all">
+                                {isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}
+                            </button>
                         ) : (
-                            <div className="space-y-3">
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                    {allowJustification && <button onClick={() => onJustify(assignment)} className="flex-1 px-4 py-2 bg-gray-600 text-white font-bold rounded-lg hover:bg-gray-500">Justificar Ausência</button>}
-                                    <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="flex-1 px-6 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50">Enviar Comprovação</button>
-                                </div>
-                                <p className={`text-xs ${timeLeftForProof === 'Tempo esgotado' ? 'text-red-400' : 'text-gray-400'}`}>{timeLeftForProof}</p>
-                            </div>
+                            <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30">
+                                {isProofButtonEnabled ? 'ENVIAR COMPROVANTE' : timeLeftForProof}
+                            </button>
                         )}
+                        <button onClick={() => onJustify(assignment)} className="text-xs text-gray-500 font-bold hover:text-gray-300">NÃO CONSIGO POSTAR HOJE</button>
                     </div>
                 )}
             </div>
@@ -208,198 +146,118 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
 };
 
 const PostCheck: React.FC = () => {
-    const location = useLocation();
     const navigate = useNavigate();
+    const location = useLocation();
     const [email, setEmail] = useState('');
     const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
-    const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+    const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [isSyncingPush, setIsSyncingPush] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+    const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
-    const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
-    const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
-    const [promoter, setPromoter] = useState<Promoter | null>(null);
-    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'pending' | 'scheduled' | 'history'>('pending');
-    
-    const [currentFcmToken, setCurrentFcmToken] = useState<string | null>(null);
-    const [showPushHelp, setShowPushHelp] = useState(false);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
-        setIsLoading(true); setError(null); setAssignments([]); setScheduledPosts([]); setSearched(true);
+        setIsLoading(true); setSearched(true);
         try {
-            const [promoterProfiles, fetchedAssignments, fetchedScheduled] = await Promise.all([findPromotersByEmail(searchEmail), getAssignmentsForPromoterByEmail(searchEmail), getScheduledPostsForPromoter(searchEmail)]);
-            if (promoterProfiles.length === 0) { setError("Nenhum cadastro encontrado com este e-mail."); setIsLoading(false); return; }
-            
-            const activePromoter = promoterProfiles[0];
+            const profiles = await findPromotersByEmail(searchEmail);
+            if (profiles.length === 0) { alert("E-mail não encontrado."); setSearched(false); return; }
+            const activePromoter = profiles[0];
             setPromoter(activePromoter);
-            setCurrentFcmToken(activePromoter.fcmToken || null);
+            localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
 
-            if (Capacitor.isNativePlatform()) {
-                try {
-                    await initPushNotifications(activePromoter.id);
-                } catch (e) {
-                    console.warn("Não foi possível inicializar o push automaticamente.");
-                }
-            }
-
-            const assignmentsWithGroupStatus = fetchedAssignments.map(assignment => { const promoterProfile = promoterProfiles.find(p => p.id === assignment.promoterId); return { ...assignment, promoterHasJoinedGroup: promoterProfile?.hasJoinedGroup || false }; });
-            setAssignments(assignmentsWithGroupStatus); setScheduledPosts(fetchedScheduled);
-        } catch (err: any) { setError(err.message || 'Ocorreu um erro ao buscar.'); } finally { setIsLoading(false); }
+            const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
+            setAssignments(fetchedAssignments.map(a => ({ ...a, promoterHasJoinedGroup: activePromoter.hasJoinedGroup || false })));
+        } catch (err: any) { alert(err.message); } finally { setIsLoading(false); }
     }, []);
 
-    useEffect(() => { const queryParams = new URLSearchParams(location.search); const emailFromQuery = queryParams.get('email'); if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); } }, [location.search, performSearch]);
-    
-    const handleConfirmAssignment = async () => { performSearch(email); };
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const emailFromQuery = queryParams.get('email');
+        const savedEmail = localStorage.getItem('saved_promoter_email');
 
-    const handleOpenJustification = (a: PostAssignment) => {
-        setJustificationText('');
-        setJustificationFiles([]);
-        setJustificationAssignment(a);
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setJustificationFiles(Array.from(e.target.files));
+        if (emailFromQuery) {
+            setEmail(emailFromQuery);
+            performSearch(emailFromQuery);
+        } else if (savedEmail) {
+            setEmail(savedEmail);
+            performSearch(savedEmail);
         }
+    }, [location.search, performSearch]);
+
+    const handleLogout = () => {
+        localStorage.removeItem('saved_promoter_email');
+        setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
     };
 
-    const handleSyncPush = async () => {
-        if (!promoter || isSyncingPush) return;
-        setIsSyncingPush(true);
-        try {
-            const token = await syncPushTokenManually(promoter.id);
-            if (token) {
-                setCurrentFcmToken(token);
-                alert("CONEXÃO OK: Celular vinculado com sucesso!");
-            } else {
-                alert("AVISO: O celular não gerou uma resposta válida. Tente reiniciar o App.");
-            }
-        } catch (e: any) {
-            if (e.message === "DETECTION_FAILED") {
-                alert("SISTEMA: O suporte a notificações push nativas não foi detectado nesta versão do App.\n\nVerifique se o seu iPhone está na versão estável disponível na App Store/TestFlight.");
-            } else {
-                alert(`ERRO: ${e.message || "Falha técnica ao vincular."}`);
-            }
-        } finally {
-            setIsSyncingPush(false);
-        }
-    };
+    const pending = assignments.filter(a => !isHistoryAssignment(a));
+    const history = assignments.filter(a => isHistoryAssignment(a));
 
-    const pendingAssignments = assignments.filter(a => !isHistoryAssignment(a));
-    const historyAssignments = assignments.filter(a => isHistoryAssignment(a));
+    if (!searched || !promoter) {
+        return (
+            <div className="max-w-md mx-auto py-10 px-4">
+                <div className="bg-secondary shadow-2xl rounded-3xl p-8 border border-gray-800 text-center">
+                    <MegaphoneIcon className="w-16 h-16 text-primary mx-auto mb-6" />
+                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Minhas Tarefas</h1>
+                    <p className="text-gray-400 text-sm mb-8">Digite seu e-mail para acessar suas postagens.</p>
+                    <form onSubmit={(e) => { e.preventDefault(); performSearch(email); }} className="space-y-4">
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="exemplo@gmail.com" className="w-full px-4 py-4 border border-gray-700 rounded-2xl bg-gray-800 text-white outline-none focus:ring-2 focus:ring-primary" required />
+                        <button type="submit" disabled={isLoading} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20">
+                            {isLoading ? 'BUSCANDO...' : 'ACESSAR TAREFAS'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-3xl mx-auto">
-            {!searched || !promoter ? (
-                <div className="bg-secondary shadow-2xl rounded-lg p-8">
-                    <h1 className="text-3xl font-bold text-center text-gray-100 mb-2">Minhas Publicações</h1>
-                    <p className="text-center text-gray-400 mb-8">Digite o e-mail que você usou no cadastro para ver suas tarefas.</p>
-                    <form onSubmit={(e) => { e.preventDefault(); navigate(`/posts?email=${encodeURIComponent(email)}`); }}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail de cadastro" className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" required /><button type="submit" disabled={isLoading} className="mt-4 w-full py-3 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">{isLoading ? 'Buscando...' : 'Ver Tarefas'}</button></form>
+        <div className="max-w-xl mx-auto pb-20">
+            <div className="flex justify-between items-center mb-8 px-2">
+                <div>
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tight">Olá, {promoter.name.split(' ')[0]}!</h1>
+                    <p className="text-xs text-gray-500 font-mono">{promoter.email}</p>
                 </div>
-            ) : (
-                <div className="flex flex-col gap-4 mb-6">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-2xl font-bold text-white">Olá, {promoter.name.split(' ')[0]}!</h1>
-                            <p className="text-gray-400">Aqui estão suas tarefas de divulgação.</p>
-                        </div>
-                        <button onClick={() => setIsStatsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 font-semibold"><ChartBarIcon className="w-5 h-5"/> Minhas Stats</button>
-                    </div>
+                <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors">
+                    <LogoutIcon className="w-6 h-6" />
+                </button>
+            </div>
 
-                    {Capacitor.isNativePlatform() && (
-                        <div className={`p-4 rounded-xl border-2 flex flex-col gap-3 transition-all ${currentFcmToken ? 'bg-green-900/10 border-green-800/50 text-green-400' : 'bg-blue-900/10 border-blue-800/50 text-blue-400'}`}>
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-full ${currentFcmToken ? 'bg-green-500/20' : 'bg-blue-500/20'}`}>
-                                        <FaceIdIcon className="w-6 h-6" />
-                                    </div>
-                                    <div onClick={() => setShowPushHelp(!showPushHelp)} className="cursor-pointer">
-                                        <span className="text-sm font-bold block flex items-center gap-1">
-                                            {currentFcmToken ? 'Alertas Ativos!' : 'Ativar Push'}
-                                            <AlertTriangleIcon className="w-3 h-3 text-gray-500" />
-                                        </span>
-                                        <span className="text-xs text-gray-400 underline">{currentFcmToken ? 'Celular vinculado.' : 'Clique para ajuda.'}</span>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={handleSyncPush}
-                                    disabled={isSyncingPush}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all ${currentFcmToken ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20'}`}
-                                >
-                                    <RefreshIcon className={`w-4 h-4 ${isSyncingPush ? 'animate-spin' : ''}`} />
-                                    <span>{isSyncingPush ? '...' : (currentFcmToken ? 'Atualizar' : 'Vincular')}</span>
-                                </button>
-                            </div>
+            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50">
+                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Pendentes ({pending.length})</button>
+                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico ({history.length})</button>
+            </div>
 
-                            {showPushHelp && (
-                                <div className="bg-dark/50 p-3 rounded-lg text-xs text-gray-300 space-y-2 border border-gray-700">
-                                    <p><strong>Problemas com notificações?</strong></p>
-                                    <ol className="list-decimal list-inside space-y-1">
-                                        <li>Vá em Ajustes do iPhone, Notificações e permita para o Equipe Certa.</li>
-                                        <li>Toque no botão "Vincular" se você trocou de aparelho recentemente.</li>
-                                        <li>Certifique-se que seu e-mail de cadastro está correto.</li>
-                                    </ol>
-                                    {promoter.pushDiagnostics?.lastError && (
-                                        <div className="mt-2 p-2 bg-black/40 rounded font-mono text-[10px] break-all">
-                                            Código de Erro: {promoter.pushDiagnostics.lastError}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
-            
-            {searched && promoter && (
-                <div className="mt-8">
-                    <div className="mb-6 border-b border-gray-700">
-                        <nav className="-mb-px flex space-x-6">
-                            <button onClick={() => setActiveTab('pending')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'pending' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-white'}`}>Pendentes ({pendingAssignments.length})</button>
-                            <button onClick={() => setActiveTab('scheduled')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'scheduled' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-white'}`}>Agendadas ({scheduledPosts.length})</button>
-                            <button onClick={() => setActiveTab('history')} className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'history' ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-white'}`}>Histórico ({historyAssignments.length})</button>
-                        </nav>
-                    </div>
-                    <div className="space-y-6">
-                        {activeTab === 'pending' && (pendingAssignments.length > 0 ? pendingAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={handleConfirmAssignment} onJustify={handleOpenJustification} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma tarefa pendente! 🎉</p>)}
-                        {activeTab === 'scheduled' && (scheduledPosts.length > 0 ? scheduledPosts.map(p => (<div key={p.id} className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 flex items-center justify-between"><p className="font-semibold text-white">{p.postData.campaignName}</p><span className="px-3 py-1 bg-blue-900/30 text-blue-300 text-xs rounded-full border border-blue-500/30">Agendado</span></div>)) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Nenhuma publicação agendada.</p>)}
-                        {activeTab === 'history' && (historyAssignments.length > 0 ? historyAssignments.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} />) : <p className="text-center text-gray-400 py-8 border border-dashed border-gray-700 rounded-lg">Seu histórico está vazio.</p>)}
-                    </div>
-                </div>
-            )}
+            <div className="space-y-2">
+                {isLoading ? <div className="text-center py-20 animate-pulse text-primary font-black uppercase">Sincronizando tarefas...</div> : (
+                    activeTab === 'pending' ? (
+                        pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} />) 
+                        : <div className="text-center py-20"><div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircleIcon className="w-8 h-8 text-green-500" /></div><p className="text-gray-400 font-bold">Nenhuma tarefa para agora! 🎉</p></div>
+                    ) : (
+                        history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} />) 
+                        : <p className="text-center text-gray-500 py-10 font-bold">Seu histórico está limpo.</p>
+                    )
+                )}
+            </div>
 
             {justificationAssignment && (
-                <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4 backdrop-blur-sm" onClick={() => setJustificationAssignment(null)}>
-                    <div className="bg-secondary rounded-xl shadow-2xl p-6 w-full max-md border border-gray-700" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-white">Justificar Ausência</h3>
-                            <button onClick={() => setJustificationAssignment(null)} className="text-gray-400 hover:text-white"><XIcon className="w-6 h-6" /></button>
-                        </div>
-                        <p className="text-sm text-gray-400 mb-4">Explique o motivo pelo qual você não poderá realizar esta postagem hoje.</p>
-                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Digite sua justificativa aqui..." rows={4} className="w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-800 mb-4 text-white focus:ring-2 focus:ring-primary outline-none" />
-                        
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Anexar comprovante (opcional)</label>
-                            <input type="file" onChange={handleFileChange} accept="image/*" className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600" />
-                        </div>
-
-                        <div className="flex justify-end gap-3">
-                            <button onClick={() => setJustificationAssignment(null)} className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 font-medium">Cancelar</button>
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setJustificationAssignment(null)}>
+                    <div className="bg-secondary w-full max-w-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Justificativa</h3>
+                        <p className="text-gray-400 text-sm mb-6">Por que você não poderá realizar esta postagem de {justificationAssignment.post.campaignName}?</p>
+                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Descreva o motivo..." rows={4} className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-6" />
+                        <div className="flex gap-4">
+                            <button onClick={() => setJustificationAssignment(null)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl">CANCELAR</button>
                             <button onClick={async () => {
-                                if (!justificationText.trim()) { alert("Por favor, escreva o motivo."); return; }
-                                setIsSubmittingJustification(true);
-                                try { await submitJustification(justificationAssignment.id, justificationText, justificationFiles); setJustificationAssignment(null); alert("Justificativa enviada com sucesso!"); performSearch(email); } catch (err: any) { alert(err.message); } finally { setIsSubmittingJustification(false); }
-                            }} disabled={isSubmittingJustification} className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark font-bold disabled:opacity-50">{isSubmittingJustification ? 'Enviando...' : 'Enviar Justificativa'}</button>
+                                if (!justificationText.trim()) return alert("Escreva o motivo.");
+                                await submitJustification(justificationAssignment.id, justificationText, []);
+                                setJustificationAssignment(null); performSearch(email);
+                            }} className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-900/20">ENVIAR</button>
                         </div>
                     </div>
                 </div>
             )}
-            <PromoterPublicStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={promoter} />
         </div>
     );
 };

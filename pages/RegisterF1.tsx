@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
@@ -28,7 +29,6 @@ const RegisterF1: React.FC = () => {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            // FIX: Explicitly cast Array.from result to File[] to resolve unknown parameter issues in map.
             const files = Array.from(e.target.files) as File[];
             setPhotos(files);
             setPreviews(files.map(f => URL.createObjectURL(f as Blob)));
@@ -49,10 +49,14 @@ const RegisterF1: React.FC = () => {
             await addPromoter({
                 ...formData,
                 photos,
-                tiktok: '', // Opcional
-                organizationId: 'stingressos-f1', // ID fixo para F1 ou dinâmico se preferir
+                tiktok: '',
+                organizationId: 'stingressos-f1',
                 campaignName: 'Divulgadora F1'
             });
+
+            // PERSISTE O E-MAIL APÓS O CADASTRO
+            localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
+
             setSuccess(true);
             setTimeout(() => navigate('/status'), 4000);
         } catch (err: any) {
