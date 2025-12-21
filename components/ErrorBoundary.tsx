@@ -14,9 +14,8 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-// FIX: Explicitly extending React.Component to ensure 'this.setState' and 'this.props' are correctly typed and available in line 41 and 77.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Standard property initialization for class components.
+// FIX: Using the directly imported 'Component' to resolve inheritance issues.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -38,7 +37,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: Standard usage of setState in a class component extending React.Component.
+    // FIX: Standard usage of setState in a class component.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -46,7 +45,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // FIX: Accessing state and props via 'this' as expected in React class components extending React.Component.
+    // FIX: Accessing state and props via 'this' as expected in React class components.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -75,7 +74,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Accessing this.props.children correctly on line 77.
+    // FIX: Accessing this.props.children correctly.
     return this.props.children;
   }
 }

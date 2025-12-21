@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
@@ -108,11 +109,18 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
         }
     };
 
-    const handleCopyLink = () => {
+    const handleLinkAction = () => {
         if (!assignment.post.postLink) return;
-        navigator.clipboard.writeText(assignment.post.postLink);
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2000);
+        
+        if (assignment.post.type === 'text') {
+            // Se for interação, abre o link
+            window.open(assignment.post.postLink, '_blank');
+        } else {
+            // Se for mídia, mantém o copiar
+            navigator.clipboard.writeText(assignment.post.postLink);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        }
     };
 
     if (!assignment.promoterHasJoinedGroup) {
@@ -174,9 +182,11 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 )}
 
                 {assignment.post.postLink && (
-                    <button onClick={handleCopyLink} className={`w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed rounded-xl text-xs font-black transition-all ${linkCopied ? 'border-green-500 text-green-400 bg-green-900/10' : 'border-primary/50 text-primary hover:bg-primary/5'}`}>
-                        <DocumentDuplicateIcon className="w-4 h-4" />
-                        {linkCopied ? 'LINK COPIADO!' : 'COPIAR LINK DE POSTAGEM'}
+                    <button onClick={handleLinkAction} className={`w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed rounded-xl text-xs font-black transition-all ${linkCopied ? 'border-green-500 text-green-400 bg-green-900/10' : 'border-primary/50 text-primary hover:bg-primary/5'}`}>
+                        {assignment.post.type === 'text' ? <ExternalLinkIcon className="w-4 h-4" /> : <DocumentDuplicateIcon className="w-4 h-4" />}
+                        {assignment.post.type === 'text' 
+                            ? 'ABRIR LINK DE INTERAÇÃO' 
+                            : (linkCopied ? 'LINK COPIADO!' : 'COPIAR LINK DE POSTAGEM')}
                     </button>
                 )}
             </div>

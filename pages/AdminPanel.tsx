@@ -550,23 +550,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Explicitly cast lookupEmail or emailToSearch to string to resolve 'unknown' type assignment error on line 508.
-        const providedEmail = typeof emailToSearch === 'string' ? emailToSearch : '';
-        const stateEmail = typeof lookupEmail === 'string' ? lookupEmail : '';
-        const searchInput = (providedEmail || stateEmail || '').trim();
-        const finalEmail: string = searchInput;
+        // FIX: Explicitly cast lookupEmail or emailToSearch result to string to avoid 'unknown' issues.
+        const inputEmail = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail || '').trim();
         
-        if (!finalEmail) return;
+        if (!inputEmail) return;
         
         setIsLookingUp(true);
         setLookupError(''); 
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
-            const results = await findPromotersByEmail(finalEmail);
+            const results = await findPromotersByEmail(inputEmail);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Robustly extracting error message from unknown error in catch block.
+        } catch (err: unknown) {
+            // FIX: Robust error handling for unknown type in catch blocks.
             const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
@@ -1059,7 +1056,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             {filter === 'approved' && canManage && (
                                 <>
-                                    <button onClick={handleManualNotify} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
                                         {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
                                     </button>
                                     <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
