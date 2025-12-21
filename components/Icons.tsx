@@ -14,26 +14,39 @@ const createStrokeIcon = (path: React.ReactNode): React.FC<React.SVGProps<SVGSVG
 );
 
 export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" {...props}>
-        {/* Círculo Externo Grosso */}
-        <circle cx="50" cy="50" r="46" stroke="currentColor" strokeWidth="8" />
-        
-        {/* Pessoas no Topo */}
-        {/* Esquerda */}
-        <circle cx="28" cy="35" r="5" fill="currentColor" opacity="0.6" />
-        <path d="M20 45C20 42.5 22.5 41 28 41C33.5 41 36 42.5 36 45V46H20V45Z" fill="currentColor" opacity="0.6" />
-        
-        {/* Direita */}
-        <circle cx="72" cy="35" r="5" fill="currentColor" opacity="0.6" />
-        <path d="M64 45C64 42.5 66.5 41 72 41C77.5 41 80 42.5 80 45V46H64V45Z" fill="currentColor" opacity="0.6" />
-        
-        {/* Centro (Destaque) */}
-        <circle cx="50" cy="32" r="6" fill="currentColor" />
-        <path d="M40 45C40 41.5 43.5 39.5 50 39.5C56.5 39.5 60 41.5 60 45V46.5H40V45Z" fill="currentColor" />
-        
-        {/* Círculo Interno com Check */}
-        <circle cx="50" cy="62" r="14" fill="currentColor" opacity="0.15" />
-        <path d="M42 62L48 68L59 56" stroke="#fbbd08" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 800 180" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <defs>
+        <linearGradient id="gradPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style={{ stopColor: '#8B3DFF', stopOpacity: 1 }} />
+          <stop offset="100%" style={{ stopColor: '#6A1B9A', stopOpacity: 1 }} />
+        </linearGradient>
+        <linearGradient id="gradGold" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style={{ stopColor: '#FFD700', stopOpacity: 1 }} />
+          <stop offset="100%" style={{ stopColor: '#FFA500', stopOpacity: 1 }} />
+        </linearGradient>
+      </defs>
+      
+      {/* Círculo do Checkmark */}
+      <circle cx="90" cy="90" r="70" fill="url(#gradPurple)" />
+      <circle cx="90" cy="90" r="60" fill="white" opacity="0.15" />
+      
+      {/* Checkmark */}
+      <path d="M 50 90 L 80 120 L 130 70" 
+            stroke="url(#gradGold)" 
+            strokeWidth="22" 
+            fill="none" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" />
+      
+      {/* Texto Lateral */}
+      <text x="180" y="115" 
+            fontFamily="Arial, Helvetica, sans-serif" 
+            fontSize="100" 
+            fontWeight="900" 
+            fill="white"
+            letterSpacing="-2">
+        Equipe Certa
+      </text>
     </svg>
 );
 

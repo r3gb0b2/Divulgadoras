@@ -26,8 +26,6 @@ const AppleTestRegistration: React.FC = () => {
         setError(null);
 
         try {
-            // No modo público simplificado, associamos ao sistema global 'equipe-certa'
-            // ou à primeira organização ativa do sistema.
             await registerForAppleTest({
                 ...formData,
                 organizationId: 'sistema-global'
@@ -59,7 +57,7 @@ const AppleTestRegistration: React.FC = () => {
         <div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
             <div className="w-full max-w-md bg-secondary shadow-2xl rounded-2xl p-8 border border-gray-700">
                 <div className="text-center mb-8">
-                    <LogoIcon className="h-12 w-auto mx-auto text-primary mb-4" />
+                    <LogoIcon className="h-32 w-auto mx-auto mb-6" />
                     <h1 className="text-2xl font-bold text-white uppercase tracking-wider">Inscrição Beta iOS</h1>
                     <p className="text-gray-400 text-sm mt-2">Cadastre o e-mail do seu ID Apple para baixar o App no iPhone.</p>
                 </div>

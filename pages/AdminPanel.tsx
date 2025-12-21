@@ -548,12 +548,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
-     * @param {any} emailToSearch - O e-mail a ser pesquisado (pode ser string ou o evento do clique).
      */
-    // FIX: Changed parameter type to any and use defensive narrowing to resolve 'unknown is not assignable to string' errors during internal processing.
     const handleLookupPromoter = async (emailToSearch?: any) => {
-        // Ensure the search input is treated as a string, falling back to lookupEmail if emailToSearch is not a string.
-        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : lookupEmail;
+        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail = (searchInput || '').trim();
         
         if (!finalEmail) return;
@@ -574,13 +571,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleGoToPromoter = (promoter: Promoter) => {
-        // FIX: Cast promoter.status explicitly to ensure its literal type is correctly recognized by setFilter.
-        setFilter(promoter.status as PromoterStatus);
-        setSearchQuery(promoter.email);
+        /* Fixed: explicitly typing targetStatus to satisfy union and literals */
+        const targetStatus = promoter.status as PromoterStatus;
+        setFilter(targetStatus);
+        setSearchQuery(String(promoter.email || ''));
         if (isSuperAdmin) {
-            setSelectedOrg(promoter.organizationId);
-            setSelectedState(promoter.state);
-            setSelectedCampaign(promoter.campaignName || 'all');
+            setSelectedOrg(String(promoter.organizationId));
+            setSelectedState(String(promoter.state));
+            setSelectedCampaign(String(promoter.campaignName || 'all'));
         }
         setIsLookupModalOpen(false);
     };

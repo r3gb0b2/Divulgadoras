@@ -69,22 +69,24 @@ const PublicHome: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 py-8 px-4">
+    <div className="max-w-5xl mx-auto space-y-10 py-6 px-4">
       
-      {/* Header Badge */}
-      <div className="text-center pt-4">
-          <div className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-primary text-xs font-bold uppercase tracking-widest">
-              Plataforma Oficial de Cadastro
+      {/* Brand Section - Simplified */}
+      <div className="text-center space-y-2">
+          <div className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-primary text-[10px] font-bold uppercase tracking-widest">
+              Plataforma Oficial de Gestão
           </div>
+          <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter">Equipe Certa</h1>
+          <p className="text-gray-400 text-sm max-w-lg mx-auto">Portal oficial para divulgadoras e produtores de eventos.</p>
       </div>
 
-      {/* Main Selection Area - Now at the Top */}
+      {/* Main Selection Area */}
       <div className="relative">
           <div className="absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-3xl blur opacity-10"></div>
-          <div className="relative bg-secondary/80 backdrop-blur-xl shadow-2xl rounded-3xl p-8 md:p-12 border border-gray-800">
-              <div className="flex items-center gap-4 mb-10">
-                  <div className="h-10 w-2 bg-primary rounded-full"></div>
-                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter">
+          <div className="relative bg-secondary/80 backdrop-blur-xl shadow-2xl rounded-3xl p-6 md:p-10 border border-gray-800">
+              <div className="flex items-center gap-4 mb-8">
+                  <div className="h-8 w-1.5 bg-primary rounded-full"></div>
+                  <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
                     Escolha a Produtora
                   </h2>
               </div>
@@ -92,38 +94,38 @@ const PublicHome: React.FC = () => {
           </div>
       </div>
 
-      {/* Action Buttons - Repositioned Below the Producer Cards */}
-      <section className="flex flex-wrap justify-center gap-4 md:gap-6">
-        <Link to="/como-funciona" className="px-8 py-4 bg-primary text-white font-black rounded-full hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 flex items-center gap-3 transform hover:-translate-y-1 text-sm md:text-base">
-          <SparklesIcon className="w-6 h-6" /> VER GUIA DA DIVULGADORA
+      {/* Action Buttons */}
+      <section className="flex flex-wrap justify-center gap-4">
+        <Link to="/como-funciona" className="px-6 py-3 bg-primary text-white font-black rounded-full hover:bg-primary-dark transition-all shadow-lg flex items-center gap-2 transform hover:-translate-y-0.5 text-xs md:text-sm">
+          <SparklesIcon className="w-5 h-5" /> GUIA DA DIVULGADORA
         </Link>
-        <Link to="/status" className="px-8 py-4 bg-gray-800 text-white font-black rounded-full hover:bg-gray-700 transition-all flex items-center gap-3 border border-gray-700 transform hover:-translate-y-1 text-sm md:text-base">
-          <SearchIcon className="w-6 h-6" /> CONSULTAR MEU STATUS
+        <Link to="/status" className="px-6 py-3 bg-gray-800 text-white font-black rounded-full hover:bg-gray-700 transition-all flex items-center gap-2 border border-gray-700 transform hover:-translate-y-0.5 text-xs md:text-sm">
+          <SearchIcon className="w-5 h-5" /> CONSULTAR MEU STATUS
         </Link>
       </section>
 
-      {/* Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-10">
-        <div className="p-8 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
-           <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 mb-6 group-hover:scale-110 transition-transform">
-               <UsersIcon className="w-6 h-6" />
+      {/* Info Grid - More compact */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-6 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
+           <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-400 mb-4 group-hover:scale-110 transition-transform">
+               <UsersIcon className="w-5 h-5" />
            </div>
-           <h3 className="text-white text-xl font-bold mb-3">Cadastro Único</h3>
-           <p className="text-gray-500 leading-relaxed">Preencha seus dados uma vez e utilize seu perfil para se candidatar a diversos eventos com apenas um clique.</p>
+           <h3 className="text-white text-lg font-bold mb-2">Cadastro Único</h3>
+           <p className="text-gray-500 text-sm leading-relaxed">Perfil inteligente para se candidatar a diversos eventos em um clique.</p>
         </div>
-        <div className="p-8 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
-           <div className="w-12 h-12 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-400 mb-6 group-hover:scale-110 transition-transform">
-               <MegaphoneIcon className="w-6 h-6" />
+        <div className="p-6 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
+           <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center text-pink-400 mb-4 group-hover:scale-110 transition-transform">
+               <MegaphoneIcon className="w-5 h-5" />
            </div>
-           <h3 className="text-white text-xl font-bold mb-3">Tarefas e Listas</h3>
-           <p className="text-gray-500 leading-relaxed">Acesse artes exclusivas para postar, envie seus prints de comprovação e gerencie suas próprias listas VIP no portal.</p>
+           <h3 className="text-white text-lg font-bold mb-2">Tarefas e Listas</h3>
+           <p className="text-gray-500 text-sm leading-relaxed">Acesse artes, envie comprovações e gerencie suas próprias listas VIP.</p>
         </div>
-        <div className="p-8 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
-           <div className="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center text-green-400 mb-6 group-hover:scale-110 transition-transform">
-               <CheckCircleIcon className="w-6 h-6" />
+        <div className="p-6 bg-gray-800/40 rounded-3xl border border-gray-800 group hover:border-primary/30 transition-colors">
+           <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-400 mb-4 group-hover:scale-110 transition-transform">
+               <CheckCircleIcon className="w-5 h-5" />
            </div>
-           <h3 className="text-white text-xl font-bold mb-3">Tudo Transparente</h3>
-           <p className="text-gray-500 leading-relaxed">Acompanhe sua taxa de aproveitamento e garanta sua vaga nos melhores eventos mantendo um bom desempenho.</p>
+           <h3 className="text-white text-lg font-bold mb-2">Transparência</h3>
+           <p className="text-gray-500 text-sm leading-relaxed">Acompanhe seu desempenho e garanta sua vaga nos melhores eventos.</p>
         </div>
       </div>
     </div>
