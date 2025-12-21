@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { registerForAppleTest } from '../services/testRegistrationService.ts';
+import { registerForAppleTest } from '../services/testRegistrationService';
 import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon } from '../components/Icons';
 import { useNavigate } from 'react-router-dom';
 

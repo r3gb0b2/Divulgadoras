@@ -209,7 +209,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const [photoViewerStartIndex, setPhotoViewerStartIndex] = useState(0);
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editingPromoter, setEditingPromoter] = useState<Promoter | null>(null);
+    const [editingPromoter, setEditingPromoter] = useState<FollowInteraction | Promoter | null>(null);
     
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [rejectingPromoter, setRejectingPromoter] = useState<Promoter | null>(null);
@@ -550,9 +550,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        const searchInput = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
-        const finalEmail = (searchInput || '').trim();
+    // Fixed typing to resolve unknown string parameter error on line 509
+    const handleLookupPromoter = async (emailToSearch?: string) => {
+        const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
+        const finalEmail: string = searchInput.trim();
         
         if (!finalEmail) return;
         
@@ -561,10 +562,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setLookupResults(null);
         setIsLookupModalOpen(true);
         try {
+            // Added explicit cast to string for safety
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // Fix for line 509 (approx): Argument of type 'unknown' is not assignable to parameter of type 'string'.
             // Using 'any' type in catch block for simpler access to message and ensuring fallback string.
             const errorMessage = err?.message || String(err) || 'Erro desconhecido';
             setLookupError(errorMessage);
@@ -834,7 +835,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsPhotoViewerOpen(true);
     };
 
-    const openEditModal = (promoter: Promoter) => {
+    const openEditModal = (promoter: FollowInteraction | Promoter) => {
         setEditingPromoter(promoter);
         setIsEditModalOpen(true);
     };
@@ -1082,7 +1083,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             )}
 
             <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter as Promoter | null} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
             {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />

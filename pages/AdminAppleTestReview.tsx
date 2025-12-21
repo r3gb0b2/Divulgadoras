@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService.ts';
+import { getAppleTestRegistrants, deleteAppleTestRegistrant } from '../services/testRegistrationService';
 import { AppleTestRegistrant } from '../types';
 import { ArrowLeftIcon, DownloadIcon, TrashIcon, LinkIcon } from '../components/Icons';
 
