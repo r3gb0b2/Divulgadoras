@@ -21,10 +21,12 @@ const setupBrevo = () => {
         return null;
     }
 
-    const apiInstance = new sib.TransactionalEmailsApi();
-    // O índice 0 é o padrão para a chave de API primária no SDK do Brevo
-    apiInstance.setApiKey(0, key);
-    return apiInstance;
+    // Configuração correta para o SDK do Brevo (@getbrevo/brevo)
+    const defaultClient = sib.ApiClient.instance;
+    const apiKey = defaultClient.authentications['api-key'];
+    apiKey.apiKey = key;
+
+    return new sib.TransactionalEmailsApi();
 };
 
 const brevoApi = setupBrevo();
@@ -85,24 +87,35 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             const orgSnap = await db.collection('organizations').doc(promoter.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
             
+            // Pega o nome do evento cadastrado
             const eventName = promoter.campaignName || "nosso banco de talentos";
 
             const html = `
-                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
-                    <h1 style="color: #7e39d5;">Parabéns, ${promoter.name}!</h1>
-                    <p>Seu perfil foi aprovado para participar da equipe <strong>${org.name}</strong> para o evento <strong>${eventName}</strong>.</p>
-                    <p>Agora você já pode acessar suas tarefas e confirmar sua presença nos eventos.</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://divulgadoras.vercel.app/#/status?email=${promoter.email}" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">ACESSAR MEU PORTAL</a>
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 30px; border-radius: 15px; background-color: #ffffff;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h1 style="color: #7e39d5; margin: 0;">Parabéns, ${promoter.name}!</h1>
+                        <p style="font-size: 18px; color: #444;">Você foi aprovada na equipe <strong>${org.name}</strong>!</p>
                     </div>
-                    <p style="color: #666; font-size: 12px;">Equipe Certa &copy; ${new Date().getFullYear()}</p>
+                    
+                    <div style="background-color: #f8f4ff; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #e5d5ff; margin-bottom: 25px;">
+                        <p style="margin: 0; color: #5d1eab; font-weight: bold; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Evento Selecionado</p>
+                        <p style="margin: 5px 0 0 0; font-size: 22px; color: #1a1a1a; font-weight: 800;">${eventName}</p>
+                    </div>
+
+                    <p style="color: #666; line-height: 1.6;">Agora você já pode acessar seu portal exclusivo para visualizar tarefas, baixar mídias de postagem e enviar seus nomes para as listas VIP.</p>
+                    
+                    <div style="text-align: center; margin: 35px 0;">
+                        <a href="https://divulgadoras.vercel.app/#/status?email=${promoter.email}" style="background-color: #7e39d5; color: white; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block; box-shadow: 0 4px 12px rgba(126, 57, 213, 0.3);">ACESSAR MEU PORTAL</a>
+                    </div>
+                    
+                    <p style="color: #999; font-size: 11px; text-align: center; border-top: 1px solid #eee; pt: 20px; margin-top: 30px;">Equipe Certa &copy; ${new Date().getFullYear()} - Sistema Profissional de Gestão de Eventos</p>
                 </div>
             `;
 
             await sendEmail({
                 toEmail: promoter.email,
                 toName: promoter.name,
-                subject: `Seu cadastro na ${org.name} foi aprovado! 🎉`,
+                subject: `Seu cadastro na ${org.name} para o evento ${eventName} foi aprovado! 🎉`,
                 htmlContent: html
             });
         }

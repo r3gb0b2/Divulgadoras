@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, XIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
@@ -192,9 +192,14 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                                 {isProofButtonEnabled ? 'ENVIAR COMPROVANTE' : timeLeftForProof}
                             </button>
                         )}
-                        <button onClick={() => onJustify(assignment)} className="w-full py-2 bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-900/40 transition-colors">
+                        <button onClick={() => onJustify(assignment)} className="w-full py-2 bg-red-900/10 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-900/20 transition-colors">
                             ENVIAR UMA JUSTIFICATIVA
                         </button>
+                    </div>
+                )}
+                {assignment.justification && !assignment.justificationStatus && (
+                    <div className="bg-yellow-900/20 p-4 rounded-2xl text-center border border-yellow-900/30">
+                        <p className="text-yellow-500 text-xs font-bold uppercase">Justificativa em análise</p>
                     </div>
                 )}
             </div>
@@ -264,6 +269,16 @@ const PostCheck: React.FC = () => {
             const previewUrls = fileList.map(file => URL.createObjectURL(file as Blob));
             setJustificationPreviews(previewUrls);
         }
+    };
+
+    const removePreview = (index: number) => {
+        const newFiles = [...justificationFiles];
+        newFiles.splice(index, 1);
+        setJustificationFiles(newFiles);
+
+        const newPreviews = [...justificationPreviews];
+        newPreviews.splice(index, 1);
+        setJustificationPreviews(newPreviews);
     };
 
     const handleJustificationSubmit = async () => {
@@ -344,29 +359,38 @@ const PostCheck: React.FC = () => {
             {justificationAssignment && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setJustificationAssignment(null)}>
                     <div className="bg-secondary w-full max-w-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Justificar Ausência</h3>
-                        <p className="text-gray-400 text-sm mb-6">Explique por que você não poderá realizar esta postagem e anexe comprovantes se necessário.</p>
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Justificar Ausência</h3>
+                            <button onClick={() => setJustificationAssignment(null)} className="text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
+                        </div>
+                        <p className="text-gray-400 text-sm mb-6">Explique por que você não poderá realizar esta postagem e anexe comprovantes (ex: atestado ou print de erro) se necessário.</p>
                         
                         <textarea 
                             value={justificationText} 
                             onChange={e => setJustificationText(e.target.value)} 
-                            placeholder="Digite sua justificativa..." 
+                            placeholder="Descreva aqui o motivo..." 
                             rows={4} 
                             className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-6" 
                         />
 
                         <div className="mb-6">
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Anexar Provas (opcional, máx 2)</label>
-                            <div className="flex items-center gap-4">
-                                <label className="flex-shrink-0 cursor-pointer bg-gray-700 p-4 rounded-xl border border-gray-600 text-primary hover:bg-gray-600 transition-colors">
-                                    <CameraIcon className="w-6 h-6" />
-                                    <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
-                                </label>
-                                <div className="flex gap-2">
-                                    {justificationPreviews.map((p, i) => (
-                                        <img key={i} src={p} className="h-14 w-14 rounded-lg object-cover border border-gray-600" alt="Preview" />
-                                    ))}
-                                </div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">Anexar Provas (Máx 2 Imagens)</label>
+                            <div className="flex flex-wrap gap-4">
+                                {justificationFiles.length < 2 && (
+                                    <label className="flex-shrink-0 cursor-pointer bg-gray-800 w-20 h-20 rounded-2xl border-2 border-dashed border-gray-700 text-primary hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-1">
+                                        <CameraIcon className="w-6 h-6" />
+                                        <span className="text-[8px] font-bold">ANEXAR</span>
+                                        <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple />
+                                    </label>
+                                )}
+                                {justificationPreviews.map((p, i) => (
+                                    <div key={i} className="relative group">
+                                        <img src={p} className="h-20 w-20 rounded-2xl object-cover border-2 border-gray-700" alt="Preview" />
+                                        <button onClick={() => removePreview(i)} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg group-hover:scale-110 transition-transform">
+                                            <XIcon className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
@@ -374,8 +398,8 @@ const PostCheck: React.FC = () => {
                             <button onClick={() => setJustificationAssignment(null)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl">CANCELAR</button>
                             <button 
                                 onClick={handleJustificationSubmit} 
-                                disabled={isSubmittingJustification}
-                                className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-900/20 disabled:opacity-50"
+                                disabled={isSubmittingJustification || !justificationText.trim()}
+                                className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl shadow-red-900/20 disabled:opacity-30"
                             >
                                 {isSubmittingJustification ? 'ENVIANDO...' : 'ENVIAR'}
                             </button>

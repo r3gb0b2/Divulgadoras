@@ -550,7 +550,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Ensure searchInput is correctly typed as string before use
         const searchInput: string = typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '');
         const finalEmail: string = searchInput.trim();
         
@@ -564,8 +563,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(finalEmail);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Using catch (err: any) and safe error message extraction to resolve 'unknown' type errors.
-            const errorMessage = err?.message || String(err);
+            // FIX: Ensure errorMessage is derived safely from any error type to avoid potential 'unknown' assignment issues from catch block.
+            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
@@ -972,7 +971,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                     </select>
                     <select value={selectedCampaign} onChange={(e) => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700">
                         <option value="all">Todos os Eventos</option>
-                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                        {campaignsForFilter.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                     <div className="flex gap-2 items-center flex-grow">
                         <input
