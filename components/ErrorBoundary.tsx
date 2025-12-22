@@ -12,12 +12,15 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Inherit props and state correctly from standard React.Component class to resolve property access errors.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-  };
+// FIX: Inherit props and state correctly from standard Component class to resolve property access errors.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
+  }
 
   // Static method for error state transformation.
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -57,7 +60,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Access correctly typed children through this.props as defined in the generic React.Component heritage.
+    // FIX: Access correctly typed children through this.props as defined in the generic Component heritage.
     return this.props.children;
   }
 }
