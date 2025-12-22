@@ -564,13 +564,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        // FIX: Ensure 'err' is handled as unknown and converted to a string to fix type error.
         } catch (err: unknown) {
             let message = 'Erro desconhecido';
             if (err instanceof Error) {
                 message = err.message;
-            } else {
-                message = String(err || 'Erro desconhecido');
+            } else if (err) {
+                // Fixed: Use nullish coalescing or explicit check instead of logical OR on unknown type
+                message = String(err ?? 'Erro desconhecido');
             }
             setLookupError(message);
         } finally {

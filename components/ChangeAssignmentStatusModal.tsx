@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import firebase from 'firebase/compat/app';
 import { PostAssignment } from '../types';
-import { serverTimestamp } from 'firebase/firestore';
-import PhotoViewerModal from './PhotoViewerModal';
+import { PhotoViewerModal } from './PhotoViewerModal';
 import { TrashIcon } from './Icons';
 
 interface ChangeAssignmentStatusModalProps {
@@ -30,7 +30,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             if(assignment.proofSubmittedAt) {
                 setSelectedStatus('completed_manual');
             } else {
-                setSelectedStatus(assignment.status);
+                setSelectedStatus(assignment.status as any);
             }
             
             if (assignment.justification) {
@@ -55,7 +55,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             if (selectedStatus === 'completed_manual') {
                 dataToSave = {
                     status: 'confirmed', // A completed post is also a confirmed one
-                    proofSubmittedAt: serverTimestamp(),
+                    proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     proofImageUrls: ['manual'], // Special value to indicate manual completion
                     justification: undefined, // Clear any previous justification
                     justificationStatus: undefined,
@@ -63,7 +63,7 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                 };
             } else {
                  dataToSave = {
-                    status: selectedStatus,
+                    status: selectedStatus as any,
                     proofSubmittedAt: null, // Reset proof if status is reverted
                     proofImageUrls: [],
                  };

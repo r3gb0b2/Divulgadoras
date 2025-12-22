@@ -170,13 +170,13 @@ export interface PostAssignment {
   promoterName: string;
   organizationId: string;
   status: 'pending' | 'confirmed';
-  confirmedAt: Timestamp | null;
-  proofSubmittedAt: Timestamp | null;
+  confirmedAt: Timestamp | FieldValue | null;
+  proofSubmittedAt: Timestamp | FieldValue | null;
   proofImageUrls?: string[];
   justification?: string;
   justificationStatus?: 'pending' | 'accepted' | 'rejected' | null;
   justificationResponse?: string;
-  justificationSubmittedAt?: Timestamp | null;
+  justificationSubmittedAt?: Timestamp | FieldValue | null;
   justificationImageUrls?: string[];
   completionRate: number;
   createdAt?: Timestamp | FieldValue;
