@@ -61,10 +61,6 @@ exports.onPromoterCreate = functions.region("southamerica-east1").firestore
                 <h2 style="color: #7e39d5;">Olá, ${promoter.name}!</h2>
                 <p>Recebemos sua inscrição para a equipe <strong>${promoter.campaignName || 'Geral'}</strong>.</p>
                 <p>Seu perfil agora passará por uma análise da nossa equipe de produção.</p>
-                <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Como acompanhar?</strong></p>
-                    <p style="margin: 5px 0 0 0;">Acesse nosso site e clique em <strong>"Verificar Status"</strong> usando seu e-mail: <em>${promoter.email}</em></p>
-                </div>
                 <p>Boa sorte! 🚀</p>
             </div>
         `;
@@ -87,26 +83,17 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Promoter not found");
         
         const oldPromoterData = snapshot.data();
-
         await promoterRef.update(updateData);
 
         if (updateData.status === 'approved' && oldPromoterData.status !== 'approved') {
             const orgSnap = await db.collection('organizations').doc(oldPromoterData.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
             
-            const eventName = updateData.campaignName || oldPromoterData.campaignName || "nosso banco de talentos";
-
             const html = `
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                     <h1 style="color: #22c55e;">Parabéns, ${oldPromoterData.name}! 🎉</h1>
-                    <p>Seu cadastro na equipe <strong>${org.name}</strong> para o evento <strong>${eventName}</strong> foi APROVADO!</p>
-                    <p>Acesse seu portal para ver as regras e entrar no grupo de trabalho.</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldPromoterData.email)}" 
-                           style="background: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                           ACESSAR MEU PORTAL
-                        </a>
-                    </div>
+                    <p>Seu cadastro na equipe <strong>${org.name}</strong> foi APROVADO!</p>
+                    <p>Acesse seu portal para ver as tarefas.</p>
                 </div>
             `;
 
@@ -123,32 +110,146 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     }
 });
 
-exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Apenas administradores podem usar a IA.");
-    const { prompt } = data;
+exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { postId } = data;
+
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
+        const postSnap = await db.collection('posts').doc(postId).get();
+        if (!postSnap.exists) return { success: false, message: "Post não encontrado" };
+        const post = postSnap.data();
+
+        const assignmentsSnap = await db.collection('postAssignments').where('postId', '==', postId).get();
+        const promoterIds = assignmentsSnap.docs.map(doc => doc.data().promoterId);
+
+        if (promoterIds.length === 0) return { success: true, message: "Nenhuma divulgadora para notificar." };
+
+        const tokens = [];
+        const promotersSnap = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', promoterIds.slice(0, 10)).get();
+        promotersSnap.forEach(doc => {
+            const p = doc.data();
+            if (p.fcmToken) tokens.push(p.fcmToken);
         });
-        return { text: response.text };
-    } catch (error) {
-        throw new functions.https.HttpsError("internal", "Erro ao processar IA.");
+
+        if (tokens.length > 0) {
+            const message = {
+                notification: {
+                    title: `Nova Tarefa: ${post.campaignName}`,
+                    body: `Uma nova postagem foi liberada. Acesse agora para baixar o material!`
+                },
+                data: { url: "/#/posts" },
+                tokens: tokens
+            };
+            const response = await admin.messaging().sendEachForMulticast(message);
+            return { success: true, message: `Push enviado para ${response.successCount} aparelhos.` };
+        }
+        return { success: true, message: "Nenhum aparelho com App vinculado encontrado." };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
     }
 });
 
-exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { title, body, url, promoterIds } = data;
+
+    try {
+        const tokens = [];
+        // Firebase 'in' operator limits to 30 items
+        const chunks = [];
+        for (let i = 0; i < promoterIds.length; i += 30) {
+            chunks.push(promoterIds.slice(i, i + 30));
+        }
+
+        for (const chunk of chunks) {
+            const snap = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
+            snap.forEach(doc => {
+                if (doc.data().fcmToken) tokens.push(doc.data().fcmToken);
+            });
+        }
+
+        if (tokens.length === 0) return { success: false, message: "Nenhum token encontrado." };
+
+        const message = {
+            notification: { title, body },
+            data: { url: url || "/#/posts" },
+            tokens: tokens
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(message);
+        return { success: true, message: `Enviado com sucesso para ${response.successCount} aparelhos.` };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId } = data;
+
     try {
-        await db.collection('promoters').doc(promoterId).update({
-            status: 'removed',
-            statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
-            actionTakenByEmail: context.auth.token.email
+        const pSnap = await db.collection('promoters').doc(promoterId).get();
+        const p = pSnap.data();
+        if (!p) throw new Error("Promoter not found");
+
+        const html = `<div style="font-family: sans-serif;"><h2>Olá, ${p.name}</h2><p>Este é um lembrete de que seu cadastro foi aprovado.</p></div>`;
+        
+        await sendEmail({
+            toEmail: p.email,
+            toName: p.name,
+            subject: "Lembrete: Seu cadastro está aprovado! 🎉",
+            htmlContent: html
         });
-        const assignments = await db.collection('postAssignments').where('promoterId', '==', promoterId).where('status', '==', 'pending').get();
+
+        return { success: true, message: "E-mail reenviado." };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.acceptAllJustifications = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { postId } = data;
+
+    try {
+        const snap = await db.collection('postAssignments')
+            .where('postId', '==', postId)
+            .where('justificationStatus', '==', 'pending')
+            .get();
+
         const batch = db.batch();
-        assignments.forEach(doc => batch.delete(doc.ref));
+        snap.forEach(doc => {
+            batch.update(doc.ref, { justificationStatus: 'accepted' });
+        });
+
+        await batch.commit();
+        return { success: true, count: snap.size, message: `${snap.size} justificativas aceitas.` };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.addAssignmentsToPost = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { postId, promoterIds } = data;
+
+    try {
+        const postSnap = await db.collection('posts').doc(postId).get();
+        const post = postSnap.data();
+        
+        const batch = db.batch();
+        const pSnaps = await db.collection('promoters').where(admin.firestore.FieldPath.documentId(), 'in', promoterIds).get();
+        
+        pSnaps.forEach(pDoc => {
+            const p = pDoc.data();
+            const ref = db.collection('postAssignments').doc();
+            batch.set(ref, {
+                postId, post, promoterId: pDoc.id, promoterEmail: p.email, promoterName: p.name,
+                organizationId: post.organizationId, status: 'pending', confirmedAt: null, proofSubmittedAt: null,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
         await batch.commit();
         return { success: true };
     } catch (e) {
@@ -160,31 +261,18 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { postData, assignedPromoters } = data;
     try {
-        const postRef = await db.collection('posts').add({ 
-            ...postData, 
-            createdAt: admin.firestore.FieldValue.serverTimestamp() 
-        });
-        const postId = postRef.id;
-        
+        const postRef = await db.collection('posts').add({ ...postData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
         const batch = db.batch();
         assignedPromoters.forEach(p => {
             const assignmentRef = db.collection('postAssignments').doc();
             batch.set(assignmentRef, { 
-                postId, 
-                post: postData, 
-                promoterId: p.id, 
-                promoterEmail: p.email, 
-                promoterName: p.name, 
-                organizationId: postData.organizationId, 
-                status: 'pending', 
-                confirmedAt: null, 
-                proofSubmittedAt: null,
+                postId: postRef.id, post: postData, promoterId: p.id, promoterEmail: p.email, promoterName: p.name, 
+                organizationId: postData.organizationId, status: 'pending', confirmedAt: null, proofSubmittedAt: null,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
         });
-        
         await batch.commit();
-        return { success: true, postId };
+        return { success: true, postId: postRef.id };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
     }
@@ -202,5 +290,19 @@ exports.deletePostAndAssignments = functions.region("southamerica-east1").https.
         return { success: true };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Apenas administradores podem usar a IA.");
+    const { prompt } = data;
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+        return { text: response.text };
+    } catch (error) {
+        throw new functions.https.HttpsError("internal", "Erro ao processar IA.");
     }
 });

@@ -13,14 +13,16 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Use named imports and explicit constructor to resolve issues with "props" not being recognized in some TypeScript/React environments.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// FIX: Use named imports and explicit field declarations to resolve issues with "state" and "props" not being recognized in some TypeScript/React environments.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Declare explicit state type as class member to resolve 'Property state does not exist' errors on lines 20, 38, 46, 48.
+  public override state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
   }
 
   // Static method for error state transformation.
@@ -62,7 +64,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Access props via "this.props"
+    // Access props via "this.props" - Line 66 FIX: props are now correctly recognized through inheritance.
     return this.props.children;
   }
 }
