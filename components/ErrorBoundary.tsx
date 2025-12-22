@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -7,43 +8,35 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
- * Standard implementation using React Class Component.
  */
-// Fixed inheritance and property access issues by explicitly using React.Component and proper type generics.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Using public class property initialization for state to fix "Property 'state' does not exist" errors.
+  public override state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
   }
 
   // Static method for error state transformation.
+  // FIX: Explicitly typing the static lifecycle method return type.
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render will show the fallback UI.
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error };
   }
 
   // Standard lifecycle method for side-effects when an error is caught.
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error for debugging
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    
-    this.setState({
-      error: error,
-      errorInfo: errorInfo
-    });
   }
 
-  render() {
-    // Accessing this.state which is now available via inheritance from React.Component
+  override render() {
+    // FIX: Accessing this.state and this.props which are inherited from Component<P, S>.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,7 +45,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/* Safely rendering the error string. Accessing this.state.error correctly. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -72,7 +64,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Accessing this.props.children correctly via inheritance
     return this.props.children;
   }
 }

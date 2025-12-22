@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -175,6 +174,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         try {
             const validGuests = isAttending ? guests.filter(g => g.name.trim() !== '') : [];
             
+            // Fixed type safety by adding required isLocked property
             await addGuestListConfirmation({
                 organizationId: list.organizationId,
                 campaignId: list.campaignId,
@@ -187,6 +187,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
                 isPromoterAttending: isAttending,
                 guests: validGuests,
                 guestNames: validGuests.map(g => g.name), // Keep legacy field populated
+                isLocked: true,
             });
             setSuccess(true);
         } catch (err: any) {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -535,11 +536,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
+        // FIX: Explicitly cast newStatus to PromoterStatus to ensure type safety.
+        const newStatus: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         if (isBulkRejection) {
-            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
             await handleBulkUpdate({ status: newStatus, rejectionReason: reason }, 'reject');
         } else if (rejectingPromoter && canManage) {
-            const newStatus = allowEdit ? 'rejected_editable' : 'rejected';
             await handleUpdatePromoter(rejectingPromoter.id, { status: newStatus, rejectionReason: reason });
         }
         setRejectingPromoter(null);
@@ -549,9 +550,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // Fixed type safety by changing emailToSearch to unknown and using type guards
-    const handleLookupPromoter = async (emailToSearch?: unknown) => {
-        const emailArg: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
+    // FIX: Change emailToSearch type to any and use a manual check to ensure it's a non-empty string before trim to avoid TypeScript assignment errors.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        let emailArg: string = '';
+        
+        if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
+            emailArg = emailToSearch.trim();
+        } else if (lookupEmail && lookupEmail.trim() !== '') {
+            emailArg = lookupEmail.trim();
+        }
         
         if (!emailArg) return;
         

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -700,13 +701,12 @@ const CreatePost: React.FC = () => {
                                     </label>
                                 </div>
                                 <div className="max-h-60 overflow-y-auto border border-gray-600 rounded-md p-2 space-y-1">
-                                    {promoters.map(p =>
+                                    {promoters.map((p: Promoter) =>
                                         <label key={p.id} className={`flex items-center justify-between p-1 rounded ${p.hasJoinedGroup ? 'hover:bg-gray-700/50 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
                                             <div className="flex items-center space-x-2 truncate">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedPromoters.has(p.id)}
-                                                    // Fixed: Cannot find name 'handleTogglePromoter'
                                                     onChange={() => handlePromoterToggle(p.id)}
                                                     disabled={!p.hasJoinedGroup}
                                                     className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded disabled:cursor-not-allowed disabled:opacity-50"

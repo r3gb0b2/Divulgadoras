@@ -1,69 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById, resubmitPromoterApplication } from '../services/promoterService';
-import { getCampaigns } from '../services/settingsService';
-import { Campaign } from '../types';
-import { InstagramIcon, TikTokIcon, UserIcon, MailIcon, PhoneIcon, CalendarIcon, CameraIcon, ArrowLeftIcon, CheckCircleIcon } from '../components/Icons';
+
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
+import { 
+  InstagramIcon, TikTokIcon, UserIcon, MailIcon, 
+  PhoneIcon, CalendarIcon, CameraIcon, SparklesIcon,
+  ArrowLeftIcon, CheckCircleIcon, XIcon 
+} from '../components/Icons';
 import { stateMap } from '../constants/states';
-import { storage } from '../firebase/config';
 
-// Meta Pixel Support
-declare global {
-    interface Window {
-        fbq?: (...args: any[]) => void;
-    }
-}
-
-const MALE_NAMES = [
-    'joão', 'pedro', 'lucas', 'matheus', 'gabriel', 'rafael', 'felipe', 'bruno', 'carlos', 
-    'marcos', 'paulo', 'rodrigo', 'fernando', 'daniel', 'diego', 'thiago', 'tiago', 'andré', 
-    'antonio', 'francisco', 'josé', 'luiz', 'ricardo', 'vinicius', 'guilherme', 'gustavo', 
-    'leonardo', 'eduardo', 'marcelo', 'juliano', 'cesar', 'renato', 'adriano', 'leandro', 
-    'alexandre', 'fábio', 'sérgio', 'claudio', 'mauricio', 'cristiano', 'heitor', 'davi', 
-    'arthur', 'bernardo', 'miguel', 'enzo', 'nicolas', 'lorenzo', 'samuel', 'benjamin', 
-    'joaquim', 'augusto', 'caio', 'breno', 'vitor', 'igor', 'yuri', 'henrique', 'otávio'
-].map(name => name.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
-
-const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality: number): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      if (!event.target?.result) return reject(new Error("FileReader error"));
-      const img = new Image();
-      img.src = event.target.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
-        if (width > height) {
-          if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
-        } else {
-          if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
-        }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Canvas error'));
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          if (!blob) return reject(new Error('Blob error'));
-          resolve(blob);
-        }, 'image/jpeg', quality);
-      };
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
-
-const PromoterForm: React.FC = () => {
+const RegistrationForm: React.FC = () => {
   const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
-  const location = useLocation();
   const navigate = useNavigate();
   
-  const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
-
-  const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -73,317 +22,283 @@ const PromoterForm: React.FC = () => {
     dateOfBirth: '',
   });
   
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
-  const [originalPhotoUrls, setOriginalPhotoUrls] = useState<string[]>([]);
-  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
-  
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-  const [showGenderWarning, setShowGenderWarning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const idToEdit = queryParams.get('edit_id');
-    if (idToEdit) {
-        setEditId(idToEdit);
-        getPromoterById(idToEdit).then(profile => {
-            if (profile) {
-                setFormData({
-                    email: profile.email,
-                    name: profile.name,
-                    whatsapp: profile.whatsapp,
-                    instagram: profile.instagram,
-                    tiktok: profile.tiktok || '',
-                    dateOfBirth: profile.dateOfBirth,
-                });
-                setPhotoPreviews(profile.photoUrls);
-                setOriginalPhotoUrls(profile.photoUrls);
-                setProfileLoaded(true);
-            }
-        }).catch(err => setSubmitError(err.message));
-    }
-  }, [location.search]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (name === 'name') {
-        const firstName = value.trim().split(' ')[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        setShowGenderWarning(!!firstName && MALE_NAMES.includes(firstName));
-    }
-  };
-  
-  const handleCheckEmail = async () => {
-    if (editId) return;
+  // Auto-preenchimento inteligente
+  const handleBlurEmail = async () => {
     const email = formData.email.trim();
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return;
+    if (!email || !email.includes('@')) return;
+    
     setIsCheckingEmail(true);
-    setProfileLoaded(false);
     try {
       const profile = await getLatestPromoterProfileByEmail(email);
       if (profile) {
-        setFormData({
-          email: profile.email,
+        setFormData(prev => ({
+          ...prev,
           name: profile.name,
           whatsapp: profile.whatsapp,
           instagram: profile.instagram,
           tiktok: profile.tiktok || '',
-          dateOfBirth: profile.dateOfBirth,
-        });
-        setProfileLoaded(true);
-        setPhotoFiles([]);
-        setPhotoPreviews(profile.photoUrls);
-        setOriginalPhotoUrls(profile.photoUrls);
+          dateOfBirth: profile.dateOfBirth
+        }));
       }
-    } catch (error) {
-      setSubmitError("Erro ao buscar dados anteriores.");
+    } catch (e) {
+      console.warn("Sem histórico.");
     } finally {
       setIsCheckingEmail(false);
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      setIsProcessingPhoto(true);
-      setSubmitError(null);
-      try {
-        const fileList = Array.from(files) as File[];
-        const processedFiles = await Promise.all(
-          fileList.map(async (file) => {
-            const compressedBlob = await resizeImage(file, 1000, 1000, 0.85);
-            return new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' });
-          })
-        );
-        setPhotoFiles(processedFiles);
-        setPhotoPreviews(processedFiles.map(file => URL.createObjectURL(file)));
-      } catch (error) {
-        setSubmitError("Erro ao processar imagens.");
-      } finally {
-        setIsProcessingPhoto(false);
-      }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      const totalPhotos = [...photos, ...filesArray].slice(0, 4);
+      setPhotos(totalPhotos);
+      setPreviews(totalPhotos.map(file => URL.createObjectURL(file as Blob)));
+      setError(null);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const removePhoto = (index: number) => {
+    const newFiles = photos.filter((_, i) => i !== index);
+    const newPreviews = previews.filter((_, i) => i !== index);
+    setPhotos(newFiles);
+    setPreviews(newPreviews);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.dateOfBirth) {
-        const birthDate = new Date(formData.dateOfBirth);
-        birthDate.setMinutes(birthDate.getMinutes() + birthDate.getTimezoneOffset());
-        const today = new Date();
-        const minAge = new Date(today.getFullYear() - 14, today.getMonth(), today.getDate());
-        if (birthDate > minAge) { setSubmitError("Idade mínima de 14 anos."); return; }
+    if (!organizationId || !state) return;
+
+    // Validações básicas
+    if (formData.name.trim().split(' ').length < 2) {
+      setError("Por favor, insira seu nome completo (Nome e Sobrenome).");
+      return;
     }
-    if (!organizationId || !state) { setSubmitError("Dados de região inválidos."); return; }
-    if (photoFiles.length === 0 && originalPhotoUrls.length === 0) { setSubmitError("Envie ao menos uma foto."); return; }
-    
+
+    if (photos.length < 2) {
+      setError("Por favor, envie pelo menos 2 fotos nítidas (sugerimos rosto e corpo).");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setIsSubmitting(true);
-    setSubmitError(null);
+    setError(null);
+
     try {
-      const decodedCampaignName = campaignName ? decodeURIComponent(campaignName) : undefined;
-      if (editId) {
-        let finalPhotoUrls = originalPhotoUrls;
-        if (photoFiles.length > 0) {
-            finalPhotoUrls = await Promise.all(
-                photoFiles.map(async (photo) => {
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpg`;
-                    const storageRef = storage.ref(`promoters-photos/${fileName}`);
-                    await storageRef.put(photo);
-                    return await storageRef.getDownloadURL();
-                })
-            );
-        }
-        await resubmitPromoterApplication(editId, { ...formData, photoUrls: finalPhotoUrls, status: 'pending', rejectionReason: '' });
-      } else {
-        await addPromoter({ ...formData, photos: photoFiles, state, campaignName: decodedCampaignName, organizationId });
-      }
+      await addPromoter({
+        ...formData,
+        photos,
+        state,
+        campaignName: campaignName ? decodeURIComponent(campaignName) : undefined,
+        organizationId
+      });
       
       localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
+      setIsSuccess(true);
       
-      setSubmitSuccess(true);
-      if (window.fbq) window.fbq('track', 'CompleteRegistration');
-      setTimeout(() => navigate('/status'), 3000);
-    } catch (error: any) {
-      setSubmitError(error.message || "Erro ao enviar cadastro.");
-    } finally {
+      // Delay suave para mostrar o sucesso
+      setTimeout(() => {
+        navigate('/status');
+      }, 3000);
+
+    } catch (err: any) {
+      setError(err.message || "Erro ao salvar seu cadastro.");
       setIsSubmitting(false);
     }
   };
 
-  if (submitSuccess) {
+  if (isSuccess) {
     return (
-        <div className="max-w-md mx-auto text-center py-20 animate-fadeIn">
-            <div className="bg-secondary p-10 rounded-3xl shadow-2xl border border-green-500/30">
-                <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500">
-                    <CheckCircleIcon className="w-12 h-12" />
-                </div>
-                <h1 className="text-3xl font-black text-white mb-4">Cadastro Enviado!</h1>
-                <p className="text-gray-400 mb-8">Nossa equipe analisará seu perfil. Você será redirecionada para a página de status em instantes.</p>
-                <Link to="/status" className="inline-block px-8 py-3 bg-primary text-white font-bold rounded-full hover:bg-primary-dark transition-all">Ver meu Status</Link>
-            </div>
+      <div className="max-w-2xl mx-auto py-20 px-4 text-center animate-fadeIn">
+        <div className="bg-secondary p-10 rounded-[3rem] border border-green-500/30 shadow-2xl">
+          <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircleIcon className="w-12 h-12 text-green-500" />
+          </div>
+          <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">Cadastro Recebido!</h1>
+          <p className="text-gray-400 text-lg mb-8">Sua inscrição foi enviada com sucesso para análise. Em breve você receberá um retorno em seu e-mail.</p>
+          <div className="animate-pulse text-primary font-bold text-sm tracking-widest uppercase">Redirecionando para Status...</div>
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-4">
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors mb-6">
-            <ArrowLeftIcon className="w-5 h-5" /> <span>Voltar</span>
-        </button>
+    <div className="max-w-2xl mx-auto py-6 px-4">
+      <button 
+        onClick={() => navigate(-1)} 
+        className="flex items-center gap-2 text-gray-400 hover:text-primary transition-all mb-6 font-black text-xs uppercase tracking-widest"
+      >
+        <ArrowLeftIcon className="w-4 h-4" /> <span>Voltar</span>
+      </button>
 
-        <div className="bg-secondary shadow-2xl rounded-3xl overflow-hidden border border-gray-800">
-            <div className="bg-primary/10 p-8 text-center border-b border-gray-800">
-                <h1 className="text-3xl font-black text-white uppercase tracking-tight">Seja uma Divulgadora</h1>
-                <p className="text-primary font-bold mt-1">{stateFullName} • {campaignName ? decodeURIComponent(campaignName) : 'Geral'}</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
-                {submitError && <div className="bg-red-900/40 border border-red-800 text-red-200 p-4 rounded-xl text-sm font-medium">{submitError}</div>}
-
-                <section className="space-y-4">
-                    <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <div className="h-px flex-grow bg-gray-800"></div> Dados de Acesso <div className="h-px flex-grow bg-gray-800"></div>
-                    </h2>
-                    <InputWithIcon Icon={MailIcon} type="email" name="email" placeholder="Seu melhor e-mail" value={formData.email} onChange={handleChange} onBlur={handleCheckEmail} disabled={!!editId} required />
-                    {isCheckingEmail && <p className="text-xs text-yellow-400 font-bold animate-pulse">Buscando cadastros anteriores...</p>}
-                    {profileLoaded && !editId && <div className="p-3 bg-green-900/20 border border-green-800 rounded-xl text-xs text-green-400 font-medium">Encontramos seu perfil anterior! Seus dados foram preenchidos automaticamente.</div>}
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <div className="h-px flex-grow bg-gray-800"></div> Informações Pessoais <div className="h-px flex-grow bg-gray-800"></div>
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputWithIcon Icon={UserIcon} type="text" name="name" placeholder="Nome Completo" value={formData.name} onChange={handleChange} required />
-                        <InputWithIcon Icon={CalendarIcon} type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} required />
-                    </div>
-                    {showGenderWarning && <div className="p-3 bg-yellow-900/30 border border-yellow-800 rounded-xl text-xs text-yellow-200"><strong>Aviso:</strong> Nossos grupos são primariamente para o público feminino. Você pode continuar, mas a seleção prioriza mulheres.</div>}
-                    <InputWithIcon Icon={PhoneIcon} type="tel" name="whatsapp" placeholder="WhatsApp (com DDD)" value={formData.whatsapp} onChange={handleChange} required />
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <div className="h-px flex-grow bg-gray-800"></div> Redes Sociais <div className="h-px flex-grow bg-gray-800"></div>
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <InputWithIcon Icon={InstagramIcon} type="text" name="instagram" placeholder="@seuinstagram" value={formData.instagram} onChange={handleChange} required />
-                        <InputWithIcon Icon={TikTokIcon} type="text" name="tiktok" placeholder="@seutiktok (opcional)" value={formData.tiktok} onChange={handleChange} />
-                    </div>
-                </section>
-
-                <section className="space-y-4">
-                    <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <div className="h-px flex-grow bg-gray-800"></div> Fotos do Perfil <div className="h-px flex-grow bg-gray-800"></div>
-                    </h2>
-                    <div className="p-6 border-2 border-dashed border-gray-700 rounded-3xl bg-gray-800/30 hover:border-primary/50 transition-colors">
-                        <label className="flex flex-col items-center cursor-pointer">
-                            <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary mb-3">
-                                <CameraIcon className="w-6 h-6" />
-                            </div>
-                            <span className="text-white font-bold">{photoPreviews.length > 0 ? 'Substituir Fotos' : 'Selecionar Fotos'}</span>
-                            <span className="text-gray-500 text-xs mt-1">Corpo e rosto (Mínimo 1, Máximo 5)</span>
-                            <input type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple disabled={isProcessingPhoto || isSubmitting} />
-                        </label>
-                    </div>
-
-                    <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
-                        {isProcessingPhoto ? (
-                            <div className="h-24 w-full flex items-center justify-center bg-gray-800 rounded-2xl animate-pulse">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                            </div>
-                        ) : photoPreviews.length > 0 ? (
-                            photoPreviews.map((p, i) => <img key={i} src={p} className="h-24 w-24 flex-shrink-0 object-cover rounded-2xl border-2 border-gray-700 shadow-lg" alt="Preview" />)
-                        ) : null}
-                    </div>
-                </section>
-
-                <button
-                    type="submit"
-                    disabled={isSubmitting || isProcessingPhoto}
-                    className="w-full py-4 bg-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all transform hover:-translate-y-1 disabled:opacity-50 disabled:translate-y-0"
-                >
-                    {isSubmitting ? 'Enviando...' : editId ? 'Reenviar Correção' : 'Finalizar Inscrição'}
-                </button>
-            </form>
+      <div className="bg-secondary shadow-3xl rounded-[2.5rem] overflow-hidden border border-gray-800">
+        <div className="bg-primary/20 p-10 text-center border-b border-gray-800 relative">
+          <SparklesIcon className="w-10 h-10 text-primary absolute top-6 right-10 animate-pulse" />
+          <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Seja Divulgadora</h1>
+          <p className="text-primary font-bold mt-2 uppercase tracking-widest text-sm">
+            {campaignName ? decodeURIComponent(campaignName) : 'Inscrição Oficial'} • {stateMap[state || ''] || state}
+          </p>
         </div>
+
+        <form onSubmit={handleSubmit} className="p-8 md:p-12 space-y-10">
+          {error && (
+            <div className="bg-red-900/40 border-2 border-red-800 text-red-200 p-4 rounded-2xl text-sm font-bold text-center animate-shake">
+              {error}
+            </div>
+          )}
+
+          {/* Seção 1: Identidade */}
+          <div className="space-y-6">
+            <h2 className="text-lg font-black text-white flex items-center gap-3 uppercase tracking-tight">
+              <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-[10px] text-white">01</span>
+              Dados Pessoais
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="email" 
+                  placeholder="Seu melhor e-mail" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                  onBlur={handleBlurEmail}
+                  required
+                />
+              </div>
+              <div className="relative">
+                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="text" 
+                  placeholder="Nome Completo" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all placeholder-gray-500"
+                  value={formData.name}
+                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  required
+                />
+              </div>
+            </div>
+            {isCheckingEmail && <p className="text-[10px] text-primary animate-pulse font-black uppercase tracking-widest px-4">Sincronizando banco de dados...</p>}
+          </div>
+
+          {/* Seção 2: Redes e Contato */}
+          <div className="space-y-6">
+            <h2 className="text-lg font-black text-white flex items-center gap-3 uppercase tracking-tight">
+              <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-[10px] text-white">02</span>
+              Redes e Contato
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <PhoneIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="tel" 
+                  placeholder="WhatsApp (DDD)" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  value={formData.whatsapp}
+                  onChange={e => setFormData({...formData, whatsapp: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="relative">
+                <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="date" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  value={formData.dateOfBirth}
+                  onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
+                  required
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+              <div className="relative">
+                <InstagramIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="text" 
+                  placeholder="@Instagram" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  value={formData.instagram}
+                  onChange={e => setFormData({...formData, instagram: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="relative">
+                <TikTokIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input 
+                  type="text" 
+                  placeholder="@TikTok (Opcional)" 
+                  className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  value={formData.tiktok}
+                  onChange={e => setFormData({...formData, tiktok: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Seção 3: Fotos */}
+          <div className="space-y-6">
+            <h2 className="text-lg font-black text-white flex items-center gap-3 uppercase tracking-tight">
+              <span className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-[10px] text-white">03</span>
+              Perfil Visual
+            </h2>
+            <p className="text-xs text-gray-400 -mt-4 px-1 leading-relaxed">Envie fotos nítidas e atuais. Preferencialmente fotos de trabalho ou que mostrem bem seu rosto e corpo.</p>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {previews.map((url, i) => (
+                <div key={i} className="relative aspect-square rounded-3xl overflow-hidden border-2 border-gray-800 shadow-xl group">
+                  <img src={url} alt={`Preview ${i+1}`} className="w-full h-full object-cover" />
+                  <button 
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-2 right-2 bg-red-600/90 backdrop-blur-sm text-white w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-lg font-bold hover:scale-110"
+                  >
+                    <XIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              
+              {photos.length < 4 && (
+                <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-gray-700 rounded-3xl bg-gray-800/50 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group">
+                  <CameraIcon className="w-8 h-8 text-gray-600 group-hover:text-primary mb-2 transition-colors" />
+                  <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest group-hover:text-primary">Adicionar</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleFileChange} 
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full py-5 bg-primary text-white font-black text-xl rounded-3xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                ENVIANDO...
+              </>
+            ) : (
+              <>
+                <CheckCircleIcon className="w-6 h-6" />
+                FINALIZAR INSCRIÇÃO
+              </>
+            )}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
 
-const RegistrationFlowPage: React.FC = () => {
-    const { organizationId, state, campaignName } = useParams<{ organizationId: string, state: string, campaignName?: string }>();
-    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-    const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const navigate = useNavigate();
-
-    const stateFullName = state ? (stateMap[state.toUpperCase()] || state) : 'Brasil';
-
-    useEffect(() => {
-        if (organizationId && state) {
-            setIsLoading(true);
-            getCampaigns(state, organizationId)
-                .then(all => {
-                    if (campaignName) {
-                        const target = all.find(c => c.name === decodeURIComponent(campaignName));
-                        if (target && target.status !== 'inactive') setActiveCampaign(target);
-                        else setError("Este evento não está mais aceitando cadastros.");
-                    } else {
-                        setCampaigns(all.filter(c => c.status === 'active'));
-                    }
-                })
-                .catch(() => setError("Erro ao carregar eventos."))
-                .finally(() => setIsLoading(false));
-        }
-    }, [organizationId, state, campaignName]);
-
-    useEffect(() => {
-        if (activeCampaign?.pixelId) {
-            const pixelId = activeCampaign.pixelId;
-            if (window.fbq) { window.fbq('init', pixelId); window.fbq('track', 'PageView'); return; }
-            const script = document.createElement('script');
-            script.innerHTML = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');`;
-            document.head.appendChild(script);
-            script.onload = () => { if (window.fbq) { window.fbq('init', pixelId); window.fbq('track', 'PageView'); } };
-        }
-    }, [activeCampaign]);
-
-    if (isLoading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-    if (error) return <div className="max-w-2xl mx-auto bg-secondary p-8 rounded-3xl text-center border border-red-800 text-red-400">{error}</div>;
-    if (campaignName && activeCampaign) return <PromoterForm />;
-    
-    return (
-        <div className="max-w-4xl mx-auto py-8">
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6 transition-colors"><ArrowLeftIcon className="w-5 h-5" /> <span>Voltar</span></button>
-            <div className="bg-secondary shadow-2xl rounded-3xl p-10 border border-gray-800">
-                <h1 className="text-3xl font-black text-white mb-2 text-center uppercase tracking-tight">Escolha o Evento</h1>
-                <p className="text-gray-500 mb-10 text-center">Para qual grupo você deseja se candidatar em {stateFullName}?</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {campaigns.map(c => (
-                        <Link key={c.id} to={`/${organizationId}/register/${state}/${encodeURIComponent(c.name)}`} className="group p-6 bg-gray-800/50 rounded-2xl border border-gray-700 hover:bg-primary transition-all duration-300">
-                            <span className="block text-xl font-bold text-white group-hover:text-white">{c.name}</span>
-                            <span className="text-xs text-gray-500 group-hover:text-purple-100">{c.description || 'Clique para se cadastrar'}</span>
-                        </Link>
-                    ))}
-                </div>
-                {campaigns.length === 0 && <p className="text-center text-gray-500 py-10">Nenhum evento ativo para esta região.</p>}
-            </div>
-        </div>
-    );
-};
-
-const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Icon: React.ElementType }> = ({ Icon, ...props }) => (
-    <div className="relative group">
-        <span className="absolute inset-y-0 left-0 flex items-center pl-4 transition-colors text-gray-500 group-focus-within:text-primary">
-            <Icon className="h-5 w-5" />
-        </span>
-        <input {...props} className="w-full pl-12 pr-4 py-4 border border-gray-700 rounded-2xl bg-gray-800/50 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" />
-    </div>
-);
-
-export default RegistrationFlowPage;
+export default RegistrationForm;
