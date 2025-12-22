@@ -45,9 +45,13 @@ const RegistrationForm: React.FC = () => {
           const actives = camps.filter(c => c.status === 'active');
           setAvailableCampaigns(actives);
           
-          // Se houver apenas uma campanha e nenhuma na URL, seleciona automaticamente
-          if (!campaignNameFromUrl && actives.length === 1) {
-            setFormData(prev => ({ ...prev, campaignName: actives[0].name }));
+          // Lógica de pré-seleção
+          if (!campaignNameFromUrl) {
+            if (actives.length === 1) {
+              setFormData(prev => ({ ...prev, campaignName: actives[0].name }));
+            } else if (actives.length === 0) {
+              setFormData(prev => ({ ...prev, campaignName: 'Geral' }));
+            }
           }
         })
         .catch(err => console.error("Erro ao carregar eventos:", err))
@@ -119,7 +123,7 @@ const RegistrationForm: React.FC = () => {
       return;
     }
 
-    if (!formData.campaignName) {
+    if (!formData.campaignName || formData.campaignName.trim() === '') {
       setError("Por favor, selecione para qual evento você deseja se candidatar.");
       return;
     }
@@ -129,8 +133,8 @@ const RegistrationForm: React.FC = () => {
       return;
     }
 
-    if (photos.length < 2) {
-      setError("Por favor, envie pelo menos 2 fotos nítidas (sugerimos rosto e corpo).");
+    if (photos.length < 1) {
+      setError("Por favor, envie pelo menos 1 foto nítida.");
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -243,13 +247,10 @@ const RegistrationForm: React.FC = () => {
                     {availableCampaigns.map(c => (
                         <option key={c.id} value={c.name} className="bg-gray-900">{c.name}</option>
                     ))}
-                    {!isLoadingCampaigns && availableCampaigns.length === 0 && (
-                        <option value="Geral" className="bg-gray-900">Banco de Talentos (Geral)</option>
-                    )}
+                    <option value="Geral" className="bg-gray-900">Banco de Talentos (Geral)</option>
                   </select>
                   {isLoadingCampaigns && <div className="absolute right-10 top-1/2 -translate-y-1/2"><div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div></div>}
                 </div>
-                {campaignNameFromUrl && <p className="text-[10px] text-gray-500 ml-4 italic mt-1">* Você está usando um link exclusivo para este evento.</p>}
             </div>
           </div>
 
@@ -380,7 +381,7 @@ const RegistrationForm: React.FC = () => {
             </div>
             
             <p className="text-xs text-gray-500 leading-relaxed max-w-lg">
-                Envie fotos nítidas e com boa iluminação. <strong className="text-primary">Indispensável:</strong> uma foto de rosto bem visível e uma de corpo inteiro. Você pode enviar até 8 fotos.
+                Envie fotos nítidas e com boa iluminação. <strong className="text-primary">Indispensável:</strong> uma foto de rosto bem visível e uma de corpo inteiro.
             </p>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">

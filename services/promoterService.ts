@@ -9,7 +9,8 @@ import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, Gro
  */
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
-  const campaign = data.campaignName || null;
+  // CRITICAL: Ensure campaign is NEVER null or empty string to avoid disappearing from filters
+  const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Geral";
   
   try {
     // 1. Verificar se já existe cadastro pendente ou aprovado para este evento
@@ -58,8 +59,7 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       state: data.state,
       campaignName: campaign,
       organizationId: data.organizationId,
-      // CRITICAL: Initialize allCampaigns with the current campaign so association is immediate
-      allCampaigns: campaign ? [campaign] : []
+      allCampaigns: [campaign]
     };
 
     await firestore.collection('promoters').add(newPromoter);

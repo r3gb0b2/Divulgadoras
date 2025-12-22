@@ -354,14 +354,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     }, [allCampaigns]);
 
     const filteredPromotersFromSource = useMemo(() => {
+        // Se um evento específico foi selecionado no filtro de topo, o service já filtrou no Firestore
         if (selectedCampaign !== 'all') {
             return allPromoters;
         }
+        // Se 'Todos' está selecionado, mostramos quem pertence a campanhas ATIVAS ou quem é 'Geral'
         return allPromoters.filter(promoter => {
-            if (!promoter.campaignName) {
+            const name = promoter.campaignName;
+            if (!name || name === 'Geral') {
                 return true;
             }
-            return activeCampaignNames.has(promoter.campaignName);
+            return activeCampaignNames.has(name);
         });
     }, [allPromoters, selectedCampaign, activeCampaignNames]);
 
@@ -563,9 +566,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err) {
-            // FIX: Narrowing 'err' from unknown to safely extract error message as a string and avoid 'unknown' assignment error.
-            const message = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
+        } catch (err: any) {
+            // FIX: Safely access error message by casting to any to prevent unknown argument error
+            const message = (err as any)?.message || String(err || 'Erro desconhecido');
             setLookupError(message);
         } finally {
             setIsLookingUp(false);
@@ -578,7 +581,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setSearchQuery(String(promoter.email || ''));
         if (isSuperAdmin) {
             setSelectedOrg(String(promoter.organizationId));
-            setSelectedState(String(promoter.state));
+            // FIX: Ensure promoter.state is cast to string to avoid 'unknown' issues in setter
+            setSelectedState(String(promoter.state || ''));
             setSelectedCampaign(String(promoter.campaignName || 'all'));
         }
         setIsLookupModalOpen(false);
