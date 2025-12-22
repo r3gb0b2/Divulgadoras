@@ -165,24 +165,28 @@ const AdminPushCampaignPage: React.FC = () => {
 
                     {showBuildFix && (
                         <div className="space-y-4 animate-fadeIn">
+                            <div className="bg-red-900/40 border border-red-500/50 p-4 rounded-xl text-sm text-red-200">
+                                <p className="font-bold mb-1">⚠️ RESOLVENDO 'No Podfile found' e 'ERESOLVE':</p>
+                                <p>O erro ocorreu porque a instalação falhou na metade. Precisamos forçar a versão 6 do Capacitor para compatibilidade com os plugins.</p>
+                            </div>
+
                             <p className="text-sm text-gray-300 leading-relaxed">
-                                Este erro ocorre quando o Capacitor falha ao localizar os cabeçalhos internos do Cordova. 
-                                Siga estes passos <strong>exatamente</strong> na ordem abaixo:
+                                Execute estes passos na ordem, sempre na pasta RAIZ do projeto:
                             </p>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div className="bg-black/40 p-4 rounded-xl border border-gray-700 font-mono text-[11px]">
-                                    <p className="text-indigo-400 mb-2 font-bold">1. Resetar Dependências e IOS:</p>
-                                    <p className="text-gray-400 mb-1"># Execute na raiz do projeto:</p>
+                                    <p className="text-indigo-400 mb-2 font-bold">1. Limpeza e Instalação Forçada (Versão 6):</p>
+                                    <p className="text-gray-400 mb-1"># Copie e cole todo este comando único:</p>
                                     <code className="text-green-400 block break-all">
-                                        {"rm -rf ios node_modules package-lock.json && npm install && npx cap add ios && npx cap sync ios"}
+                                        {"rm -rf ios node_modules package-lock.json && npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/ios@6 --legacy-peer-deps && npm install --legacy-peer-deps && npx cap add ios && npx cap sync ios"}
                                     </code>
                                 </div>
                                 <div className="bg-black/40 p-4 rounded-xl border border-gray-700 font-mono text-[11px]">
-                                    <p className="text-indigo-400 mb-2 font-bold">2. Reinstalar Pods Nativo:</p>
-                                    <p className="text-gray-400 mb-1"># Execute estes comandos:</p>
+                                    <p className="text-indigo-400 mb-2 font-bold">2. Instalação Nativa (Agora o Podfile existirá):</p>
+                                    <p className="text-gray-400 mb-1"># Execute após o comando acima terminar com sucesso:</p>
                                     <code className="text-green-400 block">
-                                        {"cd ios/App && pod deintegrate && pod install && cd ../.."}
+                                        {"cd ios/App && pod install && cd ../.."}
                                     </code>
                                 </div>
                             </div>
@@ -192,8 +196,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                 <div>
                                     <p className="text-sm text-red-200 font-bold uppercase">Atenção no Xcode:</p>
                                     <p className="text-sm text-gray-300">
-                                        Antes de rodar novamente no Xcode, vá em <strong>{"Product \u2192 Clean Build Folder"}</strong>. 
-                                        Isso é obrigatório para limpar referências antigas do header que não existe mais.
+                                        Se o erro persistir, no Xcode use <strong>{"Product \u2192 Clean Build Folder"}</strong>. Isso limpa o cache de arquivos deletados.
                                     </p>
                                 </div>
                             </div>
@@ -203,6 +206,7 @@ const AdminPushCampaignPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* ... restante do componente original ... */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">

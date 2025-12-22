@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -548,7 +549,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // FIX: Refined error handling with type narrowing to resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 508.
+    // FIX: Refined parameter type to 'unknown' and added better error handling for catch block to resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 509.
     const handleLookupPromoter = async (emailToSearch?: unknown) => {
         let emailArg: string = '';
         
