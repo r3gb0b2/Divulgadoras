@@ -1,5 +1,4 @@
-
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -15,11 +14,10 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-// Fixed inheritance by using Component directly from react
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fixed inheritance and property access issues by using explicit React namespace and proper standard implementation.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    // Fixed: Property 'state' now correctly belongs to Component
     this.state = {
       hasError: false,
       error: null,
@@ -38,7 +36,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // Fixed: Property 'setState' now correctly belongs to Component
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -46,7 +43,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
-    // Fixed: Property 'state' now correctly belongs to Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -75,7 +71,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: Property 'props' now correctly belongs to Component
     return this.props.children;
   }
 }

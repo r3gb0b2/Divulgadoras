@@ -17,25 +17,28 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
             await FCM.setAutoInit({ enabled: true });
         }
 
-        // Tenta pegar o token FCM
+        // Verifica se o plugin FCM está disponível antes de chamar
+        if (!FCM) {
+            return { success: false, error: "Plugin FCM (Native) não encontrado no bundle." };
+        }
+
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
         if (fcmToken && fcmToken.length > 32) {
             const saved = await savePushToken(promoterId, fcmToken);
             if (saved) return { success: true };
-            return { success: false, error: "Falha ao gravar no Firestore (Function error)" };
+            return { success: false, error: "Token capturado, mas falhou ao gravar no Firestore (Cloud Function)." };
         }
-        return { success: false, error: "Token FCM retornado é inválido ou vazio" };
+        return { success: false, error: "Token retornado pelo Firebase é inválido ou nulo." };
     } catch (error: any) {
         console.error('Push Sync Error:', error.message);
-        return { success: false, error: error.message };
+        return { success: false, error: error.message || "Erro desconhecido na sincronização FCM." };
     }
 };
 
 /**
- * Inicializa as notificações push e retorna o status final do processo.
- * Agora aceita um callback que recebe a mensagem de erro detalhada.
+ * Inicializa as notificações push e reporta status/erros detalhados.
  */
 export const initPushNotifications = async (
     promoterId: string, 
@@ -55,17 +58,19 @@ export const initPushNotifications = async (
         }
 
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão de notificação negada no sistema.");
+            onStatusChange?.('denied', "Permissão negada pelo usuário nas configurações do celular.");
             return 'denied';
         }
 
         onStatusChange?.('granted');
         await PushNotifications.removeAllListeners();
 
-        // Listener de Registro do Sistema
+        // 1. Listener de Sucesso no Registro Nativo (APNs/GCM)
         PushNotifications.addListener('registration', async (token: Token) => {
+            console.log('Push: Registro nativo OK. Sincronizando com Firebase...');
             onStatusChange?.('syncing');
-            // Aguarda o handshake do Firebase
+            
+            // Delay para garantir que o SDK do Firebase processou o token nativo
             setTimeout(async () => {
                 const result = await syncTokenWithServer(promoterId);
                 if (result.success) {
@@ -73,19 +78,20 @@ export const initPushNotifications = async (
                 } else {
                     onStatusChange?.('error', result.error);
                 }
-            }, 2000);
+            }, 2500);
         });
 
-        // Erro no registro nativo (APNs/GCM)
+        // 2. Erro no registro nativo
         PushNotifications.addListener('registrationError', (error: any) => {
             const msg = error.error || error.message || JSON.stringify(error);
             console.error('Push Reg Error:', msg);
             onStatusChange?.('error', `Erro Nativo: ${msg}`);
         });
 
+        // 3. Solicita registro ao SO
         await PushNotifications.register();
         
-        // Tentativa de sincronização imediata
+        // Tentativa de sincronização imediata caso já esteja registrado de sessões anteriores
         onStatusChange?.('syncing');
         const syncResult = await syncTokenWithServer(promoterId);
         if (syncResult.success) {
@@ -96,7 +102,7 @@ export const initPushNotifications = async (
         return 'granted';
     } catch (error: any) {
         console.error("Push Crash:", error.message);
-        onStatusChange?.('error', error.message);
+        onStatusChange?.('error', `Falha Crítica: ${error.message}`);
         return 'error';
     }
 };

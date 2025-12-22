@@ -279,7 +279,10 @@ const PostCheck: React.FC = () => {
             const timer = setTimeout(() => {
                 initPushNotifications(promoter.id, (status, detail) => {
                     setPushStatus(status);
-                    if (detail) setPushErrorDetail(detail);
+                    if (detail) {
+                        setPushErrorDetail(detail);
+                        console.error("Push Diagnostic Error:", detail);
+                    }
                 }).catch(err => {
                     console.error("Push Init Fail:", err.message);
                     setPushStatus('error');
@@ -355,12 +358,12 @@ const PostCheck: React.FC = () => {
         };
 
         const labels = {
-            requesting: 'Solicitando Notificações...',
-            granted: 'Permissão ok, vinculando...',
-            denied: 'Notificações Desativadas',
-            syncing: 'Vinculando dispositivo...',
-            success: 'Alertas Ativados!',
-            error: pushErrorDetail || 'Erro ao ativar alertas push',
+            requesting: 'Iniciando Notificações...',
+            granted: 'Aguardando Permissão...',
+            denied: 'Permissão de Alerta Negada',
+            syncing: 'Vinculando Aparelho...',
+            success: 'Alertas Push Ativados!',
+            error: 'Erro no Alerta Push',
         };
 
         const icons = {
@@ -375,11 +378,18 @@ const PostCheck: React.FC = () => {
         const currentStyle = styles[pushStatus as keyof typeof styles] || styles.error;
 
         return (
-            <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-2 rounded-full border text-[9px] font-black uppercase tracking-widest ${currentStyle}`}>
-                {icons[pushStatus as keyof typeof icons]}
-                <span className="max-w-[150px] truncate" title={labels[pushStatus as keyof typeof labels]}>
-                    {labels[pushStatus as keyof typeof labels]}
-                </span>
+            <div className="flex flex-col gap-1 items-start mt-2">
+                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${currentStyle}`}>
+                    {icons[pushStatus as keyof typeof icons]}
+                    <span>{labels[pushStatus as keyof typeof labels]}</span>
+                </div>
+                {pushStatus === 'error' && pushErrorDetail && (
+                    <div className="bg-red-900/30 border border-red-900/50 p-2 rounded-lg max-w-[250px]">
+                        <p className="text-[8px] font-mono text-red-300 break-words italic">
+                            Erro Técnico: {pushErrorDetail}
+                        </p>
+                    </div>
+                )}
             </div>
         );
     };
@@ -415,8 +425,8 @@ const PostCheck: React.FC = () => {
                         >
                             <ChartBarIcon className="w-3 h-3" /> VER MEU STATUS
                         </button>
-                        {renderPushStatus()}
                     </div>
+                    {renderPushStatus()}
                 </div>
                 <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors">
                     <LogoutIcon className="w-6 h-6" />

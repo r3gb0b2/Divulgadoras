@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -563,8 +562,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // Fixed: Robustly handle unknown error type from modern TypeScript configuration
+        } catch (err: any) {
+            // Fixed: Use 'any' type in catch block to avoid unknown type restriction errors when setting error messages.
             const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
