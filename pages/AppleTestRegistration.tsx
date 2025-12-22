@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { registerForAppleTest, checkAppleEmailExists } from '../services/testRegistrationService';
-import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon, AlertTriangleIcon, CheckCircleIcon } from '../components/Icons';
-import { useNavigate } from 'react-router-dom';
+import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon, AlertTriangleIcon, CheckCircleIcon, SparklesIcon } from '../components/Icons';
+import { useNavigate, Link } from 'react-router-dom';
 
 const AppleTestRegistration: React.FC = () => {
     const navigate = useNavigate();
@@ -51,7 +51,10 @@ const AppleTestRegistration: React.FC = () => {
                     <div className="mt-6 p-4 bg-gray-800 rounded-2xl text-xs text-left text-gray-400 border border-gray-700">
                         <strong>Próximo passo:</strong> Quando o e-mail da Apple chegar, você precisará baixar o app <strong>TestFlight</strong> na App Store para então instalar o nosso aplicativo.
                     </div>
-                    <button onClick={() => navigate('/')} className="mt-8 w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all">Voltar ao Início</button>
+                    <Link to="/apple-test/tutorial" className="mt-6 inline-block w-full py-4 bg-gray-700 text-white font-bold rounded-2xl hover:bg-gray-600 transition-all text-sm uppercase tracking-widest">
+                        Ver tutorial de instalação
+                    </Link>
+                    <button onClick={() => navigate('/')} className="mt-4 w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all text-sm uppercase tracking-widest">Voltar ao Início</button>
                 </div>
             </div>
         );
@@ -66,13 +69,27 @@ const AppleTestRegistration: React.FC = () => {
                     <p className="text-gray-400 text-xs mt-2 font-bold uppercase tracking-widest">Exclusivo para iPhone</p>
                 </div>
 
+                {/* LINK PARA TUTORIAL */}
+                <Link 
+                    to="/apple-test/tutorial" 
+                    className="mb-8 block p-4 bg-primary/10 border border-primary/20 rounded-2xl group hover:bg-primary/20 transition-all"
+                >
+                    <div className="flex items-center gap-3">
+                        <SparklesIcon className="w-6 h-6 text-primary animate-pulse" />
+                        <div className="text-left">
+                            <p className="text-white text-[11px] font-black uppercase tracking-tight">Já recebeu o convite?</p>
+                            <p className="text-primary text-[10px] font-bold uppercase tracking-widest mt-0.5 group-hover:underline">Veja como instalar &rarr;</p>
+                        </div>
+                    </div>
+                </Link>
+
                 {/* ALERTA CRÍTICO SOBRE ICLOUD */}
-                <div className="mb-8 p-4 bg-blue-900/30 border border-blue-500/50 rounded-2xl flex gap-3 items-start animate-pulse">
+                <div className="mb-8 p-4 bg-blue-900/30 border border-blue-500/50 rounded-2xl flex gap-3 items-start">
                     <AlertTriangleIcon className="w-10 h-10 text-blue-400 flex-shrink-0" />
                     <div className="text-left">
                         <p className="text-blue-200 text-[11px] font-black uppercase tracking-tight">Atenção Obrigatória</p>
                         <p className="text-blue-100 text-[10px] leading-tight mt-1">
-                            Você <strong>DEVE</strong> usar o e-mail que está logado no seu iPhone (Ajustes &gt; Seu Nome). Se usar outro e-mail, você não conseguirá baixar o app.
+                            Você <strong>DEVE</strong> usar o e-mail que está logado no seu iPhone (Ajustes &gt; Seu Nome).
                         </p>
                     </div>
                 </div>
