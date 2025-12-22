@@ -227,8 +227,8 @@ const PostCheck: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     
-    // Referência para evitar múltiplas inicializações de push
-    const isPushInitialized = useRef<string | null>(null);
+    // Referência para evitar loop infinito de ativação do push
+    const pushInitializedRef = useRef<string | null>(null);
 
     // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -269,25 +269,29 @@ const PostCheck: React.FC = () => {
         }
     }, [location.search, performSearch]);
 
-    // ATIVAÇÃO DO PUSH QUANDO O PROMOTER É CARREGADO
+    // INICIALIZAÇÃO DO PUSH: Ocorre quando o promoter é carregado
     useEffect(() => {
-        // Só inicializa se tiver promoter e se já não inicializou para este ID nesta sessão de componente
-        if (promoter?.id && isPushInitialized.current !== promoter.id) {
-            console.log("Push: Iniciando processo para divulgadora:", promoter.id);
-            isPushInitialized.current = promoter.id;
+        if (promoter?.id && pushInitializedRef.current !== promoter.id) {
+            pushInitializedRef.current = promoter.id;
+            console.log("Push: Iniciando processo de registro para:", promoter.id);
             
-            const timer = setTimeout(() => {
-                initPushNotifications(promoter.id).catch(e => console.warn("Push init error:", e.message));
+            // Pequeno delay para garantir que plugins Capacitor estão prontos após o carregamento da página
+            const pushTimer = setTimeout(() => {
+                initPushNotifications(promoter.id).catch(e => {
+                    console.error("Push: Falha silenciosa na inicialização:", e.message);
+                });
             }, 2000);
-            
-            return () => clearTimeout(timer);
+
+            return () => {
+                clearTimeout(pushTimer);
+            };
         }
     }, [promoter?.id]);
 
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
-        isPushInitialized.current = null;
+        pushInitializedRef.current = null;
         clearPushListeners();
     };
 

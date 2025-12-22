@@ -21,13 +21,20 @@ const toMillisSafe = (timestamp: any): number => {
 export const savePushToken = async (promoterId: string, token: string): Promise<boolean> => {
     try {
         if (!promoterId || !token) return false;
+        
+        const cleanToken = String(token).trim();
+        if (cleanToken.length < 32) {
+            console.warn("Push: Token ignorado por ser muito curto:", cleanToken);
+            return false;
+        }
+
         const savePromoterToken = functions.httpsCallable('savePromoterToken');
-        const result = await savePromoterToken({ promoterId, token });
+        const result = await savePromoterToken({ promoterId, token: cleanToken });
         const data = result.data as { success: boolean };
         return data.success;
     } catch (error: any) {
-        console.error("Push Service: Erro ao invocar savePromoterToken:", error);
-        throw error;
+        console.error("Push Service Error: Falha ao salvar token via Function:", error);
+        return false;
     }
 };
 
