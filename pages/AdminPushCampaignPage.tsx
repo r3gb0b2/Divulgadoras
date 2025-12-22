@@ -6,7 +6,8 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, CheckCircleIcon, CogIcon, XIcon, RefreshIcon } from '../components/Icons';
+// FIX: Add SearchIcon to the imports
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, CheckCircleIcon, CogIcon, XIcon, RefreshIcon, SearchIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -29,7 +30,7 @@ const AdminPushCampaignPage: React.FC = () => {
     const [isDeletingToken, setIsDeletingToken] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showBuildFix, setShowBuildFix] = useState(true);
+    const [showBuildFix, setShowBuildFix] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -54,6 +55,7 @@ const AdminPushCampaignPage: React.FC = () => {
                 selectedCampaign: 'all',
                 status: 'approved',
             });
+            // Filtra apenas quem tem token
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
             setSelectedPromoterIds(new Set()); 
@@ -70,7 +72,16 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const filteredPromoters = useMemo(() => {
         return promoters.filter(p => {
-            const pForm = (p.pushDiagnostics?.platform || 'ios').toLowerCase();
+            // Lógica de fallback: Se não tiver plataforma salva, tenta deduzir pelo tamanho do token
+            // Tokens APNs (iOS puro) costumam ter 64 chars hex. Tokens FCM são longos.
+            let pForm = (p.pushDiagnostics?.platform || '').toLowerCase();
+            
+            if (!pForm) {
+                // Fallback: Se não sabemos a plataforma mas o token existe,
+                // mostramos na aba iOS por padrão (ou baseado no token) para não sumir da lista
+                pForm = 'ios'; 
+            }
+
             const matchesPlatform = pForm === activePlatformTab;
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesPlatform && matchesSearch;
@@ -98,20 +109,6 @@ const AdminPushCampaignPage: React.FC = () => {
         }
     };
 
-    const handleCleanInvalid = async () => {
-        if (!window.confirm(`Deseja apagar os ${invalidTokens.length} tokens curtos (APNs)?`)) return;
-        setIsDeletingToken('clean');
-        try {
-            await Promise.all(invalidTokens.map(p => deletePushToken(p.id)));
-            setPromoters(prev => prev.filter(p => (p.fcmToken?.length || 0) > 64));
-            alert("Limpeza concluída!");
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsDeletingToken(null);
-        }
-    };
-
     const handleSend = async () => {
         if (!title || !body || selectedPromoterIds.size === 0) {
             setError("Preencha todos os campos e selecione os destinos.");
@@ -128,6 +125,7 @@ const AdminPushCampaignPage: React.FC = () => {
             if (res.success) {
                 setResult(res.message); setTitle(''); setBody('');
                 setSelectedPromoterIds(new Set());
+                fetchPromoters(); // Refresh
             } else {
                 setError(res.message);
             }
@@ -150,70 +148,30 @@ const AdminPushCampaignPage: React.FC = () => {
                 </button>
             </div>
 
-            {/* GUIA DE REPARO PARA ERRO DE COMPILAÇÃO IOS */}
-            <div className="mb-8">
-                <div className="bg-indigo-900/20 border-2 border-indigo-500/50 p-6 rounded-2xl shadow-xl">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-black text-indigo-400 flex items-center gap-2 uppercase tracking-wider">
-                            <CogIcon className="w-6 h-6 animate-spin-slow" />
-                            Correção do Erro 'Cordova/CDVAvailabilityDeprecated.h'
-                        </h2>
-                        <button onClick={() => setShowBuildFix(!showBuildFix)} className="text-gray-400 hover:text-white">
-                            {showBuildFix ? <XIcon className="w-5 h-5" /> : <RefreshIcon className="w-5 h-5" />}
-                        </button>
-                    </div>
-
-                    {showBuildFix && (
-                        <div className="space-y-4 animate-fadeIn">
-                            <div className="bg-red-900/40 border border-red-500/50 p-4 rounded-xl text-sm text-red-200">
-                                <p className="font-bold mb-1">⚠️ RESOLVENDO 'No Podfile found' e 'ERESOLVE':</p>
-                                <p>O erro ocorreu porque a instalação falhou na metade. Precisamos forçar a versão 6 do Capacitor para compatibilidade com os plugins.</p>
-                            </div>
-
-                            <p className="text-sm text-gray-300 leading-relaxed">
-                                Execute estes passos na ordem, sempre na pasta RAIZ do projeto:
-                            </p>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="bg-black/40 p-4 rounded-xl border border-gray-700 font-mono text-[11px]">
-                                    <p className="text-indigo-400 mb-2 font-bold">1. Limpeza e Instalação Forçada (Versão 6):</p>
-                                    <p className="text-gray-400 mb-1"># Copie e cole todo este comando único:</p>
-                                    <code className="text-green-400 block break-all">
-                                        {"rm -rf ios node_modules package-lock.json && npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/ios@6 --legacy-peer-deps && npm install --legacy-peer-deps && npx cap add ios && npx cap sync ios"}
-                                    </code>
-                                </div>
-                                <div className="bg-black/40 p-4 rounded-xl border border-gray-700 font-mono text-[11px]">
-                                    <p className="text-indigo-400 mb-2 font-bold">2. Instalação Nativa (Agora o Podfile existirá):</p>
-                                    <p className="text-gray-400 mb-1"># Execute após o comando acima terminar com sucesso:</p>
-                                    <code className="text-green-400 block">
-                                        {"cd ios/App && pod install && cd ../.."}
-                                    </code>
-                                </div>
-                            </div>
-
-                            <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-xl flex items-start gap-3">
-                                <AlertTriangleIcon className="w-6 h-6 text-red-500 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm text-red-200 font-bold uppercase">Atenção no Xcode:</p>
-                                    <p className="text-sm text-gray-300">
-                                        Se o erro persistir, no Xcode use <strong>{"Product \u2192 Clean Build Folder"}</strong>. Isso limpa o cache de arquivos deletados.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* ... restante do componente original ... */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
                         <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">Dispositivos Vinculados</h2>
+                            <div>
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2">Dispositivos Vinculados</h2>
+                                <p className="text-xs text-gray-500">Apenas divulgadoras com App instalado aparecem aqui.</p>
+                            </div>
                             <div className="flex bg-dark p-1 rounded-lg border border-gray-700">
                                 <button onClick={() => setActivePlatformTab('ios')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${activePlatformTab === 'ios' ? 'bg-primary text-white' : 'text-gray-400'}`}>iOS</button>
                                 <button onClick={() => setActivePlatformTab('android')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${activePlatformTab === 'android' ? 'bg-green-600 text-white' : 'text-gray-400'}`}>Android</button>
+                            </div>
+                        </div>
+
+                        <div className="mb-4">
+                            <div className="relative">
+                                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Filtrar por nome..." 
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full bg-dark border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white"
+                                />
                             </div>
                         </div>
 
@@ -229,18 +187,20 @@ const AdminPushCampaignPage: React.FC = () => {
                                             }} className="rounded border-gray-600 text-primary" />
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Divulgadora</th>
-                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Token</th>
+                                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase">Status Token</th>
                                         <th className="px-4 py-3 text-right text-xs font-bold text-gray-400 uppercase">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-700 bg-gray-800/20">
                                     {isLoadingData ? (
-                                        <tr><td colSpan={4} className="text-center py-8">Buscando...</td></tr>
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Buscando dispositivos...</td></tr>
+                                    ) : filteredPromoters.length === 0 ? (
+                                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">Nenhum dispositivo encontrado nesta aba.</td></tr>
                                     ) : (
                                         filteredPromoters.map(p => {
-                                            const isAPNs = (p.fcmToken?.length || 0) <= 64;
+                                            const isFCM = (p.fcmToken?.length || 0) > 64;
                                             return (
-                                                <tr key={p.id} className={`hover:bg-gray-700/30 ${isAPNs ? 'bg-red-900/10' : ''}`}>
+                                                <tr key={p.id} className="hover:bg-gray-700/30">
                                                     <td className="px-4 py-3">
                                                         <input type="checkbox" checked={selectedPromoterIds.has(p.id)} onChange={() => {
                                                             const n = new Set(selectedPromoterIds);
@@ -253,15 +213,14 @@ const AdminPushCampaignPage: React.FC = () => {
                                                         <p className="text-[10px] text-gray-500 uppercase">{p.campaignName || 'Geral'}</p>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        {isAPNs ? (
-                                                            <span className="text-[9px] bg-red-600 text-white px-2 py-0.5 rounded-full font-black">NATIVO (64)</span>
+                                                        {isFCM ? (
+                                                            <span className="text-[9px] bg-green-600/20 text-green-400 px-2 py-0.5 rounded-full font-black border border-green-500/30">VÍNCULO OK</span>
                                                         ) : (
-                                                            <span className="text-[9px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black">FCM OK</span>
+                                                            <span className="text-[9px] bg-yellow-600/20 text-yellow-400 px-2 py-0.5 rounded-full font-black border border-yellow-500/30">LEGACY</span>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex justify-end gap-2">
-                                                            <button onClick={() => handleCopyToken(p.fcmToken || '')} className="p-2 bg-gray-700 text-gray-300 rounded hover:text-white"><DocumentDuplicateIcon className="w-4 h-4" /></button>
                                                             <button onClick={() => handleDeleteToken(p.id)} disabled={isDeletingToken === p.id} className="p-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50"><TrashIcon className="w-4 h-4" /></button>
                                                         </div>
                                                     </td>
@@ -279,17 +238,27 @@ const AdminPushCampaignPage: React.FC = () => {
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
                         <h2 className="text-xl font-bold text-white mb-4">Nova Notificação</h2>
                         <div className="space-y-4">
-                            <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold" />
-                            <textarea placeholder="Mensagem..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm" />
-                            <input type="text" placeholder="URL (Ex: /#/posts)" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Título do Alerta</label>
+                                <input type="text" placeholder="Ex: Novo Post Disponível!" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white font-bold focus:ring-1 focus:ring-primary outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Mensagem Curta</label>
+                                <textarea placeholder="Clique para ver os detalhes da nova tarefa..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-1 focus:ring-primary outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Link de Destino</label>
+                                <input type="text" placeholder="/#/posts" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                            </div>
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-gray-700">
-                            {error && <div className="p-3 bg-red-900/30 text-red-300 text-xs font-bold mb-4">{error}</div>}
-                            {result && <div className="p-3 bg-green-900/30 text-green-400 text-xs text-center font-bold mb-4">{result}</div>}
-                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg disabled:opacity-30">
-                                {isSending ? 'ENVIANDO...' : 'DISPARAR PUSH'}
+                            {error && <div className="p-3 bg-red-900/30 text-red-300 text-xs font-bold mb-4 rounded-lg border border-red-800/50">{error}</div>}
+                            {result && <div className="p-3 bg-green-900/30 text-green-400 text-xs text-center font-bold mb-4 rounded-lg border border-green-800/50">{result}</div>}
+                            <button onClick={handleSend} disabled={isSending || selectedPromoterIds.size === 0} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-black text-lg shadow-xl shadow-primary/20 disabled:opacity-30 transition-all transform active:scale-95">
+                                {isSending ? 'ENVIANDO...' : `DISPARAR PARA ${selectedPromoterIds.size}`}
                             </button>
+                            <p className="text-[9px] text-gray-500 text-center mt-3 uppercase tracking-widest">O envio pode levar alguns segundos</p>
                         </div>
                     </div>
                 </div>

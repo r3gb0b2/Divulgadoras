@@ -13,7 +13,6 @@ const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
 // --- Gemini API Setup ---
-// Usando process.env.API_KEY conforme as diretrizes
 const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Brevo Configuration ---
@@ -86,7 +85,6 @@ exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").http
             actionTakenByEmail: context.auth.token.email
         });
 
-        // Remove de tarefas ativas (opcional, dependendo da regra de negócio)
         const assignments = await db.collection('postAssignments')
             .where('promoterId', '==', promoterId)
             .where('status', '==', 'pending')
@@ -103,14 +101,24 @@ exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").http
 });
 
 exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId, token } = data;
+    const { promoterId, token, metadata } = data;
     if (!promoterId || !token) throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
 
     try {
-        await db.collection('promoters').doc(promoterId).update({
+        const updateData = {
             fcmToken: token,
             lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
-        });
+        };
+
+        // Se houver metadados (plataforma), salva para facilitar o filtro no Admin
+        if (metadata) {
+            updateData.pushDiagnostics = {
+                ...metadata,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+        }
+
+        await db.collection('promoters').doc(promoterId).update(updateData);
         return { success: true };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);

@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -357,10 +358,10 @@ export const updateGroupRemovalRequest = async (id: string, data: Partial<GroupR
 /**
  * Salva o token de push no Firestore.
  */
-export const savePushToken = async (promoterId: string, token: string): Promise<boolean> => {
+export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
     try {
         const saveFunc = functions.httpsCallable('savePromoterToken');
-        const result = await saveFunc({ promoterId, token });
+        const result = await saveFunc({ promoterId, token, metadata });
         return (result.data as any).success;
     } catch (error) {
         console.error("Error saving push token:", error);
@@ -373,6 +374,7 @@ export const savePushToken = async (promoterId: string, token: string): Promise<
  */
 export const deletePushToken = async (promoterId: string): Promise<void> => {
     try {
+        // FIX: Use promoterId instead of undefined variable 'id'
         await firestore.collection('promoters').doc(promoterId).update({
             fcmToken: firebase.firestore.FieldValue.delete(),
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
