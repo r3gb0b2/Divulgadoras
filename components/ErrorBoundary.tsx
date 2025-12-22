@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -14,7 +13,7 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  */
 // FIX: Inherit props and state correctly from standard Component class to resolve property access errors.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,

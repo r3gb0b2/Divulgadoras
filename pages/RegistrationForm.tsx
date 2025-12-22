@@ -27,25 +27,41 @@ const RegistrationForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [dataFound, setDataFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Função para limpar links de redes sociais
+  const sanitizeHandle = (input: string) => {
+    return input
+      .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
+      .replace(/https?:\/\/(www\.)?tiktok\.com\/@?/i, '')
+      .replace(/@/g, '')
+      .split('/')[0] // remove parâmetros após a barra
+      .split('?')[0] // remove query strings
+      .trim();
+  };
 
   // Auto-preenchimento inteligente baseado em cadastros anteriores
   const handleBlurEmail = async () => {
-    const email = formData.email.trim();
+    const email = formData.email.trim().toLowerCase();
     if (!email || !email.includes('@')) return;
     
     setIsCheckingEmail(true);
+    setDataFound(false);
     try {
       const profile = await getLatestPromoterProfileByEmail(email);
       if (profile) {
         setFormData(prev => ({
           ...prev,
-          name: profile.name,
-          whatsapp: profile.whatsapp,
-          instagram: profile.instagram,
-          tiktok: profile.tiktok || '',
-          dateOfBirth: profile.dateOfBirth
+          name: profile.name || prev.name,
+          whatsapp: profile.whatsapp || prev.whatsapp,
+          instagram: profile.instagram || prev.instagram,
+          tiktok: profile.tiktok || prev.tiktok,
+          dateOfBirth: profile.dateOfBirth || prev.dateOfBirth
         }));
+        setDataFound(true);
+        // Feedback visual rápido de que os dados foram recuperados
+        setTimeout(() => setDataFound(false), 3000);
       }
     } catch (e) {
       console.warn("Sem histórico para este e-mail.");
@@ -57,7 +73,7 @@ const RegistrationForm: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
-      const totalPhotos = [...photos, ...filesArray].slice(0, 4);
+      const totalPhotos = [...photos, ...filesArray].slice(0, 8); // Limite de 8
       setPhotos(totalPhotos);
       setPreviews(totalPhotos.map(file => URL.createObjectURL(file as Blob)));
       setError(null);
@@ -73,9 +89,12 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organizationId || !state) return;
+    if (!organizationId || !state) {
+      setError("Erro de configuração da página. O ID da organização ou Estado está ausente.");
+      return;
+    }
 
-    if (formData.name.trim().split(' ').length < 2) {
+    if (formData.name.trim().split(/\s+/).length < 2) {
       setError("Por favor, insira seu nome completo (Nome e Sobrenome).");
       return;
     }
@@ -90,13 +109,19 @@ const RegistrationForm: React.FC = () => {
     setError(null);
 
     try {
-      await addPromoter({
+      // Sanitização final das redes sociais antes de enviar
+      const finalData = {
         ...formData,
+        email: formData.email.toLowerCase().trim(),
+        instagram: sanitizeHandle(formData.instagram),
+        tiktok: sanitizeHandle(formData.tiktok),
         photos,
         state,
         campaignName: campaignName ? decodeURIComponent(campaignName) : undefined,
-        organizationId
-      });
+        organizationId // Crucial para aparecer na lista do admin certo
+      };
+
+      await addPromoter(finalData);
       
       localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
       setIsSuccess(true);
@@ -135,7 +160,7 @@ const RegistrationForm: React.FC = () => {
     <div className="max-w-3xl mx-auto py-8 px-4">
       <button 
         onClick={() => navigate(-1)} 
-        className="group flex items-center gap-2 text-gray-500 hover:text-primary transition-all mb-8 font-black text-xs uppercase tracking-widest"
+        className="group flex items-center gap-2 text-gray-500 hover:text-white transition-all mb-8 font-black text-xs uppercase tracking-widest"
       >
         <ArrowLeftIcon className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 
         <span>Voltar</span>
@@ -175,7 +200,10 @@ const RegistrationForm: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">E-mail para contato</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex justify-between">
+                  <span>E-mail para contato</span>
+                  {dataFound && <span className="text-green-400 animate-pulse">Dados recuperados!</span>}
+                </label>
                 <div className="relative group">
                   <MailIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                   <input 
@@ -247,30 +275,32 @@ const RegistrationForm: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram (apenas o usuário)</label>
                 <div className="relative group">
                   <InstagramIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                   <input 
                     type="text" 
-                    placeholder="@usuario" 
+                    placeholder="usuario_exemplo" 
                     className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all font-medium"
                     value={formData.instagram}
                     onChange={e => setFormData({...formData, instagram: e.target.value})}
+                    onBlur={e => setFormData({...formData, instagram: sanitizeHandle(e.target.value)})}
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">TikTok (Opcional)</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">TikTok (apenas o usuário)</label>
                 <div className="relative group">
                   <div className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors flex items-center justify-center font-black text-[10px]">TT</div>
                   <input 
                     type="text" 
-                    placeholder="@usuario" 
+                    placeholder="usuario_tiktok" 
                     className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all font-medium"
                     value={formData.tiktok}
                     onChange={e => setFormData({...formData, tiktok: e.target.value})}
+                    onBlur={e => setFormData({...formData, tiktok: sanitizeHandle(e.target.value)})}
                   />
                 </div>
               </div>
@@ -284,11 +314,11 @@ const RegistrationForm: React.FC = () => {
                 <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">03</div>
                 <h2 className="text-xl font-black text-white uppercase tracking-tight">Perfil Visual</h2>
               </div>
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{photos.length}/4 Fotos</span>
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{photos.length}/8 Fotos</span>
             </div>
             
             <p className="text-xs text-gray-500 leading-relaxed max-w-lg">
-                Envie fotos nítidas e com boa iluminação. <strong className="text-primary">Indispensável:</strong> uma foto de rosto bem visível e uma de corpo inteiro.
+                Envie fotos nítidas e com boa iluminação. <strong className="text-primary">Indispensável:</strong> uma foto de rosto bem visível e uma de corpo inteiro. Você pode enviar até 8 fotos.
             </p>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
@@ -306,7 +336,7 @@ const RegistrationForm: React.FC = () => {
                 </div>
               ))}
               
-              {photos.length < 4 && (
+              {photos.length < 8 && (
                 <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-[2rem] bg-white/5 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <CameraIcon className="w-10 h-10 text-gray-600 group-hover:text-primary mb-3 transition-colors transform group-hover:-translate-y-1" />

@@ -23,6 +23,15 @@ const RegisterF1: React.FC = () => {
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
 
+    const sanitizeHandle = (input: string) => {
+      return input
+        .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
+        .replace(/https?:\/\/(www\.)?tiktok\.com\/@?/i, '')
+        .replace(/@/g, '')
+        .split('/')[0]
+        .trim();
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
@@ -30,8 +39,9 @@ const RegisterF1: React.FC = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files) as File[];
-            setPhotos(files);
-            setPreviews(files.map(f => URL.createObjectURL(f as Blob)));
+            const limitedFiles = files.slice(0, 8);
+            setPhotos(limitedFiles);
+            setPreviews(limitedFiles.map(f => URL.createObjectURL(f as Blob)));
         }
     };
 
@@ -48,13 +58,13 @@ const RegisterF1: React.FC = () => {
         try {
             await addPromoter({
                 ...formData,
+                instagram: sanitizeHandle(formData.instagram),
                 photos,
                 tiktok: '',
                 organizationId: 'stingressos-f1',
                 campaignName: 'Divulgadora F1'
             });
 
-            // PERSISTE O E-MAIL APÓS O CADASTRO
             localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
 
             setSuccess(true);
@@ -99,7 +109,7 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nome Completo</label>
                             <div className="relative">
                                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input name="name" required onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="Como no RG" />
+                                <input name="name" required value={formData.name} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="Como no RG" />
                             </div>
                         </div>
 
@@ -107,7 +117,7 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">E-mail</label>
                             <div className="relative">
                                 <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input type="email" name="email" required onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="exemplo@gmail.com" />
+                                <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="exemplo@gmail.com" />
                             </div>
                         </div>
 
@@ -115,7 +125,7 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">WhatsApp</label>
                             <div className="relative">
                                 <PhoneIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input type="tel" name="whatsapp" required onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="(00) 00000-0000" />
+                                <input type="tel" name="whatsapp" required value={formData.whatsapp} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="(00) 00000-0000" />
                             </div>
                         </div>
 
@@ -123,7 +133,7 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Instagram</label>
                             <div className="relative">
                                 <InstagramIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input name="instagram" required onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="@seuusuario" />
+                                <input name="instagram" required value={formData.instagram} onChange={handleChange} onBlur={e => setFormData({...formData, instagram: sanitizeHandle(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="@seuusuario" />
                             </div>
                         </div>
 
@@ -131,7 +141,7 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Nascimento</label>
                             <div className="relative">
                                 <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input type="date" name="dateOfBirth" required onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" />
+                                <input type="date" name="dateOfBirth" required value={formData.dateOfBirth} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" />
                             </div>
                         </div>
 
@@ -144,7 +154,7 @@ const RegisterF1: React.FC = () => {
                     </div>
 
                     <div className="pt-4">
-                        <label className="block text-sm font-bold text-gray-400 uppercase mb-4">Fotos de Perfil (Corpo e Rosto)</label>
+                        <label className="block text-sm font-bold text-gray-400 uppercase mb-4">Fotos de Perfil (Até 8 Fotos)</label>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <label className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-gray-700 rounded-2xl hover:border-primary transition-all cursor-pointer bg-gray-800/30">
                                 <CameraIcon className="w-8 h-8 text-primary mb-2" />
