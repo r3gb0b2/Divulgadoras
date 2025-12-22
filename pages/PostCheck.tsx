@@ -8,7 +8,7 @@ import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, C
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
-import { initPushNotifications } from '../services/pushService';
+import { initPushNotifications, clearPushListeners } from '../services/pushService';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -270,13 +270,21 @@ const PostCheck: React.FC = () => {
     useEffect(() => {
         if (promoter?.id) {
             console.log("Push: Ativando monitoramento para divulgadora:", promoter.id);
-            initPushNotifications(promoter.id).catch(e => console.warn("Push init skipped:", e.message));
+            // Pequeno delay para garantir que o Capacitor e plugins estejam prontos
+            const timer = setTimeout(() => {
+                initPushNotifications(promoter.id).catch(e => console.warn("Push init skipped:", e.message));
+            }, 1500);
+            return () => {
+                clearTimeout(timer);
+                clearPushListeners();
+            };
         }
     }, [promoter?.id]);
 
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
+        clearPushListeners();
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

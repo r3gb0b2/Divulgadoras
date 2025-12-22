@@ -563,9 +563,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Safely extract error message from unknown type to string (Line 509 fix)
-            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
+        } catch (err: any) {
+            // FIX: Safely extract error message from any type (Line 509 fix)
+            const errorMessage = err?.message || 'Erro desconhecido';
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

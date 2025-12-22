@@ -55,16 +55,33 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
 
 exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, token } = data;
+    
     if (!promoterId || !token) {
         throw new functions.https.HttpsError("invalid-argument", "ID da divulgadora e token são obrigatórios.");
     }
+
     try {
-        await db.collection('promoters').doc(promoterId).update({
+        const docRef = db.collection('promoters').doc(promoterId);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            throw new functions.https.HttpsError("not-found", "Perfil da divulgadora não encontrado.");
+        }
+
+        await docRef.update({
             fcmToken: token,
-            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
+            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
+            // Registra um diagnóstico simples para o Admin
+            pushDiagnostics: {
+                lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
+                tokenLength: token.length,
+                status: 'active'
+            }
         });
-        return { success: true, message: "Token vinculado com sucesso." };
+
+        return { success: true, message: "Token FCM vinculado com sucesso." };
     } catch (e) {
+        console.error("Erro ao salvar token push:", e.message);
         throw new functions.https.HttpsError("internal", "Erro ao gravar no banco: " + e.message);
     }
 });
