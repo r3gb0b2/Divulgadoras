@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -549,12 +548,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
+    // FIX: Refined error handling with type narrowing to resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 508.
+    const handleLookupPromoter = async (emailToSearch?: unknown) => {
         let emailArg: string = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
-        } else if (lookupEmail && lookupEmail.trim() !== '') {
+        } else if (typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
         }
         
@@ -567,10 +567,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Using 'any' for the catch block to avoid narrowing issues with 'unknown' type when extracting error messages for UI.
-            const errorMessage = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
-            setLookupError(errorMessage);
+        } catch (err: unknown) {
+            let message = 'Erro desconhecido';
+            if (err instanceof Error) {
+                message = err.message;
+            } else if (typeof err === 'string') {
+                message = err;
+            } else {
+                message = String(err ?? 'Erro desconhecido');
+            }
+            setLookupError(message);
         } finally {
             setIsLookingUp(false);
         }
