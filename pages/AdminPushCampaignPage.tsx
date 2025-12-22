@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { deletePushToken } from '../services/promoterService';
 import { sendPushCampaign } from '../services/messageService';
 import { Organization, Promoter } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, DownloadIcon, RefreshIcon, XIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, AlertTriangleIcon, DocumentDuplicateIcon, TrashIcon, SearchIcon, DownloadIcon, RefreshIcon, XIcon, CheckCircleIcon, CogIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -30,10 +30,10 @@ const AdminPushCampaignPage: React.FC = () => {
     const [result, setResult] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showTroubleshoot, setShowTroubleshoot] = useState(false);
+    const [showBuildFix, setShowBuildFix] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
-    // Código Swift V2: Corrigindo o problema dos 64 caracteres
     const appDelegateCode = `import UIKit
 import Capacitor
 import FirebaseCore
@@ -52,16 +52,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
         return true
     }
 
-    // didRegisterForRemoteNotifications: SOLUÇÃO PARA TOKEN DE 64 CHARS
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        // 1. Vincula o token físico ao Firebase
         Messaging.messaging().apnsToken = deviceToken
-        
-        // 2. BUSCA O TOKEN FCM (STRING LONGA) E ENVIA PARA O CAPACITOR
         Messaging.messaging().token { token, error in
             if let fcmToken = token {
-                print("FCM Token Gerado: \(fcmToken)")
-                // O Capacitor espera uma STRING para reconhecer como Token de Push válido
                 NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: fcmToken)
             }
         }
@@ -217,16 +211,65 @@ class AppDelegate: UIResponder, UIApplicationDelegate, MessagingDelegate, UNUser
                 </button>
             </div>
 
-            {/* TROUBLESHOOTING UI V2 */}
+            {/* SEÇÃO DE CORREÇÃO DE BUILD XCODE */}
+            <div className="mb-4">
+                <button 
+                    onClick={() => setShowBuildFix(!showBuildFix)}
+                    className="w-full flex items-center justify-between text-left gap-2 text-white font-black bg-indigo-600 px-6 py-4 rounded-xl shadow-xl hover:bg-indigo-700 border-2 border-indigo-400 transition-all"
+                >
+                    <div className="flex items-center gap-3">
+                        <CogIcon className="w-6 h-6 animate-spin-slow" />
+                        <div>
+                            <p className="text-lg">ERRO: 'Cordova/CDVAvailabilityDeprecated.h' not found?</p>
+                            <p className="text-xs font-normal opacity-80">Clique aqui para ver os comandos de reparo do ambiente iOS.</p>
+                        </div>
+                    </div>
+                    <span>{showBuildFix ? '▲' : '▼'}</span>
+                </button>
+                
+                {showBuildFix && (
+                    <div className="mt-4 bg-gray-900 border-2 border-indigo-500 p-6 rounded-xl animate-fadeIn shadow-2xl space-y-6">
+                        <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-lg">
+                            <p className="text-red-400 font-bold mb-2">Por que isso acontece?</p>
+                            <p className="text-sm text-gray-300">Este erro ocorre quando as dependências do CocoaPods estão corrompidas ou o Capacitor não sincronizou corretamente os headers do Cordova (usados para compatibilidade interna).</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h3 className="text-indigo-400 font-black flex items-center gap-2"><CheckCircleIcon className="w-5 h-5"/> PASSO A PASSO PARA CORRIGIR NO TERMINAL:</h3>
+                            
+                            <div className="space-y-3 font-mono text-xs">
+                                <div className="bg-black p-3 rounded border border-gray-700">
+                                    <p className="text-gray-500 mb-1"># 1. Remova a plataforma iOS e os Pods</p>
+                                    <p className="text-green-400">rm -rf ios && rm -rf node_modules && npm install</p>
+                                </div>
+                                <div className="bg-black p-3 rounded border border-gray-700">
+                                    <p className="text-gray-500 mb-1"># 2. Adicione a plataforma novamente</p>
+                                    <p className="text-green-400">npx cap add ios</p>
+                                </div>
+                                <div className="bg-black p-3 rounded border border-gray-700">
+                                    <p className="text-gray-500 mb-1"># 3. Sincronize e instale os Pods corretamente</p>
+                                    <p className="text-green-400">npx cap sync ios && cd ios/App && pod install && cd ../..</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-yellow-900/20 border border-yellow-900/50 p-4 rounded-lg">
+                                <p className="text-yellow-400 font-bold mb-1">Dica de Xcode:</p>
+                                <p className="text-sm text-gray-300">No Xcode, vá em <strong>Product -> Clean Build Folder</strong> antes de tentar rodar novamente após os comandos acima.</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div className="mb-8">
                 <button 
                     onClick={() => setShowTroubleshoot(!showTroubleshoot)}
-                    className="w-full flex items-center justify-between text-left gap-2 text-white font-black bg-red-600 px-6 py-4 rounded-xl shadow-xl hover:bg-red-700 border-2 border-red-400"
+                    className="w-full flex items-center justify-between text-left gap-2 text-white font-black bg-red-600 px-6 py-4 rounded-xl shadow-xl hover:bg-red-700 border-2 border-red-400 transition-all"
                 >
                     <div className="flex items-center gap-3">
                         <AlertTriangleIcon className="w-6 h-6 animate-pulse" />
                         <div>
-                            <p className="text-lg">AINDA COM 64 CARACTERES? USE A VERSÃO V2 DO CÓDIGO</p>
+                            <p className="text-lg">TOKEN COM 64 CARACTERES? USE A VERSÃO V2</p>
                             <p className="text-xs font-normal opacity-80">O segredo está em esperar o FCM Token antes de avisar o Capacitor.</p>
                         </div>
                     </div>

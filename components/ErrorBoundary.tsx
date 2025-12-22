@@ -1,5 +1,5 @@
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -13,9 +13,11 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Using public class property initialization for state to fix "Property 'state' does not exist" errors.
-  public override state: ErrorBoundaryState = {
+// FIX: Using React.Component explicitly to ensure standard class inheritance behavior.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Using public class property initialization for state. 
+  // Removed 'override' as it was causing "does not extend another class" errors due to inheritance chain detection issues.
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
   };
@@ -31,12 +33,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   // Standard lifecycle method for side-effects when an error is caught.
-  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  // FIX: Removed 'override' to resolve compilation errors where base class inheritance was not correctly recognized by the TS compiler.
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  override render() {
-    // FIX: Accessing this.state and this.props which are inherited from Component<P, S>.
+  // FIX: Removed 'override' to resolve compilation errors.
+  render() {
+    // FIX: Standard this.state and this.props access.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">

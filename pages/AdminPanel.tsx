@@ -536,7 +536,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     };
 
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
-        // FIX: Explicitly cast newStatus to PromoterStatus to ensure type safety.
         const newStatus: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         if (isBulkRejection) {
             await handleBulkUpdate({ status: newStatus, rejectionReason: reason }, 'reject');
@@ -550,7 +549,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    // FIX: Change emailToSearch type to any and use a manual check to ensure it's a non-empty string before trim to avoid TypeScript assignment errors.
     const handleLookupPromoter = async (emailToSearch?: any) => {
         let emailArg: string = '';
         
@@ -569,7 +567,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
+        } catch (err: any) {
+            // FIX: Using 'any' for the catch block to avoid narrowing issues with 'unknown' type when extracting error messages for UI.
             const errorMessage = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
