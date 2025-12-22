@@ -52,7 +52,6 @@ export interface PromoterApplicationData {
   state: string;
   campaignName?: string;
   organizationId: string;
-  // Propriedades opcionais para evitar erros de compilação em formulários que ainda não as implementam
   cpf?: string;
   rg?: string;
   documentPhotos?: File[];
@@ -230,18 +229,6 @@ export interface OneTimePostSubmission {
   submittedAt: Timestamp | FieldValue;
 }
 
-export interface WhatsAppReminder {
-  id: string;
-  organizationId: string;
-  promoterId: string;
-  promoterName: string;
-  promoterWhatsapp: string;
-  postCampaignName: string;
-  sendAt: Timestamp;
-  status: 'pending' | 'sent' | 'error';
-  error?: string;
-}
-
 export interface GuestList {
   id: string;
   organizationId: string;
@@ -388,4 +375,19 @@ export interface GroupRemovalRequest {
   requestedAt: Timestamp | FieldValue;
   actionTakenBy?: string;
   actionTakenAt?: Timestamp;
+}
+
+// FIX: Added missing WhatsAppReminder interface.
+export interface WhatsAppReminder {
+  id: string;
+  organizationId: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  promoterWhatsapp: string;
+  postId: string;
+  postCampaignName: string;
+  sendAt: Timestamp;
+  status: 'pending' | 'sent' | 'error';
+  error?: string;
 }

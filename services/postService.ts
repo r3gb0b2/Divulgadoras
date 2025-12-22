@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, AdminUserData, WhatsAppReminder } from '../types';
@@ -539,36 +540,36 @@ export const deleteCampaignProofs = async (organizationId: string, campaignName?
   }
 };
 
-/**
- * FIX: Adicionado export member getWhatsAppRemindersPage para AdminWhatsAppReminders.tsx.
- * Busca lembretes de WhatsApp paginados.
- */
-export const getWhatsAppRemindersPage = async (pageSize: number, startAfterDoc: firebase.firestore.QueryDocumentSnapshot | null = null): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
+// FIX: Added missing WhatsApp reminder service functions.
+export const getWhatsAppRemindersPage = async (
+    pageSize: number, 
+    startAfterDoc: firebase.firestore.QueryDocumentSnapshot | null = null
+): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
     try {
-        let q = firestore.collection('whatsAppReminders').orderBy('sendAt', 'desc').limit(pageSize);
+        let q: firebase.firestore.Query = firestore.collection('whatsappReminders')
+            .orderBy('sendAt', 'desc')
+            .limit(pageSize);
+        
         if (startAfterDoc) {
             q = q.startAfter(startAfterDoc);
         }
+        
         const snapshot = await q.get();
         const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
+        const lastVisible = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+        
         return { reminders, lastVisible };
     } catch (error) {
-        console.error("Error fetching reminders page:", error);
+        console.error("Error getting whatsapp reminders:", error);
         return { reminders: [], lastVisible: null };
     }
 };
 
-/**
- * FIX: Adicionado export member sendWhatsAppReminderImmediately para AdminWhatsAppReminders.tsx.
- * Envia um lembrete de WhatsApp imediatamente via Cloud Function.
- */
 export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<void> => {
     try {
         const func = functions.httpsCallable('sendWhatsAppReminderImmediately');
         await func({ reminderId });
     } catch (error: any) {
-        console.error("Error sending reminder immediately:", error);
         throw new Error(error.message || "Falha ao enviar lembrete.");
     }
 };

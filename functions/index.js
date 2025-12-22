@@ -96,7 +96,6 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             const orgSnap = await db.collection('organizations').doc(oldPromoterData.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
             
-            // PRIORIDADE: Pega o nome do evento que veio no updateData, se não houver, usa o que já estava no banco
             const eventName = updateData.campaignName || oldPromoterData.campaignName || "nosso banco de talentos";
 
             const html = `
@@ -176,13 +175,31 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { postData, assignedPromoters } = data;
     try {
-        const postRef = await db.collection('posts').add({ ...postData, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+        // Cria o post principal
+        const postRef = await db.collection('posts').add({ 
+            ...postData, 
+            createdAt: admin.firestore.FieldValue.serverTimestamp() 
+        });
         const postId = postRef.id;
+        
+        // Cria as atribuições em lote
         const batch = db.batch();
         assignedPromoters.forEach(p => {
             const assignmentRef = db.collection('postAssignments').doc();
-            batch.set(assignmentRef, { postId, post: postData, promoterId: p.id, promoterEmail: p.email, promoterName: p.name, organizationId: postData.organizationId, status: 'pending', confirmedAt: null, proofSubmittedAt: null });
+            batch.set(assignmentRef, { 
+                postId, 
+                post: postData, 
+                promoterId: p.id, 
+                promoterEmail: p.email, 
+                promoterName: p.name, 
+                organizationId: postData.organizationId, 
+                status: 'pending', 
+                confirmedAt: null, 
+                proofSubmittedAt: null,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
         });
+        
         await batch.commit();
         return { success: true, postId };
     } catch (e) {
