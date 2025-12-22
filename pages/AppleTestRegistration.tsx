@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { registerForAppleTest, checkAppleEmailExists } from '../services/testRegistrationService';
-import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon } from '../components/Icons';
+import { UserIcon, MailIcon, LogoIcon, ArrowLeftIcon, AlertTriangleIcon, CheckCircleIcon } from '../components/Icons';
 import { useNavigate } from 'react-router-dom';
 
 const AppleTestRegistration: React.FC = () => {
@@ -40,13 +40,18 @@ const AppleTestRegistration: React.FC = () => {
     if (success) {
         return (
             <div className="min-h-[70vh] flex items-center justify-center p-4">
-                <div className="bg-secondary p-8 rounded-2xl shadow-2xl border border-green-500/30 text-center max-w-md w-full">
+                <div className="bg-secondary p-8 rounded-3xl shadow-2xl border border-green-500/30 text-center max-w-md w-full">
                     <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        <CheckCircleIcon className="w-10 h-10 text-green-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Inscrição Realizada!</h2>
-                    <p className="text-gray-400">Seu e-mail foi adicionado à fila de convites do TestFlight. Verifique sua caixa de entrada (e o spam) nas próximas horas para o convite oficial da Apple.</p>
-                    <button onClick={() => navigate('/')} className="mt-6 text-primary hover:underline font-semibold">Voltar ao Início</button>
+                    <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">Inscrição Realizada!</h2>
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                        Seu e-mail foi adicionado à fila. Agora, aguarde o convite oficial da <strong>Apple (TestFlight)</strong> que chegará na sua caixa de entrada.
+                    </p>
+                    <div className="mt-6 p-4 bg-gray-800 rounded-2xl text-xs text-left text-gray-400 border border-gray-700">
+                        <strong>Próximo passo:</strong> Quando o e-mail da Apple chegar, você precisará baixar o app <strong>TestFlight</strong> na App Store para então instalar o nosso aplicativo.
+                    </div>
+                    <button onClick={() => navigate('/')} className="mt-8 w-full py-4 bg-primary text-white font-bold rounded-2xl hover:bg-primary-dark transition-all">Voltar ao Início</button>
                 </div>
             </div>
         );
@@ -54,82 +59,82 @@ const AppleTestRegistration: React.FC = () => {
 
     return (
         <div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-md bg-secondary shadow-2xl rounded-2xl p-8 border border-gray-700">
+            <div className="w-full max-w-md bg-secondary shadow-2xl rounded-[2.5rem] p-8 md:p-10 border border-gray-700">
                 <div className="text-center mb-8">
-                    <LogoIcon className="w-full max-w-[240px] h-auto mx-auto mb-6" />
-                    <h1 className="text-2xl font-bold text-white uppercase tracking-wider">Inscrição Beta iOS</h1>
-                    <p className="text-gray-400 text-sm mt-2">Cadastre o e-mail do seu ID Apple para baixar o App no iPhone.</p>
+                    <LogoIcon className="w-full max-w-[200px] h-auto mx-auto mb-6" />
+                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Beta Tester <span className="text-primary">iOS</span></h1>
+                    <p className="text-gray-400 text-xs mt-2 font-bold uppercase tracking-widest">Exclusivo para iPhone</p>
+                </div>
+
+                {/* ALERTA CRÍTICO SOBRE ICLOUD */}
+                <div className="mb-8 p-4 bg-blue-900/30 border border-blue-500/50 rounded-2xl flex gap-3 items-start animate-pulse">
+                    <AlertTriangleIcon className="w-10 h-10 text-blue-400 flex-shrink-0" />
+                    <div className="text-left">
+                        <p className="text-blue-200 text-[11px] font-black uppercase tracking-tight">Atenção Obrigatória</p>
+                        <p className="text-blue-100 text-[10px] leading-tight mt-1">
+                            Você <strong>DEVE</strong> usar o e-mail que está logado no seu iPhone (Ajustes > Seu Nome). Se usar outro e-mail, você não conseguirá baixar o app.
+                        </p>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                    {error && <div className="bg-red-900/30 text-red-300 p-3 rounded-md text-xs border border-red-800">{error}</div>}
+                    {error && <div className="bg-red-900/30 text-red-300 p-4 rounded-2xl text-xs font-bold border border-red-800 text-center">{error}</div>}
                     
                     <div className="space-y-4">
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <UserIcon className="h-5 w-5 text-gray-500" />
-                            </span>
+                        <div className="relative group">
+                            <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                             <input
                                 type="text"
                                 name="firstName"
                                 value={formData.firstName}
                                 onChange={handleChange}
                                 placeholder="Primeiro Nome"
-                                className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
+                                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none font-medium placeholder-gray-600"
                                 required
                             />
                         </div>
 
-                        <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <UserIcon className="h-5 w-5 text-gray-500" />
-                            </span>
+                        <div className="relative group">
+                            <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                             <input
                                 type="text"
                                 name="lastName"
                                 value={formData.lastName}
                                 onChange={handleChange}
                                 placeholder="Sobrenome"
-                                className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
+                                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none font-medium placeholder-gray-600"
                                 required
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                    <MailIcon className="h-5 w-5 text-gray-500" />
-                                </span>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    placeholder="E-mail do ID Apple (iCloud)"
-                                    className="w-full pl-10 pr-3 py-3 border border-gray-600 rounded-lg bg-gray-800 text-white focus:ring-2 focus:ring-primary outline-none"
-                                    required
-                                />
-                            </div>
-                            <p className="text-[11px] text-yellow-500 font-medium px-1">
-                                ⚠️ Importante: Utilize o mesmo e-mail que você usa para acessar o iCloud ou baixar aplicativos na App Store.
-                            </p>
+                        <div className="relative group">
+                            <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
+                            <input
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                placeholder="E-mail do seu ID Apple / iCloud"
+                                className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none font-black placeholder-gray-600"
+                                required
+                            />
                         </div>
                     </div>
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary-dark transition-all shadow-lg disabled:opacity-50"
+                        className="w-full py-5 bg-primary text-white font-black text-lg rounded-2xl hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 disabled:opacity-50 active:scale-95"
                     >
-                        {isLoading ? 'Processando...' : 'Solicitar Acesso Beta'}
+                        {isLoading ? 'ENVIANDO...' : 'SOLICITAR ACESSO BETA'}
                     </button>
                     
-                    <p className="text-[10px] text-gray-500 text-center uppercase tracking-widest mt-4">
-                        Equipe Certa Beta Program
+                    <p className="text-[9px] text-gray-500 text-center uppercase font-black tracking-[0.2em] mt-4">
+                        Sistema de Gestão Oficial • TestFlight Ready
                     </p>
                 </form>
             </div>
-            <button onClick={() => navigate(-1)} className="mt-6 flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm">
+            <button onClick={() => navigate(-1)} className="mt-8 flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-xs font-black uppercase tracking-widest">
                 <ArrowLeftIcon className="w-4 h-4" /> Voltar
             </button>
         </div>

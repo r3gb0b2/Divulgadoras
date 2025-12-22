@@ -12,7 +12,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Inherit props and state correctly from standard Component class to resolve property access errors.
+// FIX: Inherited correctly from named 'Component' using explicit generic type parameters to ensure 'state' and 'props' properties are recognized by the compiler.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -33,6 +33,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
+    // FIX: Safely access 'hasError' and 'error' from 'this.state' which is now correctly defined through the class inheritance.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -60,7 +61,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // FIX: Access correctly typed children through this.props as defined in the generic Component heritage.
+    // FIX: Access correctly typed children through 'this.props' as defined in the generic Component interface.
     return this.props.children;
   }
 }

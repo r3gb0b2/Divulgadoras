@@ -34,6 +34,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         hasJoinedGroup: promoter.hasJoinedGroup || false,
         observation: promoter.observation || '',
         associatedCampaigns: promoter.associatedCampaigns || [],
+        campaignName: promoter.campaignName || '', // Agora incluído no formData para edição
       });
       
       if (isOpen) {
@@ -89,17 +90,19 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         dataToSave.email = dataToSave.email.toLowerCase().trim();
       }
       if (dataToSave.status !== 'rejected') {
-        dataToSave.rejectionReason = ''; // Clear reason if not rejected
+        dataToSave.rejectionReason = ''; // Limpar motivo se não for rejeitado
       }
       if (dataToSave.status !== 'approved') {
-        dataToSave.hasJoinedGroup = false; // Clear group status if not approved
+        dataToSave.hasJoinedGroup = false; // Limpar status do grupo se não for aprovado
       }
       
+      // Garante que o campaignName atual esteja na lista de allCampaigns
       const allCampaigns = [
-        promoter.campaignName,
+        dataToSave.campaignName,
         ...(dataToSave.associatedCampaigns || [])
-      ].filter((c, index, self) => c && self.indexOf(c) === index); // Filter out null/undefined and get unique
-      dataToSave.allCampaigns = allCampaigns;
+      ].filter((c, index, self) => c && self.indexOf(c) === index); 
+      
+      dataToSave.allCampaigns = allCampaigns as string[];
 
       await onSave(promoter.id, dataToSave);
       onClose();
@@ -123,22 +126,33 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="md:col-span-2">
                   <h3 className="font-bold text-lg mb-2 text-gray-200">Fotos</h3>
-                  <div className="flex gap-4 overflow-x-auto">
+                  <div className="flex gap-4 overflow-x-auto pb-2">
                       {(promoter.photoUrls || []).map((url, index) => (
-                          <a href={url} target="_blank" rel="noopener noreferrer" key={index}>
-                              <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg" />
+                          <a href={url} target="_blank" rel="noopener noreferrer" key={index} className="flex-shrink-0">
+                              <img src={url} alt={`Foto ${index+1}`} className="w-32 h-32 object-cover rounded-lg border border-gray-600" />
                           </a>
                       ))}
                   </div>
               </div>
           </div>
           
-          {promoter.campaignName && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300">Evento / Gênero</label>
-              <input type="text" value={promoter.campaignName} readOnly className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-400 cursor-not-allowed" />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300">Evento Principal (Obrigatório para Aprovação)</label>
+            <select 
+              name="campaignName" 
+              value={formData.campaignName || ''} 
+              onChange={handleChange} 
+              className={formInputStyle}
+              required
+            >
+              <option value="">Selecione um evento...</option>
+              {availableCampaigns.map(c => (
+                <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Este é o evento que aparecerá no e-mail e no portal dela.</p>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-300">Nome</label>
             <input type="text" name="name" value={formData.name || ''} onChange={handleChange} className={formInputStyle} />
@@ -156,27 +170,23 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
             <input type="text" name="instagram" value={formData.instagram || ''} onChange={handleChange} className={formInputStyle} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300">TikTok</label>
-            <input type="text" name="tiktok" value={formData.tiktok || ''} onChange={handleChange} className={formInputStyle} />
-          </div>
-          <div>
             <label className="block text-sm font-medium text-gray-300">Data de Nascimento</label>
             <input type="date" name="dateOfBirth" value={formData.dateOfBirth || ''} onChange={handleChange} className={formInputStyle} />
           </div>
            <div>
-            <label className="block text-sm font-medium text-gray-300">Observação (visível apenas para admins)</label>
+            <label className="block text-sm font-medium text-gray-300">Observação (Privada)</label>
             <textarea
                 name="observation"
                 value={formData.observation || ''}
                 onChange={handleChange}
                 className={formInputStyle + ' min-h-[60px]'}
-                placeholder="Adicione uma nota rápida aqui..."
+                placeholder="Ex: Já trabalhou conosco, perfil verificado..."
             />
           </div>
 
           <div className="border-t border-gray-700 pt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Eventos Associados</label>
-            <p className="text-xs text-gray-400 mb-2">Associe esta divulgadora a outros eventos. O evento original do cadastro é: <strong>{promoter.campaignName || 'N/A'}</strong></p>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Adicionar a Outros Eventos</label>
+            <p className="text-xs text-gray-400 mb-2">Marque abaixo se esta divulgadora também deve participar de outros eventos simultaneamente.</p>
             {isLoadingCampaigns ? (
                 <p className="text-sm text-gray-400">Carregando eventos...</p>
             ) : Object.keys(campaignsByState).length > 0 ? (
@@ -191,10 +201,10 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                                             type="checkbox"
                                             checked={(formData.associatedCampaigns || []).includes(campaign.name)}
                                             onChange={() => handleCampaignToggle(campaign.name)}
-                                            disabled={campaign.name === promoter.campaignName}
+                                            disabled={campaign.name === formData.campaignName}
                                             className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary disabled:opacity-50"
                                         />
-                                        <span className={`text-sm ${campaign.name === promoter.campaignName ? 'text-gray-500' : 'text-gray-200'}`}>{campaign.name}</span>
+                                        <span className={`text-sm ${campaign.name === formData.campaignName ? 'text-gray-500' : 'text-gray-200'}`}>{campaign.name}</span>
                                     </label>
                                 ))}
                             </div>
@@ -202,22 +212,21 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                     ))}
                 </div>
             ) : (
-                <p className="text-sm text-gray-400">Nenhum outro evento encontrado para esta organização.</p>
+                <p className="text-sm text-gray-400">Nenhum outro evento encontrado.</p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300">Status</label>
+          <div className="bg-dark/50 p-4 rounded-xl border border-gray-700">
+            <label className="block text-sm font-bold text-white mb-3">Status da Inscrição</label>
             <select name="status" value={formData.status || 'pending'} onChange={handleChange} className={formInputStyle}>
               <option value="pending">Pendente</option>
-              <option value="approved">Aprovado</option>
-              <option value="rejected">Rejeitado</option>
+              <option value="approved">Aprovada (Envia E-mail)</option>
+              <option value="rejected">Rejeitada (Estatístico)</option>
+              <option value="rejected_editable">Solicitar Correção</option>
             </select>
-          </div>
-          
-          {formData.status === 'approved' && (
-            <div className="mt-4">
-                 <label className="flex items-center text-sm font-medium text-gray-300">
+            
+            {formData.status === 'approved' && (
+                <label className="flex items-center text-sm font-medium text-green-400 mt-4 cursor-pointer">
                     <input 
                         type="checkbox" 
                         name="hasJoinedGroup" 
@@ -225,29 +234,29 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                         onChange={handleChange}
                         className={formCheckboxStyle}
                     />
-                    <span className="ml-2">Confirmar que entrou no grupo</span>
-                 </label>
-            </div>
-          )}
-          
-          {formData.status === 'rejected' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300">Motivo da Rejeição</label>
-              <textarea
-                name="rejectionReason"
-                value={formData.rejectionReason || ''}
-                onChange={handleChange}
-                className={formInputStyle + ' min-h-[60px]'}
-                placeholder="Informe o motivo..."
-              />
-            </div>
-          )}
+                    <span className="ml-2">Marcar como já entrou no grupo (manual)</span>
+                </label>
+            )}
+            
+            {(formData.status === 'rejected' || formData.status === 'rejected_editable') && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-300">Motivo (enviado à divulgadora)</label>
+                  <textarea
+                    name="rejectionReason"
+                    value={formData.rejectionReason || ''}
+                    onChange={handleChange}
+                    className={formInputStyle + ' min-h-[60px]'}
+                    placeholder="Informe o motivo..."
+                  />
+                </div>
+            )}
+          </div>
 
           <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-700">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+            <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
               Cancelar
             </button>
-            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50">
+            <button type="submit" disabled={isSaving} className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:bg-primary/50 font-bold shadow-lg shadow-primary/20">
               {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
