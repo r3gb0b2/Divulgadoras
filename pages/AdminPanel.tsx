@@ -556,7 +556,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         let emailArg: string = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
-            emailArg = emailToSearch.trim();
+            emailArg = (emailToSearch as string).trim();
         } else if (typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
         }

@@ -16,37 +16,65 @@ db.settings({ ignoreUndefinedProperties: true });
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- WhatsApp Helper (Z-API) ---
-async function sendWhatsApp(to, message, organizationId) {
-    // Busca credenciais da organização ou usa padrão do sistema
-    const orgSnap = await db.collection('organizations').doc(organizationId).get();
-    const orgData = orgSnap.data();
+/**
+ * Garante que o número esteja no formato 55DD999998888
+ */
+function normalizePhoneNumber(phone) {
+    if (!phone) return null;
+    let cleaned = phone.replace(/\D/g, '');
     
-    // Configurações da Z-API (Devem ser configuradas no Firebase Config ou Secret Manager)
+    // Se não tem o 55 no início e parece um número brasileiro (10 ou 11 dígitos)
+    if (!cleaned.startsWith('55') && (cleaned.length === 10 || cleaned.length === 11)) {
+        cleaned = '55' + cleaned;
+    }
+    
+    return cleaned;
+}
+
+async function sendWhatsApp(to, message, organizationId) {
+    const phone = normalizePhoneNumber(to);
+    
+    if (!phone) {
+        console.error("WhatsApp Error: Número de telefone inválido ou ausente.");
+        return { success: false, message: "Invalid phone number" };
+    }
+
+    // Configurações da Z-API (Devem ser configuradas no Firebase Config)
     // firebase functions:config:set zapi.instance="SUA_INSTANCIA" zapi.token="SEU_TOKEN"
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance;
     const token = zapiConfig.token;
 
     if (!instance || !token) {
-        console.warn("WhatsApp não enviado: Credenciais Z-API não configuradas nas functions.");
+        console.warn(`WhatsApp Ignorado: Credenciais Z-API não configuradas para a Org: ${organizationId}`);
         return { success: false, message: "Z-API credentials missing" };
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
+    
+    console.log(`Tentando enviar WhatsApp para ${phone}...`);
     
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                phone: to.replace(/\D/g, ''),
+                phone: phone,
                 message: message
             })
         });
+
         const data = await response.json();
-        return { success: true, data };
+        
+        if (response.ok) {
+            console.log(`WhatsApp enviado com sucesso para ${phone}. ID: ${data.messageId || 'N/A'}`);
+            return { success: true, data };
+        } else {
+            console.error(`Erro Z-API (${response.status}):`, JSON.stringify(data));
+            return { success: false, error: data };
+        }
     } catch (error) {
-        console.error("Erro ao enviar WhatsApp:", error);
+        console.error("Erro crítico ao conectar com Z-API:", error.message);
         return { success: false, error: error.message };
     }
 }
@@ -123,30 +151,44 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
 
         // AÇÃO: Se o status mudou para APROVADO
         if (updateData.status === 'approved' && oldPromoterData.status !== 'approved') {
-            const orgSnap = await db.collection('organizations').doc(oldPromoterData.organizationId).get();
-            const org = orgSnap.data() || { name: "Equipe Certa" };
+            let orgName = "Equipe Certa";
+            
+            if (oldPromoterData.organizationId) {
+                const orgSnap = await db.collection('organizations').doc(oldPromoterData.organizationId).get();
+                if (orgSnap.exists) {
+                    orgName = orgSnap.data().name || orgName;
+                }
+            }
             
             // 1. Enviar E-mail
             const html = `
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                     <h1 style="color: #22c55e;">Parabéns, ${oldPromoterData.name}! 🎉</h1>
-                    <p>Seu cadastro na equipe <strong>${org.name}</strong> foi APROVADO!</p>
+                    <p>Seu cadastro na equipe <strong>${orgName}</strong> foi APROVADO!</p>
                     <p>Acesse seu portal para ver as tarefas e materiais de divulgação.</p>
+                    <p><a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldPromoterData.email)}" style="background:#7e39d5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; display:inline-block;">Acessar Portal</a></p>
                 </div>
             `;
+            
             await sendEmail({
                 toEmail: oldPromoterData.email,
                 toName: oldPromoterData.name,
-                subject: `Seu cadastro na ${org.name} foi aprovado! 🎉`,
+                subject: `Seu cadastro na ${orgName} foi aprovado! 🎉`,
                 htmlContent: html
             });
 
             // 2. Enviar WhatsApp Automático
-            const waMessage = `Olá ${oldPromoterData.name.split(' ')[0]}! Seu cadastro na equipe *${org.name}* foi APROVADO! 🎉\n\nAcesse seu portal para ver suas tarefas: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldPromoterData.email)}`;
-            await sendWhatsApp(oldPromoterData.whatsapp, waMessage, oldPromoterData.organizationId);
+            if (oldPromoterData.whatsapp) {
+                const firstName = oldPromoterData.name.split(' ')[0];
+                const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldPromoterData.email)}`;
+                const waMessage = `Olá *${firstName}*! Seu cadastro na equipe *${orgName}* foi APROVADO! 🎉\n\nAcesse seu portal para ver suas tarefas e materiais:\n${portalLink}`;
+                
+                await sendWhatsApp(oldPromoterData.whatsapp, waMessage, oldPromoterData.organizationId);
+            }
         }
         return { success: true };
     } catch (e) {
+        console.error("Erro na função updatePromoterAndSync:", e.message);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
@@ -191,8 +233,6 @@ exports.sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCa
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
-
-// ... rest of the existing functions (notifyPostPush, sendPushCampaign, etc) ...
 
 exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
