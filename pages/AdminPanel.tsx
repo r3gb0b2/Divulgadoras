@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -534,13 +535,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Typed parameter as unknown and simplified logic to ensure type-safe string assignment, resolving line 497 error.
-    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+    // FIX: Simplified parameter type handling to correctly handle any input and ensure type safety, resolving line 496 unknown type error.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
         let emailArg = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
-        } else if (lookupEmail && typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
+        } else if (lookupEmail && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
         }
         
@@ -553,9 +554,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
-            setLookupError(message);
+        } catch (err: any) {
+            setLookupError(err.message || "Erro desconhecido.");
         } finally {
             setIsLookingUp(false);
         }

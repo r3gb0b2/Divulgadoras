@@ -62,7 +62,7 @@ const CountdownTimer: React.FC<{ targetDate: any, prefix?: string }> = ({ target
     return <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isExpired ? 'bg-red-900/30 text-red-400' : 'bg-primary/20 text-primary'}`}><ClockIcon className="h-3 w-3" /><span>{prefix}{timeLeft}</span></div>;
 };
 
-const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void }> = ({ assignment, onConfirm, onJustify }) => {
+const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void, onRefresh: () => void }> = ({ assignment, onConfirm, onJustify, onRefresh }) => {
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -124,11 +124,38 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
 
     if (!assignment.promoterHasJoinedGroup) {
         return (
-            <div className="bg-dark/50 p-4 rounded-2xl border-2 border-yellow-900/50 mb-4">
-                <h3 className="font-bold text-white uppercase">{assignment.post.campaignName}</h3>
-                <p className="text-yellow-500 text-sm mt-1 font-bold">Ação necessária!</p>
-                <p className="text-gray-400 text-xs mt-1">Você precisa entrar no grupo oficial para ver esta tarefa.</p>
-                <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="mt-4 icon-block px-4 py-2 bg-yellow-600 text-white font-bold rounded-lg text-xs">Ir para Status</Link>
+            <div className="bg-dark/50 p-6 rounded-3xl border-2 border-yellow-900/50 mb-4 animate-fadeIn">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-black text-white uppercase tracking-tight">{assignment.post.campaignName}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                      <p className="text-yellow-500 text-xs font-black uppercase tracking-widest">Ação necessária!</p>
+                    </div>
+                  </div>
+                  <button onClick={onRefresh} className="p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors" title="Atualizar Status">
+                    <RefreshIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <p className="text-gray-400 text-xs leading-relaxed mb-6">
+                  Você precisa entrar no grupo oficial desta produtora para que as tarefas sejam liberadas automaticamente no seu portal.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link 
+                    to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} 
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors"
+                  >
+                    PEGAR LINK DO GRUPO
+                  </Link>
+                  <button 
+                    onClick={onRefresh}
+                    className="flex-1 py-3 bg-gray-800 text-gray-300 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-gray-700 transition-colors border border-gray-700"
+                  >
+                    JÁ ENTREI, ATUALIZAR
+                  </button>
+                </div>
             </div>
         );
     }
@@ -247,15 +274,53 @@ const PostCheck: React.FC = () => {
         if (!searchEmail) return;
         setIsLoading(true); setSearched(true);
         try {
+            // Busca todos os perfis associados a este e-mail
             const profiles = await findPromotersByEmail(searchEmail);
-            if (profiles.length === 0) { alert("E-mail não encontrado."); setSearched(false); return; }
-            const activePromoter = profiles[0];
-            setPromoter(activePromoter);
+            if (profiles.length === 0) { 
+              alert("E-mail não encontrado. Verifique se digitou corretamente."); 
+              setSearched(false); 
+              setIsLoading(false);
+              return; 
+            }
+
+            // Ordena perfis: Aprovados primeiro, depois por data de criação
+            const sortedProfiles = [...profiles].sort((a, b) => {
+              if (a.status === 'approved' && b.status !== 'approved') return -1;
+              if (a.status !== 'approved' && b.status === 'approved') return 1;
+              const timeA = (a.createdAt as any)?.seconds || 0;
+              const timeB = (b.createdAt as any)?.seconds || 0;
+              return timeB - timeA;
+            });
+
+            const mainProfile = sortedProfiles[0];
+            setPromoter(mainProfile);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
 
+            // Cria um mapa de perfis por organização para validação individual de grupo
+            const profileByOrg = new Map<string, Promoter>();
+            sortedProfiles.forEach(p => {
+              if (!profileByOrg.has(p.organizationId) || p.status === 'approved') {
+                profileByOrg.set(p.organizationId, p);
+              }
+            });
+
             const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
-            setAssignments(fetchedAssignments.map(a => ({ ...a, promoterHasJoinedGroup: activePromoter.hasJoinedGroup || false })));
-        } catch (err: any) { alert(err.message); } finally { setIsLoading(false); }
+            
+            // Mapeia o status hasJoinedGroup comparando com o perfil da organização correta
+            const mappedAssignments = fetchedAssignments.map(a => {
+              const orgProfile = profileByOrg.get(a.organizationId);
+              return { 
+                ...a, 
+                promoterHasJoinedGroup: orgProfile ? (orgProfile.hasJoinedGroup || false) : false 
+              };
+            });
+
+            setAssignments(mappedAssignments);
+        } catch (err: any) { 
+          alert("Erro ao carregar dados: " + err.message); 
+        } finally { 
+          setIsLoading(false); 
+        }
     }, []);
 
     useEffect(() => {
@@ -451,10 +516,10 @@ const PostCheck: React.FC = () => {
             <div className="space-y-2">
                 {isLoading ? <div className="text-center py-20 animate-pulse text-primary font-black uppercase">Sincronizando tarefas...</div> : (
                     activeTab === 'pending' ? (
-                        pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} />) 
+                        pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} onRefresh={() => performSearch(email)} />) 
                         : <div className="text-center py-20"><div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircleIcon className="w-8 h-8 text-green-500" /></div><p className="text-gray-400 font-bold">Tudo em dia por aqui! 🎉</p></div>
                     ) : (
-                        history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} />) 
+                        history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
                         : <p className="text-center text-gray-500 py-10 font-bold">Nenhum histórico disponível.</p>
                     )
                 )}
