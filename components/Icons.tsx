@@ -26,7 +26,6 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         </linearGradient>
       </defs>
       
-      {/* Símbolo do Checkmark */}
       <circle cx="100" cy="100" r="85" fill="url(#logoPurple)" />
       <path d="M 55 100 L 90 135 L 145 80" 
             stroke="url(#logoGold)" 
@@ -35,7 +34,6 @@ export const LogoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
             strokeLinecap="round" 
             strokeLinejoin="round" />
       
-      {/* Texto Logo - Ajustado x e largura total */}
       <text x="210" y="135" 
             fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
             fontSize="120" 
@@ -71,7 +69,7 @@ export const GripDotsIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
 );
 
 export const FaceIdIcon: React.FC<React.SVGProps<SVGSVGElement>> = createStrokeIcon(
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 0M15.59 14.37a15.953 15.953 0 00-5.84 0m5.84 0a15.953 15.953 0 01-2.92 0m2.92 0a15.953 15.953 0 00-2.92 0M3 10.5a11.96 11.96 0 011.664-5.993 11.96 11.96 0 0110.672 0 11.96 11.96 0 011.664 5.993M19.34 10.5a11.96 11.96 0 01-1.664 5.993 11.96 11.96 0 01-10.672 0 11.96 11.96 0 01-1.664-5.993m13.992-5.993a11.96 11.96 0 00-10.672 0" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.82m5.84-2.56a15.953 15.953 0 01-5.84 0M15.59 14.37a15.953 15.953 0 00-5.84 0m5.84 0a15.953 15.953 0 00-2.92 0m2.92 0a15.953 15.953 0 01-2.92 0M3 10.5a11.96 11.96 0 011.664-5.993 11.96 11.96 0 0110.672 0 11.96 11.96 0 011.664 5.993M19.34 10.5a11.96 11.96 0 01-1.664 5.993 11.96 11.96 0 01-10.672 0 11.96 11.96 0 01-1.664-5.993m13.992-5.993a11.96 11.96 0 00-10.672 0" />
 );
 
 export const InstagramIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -91,7 +89,7 @@ export const UserIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
 );
 
 export const UsersIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
+    <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
 );
 
 export const CogIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
@@ -247,7 +245,7 @@ export const FaceSmileIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon
 );
 
 export const AlertTriangleIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(
-    <path fillRule="evenodd" d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-7.22 24.46c-.352 1.193.538 2.39 1.79 2.39h19.67c1.253 0 2.142-1.197 1.79-2.39l-7.22-24.46zm-2.81 0c.413-1.4 2.397-1.4 2.81 0l7.22 24.46c.352 1.193-.538 2.39-1.79 2.39H3.165c-1.253 0-2.142-1.197-1.79-2.39l7.22-24.46zM12 17.25a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H12.75a.75.75 0 0 1-.75-.75v-.008zm.75-2.25a.75.75 0 0 0-1.5 0v-6a.75.75 0 0 0 1.5 0v6z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M12 2.25c.34 0 .668.136.906.378l9 9.15a1.275 1.275 0 010 1.784l-9 9.15a1.275 1.275 0 01-1.812 0l-9-9.15a1.275 1.275 0 010-1.784l9-9.15c.238-.242.566-.378.906-.378zM12 7.5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0112 7.5zm0 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clipRule="evenodd" />
 );
 
 export const UndoIcon: React.FC<React.SVGProps<SVGSVGElement>> = createIcon(

@@ -1,14 +1,13 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, XIcon } from '../components/Icons';
+import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
-import { initPushNotifications, clearPushListeners } from '../services/pushService';
+import { initPushNotifications, clearPushListeners, PushStatus } from '../services/pushService';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -227,8 +226,9 @@ const PostCheck: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     
-    // Referência para evitar loop infinito de ativação do push
-    const pushInitializedRef = useRef<string | null>(null);
+    // Push Notification Status
+    const pushInitializedFor = useRef<string | null>(null);
+    const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
 
     // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -269,29 +269,29 @@ const PostCheck: React.FC = () => {
         }
     }, [location.search, performSearch]);
 
-    // INICIALIZAÇÃO DO PUSH: Ocorre quando o promoter é carregado
+    // ATIVAÇÃO DO PUSH: Sincroniza quando o promoter é encontrado
     useEffect(() => {
-        if (promoter?.id && pushInitializedRef.current !== promoter.id) {
-            pushInitializedRef.current = promoter.id;
-            console.log("Push: Iniciando processo de registro para:", promoter.id);
+        if (promoter?.id && pushInitializedFor.current !== promoter.id) {
+            pushInitializedFor.current = promoter.id;
             
-            // Pequeno delay para garantir que plugins Capacitor estão prontos após o carregamento da página
-            const pushTimer = setTimeout(() => {
-                initPushNotifications(promoter.id).catch(e => {
-                    console.error("Push: Falha silenciosa na inicialização:", e.message);
+            const timer = setTimeout(() => {
+                initPushNotifications(promoter.id, (status) => {
+                    setPushStatus(status);
+                }).catch(err => {
+                    console.error("Push Init Fail:", err.message);
+                    setPushStatus('error');
                 });
-            }, 2000);
-
-            return () => {
-                clearTimeout(pushTimer);
-            };
+            }, 1000);
+            
+            return () => clearTimeout(timer);
         }
     }, [promoter?.id]);
 
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
-        pushInitializedRef.current = null;
+        pushInitializedFor.current = null;
+        setPushStatus('idle');
         clearPushListeners();
     };
 
@@ -337,6 +337,46 @@ const PostCheck: React.FC = () => {
     const pending = assignments.filter(a => !isHistoryAssignment(a));
     const history = assignments.filter(a => isHistoryAssignment(a));
 
+    const renderPushStatus = () => {
+        if (pushStatus === 'idle') return null;
+        
+        const styles = {
+            requesting: 'text-yellow-400 bg-yellow-900/20 border-yellow-800',
+            granted: 'text-blue-400 bg-blue-900/20 border-blue-800',
+            denied: 'text-gray-400 bg-gray-800 border-gray-700',
+            syncing: 'text-yellow-400 bg-yellow-900/20 border-yellow-800 animate-pulse',
+            success: 'text-green-400 bg-green-900/20 border-green-800',
+            error: 'text-red-400 bg-red-900/20 border-red-800',
+        };
+
+        const labels = {
+            requesting: 'Solicitando Notificações...',
+            granted: 'Permissão ok, vinculando...',
+            denied: 'Notificações Desativadas',
+            syncing: 'Vinculando dispositivo...',
+            success: 'Alertas Ativados!',
+            error: 'Erro ao ativar alertas push',
+        };
+
+        const icons = {
+            requesting: <RefreshIcon className="w-3 h-3 animate-spin" />,
+            granted: <RefreshIcon className="w-3 h-3 animate-spin" />,
+            denied: <XIcon className="w-3 h-3" />,
+            syncing: <RefreshIcon className="w-3 h-3 animate-spin" />,
+            success: <CheckCircleIcon className="w-3 h-3" />,
+            error: <AlertTriangleIcon className="w-3 h-3" />,
+        };
+
+        const currentStyle = styles[pushStatus as keyof typeof styles] || styles.error;
+
+        return (
+            <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-2 rounded-full border text-[9px] font-black uppercase tracking-widest ${currentStyle}`}>
+                {icons[pushStatus as keyof typeof icons]}
+                {labels[pushStatus as keyof typeof labels]}
+            </div>
+        );
+    };
+
     if (!searched || !promoter) {
         return (
             <div className="max-w-md mx-auto py-10 px-4">
@@ -361,12 +401,15 @@ const PostCheck: React.FC = () => {
                 <div>
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight">Olá, {promoter.name.split(' ')[0]}!</h1>
                     <p className="text-xs text-gray-500 font-mono">{promoter.email}</p>
-                    <button 
-                        onClick={() => setIsStatsModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
-                    >
-                        <ChartBarIcon className="w-3 h-3" /> VER MEU STATUS
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <button 
+                            onClick={() => setIsStatsModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                        >
+                            <ChartBarIcon className="w-3 h-3" /> VER MEU STATUS
+                        </button>
+                        {renderPushStatus()}
+                    </div>
                 </div>
                 <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors">
                     <LogoutIcon className="w-6 h-6" />

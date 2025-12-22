@@ -23,6 +23,8 @@ export const savePushToken = async (promoterId: string, token: string): Promise<
         if (!promoterId || !token) return false;
         
         const cleanToken = String(token).trim();
+        // Tokens de push nativos reais costumam ter mais de 32 caracteres.
+        // Tokens APNs iOS tem 64. Tokens FCM costumam ter ~160.
         if (cleanToken.length < 32) {
             console.warn("Push: Token ignorado por ser muito curto:", cleanToken);
             return false;

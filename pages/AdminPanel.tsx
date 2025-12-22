@@ -549,8 +549,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Explicitly handle potential unknown types by casting emailToSearch and lookupEmail to string before using them.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
+        // FIX: Explicitly handle potential unknown types by checking emailToSearch and lookupEmail to string before using them.
         const emailArg: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
         
         if (!emailArg) return;
@@ -562,10 +562,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
-            // FIX: Safely extract error message using instanceof check and providing a string fallback.
-            const errorMessage: string = err instanceof Error ? err.message : 'Erro desconhecido';
-            setLookupError(errorMessage);
+        } catch (err: any) {
+            // FIX: Safely handle error by using any and fallback string
+            setLookupError(err?.message || 'Erro desconhecido');
         } finally {
             setIsLookingUp(false);
         }
@@ -1005,7 +1004,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
             {error && <p className="text-red-400 mt-4">{error}</p>}
             <div className="mt-6 space-y-4">
-                {displayPromoters.map(promoter => (
+                {displayPromoters.map((promoter: Promoter) => (
                     <div key={promoter.id} className="bg-secondary shadow-md rounded-lg p-4 flex flex-col md:flex-row items-start gap-4">
                         <div className="flex-shrink-0 flex items-center gap-3">
                             {canManage && filter === 'pending' && (
@@ -1013,7 +1012,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             <div className="relative">
                                 <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
-                                <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth)}</div>
+                                {/* FIX: Explicitly cast to dateOfBirth to string to handle potential unknown type issues */}
+                                <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth as string)}</div>
                             </div>
                         </div>
                         <div className="flex-grow">
