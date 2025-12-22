@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -13,10 +12,9 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Use named imports and explicit field declarations to resolve issues with "state" and "props" not being recognized in some TypeScript/React environments.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Declare explicit state type as class member to resolve 'Property state does not exist' errors on lines 20, 38, 46, 48.
-  public override state: ErrorBoundaryState = {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // FIX: Declare explicit state type as class member to resolve 'Property state does not exist' errors.
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
   };
@@ -64,7 +62,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // Access props via "this.props" - Line 66 FIX: props are now correctly recognized through inheritance.
     return this.props.children;
   }
 }

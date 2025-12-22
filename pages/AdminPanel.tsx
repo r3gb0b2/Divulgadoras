@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -567,9 +566,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Changed catch variable type from 'unknown' to 'any' to resolve 'unknown' not assignable to 'string' error when passing message to setLookupError.
-            const message = err?.message || String(err) || 'Erro desconhecido';
+        } catch (err) {
+            // FIX: Properly handle error as unknown and ensure it is converted to string before passing to setLookupError.
+            const message = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(message);
         } finally {
             setIsLookingUp(false);
@@ -607,7 +606,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             } else if (a.justification) {
                 stat.justifications++;
                 if (a.justificationStatus === 'accepted') {
-                    stat.acceptedJustifications++;
+                    stats.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
                     stat.missed++;
                 } else if (a.justificationStatus === 'pending' || a.justification) {
