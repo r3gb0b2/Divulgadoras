@@ -551,8 +551,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: string) => {
-        // FIX: Ensure the inputEmail is strictly string and derived safely (Line 509 fix context)
-        const emailArg = (typeof emailToSearch === 'string' ? emailToSearch : lookupEmail || '').trim();
+        // FIX: Explicitly handle potential unknown types by casting emailToSearch and lookupEmail to string before using them.
+        const emailArg: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
         
         if (!emailArg) return;
         
@@ -564,8 +564,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Safely extract error message from any type (Line 509 fix)
-            const errorMessage = err?.message || 'Erro desconhecido';
+            // FIX: Safely extract error message using optional chaining and providing a string fallback.
+            const errorMessage: string = (err as Error)?.message || 'Erro desconhecido';
             setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);

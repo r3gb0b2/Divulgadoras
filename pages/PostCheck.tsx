@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -227,6 +227,9 @@ const PostCheck: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     
+    // Referência para evitar múltiplas inicializações de push
+    const isPushInitialized = useRef<string | null>(null);
+
     // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
@@ -268,22 +271,23 @@ const PostCheck: React.FC = () => {
 
     // ATIVAÇÃO DO PUSH QUANDO O PROMOTER É CARREGADO
     useEffect(() => {
-        if (promoter?.id) {
-            console.log("Push: Ativando monitoramento para divulgadora:", promoter.id);
-            // Pequeno delay para garantir que o Capacitor e plugins estejam prontos
+        // Só inicializa se tiver promoter e se já não inicializou para este ID nesta sessão de componente
+        if (promoter?.id && isPushInitialized.current !== promoter.id) {
+            console.log("Push: Iniciando processo para divulgadora:", promoter.id);
+            isPushInitialized.current = promoter.id;
+            
             const timer = setTimeout(() => {
-                initPushNotifications(promoter.id).catch(e => console.warn("Push init skipped:", e.message));
-            }, 1500);
-            return () => {
-                clearTimeout(timer);
-                clearPushListeners();
-            };
+                initPushNotifications(promoter.id).catch(e => console.warn("Push init error:", e.message));
+            }, 2000);
+            
+            return () => clearTimeout(timer);
         }
     }, [promoter?.id]);
 
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
+        isPushInitialized.current = null;
         clearPushListeners();
     };
 

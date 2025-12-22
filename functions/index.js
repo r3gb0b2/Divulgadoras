@@ -68,14 +68,18 @@ exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(
             throw new functions.https.HttpsError("not-found", "Perfil da divulgadora não encontrado.");
         }
 
+        // Determina plataforma simples baseada no token se possível ou apenas marca como atualizado
+        const isIOS = token.length < 100 && !token.includes(':'); // Heurística simples se não enviado
+
         await docRef.update({
             fcmToken: token,
             lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
-            // Registra um diagnóstico simples para o Admin
+            // Registra um diagnóstico detalhado para o Admin
             pushDiagnostics: {
-                lastUpdate: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 tokenLength: token.length,
-                status: 'active'
+                pluginStatus: 'registered',
+                platform: isIOS ? 'iOS' : 'Android'
             }
         });
 

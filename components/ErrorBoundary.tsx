@@ -15,16 +15,13 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Properly initialize state in class constructor for standard React class component pattern.
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
-  }
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  // Using class fields for state initialization ensures 'state' is correctly property-defined for TypeScript.
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
 
   // Static method for error state transformation.
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -37,7 +34,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     // Log the error for debugging
     console.error("Uncaught error:", error, errorInfo);
     
-    // FIX: setState is properly available as this is a correctly typed React.Component.
+    // setState is available via React.Component inheritance.
     this.setState({
       error: error,
       errorInfo: errorInfo
@@ -45,7 +42,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render() {
-    // FIX: Access state from current instance.
+    // Correctly accessing 'state' property from 'this'.
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -54,7 +51,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/* FIX: Safely accessing error state. */}
+            {/* Safely rendering the error string. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -74,7 +71,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       );
     }
 
-    // FIX: Correctly access children from props.
+    // Correctly accessing 'props' property from 'this'.
     return this.props.children;
   }
 }
