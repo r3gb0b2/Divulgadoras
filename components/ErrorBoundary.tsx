@@ -14,8 +14,8 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  * Standard implementation using React Class Component.
  */
-// Fixed inheritance and property access issues by using explicit Component type from react and proper standard implementation.
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+// Fixed inheritance and property access issues by explicitly using React.Component and proper type generics.
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = {
@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   render() {
-    // Fixed: Standard access to this.state
+    // Accessing this.state which is now available via inheritance from React.Component
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
@@ -52,7 +52,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {/* Safely rendering the error string. Fixed: Standard access to this.state */}
+            {/* Safely rendering the error string. Accessing this.state.error correctly. */}
             {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
                 <p className="text-red-400">{this.state.error.toString()}</p>
@@ -72,7 +72,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    // Fixed: Standard access to this.props
+    // Accessing this.props.children correctly via inheritance
     return this.props.children;
   }
 }

@@ -549,8 +549,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     /**
      * Busca uma divulgadora globalmente pelo e-mail.
      */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        // Fix: Explicitly handle potential unknown types by checking emailToSearch and lookupEmail to ensure string output
+    // Fixed type safety by changing emailToSearch to unknown and using type guards
+    const handleLookupPromoter = async (emailToSearch?: unknown) => {
         const emailArg: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
         
         if (!emailArg) return;
@@ -563,7 +563,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: unknown) {
-            // Fix: Standard catch block for unknown error type with safe string conversion
             const errorMessage = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
             setLookupError(errorMessage);
         } finally {
@@ -1013,7 +1012,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             <div className="relative">
                                 <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
-                                {/* Fixed: Explicitly cast to dateOfBirth to string to handle potential unknown type issues */}
                                 <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth as string)}</div>
                             </div>
                         </div>

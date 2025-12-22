@@ -231,6 +231,7 @@ const PostCheck: React.FC = () => {
     const pushInitializedFor = useRef<string | null>(null);
     const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
     const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
+    const [showFixGuide, setShowFixGuide] = useState(false);
 
     // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -388,9 +389,15 @@ const PostCheck: React.FC = () => {
                         <p className="text-[10px] font-bold text-red-200 mb-1 flex items-center gap-1">
                             <AlertTriangleIcon className="w-3 h-3" /> DIAGNÓSTICO TÉCNICO:
                         </p>
-                        <p className="text-[9px] font-mono text-red-300 break-words italic leading-relaxed">
+                        <p className="text-[9px] font-mono text-red-300 break-words italic leading-relaxed mb-2">
                             {pushErrorDetail}
                         </p>
+                        <button 
+                            onClick={() => setShowFixGuide(true)}
+                            className="w-full py-1.5 bg-red-600 text-white text-[9px] font-black rounded-lg hover:bg-red-500 uppercase tracking-tighter"
+                        >
+                            Ver Como Corrigir (XCODE)
+                        </button>
                     </div>
                 )}
             </div>
@@ -452,6 +459,48 @@ const PostCheck: React.FC = () => {
                     )
                 )}
             </div>
+
+            {/* Modal de Guia de Correção Push */}
+            {showFixGuide && (
+                <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 overflow-y-auto">
+                    <div className="bg-secondary w-full max-w-lg p-8 rounded-3xl border border-red-500/50 shadow-2xl">
+                         <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-red-500 uppercase tracking-tighter">Corrigindo Erro de Plugin</h3>
+                            <button onClick={() => setShowFixGuide(false)} className="text-gray-400"><XIcon className="w-6 h-6"/></button>
+                         </div>
+                         
+                         <p className="text-gray-300 text-sm mb-6 leading-relaxed">
+                            O erro <code className="text-yellow-500">Not Implemented</code> no iOS ocorre porque o Xcode não incluiu o plugin de notificações na compilação final. Siga estes passos no seu computador de desenvolvimento:
+                         </p>
+
+                         <div className="space-y-4 font-mono text-[10px]">
+                            <div className="bg-black p-4 rounded-xl border border-gray-800">
+                                <p className="text-gray-500 mb-2"># 1. Sincronize o código JavaScript com o iOS</p>
+                                <p className="text-green-400">npx cap sync ios</p>
+                            </div>
+                            <div className="bg-black p-4 rounded-xl border border-gray-800">
+                                <p className="text-gray-500 mb-2"># 2. Reinstale as dependências nativas (Pods)</p>
+                                <p className="text-green-400">cd ios/App && pod install && cd ../..</p>
+                            </div>
+                            <div className="bg-black p-4 rounded-xl border border-gray-800">
+                                <p className="text-gray-500 mb-2"># 3. Limpe o build anterior no Xcode</p>
+                                <p className="text-gray-400">Pressione <span className="text-white">Command + Shift + K</span> dentro do Xcode.</p>
+                            </div>
+                            <div className="bg-black p-4 rounded-xl border border-gray-800">
+                                <p className="text-gray-500 mb-2"># 4. Compile novamente para o dispositivo físico</p>
+                                <p className="text-gray-400">Dê o "Play" no Xcode para instalar a nova versão no celular.</p>
+                            </div>
+                         </div>
+
+                         <button 
+                            onClick={() => setShowFixGuide(false)}
+                            className="w-full mt-8 py-4 bg-gray-800 text-white font-black rounded-2xl"
+                         >
+                            ENTENDI
+                         </button>
+                    </div>
+                </div>
+            )}
 
             {justificationAssignment && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setJustificationAssignment(null)}>
