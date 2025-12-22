@@ -72,7 +72,7 @@ const AppleTestRegistration: React.FC = () => {
                     <div className="text-left">
                         <p className="text-blue-200 text-[11px] font-black uppercase tracking-tight">Atenção Obrigatória</p>
                         <p className="text-blue-100 text-[10px] leading-tight mt-1">
-                            Você <strong>DEVE</strong> usar o e-mail que está logado no seu iPhone (Ajustes > Seu Nome). Se usar outro e-mail, você não conseguirá baixar o app.
+                            Você <strong>DEVE</strong> usar o e-mail que está logado no seu iPhone (Ajustes &gt; Seu Nome). Se usar outro e-mail, você não conseguirá baixar o app.
                         </p>
                     </div>
                 </div>
