@@ -12,27 +12,42 @@ export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
         console.log('Push: Iniciando sincronização FCM...');
+
+        // Verifica se o plugin está disponível na ponte nativa
+        if (!Capacitor.isPluginAvailable('FCM')) {
+            return { 
+                success: false, 
+                error: "Plugin FCM não implementado. Execute 'npx cap sync ios' e recompile o app no Xcode." 
+            };
+        }
         
         if (Capacitor.getPlatform() === 'ios') {
-            await FCM.setAutoInit({ enabled: true });
+            try {
+                await FCM.setAutoInit({ enabled: true });
+            } catch (e) {
+                console.warn("FCM: Falha ao setar AutoInit (não crítico)");
+            }
         }
 
-        // Verifica se o plugin FCM está disponível antes de chamar
-        if (!FCM) {
-            return { success: false, error: "Plugin FCM (Native) não encontrado no bundle." };
-        }
-
+        // Tenta obter o token
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
         if (fcmToken && fcmToken.length > 32) {
             const saved = await savePushToken(promoterId, fcmToken);
             if (saved) return { success: true };
-            return { success: false, error: "Token capturado, mas falhou ao gravar no Firestore (Cloud Function)." };
+            return { success: false, error: "Token capturado, mas falhou ao gravar no Firestore." };
         }
-        return { success: false, error: "Token retornado pelo Firebase é inválido ou nulo." };
+        
+        return { success: false, error: "Token retornado pelo Firebase está vazio." };
     } catch (error: any) {
         console.error('Push Sync Error:', error.message);
+        
+        // Trata erro específico de implementação ausente
+        if (error.message?.includes('not implemented')) {
+            return { success: false, error: "Plugin FCM (Nativo) não encontrado no binário do iOS." };
+        }
+        
         return { success: false, error: error.message || "Erro desconhecido na sincronização FCM." };
     }
 };
@@ -58,19 +73,19 @@ export const initPushNotifications = async (
         }
 
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão negada pelo usuário nas configurações do celular.");
+            onStatusChange?.('denied', "Permissão de notificação negada no iOS.");
             return 'denied';
         }
 
         onStatusChange?.('granted');
         await PushNotifications.removeAllListeners();
 
-        // 1. Listener de Sucesso no Registro Nativo (APNs/GCM)
+        // 1. Listener de Sucesso no Registro Nativo (APNs)
         PushNotifications.addListener('registration', async (token: Token) => {
-            console.log('Push: Registro nativo OK. Sincronizando com Firebase...');
+            console.log('Push: Registro APNs OK. Sincronizando FCM...');
             onStatusChange?.('syncing');
             
-            // Delay para garantir que o SDK do Firebase processou o token nativo
+            // Pequeno delay para garantir que o Firebase gerou o token baseado no APNs
             setTimeout(async () => {
                 const result = await syncTokenWithServer(promoterId);
                 if (result.success) {
@@ -78,20 +93,20 @@ export const initPushNotifications = async (
                 } else {
                     onStatusChange?.('error', result.error);
                 }
-            }, 2500);
+            }, 3000);
         });
 
         // 2. Erro no registro nativo
         PushNotifications.addListener('registrationError', (error: any) => {
             const msg = error.error || error.message || JSON.stringify(error);
             console.error('Push Reg Error:', msg);
-            onStatusChange?.('error', `Erro Nativo: ${msg}`);
+            onStatusChange?.('error', `Erro APNs: ${msg}`);
         });
 
         // 3. Solicita registro ao SO
         await PushNotifications.register();
         
-        // Tentativa de sincronização imediata caso já esteja registrado de sessões anteriores
+        // Tentativa de sincronização imediata
         onStatusChange?.('syncing');
         const syncResult = await syncTokenWithServer(promoterId);
         if (syncResult.success) {
@@ -102,7 +117,7 @@ export const initPushNotifications = async (
         return 'granted';
     } catch (error: any) {
         console.error("Push Crash:", error.message);
-        onStatusChange?.('error', `Falha Crítica: ${error.message}`);
+        onStatusChange?.('error', `Falha: ${error.message}`);
         return 'error';
     }
 };

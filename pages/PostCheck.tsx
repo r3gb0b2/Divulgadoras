@@ -384,9 +384,12 @@ const PostCheck: React.FC = () => {
                     <span>{labels[pushStatus as keyof typeof labels]}</span>
                 </div>
                 {pushStatus === 'error' && pushErrorDetail && (
-                    <div className="bg-red-900/30 border border-red-900/50 p-2 rounded-lg max-w-[250px]">
-                        <p className="text-[8px] font-mono text-red-300 break-words italic">
-                            Erro Técnico: {pushErrorDetail}
+                    <div className="bg-red-900/30 border border-red-900/50 p-3 rounded-xl max-w-[280px] shadow-lg animate-fadeIn">
+                        <p className="text-[10px] font-bold text-red-200 mb-1 flex items-center gap-1">
+                            <AlertTriangleIcon className="w-3 h-3" /> DIAGNÓSTICO TÉCNICO:
+                        </p>
+                        <p className="text-[9px] font-mono text-red-300 break-words italic leading-relaxed">
+                            {pushErrorDetail}
                         </p>
                     </div>
                 )}
