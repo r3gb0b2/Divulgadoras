@@ -88,10 +88,8 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         
         const oldPromoterData = snapshot.data();
 
-        // Atualiza o banco de dados
         await promoterRef.update(updateData);
 
-        // Se o status mudou para aprovado
         if (updateData.status === 'approved' && oldPromoterData.status !== 'approved') {
             const orgSnap = await db.collection('organizations').doc(oldPromoterData.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
@@ -121,7 +119,6 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         }
         return { success: true };
     } catch (e) {
-        console.error("Erro na função updatePromoterAndSync:", e.message);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
@@ -159,30 +156,16 @@ exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").http
     }
 });
 
-exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId, token, metadata } = data;
-    try {
-        const updateData = { fcmToken: token, lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp() };
-        if (metadata) updateData.pushDiagnostics = { ...metadata, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
-        await db.collection('promoters').doc(promoterId).update(updateData);
-        return { success: true };
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
 exports.createPostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { postData, assignedPromoters } = data;
     try {
-        // Cria o post principal
         const postRef = await db.collection('posts').add({ 
             ...postData, 
             createdAt: admin.firestore.FieldValue.serverTimestamp() 
         });
         const postId = postRef.id;
         
-        // Cria as atribuições em lote
         const batch = db.batch();
         assignedPromoters.forEach(p => {
             const assignmentRef = db.collection('postAssignments').doc();
@@ -215,20 +198,6 @@ exports.deletePostAndAssignments = functions.region("southamerica-east1").https.
         const batch = db.batch();
         assignments.forEach(doc => batch.delete(doc.ref));
         batch.delete(db.collection('posts').doc(postId));
-        await batch.commit();
-        return { success: true };
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
-exports.removePromoterFromAllAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { promoterId } = data;
-    try {
-        const assignments = await db.collection('postAssignments').where('promoterId', '==', promoterId).get();
-        const batch = db.batch();
-        assignments.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
         return { success: true };
     } catch (e) {

@@ -540,36 +540,41 @@ export const deleteCampaignProofs = async (organizationId: string, campaignName?
   }
 };
 
-// FIX: Added missing WhatsApp reminder service functions.
-export const getWhatsAppRemindersPage = async (
-    pageSize: number, 
-    startAfterDoc: firebase.firestore.QueryDocumentSnapshot | null = null
-): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
+// FIX: Added missing member functions to resolve resolution errors in AdminWhatsAppReminders.tsx
+
+/**
+ * Busca lembretes de WhatsApp paginados.
+ */
+export const getWhatsAppRemindersPage = async (pageSize: number, lastVisibleDoc: firebase.firestore.QueryDocumentSnapshot | null = null): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
     try {
-        let q: firebase.firestore.Query = firestore.collection('whatsappReminders')
+        let q = firestore.collection('whatsappReminders')
             .orderBy('sendAt', 'desc')
             .limit(pageSize);
         
-        if (startAfterDoc) {
-            q = q.startAfter(startAfterDoc);
+        if (lastVisibleDoc) {
+            q = q.startAfter(lastVisibleDoc);
         }
         
         const snapshot = await q.get();
         const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
-        const lastVisible = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+        const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
         
         return { reminders, lastVisible };
     } catch (error) {
-        console.error("Error getting whatsapp reminders:", error);
-        return { reminders: [], lastVisible: null };
+        console.error("Error getting WhatsApp reminders:", error);
+        throw new Error("Falha ao buscar lembretes.");
     }
 };
 
+/**
+ * Envia um lembrete de WhatsApp imediatamente através de uma Cloud Function.
+ */
 export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<void> => {
     try {
-        const func = functions.httpsCallable('sendWhatsAppReminderImmediately');
-        await func({ reminderId });
+        const sendFunc = functions.httpsCallable('sendWhatsAppReminderImmediately');
+        await sendFunc({ reminderId });
     } catch (error: any) {
+        console.error("Error sending WhatsApp reminder immediately:", error);
         throw new Error(error.message || "Falha ao enviar lembrete.");
     }
 };

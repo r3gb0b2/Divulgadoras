@@ -377,17 +377,17 @@ export interface GroupRemovalRequest {
   actionTakenAt?: Timestamp;
 }
 
-// FIX: Added missing WhatsAppReminder interface.
+// FIX: Added missing WhatsAppReminder type
 export interface WhatsAppReminder {
   id: string;
-  organizationId: string;
   promoterId: string;
   promoterName: string;
-  promoterEmail: string;
   promoterWhatsapp: string;
+  organizationId: string;
   postId: string;
   postCampaignName: string;
   sendAt: Timestamp;
   status: 'pending' | 'sent' | 'error';
   error?: string;
+  createdAt: Timestamp | FieldValue;
 }
