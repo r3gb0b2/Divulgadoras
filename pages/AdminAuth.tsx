@@ -1,9 +1,9 @@
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import AdminDashboard from './AdminDashboard';
 import SuperAdminDashboard from './SuperAdminDashboard';
-// FIX: Using named import for AdminPanel to resolve "no default export" error
 import { AdminPanel } from './AdminPanel';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
@@ -29,7 +29,6 @@ import GroupRemovalsPage from './GroupRemovalsPage';
 import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 import PromoterDiagnosticsPage from './PromoterDiagnosticsPage';
 import GeminiPage from './Gemini';
-import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 import AdminPushCampaignPage from './AdminPushCampaignPage';
 import AdminCleanupPage from './AdminCleanupPage';
 import EmailTemplateEditor from './EmailTemplateEditor';
@@ -38,7 +37,6 @@ import NewsletterPage from './NewsletterPage';
 import SubscriptionPage from './SubscriptionPage';
 import ChangePasswordPage from './ChangePasswordPage';
 import QrCodeScannerPage from './QrCodeScannerPage';
-import AdminWhatsAppReminders from './AdminWhatsAppReminders';
 import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
 import AdminAppleTestReview from './AdminAppleTestReview';
@@ -55,10 +53,8 @@ const AdminAuth: React.FC = () => {
 
     return (
         <Routes>
-            {/* Login deve ser acessível sem proteção, mas redireciona se já logado */}
             <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
 
-            {/* Todas as outras rotas são protegidas */}
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
             {adminData?.role === 'superadmin' && (
@@ -69,9 +65,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="newsletter" element={<ProtectedRoute><NewsletterPage /></ProtectedRoute>} />
                     <Route path="email-templates" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
                     <Route path="edit-privacy" element={<ProtectedRoute><EditPrivacyPolicyPage /></ProtectedRoute>} />
-                    <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
-                    <Route path="whatsapp-reminders" element={<ProtectedRoute><AdminWhatsAppReminders /></ProtectedRoute>} />
                 </>
             )}
 
@@ -112,7 +106,6 @@ const AdminAuth: React.FC = () => {
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
 
-            {/* Catch-all interno do admin redireciona para o dashboard principal */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
     );

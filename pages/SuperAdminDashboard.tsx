@@ -4,9 +4,6 @@ import { Link } from 'react-router-dom';
 import { 
     UsersIcon, 
     BuildingOfficeIcon, 
-    MapPinIcon, 
-    MegaphoneIcon, 
-    ClipboardDocumentListIcon, 
     KeyIcon, 
     ShieldCheckIcon, 
     EnvelopeIcon, 
@@ -68,14 +65,13 @@ const SuperAdminDashboard: React.FC = () => {
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Campanha Push</h2>
                     </div>
                     <p className="mt-2 text-gray-400">Envie notificações nativas diretamente para os celulares das divulgadoras.</p>
-                    <div className="text-sm text-primary mt-4 opacity-0 group-hover:opacity-100 transition-opacity font-semibold">Enviar &rarr;</div>
                 </Link>
                 <Link to="/admin/cleanup" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                     <div className="flex items-center">
                         <TrashIcon className="w-8 h-8 text-primary" />
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Limpeza de Dados</h2>
                     </div>
-                    <p className="mt-2 text-gray-400">Remover prints antigos de eventos desativados para liberar espaço.</p>
+                    <p className="mt-2 text-gray-400">Remover prints antigos para liberar espaço.</p>
                 </Link>
             </div>
         </div>

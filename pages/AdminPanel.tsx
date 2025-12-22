@@ -551,8 +551,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleLookupPromoter = async (emailToSearch?: string) => {
         let emailArg: string = '';
         
-        // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'
-        // and safely narrowing emailToSearch to string before use.
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
         } else if (typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
@@ -568,10 +566,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Safely access error message by casting to any to prevent unknown argument error
+        } catch (err: unknown) {
+            // FIX: Explicitly cast to any or handle as unknown to safely access message
             const message = (err as any)?.message || String(err || 'Erro desconhecido');
-            setLookupError(message);
+            setLookupError(message as string);
         } finally {
             setIsLookingUp(false);
         }
@@ -583,7 +581,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setSearchQuery(String(promoter.email || ''));
         if (isSuperAdmin) {
             setSelectedOrg(String(promoter.organizationId));
-            // FIX: Ensure promoter.state is cast to string to avoid 'unknown' issues in setter
             setSelectedState(String(promoter.state || ''));
             setSelectedCampaign(String(promoter.campaignName || 'all'));
         }

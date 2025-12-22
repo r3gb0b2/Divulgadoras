@@ -1,7 +1,6 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
-import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, WhatsAppReminder, AdminUserData } from '../types';
+import { Post, PostAssignment, Promoter, ScheduledPost, Timestamp, OneTimePost, OneTimePostSubmission, AdminUserData, WhatsAppReminder } from '../types';
 
 /**
  * Converte qualquer formato de timestamp do Firebase para milissegundos de forma segura.
@@ -107,9 +106,7 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
     const snapshot = await q.get();
     const assignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
     
-    // Sort by most recent safely
     return assignments.sort((a, b) => {
-      // Use assignment createdAt if available, fallback to post createdAt
       const timeA = toMillisSafe(a.createdAt || a.post?.createdAt);
       const timeB = toMillisSafe(b.createdAt || b.post?.createdAt);
       return timeB - timeA;
@@ -186,24 +183,19 @@ export const updateAssignment = async (assignmentId: string, data: Partial<PostA
 };
 
 /**
- * Busca posts de uma organização, opcionalmente filtrando por visibilidade do admin.
+ * Busca posts de uma organização.
  */
 export const getPostsForOrg = async (organizationId?: string, adminData?: AdminUserData): Promise<Post[]> => {
   try {
     let q: firebase.firestore.Query = firestore.collection('posts');
-    
-    // Se organizationId for fornecido, filtra por ele. Caso contrário (Super Admin), traz todos.
     if (organizationId) {
       q = q.where('organizationId', '==', organizationId);
     }
-    
     const snapshot = await q.get();
     let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-    
     if (adminData && adminData.role !== 'superadmin') {
       posts = posts.filter(p => !p.ownerOnly || p.createdByEmail === adminData.email);
     }
-    
     return posts.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
   } catch (error) {
     console.error("Error fetching posts:", error);
@@ -242,10 +234,8 @@ export const getPostWithAssignments = async (postId: string): Promise<{ post: Po
   try {
     const postDoc = await firestore.collection('posts').doc(postId).get();
     if (!postDoc.exists) throw new Error("Post não encontrado.");
-    
     const assignmentsSnap = await firestore.collection('postAssignments').where('postId', '==', postId).get();
     const assignments = assignmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));
-    
     return { post: { id: postDoc.id, ...postDoc.data() } as Post, assignments };
   } catch (error: any) {
     throw new Error(error.message);
@@ -287,33 +277,7 @@ export const updateScheduledPost = async (id: string, data: any): Promise<void> 
 };
 
 /**
- * Envia lembretes para quem confirmou mas não enviou print.
- */
-export const sendPostReminder = async (postId: string): Promise<{ success: boolean; count: number; message: string }> => {
-  try {
-    const func = functions.httpsCallable('sendPostReminders');
-    const result = await func({ postId, type: 'confirmed_no_proof' });
-    return result.data as { success: boolean; count: number; message: string };
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-};
-
-/**
- * Envia lembretes para quem ainda não confirmou o post.
- */
-export const sendPendingReminders = async (postId: string): Promise<{ success: boolean; count: number; message: string }> => {
-  try {
-    const func = functions.httpsCallable('sendPostReminders');
-    const result = await func({ postId, type: 'pending_confirmation' });
-    return result.data as { success: boolean; count: number; message: string };
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-};
-
-/**
- * Deleta um post e suas atribuições chamando a Cloud Function.
+ * Deleta um post e suas atribuições.
  */
 export const deletePost = async (postId: string): Promise<void> => {
   try {
@@ -350,7 +314,6 @@ export const submitProof = async (assignmentId: string, files: File[]): Promise<
         return await ref.getDownloadURL();
       })
     );
-
     await firestore.collection('postAssignments').doc(assignmentId).update({
       proofImageUrls: imageUrls,
       proofSubmittedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -362,15 +325,12 @@ export const submitProof = async (assignmentId: string, files: File[]): Promise<
 };
 
 /**
- * Busca estatísticas de uma divulgadora pelo email.
+ * Busca estatísticas de uma divulgadora.
  */
 export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats: any; assignments: PostAssignment[] }> => {
     try {
         const assignments = await getAssignmentsForPromoterByEmail(email);
-        
-        // Filtramos apenas assignments que possuem a informação do post vinculada
         const validAssignments = assignments.filter(a => !!a.post);
-
         const stats = {
             assigned: validAssignments.length,
             completed: validAssignments.filter(a => !!a.proofSubmittedAt).length,
@@ -385,8 +345,7 @@ export const getStatsForPromoterByEmail = async (email: string): Promise<{ stats
         };
         return { stats, assignments: validAssignments };
     } catch (error: any) {
-        console.error("Erro detalhado ao calcular estatísticas:", error);
-        throw new Error("Não foi possível calcular suas estatísticas. Verifique seus dados.");
+        throw new Error("Não foi possível calcular estatísticas.");
     }
 };
 
@@ -403,7 +362,7 @@ export const addAssignmentsToPost = async (postId: string, promoterIds: string[]
 };
 
 /**
- * Busca todos os posts agendados de uma organização.
+ * Busca todos os posts agendados.
  */
 export const getScheduledPosts = async (organizationId: string): Promise<ScheduledPost[]> => {
   try {
@@ -428,7 +387,7 @@ export const deleteScheduledPost = async (id: string): Promise<void> => {
 };
 
 /**
- * Busca posts únicos de uma organização.
+ * Busca posts únicos.
  */
 export const getOneTimePostsForOrg = async (organizationId: string): Promise<OneTimePost[]> => {
     try {
@@ -555,33 +514,6 @@ export const getStatsForPromoter = async (promoterId: string): Promise<{ stats: 
 };
 
 /**
- * Busca página de lembretes de WhatsApp.
- */
-export const getWhatsAppRemindersPage = async (limit: number, startAfter: any): Promise<{ reminders: WhatsAppReminder[]; lastVisible: any }> => {
-    try {
-        let q = firestore.collection('whatsAppReminders').orderBy('sendAt', 'desc').limit(limit);
-        if (startAfter) q = q.startAfter(startAfter);
-        const snapshot = await q.get();
-        const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
-        return { reminders, lastVisible: snapshot.docs[snapshot.docs.length - 1] || null };
-    } catch (error) {
-        return { reminders: [], lastVisible: null };
-    }
-};
-
-/**
- * Envia lembrete de WhatsApp imediatamente.
- */
-export const sendWhatsAppReminderImmediately = async (id: string): Promise<void> => {
-    try {
-        const func = functions.httpsCallable('sendWhatsAppReminderImmediately');
-        await func({ reminderId: id });
-    } catch (error: any) {
-        throw new Error(error.message);
-    }
-};
-
-/**
  * Analisa prints de uma campanha para limpeza.
  */
 export const analyzeCampaignProofs = async (organizationId: string, campaignName?: string, postId?: string): Promise<{ count: number; sizeBytes: number }> => {
@@ -605,4 +537,38 @@ export const deleteCampaignProofs = async (organizationId: string, campaignName?
   } catch (error: any) {
     throw new Error(error.message);
   }
+};
+
+/**
+ * FIX: Adicionado export member getWhatsAppRemindersPage para AdminWhatsAppReminders.tsx.
+ * Busca lembretes de WhatsApp paginados.
+ */
+export const getWhatsAppRemindersPage = async (pageSize: number, startAfterDoc: firebase.firestore.QueryDocumentSnapshot | null = null): Promise<{ reminders: WhatsAppReminder[], lastVisible: firebase.firestore.QueryDocumentSnapshot | null }> => {
+    try {
+        let q = firestore.collection('whatsAppReminders').orderBy('sendAt', 'desc').limit(pageSize);
+        if (startAfterDoc) {
+            q = q.startAfter(startAfterDoc);
+        }
+        const snapshot = await q.get();
+        const reminders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhatsAppReminder));
+        const lastVisible = snapshot.docs[snapshot.docs.length - 1] || null;
+        return { reminders, lastVisible };
+    } catch (error) {
+        console.error("Error fetching reminders page:", error);
+        return { reminders: [], lastVisible: null };
+    }
+};
+
+/**
+ * FIX: Adicionado export member sendWhatsAppReminderImmediately para AdminWhatsAppReminders.tsx.
+ * Envia um lembrete de WhatsApp imediatamente via Cloud Function.
+ */
+export const sendWhatsAppReminderImmediately = async (reminderId: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('sendWhatsAppReminderImmediately');
+        await func({ reminderId });
+    } catch (error: any) {
+        console.error("Error sending reminder immediately:", error);
+        throw new Error(error.message || "Falha ao enviar lembrete.");
+    }
 };

@@ -11,7 +11,6 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const timestampToInputDate = (ts: Timestamp | undefined): string => {
     if (!ts) return '';
-    // toDate() converts to local time, toISOString() converts to UTC, split removes time part
     return ts.toDate().toISOString().split('T')[0];
 };
 
@@ -26,7 +25,6 @@ const ManageOrganizationPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isAuthorized, setIsAuthorized] = useState(false);
 
-    // States for admin association
     const [allAdmins, setAllAdmins] = useState<AdminUserData[]>([]);
     const [isProcessingAdmin, setIsProcessingAdmin] = useState<string | null>(null);
 
@@ -44,7 +42,6 @@ const ManageOrganizationPage: React.FC = () => {
             setOrganization(orgData);
             setFormData(orgData);
 
-            // Fetch all admins if superadmin
             if (isSuperAdmin) {
                 const adminsData = await getAllAdmins();
                 setAllAdmins(adminsData);
@@ -62,7 +59,6 @@ const ManageOrganizationPage: React.FC = () => {
     }, [fetchData]);
 
     useEffect(() => {
-        // Run auth check only after data has been loaded
         if (!isLoading && organization && adminData) {
             const isOwner = adminData.uid === organization.ownerUid;
             if (isSuperAdmin || (isOwner && (adminData.organizationIds || []).includes(organization.id))) {
@@ -71,7 +67,6 @@ const ManageOrganizationPage: React.FC = () => {
                 setIsAuthorized(false);
             }
         } else if (!isLoading && !organization) {
-            // If org doesn't exist or there was an error, don't show auth error yet
             setIsAuthorized(false);
         }
     }, [isLoading, organization, adminData, isSuperAdmin]);
@@ -83,7 +78,6 @@ const ManageOrganizationPage: React.FC = () => {
 
     const availableAdmins = useMemo(() => {
         if (!organization) return [];
-        // Available admins are those not already associated with this org
         return allAdmins.filter(admin => !(admin.organizationIds || []).includes(organization.id))
             .sort((a, b) => a.email.localeCompare(b.email));
     }, [allAdmins, organization]);
@@ -97,7 +91,7 @@ const ManageOrganizationPage: React.FC = () => {
             if (!currentOrgIds.includes(orgId)) {
                 await setAdminUserData(adminUid, { organizationIds: [...currentOrgIds, orgId] });
             }
-            await fetchData(); // Refresh data
+            await fetchData();
         } catch (err: any) {
             setError("Falha ao associar administrador.");
         } finally {
@@ -111,7 +105,7 @@ const ManageOrganizationPage: React.FC = () => {
             const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
             const newOrgIds = (adminToUpdate?.organizationIds || []).filter(id => id !== orgId);
             await setAdminUserData(adminUid, { organizationIds: newOrgIds });
-            await fetchData(); // Refresh data
+            await fetchData();
         } catch (err: any) {
             setError("Falha ao desvincular administrador.");
         } finally {
@@ -132,7 +126,6 @@ const ManageOrganizationPage: React.FC = () => {
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         if (value) {
-            // Create date in local timezone to avoid off-by-one day issues
             const [year, month, day] = value.split('-').map(Number);
             const localDate = new Date(year, month - 1, day);
             setFormData(prev => ({ ...prev, [name]: Timestamp.fromDate(localDate) }));
@@ -143,9 +136,7 @@ const ManageOrganizationPage: React.FC = () => {
 
     const addDaysToExpirtation = (days: number) => {
         const currentExpiry = formData.planExpiresAt ? (formData.planExpiresAt as Timestamp).toDate() : new Date();
-        // If current expiry date is in the past, we should add days from today
         const baseDate = currentExpiry < new Date() ? new Date() : currentExpiry;
-        
         baseDate.setDate(baseDate.getDate() + days);
         setFormData(prev => ({ ...prev, planExpiresAt: Timestamp.fromDate(baseDate) }));
     };
@@ -178,11 +169,9 @@ const ManageOrganizationPage: React.FC = () => {
 
     const handleDelete = async () => {
         if (!orgId) return;
-        if (window.confirm(`Tem certeza que deseja DELETAR a organização "${organization?.name}"? Esta ação é irreversível e removerá todos os dados associados.`)) {
+        if (window.confirm(`Tem certeza que deseja DELETAR a organização "${organization?.name}"? Esta ação é irreversível.`)) {
              setIsSaving(true);
              try {
-                // TODO: A complete implementation should also delete associated promoters, admins, campaigns etc.
-                // This is a complex operation that might be better as a Firebase Function.
                 await deleteOrganization(orgId);
                 alert("Organização deletada.");
                 navigate('/admin/organizations');
@@ -198,27 +187,9 @@ const ManageOrganizationPage: React.FC = () => {
         return timestamp.toDate().toLocaleString('pt-BR');
     }
 
-    if (isLoading) {
-        return <div className="text-center py-10">Carregando organização...</div>;
-    }
-    
-    if (error && !organization) {
-        return <p className="text-red-400 text-center">{error}</p>;
-    }
-
-    if (!isAuthorized) {
-        return (
-            <div className="bg-secondary shadow-lg rounded-lg p-6 text-center">
-                 <h2 className="text-2xl font-bold text-red-400">Acesso Negado</h2>
-                 <p className="text-gray-300 mt-2">Você não tem permissão para gerenciar esta organização. Apenas o proprietário ou um Super Admin pode acessar esta página.</p>
-                 <button onClick={() => navigate(-1)} className="mt-6 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark">Voltar</button>
-            </div>
-        );
-    }
-
-    if (!organization || !formData) {
-        return <p className="text-center">Organização não encontrada.</p>;
-    }
+    if (isLoading) return <div className="text-center py-10">Carregando organização...</div>;
+    if (error && !organization) return <p className="text-red-400 text-center">{error}</p>;
+    if (!isAuthorized) return <div className="bg-secondary shadow-lg rounded-lg p-6 text-center"><h2 className="text-2xl font-bold text-red-400">Acesso Negado</h2><button onClick={() => navigate(-1)} className="mt-6 px-4 py-2 bg-primary text-white rounded-md">Voltar</button></div>;
 
     return (
         <div>
@@ -231,7 +202,6 @@ const ManageOrganizationPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSave} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
-                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md text-sm">{error}</div>}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-300">Nome da Organização</label>
@@ -254,7 +224,6 @@ const ManageOrganizationPage: React.FC = () => {
                            <option value="active">Ativo</option>
                            <option value="hidden">Oculto</option>
                            <option value="deactivated">Desativado</option>
-                           {/* Show trial status if it's the current one, but don't allow setting it manually */}
                            {organization?.status === 'trial' && <option value="trial">Em Teste</option>}
                         </select>
                     </div>
@@ -298,22 +267,6 @@ const ManageOrganizationPage: React.FC = () => {
                     <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
-                <div className="border-t border-gray-700 pt-6 mt-6">
-                    <h2 className="text-xl font-semibold mb-3">Configurações de Comunicação</h2>
-                    <div className="bg-dark/50 p-4 rounded-lg grid grid-cols-1 gap-6">
-                        <label className="flex items-center justify-between space-x-3 cursor-pointer">
-                            <div>
-                                <span className="text-white font-medium">Notificações via WhatsApp</span>
-                                <p className="text-sm text-gray-400">Permite o envio automático de mensagens para divulgadoras via Z-API.</p>
-                            </div>
-                            <div className="relative">
-                                <input type="checkbox" name="whatsappNotificationsEnabled" checked={formData.whatsappNotificationsEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, whatsappNotificationsEnabled: e.target.checked }))} className="sr-only peer" />
-                                <div className="w-14 h-8 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
                 {isSuperAdmin && (
                     <div className="border-t border-gray-700 pt-6 mt-6">
                         <h2 className="text-xl font-semibold mb-3">Controles de Funcionalidades (Super Admin)</h2>
@@ -342,7 +295,7 @@ const ManageOrganizationPage: React.FC = () => {
                             <label className="flex items-center justify-between space-x-3 cursor-pointer">
                                 <div>
                                     <span className="text-white font-medium">Gerenciador de Listas</span>
-                                    <p className="text-sm text-gray-400">Permite criar listas (VIP, Aniversariante) e atribuir divulgadoras.</p>
+                                    <p className="text-sm text-gray-400">Permite criar listas e atribuir divulgadoras.</p>
                                 </div>
                                 <div className="relative">
                                     <input type="checkbox" name="guestListManagementEnabled" checked={formData.guestListManagementEnabled !== false} onChange={(e) => setFormData(prev => ({ ...prev, guestListManagementEnabled: e.target.checked }))} className="sr-only peer" />
