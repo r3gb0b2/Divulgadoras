@@ -13,29 +13,33 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Declare explicit state type as class member to resolve 'Property state does not exist' errors.
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-  };
-
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
   }
 
-  // Static method for error state transformation.
+  /**
+   * Static method for error state transformation.
+   */
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  // Standard lifecycle method for side-effects when an error is caught.
+  /**
+   * Standard lifecycle method for side-effects when an error is caught.
+   */
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
   public render(): ReactNode {
-    // Access state via "this.state"
-    if (this.state.hasError) {
+    const { hasError, error } = this.state;
+    const { children } = this.props;
+
+    if (hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
           <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
@@ -43,9 +47,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {this.state.error && (
+            {error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                <p className="text-red-400">{this.state.error.toString()}</p>
+                <p className="text-red-400">{error.toString()}</p>
               </div>
             )}
              <button
@@ -62,7 +66,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    return this.props.children;
+    return children;
   }
 }
 

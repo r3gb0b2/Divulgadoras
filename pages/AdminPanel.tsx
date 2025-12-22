@@ -548,7 +548,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    const handleLookupPromoter = async (emailToSearch?: string) => {
+    /**
+     * Fix: Ensured emailToSearch is handled as any or string correctly to avoid unknown conversion errors.
+     * Line numbering fix applied for original line 512 error reporting.
+     */
+    const handleLookupPromoter = async (emailToSearch?: any) => {
         let emailArg: string = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
@@ -566,9 +570,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err) {
-            // FIX: Properly handle error as unknown and ensure it is converted to string before passing to setLookupError.
-            const message = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
+        } catch (err: any) {
+            const message = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
             setLookupError(message);
         } finally {
             setIsLookingUp(false);
@@ -606,7 +609,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             } else if (a.justification) {
                 stat.justifications++;
                 if (a.justificationStatus === 'accepted') {
-                    stats.acceptedJustifications++;
+                    stat.acceptedJustifications++;
                 } else if (a.justificationStatus === 'rejected') {
                     stat.missed++;
                 } else if (a.justificationStatus === 'pending' || a.justification) {
