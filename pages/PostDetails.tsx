@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Post, PostAssignment, Promoter, Timestamp, Organization } from '../types';
-import { getPostWithAssignments, getAssignmentsForOrganization, sendPostReminder, sendPendingReminders, updatePost, deletePost, acceptAllJustifications, updateAssignment } from '../services/postService';
+import { getPostWithAssignments, getAssignmentsForOrganization, updatePost, deletePost, acceptAllJustifications, updateAssignment } from '../services/postService';
 import { getPromotersByIds } from '../services/promoterService';
 import { getOrganization } from '../services/organizationService';
 import { ArrowLeftIcon, MegaphoneIcon, PencilIcon, TrashIcon, UserPlusIcon, CheckCircleIcon, SearchIcon, InstagramIcon, WhatsAppIcon } from '../components/Icons';
@@ -93,11 +93,9 @@ const PostDetails: React.FC = () => {
             setPost(postData);
             setAssignments(assignmentsData);
 
-            // Fetch all org assignments for stats calculation
             const orgAssignments = await getAssignmentsForOrganization(postData.organizationId);
             setAllOrgAssignments(orgAssignments);
 
-            // FIX: Explicitly cast mapped result to string[] to ensure compatibility with getPromotersByIds.
             const promoterIds = [...new Set(assignmentsData.map(a => a.promoterId as string))];
             if (promoterIds.length > 0) {
                 const promoters = await getPromotersByIds(promoterIds);
@@ -120,18 +118,12 @@ const PostDetails: React.FC = () => {
             if (orgFromContext) {
                 setOrganization(orgFromContext);
             } else {
-                // Fallback to fetch directly if not in context (e.g., superadmin context switch)
                 getOrganization(post.organizationId)
                     .then(orgData => setOrganization(orgData))
                     .catch(err => setError(err.message));
             }
         }
     }, [post, organizationsForAdmin]);
-
-    const areRemindersEnabled = useMemo(() => {
-        if (!organization) return true; // Default to true while loading org data
-        return organization.emailRemindersEnabled !== false;
-    }, [organization]);
 
     const assignmentsWithStats = useMemo(() => {
         const promoterStatsMap = new Map<string, { assigned: number; completed: number; acceptedJustifications: number; missed: number; pending: number; justifications: number }>();
@@ -186,7 +178,7 @@ const PostDetails: React.FC = () => {
             const successfulOutcomes = stats ? stats.completed + stats.acceptedJustifications : 0;
             const completionRate = stats && stats.assigned > 0
                 ? Math.round((successfulOutcomes / stats.assigned) * 100)
-                : -1; // -1 for no data
+                : -1;
             return { ...a, completionRate };
         });
     }, [assignments, allOrgAssignments]);
@@ -275,39 +267,6 @@ const PostDetails: React.FC = () => {
         }
     };
 
-    const handleSendReminders = async () => {
-        if (!post || !window.confirm("Isso enviará um e-mail de lembrete para todas as divulgadoras que confirmaram mas ainda não enviaram a comprovação. Deseja continuar?")) {
-            return;
-        }
-        setProcessingAction('remind');
-        setError('');
-        try {
-            const result = await sendPostReminder(post.id);
-            showSuccessMessage(result.message || `${result.count} lembretes enviados.`);
-            await fetchData(); // To update last reminder timestamps
-        } catch (err: any) {
-            setError(err.message || 'Falha ao enviar lembretes.');
-        } finally {
-            setProcessingAction(null);
-        }
-    };
-
-    const handleSendPendingReminders = async () => {
-        if (!post || !window.confirm("Isso enviará um e-mail de lembrete para todas as divulgadoras que AINDA NÃO CONFIRMARAM esta publicação. Deseja continuar?")) {
-            return;
-        }
-        setProcessingAction('remind_pending');
-        setError('');
-        try {
-            const result = await sendPendingReminders(post.id);
-            showSuccessMessage(result.message || `${result.count} lembretes enviados.`);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao enviar lembretes.');
-        } finally {
-            setProcessingAction(null);
-        }
-    };
-
     const handleAcceptAllJustifications = async () => {
         if (!post || !window.confirm("Tem certeza que deseja aceitar TODAS as justificativas pendentes para esta publicação?")) {
             return;
@@ -332,7 +291,7 @@ const PostDetails: React.FC = () => {
     
     const handleSaveAssignmentStatus = async (assignmentId: string, data: Partial<PostAssignment>) => {
         await updateAssignment(assignmentId, data);
-        await fetchData(); // Refresh list
+        await fetchData();
     };
     
     const handleOpenStatsModal = (promoterId: string) => {
@@ -370,7 +329,6 @@ const PostDetails: React.FC = () => {
             {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md mb-4 text-sm font-semibold">{error}</div>}
             {successMessage && <div className="bg-green-900/50 text-green-300 p-3 rounded-md mb-4 text-sm font-semibold">{successMessage}</div>}
 
-            {/* Post Content & Actions */}
             <div className="bg-secondary p-4 rounded-lg shadow-lg mb-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-1">
@@ -396,12 +354,6 @@ const PostDetails: React.FC = () => {
                              <h3 className="font-semibold">Ações em Massa</h3>
                              <div className="flex flex-wrap gap-2">
                                 <button onClick={() => setIsAssignModalOpen(true)} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><UserPlusIcon className="w-4 h-4"/> Atribuir Novas</button>
-                                {areRemindersEnabled && (
-                                    <>
-                                        <button onClick={handleSendReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Comprovação</button>
-                                        <button onClick={handleSendPendingReminders} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-orange-500 text-white rounded-md text-sm font-semibold disabled:opacity-50"><MegaphoneIcon className="w-4 h-4"/> Lembrar Pendentes</button>
-                                    </>
-                                )}
                                 <button onClick={handleAcceptAllJustifications} disabled={!!processingAction} className="flex-1 sm:flex-none flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm font-semibold disabled:opacity-50"><CheckCircleIcon className="w-4 h-4"/> Aceitar Justificativas</button>
                             </div>
                         </div>
@@ -409,7 +361,6 @@ const PostDetails: React.FC = () => {
                  </div>
             </div>
 
-            {/* Assignments List */}
             <div className="bg-secondary p-4 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-bold mb-4">Tarefas das Divulgadoras</h2>
                  <div className="flex flex-col md:flex-row gap-4 mb-4 items-center">

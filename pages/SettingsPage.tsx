@@ -217,7 +217,7 @@ const SettingsPage: React.FC = () => {
     
     setOrderedItems(initialItems);
 
-  }, [isOwner, organization]); // Re-run when conditions might change
+  }, [isOwner, organization]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
     dragItem.current = index;
@@ -255,7 +255,6 @@ const SettingsPage: React.FC = () => {
     }
     dragItem.current = null;
     dragOverItem.current = null;
-    // Use timeout to ensure the click event has a chance to be cancelled
     setTimeout(() => {
         wasDragging.current = false;
     }, 0);

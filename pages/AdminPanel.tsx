@@ -564,12 +564,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Changed catch parameter type to 'any' for simpler error handling and consistent code style with the rest of the file.
+            // FIX: Refactored catch block to avoid 'unknown' type errors when accessing error details and to ensure consistent error string conversion.
             let message = 'Erro desconhecido';
             if (err instanceof Error) {
                 message = err.message;
             } else if (err) {
-                message = String(err ?? 'Erro desconhecido');
+                message = String(err);
             }
             setLookupError(message);
         } finally {

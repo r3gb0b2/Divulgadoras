@@ -13,7 +13,7 @@ const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
 // --- Gemini API Setup ---
-const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Brevo Configuration ---
 const setupBrevo = () => {
@@ -62,7 +62,7 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
     if (!prompt) throw new functions.https.HttpsError("invalid-argument", "O prompt é obrigatório.");
 
     try {
-        const response = await genAI.models.generateContent({
+        const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
         });
@@ -110,7 +110,6 @@ exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(
             lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
         };
 
-        // Se houver metadados (plataforma), salva para facilitar o filtro no Admin
         if (metadata) {
             updateData.pushDiagnostics = {
                 ...metadata,
@@ -137,19 +136,23 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
 
         await promoterRef.update(updateData);
 
+        // Notificação de APROVAÇÃO (Mantida conforme solicitado)
         if (updateData.status === 'approved' && promoter.status !== 'approved') {
             const orgSnap = await db.collection('organizations').doc(promoter.organizationId).get();
             const org = orgSnap.data() || { name: "Equipe Certa" };
             const eventName = promoter.campaignName || "nosso banco de talentos";
 
-            const html = `<div style="font-family: sans-serif; padding: 20px;"><h1>Parabéns, ${promoter.name}!</h1><p>Você foi aprovada na equipe ${org.name} para o evento ${eventName}!</p></div>`;
+            const html = `<div style="font-family: sans-serif; padding: 20px;"><h1>Parabéns, ${promoter.name}!</h1><p>Você foi aprovada na equipe ${org.name} para o evento ${eventName}!</p><p>Acesse seu portal agora para ver as regras e entrar no grupo de WhatsApp.</p></div>`;
 
+            // Envio por E-mail
             await sendEmail({
                 toEmail: promoter.email,
                 toName: promoter.name,
                 subject: `Seu cadastro na ${org.name} foi aprovado! 🎉`,
                 htmlContent: html
             });
+            
+            // Nota: Lógica de WhatsApp para aprovação pode ser adicionada aqui no futuro se necessário.
         }
         return { success: true };
     } catch (e) {
@@ -184,6 +187,9 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
             });
         });
         await batch.commit();
+        
+        // Nenhuma função de envio de WhatsApp chamada aqui para novos posts.
+        
         return { success: true, postId };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
