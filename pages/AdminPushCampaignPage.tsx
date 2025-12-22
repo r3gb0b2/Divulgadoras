@@ -175,14 +175,14 @@ const AdminPushCampaignPage: React.FC = () => {
                                     <p className="text-indigo-400 mb-2 font-bold">1. Resetar Dependências e IOS:</p>
                                     <p className="text-gray-400 mb-1"># Execute na raiz do projeto:</p>
                                     <code className="text-green-400 block break-all">
-                                        rm -rf ios node_modules package-lock.json && npm install && npx cap add ios && npx cap sync ios
+                                        {"rm -rf ios node_modules package-lock.json && npm install && npx cap add ios && npx cap sync ios"}
                                     </code>
                                 </div>
                                 <div className="bg-black/40 p-4 rounded-xl border border-gray-700 font-mono text-[11px]">
                                     <p className="text-indigo-400 mb-2 font-bold">2. Reinstalar Pods Nativo:</p>
                                     <p className="text-gray-400 mb-1"># Execute estes comandos:</p>
                                     <code className="text-green-400 block">
-                                        cd ios/App && pod deintegrate && pod install && cd ../..
+                                        {"cd ios/App && pod deintegrate && pod install && cd ../.."}
                                     </code>
                                 </div>
                             </div>
@@ -192,7 +192,7 @@ const AdminPushCampaignPage: React.FC = () => {
                                 <div>
                                     <p className="text-sm text-red-200 font-bold uppercase">Atenção no Xcode:</p>
                                     <p className="text-sm text-gray-300">
-                                        Antes de rodar novamente no Xcode, vá em <strong>Product -> Clean Build Folder</strong>. 
+                                        Antes de rodar novamente no Xcode, vá em <strong>{"Product \u2192 Clean Build Folder"}</strong>. 
                                         Isso é obrigatório para limpar referências antigas do header que não existe mais.
                                     </p>
                                 </div>
