@@ -52,6 +52,10 @@ export interface PromoterApplicationData {
   state: string;
   campaignName?: string;
   organizationId: string;
+  // Propriedades opcionais para evitar erros de compilação em formulários que ainda não as implementam
+  cpf?: string;
+  rg?: string;
+  documentPhotos?: File[];
 }
 
 export type AdminRole = 'superadmin' | 'admin' | 'approver' | 'viewer' | 'poster';
@@ -175,6 +179,7 @@ export interface PostAssignment {
   justificationSubmittedAt?: Timestamp | null;
   justificationImageUrls?: string[];
   completionRate: number;
+  createdAt?: Timestamp | FieldValue;
 }
 
 export interface ScheduledPostData extends Omit<Post, 'id' | 'createdAt' | 'organizationId' | 'createdByEmail'> {}

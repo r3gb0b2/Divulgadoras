@@ -109,8 +109,9 @@ export const getAssignmentsForPromoterByEmail = async (email: string): Promise<P
     
     // Sort by most recent safely
     return assignments.sort((a, b) => {
-      const timeA = toMillisSafe(a.post?.createdAt);
-      const timeB = toMillisSafe(b.post?.createdAt);
+      // Use assignment createdAt if available, fallback to post createdAt
+      const timeA = toMillisSafe(a.createdAt || a.post?.createdAt);
+      const timeB = toMillisSafe(b.createdAt || b.post?.createdAt);
       return timeB - timeA;
     });
   } catch (error) {

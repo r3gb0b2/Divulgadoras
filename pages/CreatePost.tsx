@@ -136,7 +136,7 @@ const ManageInstructionsModal: React.FC<ManageInstructionsModalProps> = ({ isOpe
                             {editingTemplate?.id === template.id ? (
                                 <><button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button><button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button></>
                             ) : (
-                                <><button onClick={setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
+                                <><button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
                             )}
                         </div>
                     </li>
@@ -255,7 +255,7 @@ const ManageLinksModal: React.FC<ManageLinksModalProps> = ({ isOpen, onClose, on
                                     {editingTemplate?.id === template.id ? (
                                         <><button onClick={handleUpdateTemplate} className="text-green-400 hover:text-green-300 text-sm">Salvar</button><button onClick={() => setEditingTemplate(null)} className="text-gray-400 hover:text-gray-300 text-sm">Cancelar</button></>
                                     ) : (
-                                        <><button onClick={setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
+                                        <><button onClick={() => setEditingTemplate(template)} className="text-indigo-400 hover:text-indigo-300 text-sm">Editar</button><button onClick={() => handleDeleteTemplate(template.id)} className="text-red-400 hover:text-red-300 text-sm">Excluir</button></>
                                     )}
                                 </div>
                             </li>

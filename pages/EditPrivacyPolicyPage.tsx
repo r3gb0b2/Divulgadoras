@@ -83,8 +83,7 @@ const EditPrivacyPolicyPage: React.FC = () => {
 
                         <div className="flex justify-end gap-4 mt-6 border-t border-gray-700 pt-4">
                             <button 
-                                onClick={() => navigate('/politica-de-privacidade')} 
-                                target="_blank"
+                                onClick={() => window.open('/#/politica-de-privacidade', '_blank')} 
                                 className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-md hover:bg-gray-600"
                             >
                                 Ver Página Pública

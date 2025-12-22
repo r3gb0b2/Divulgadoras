@@ -537,6 +537,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
     const handleConfirmReject = async (reason: string, allowEdit: boolean) => {
         const newStatus: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
+        // FIX: Ensure parameters are correctly passed to handleBulkUpdate for bulk operations.
         if (isBulkRejection) {
             await handleBulkUpdate({ status: newStatus, rejectionReason: reason }, 'reject');
         } else if (rejectingPromoter && canManage) {
@@ -565,7 +566,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Ensure message is always a string to fix potential "unknown" to "string" assignment issues.
+            // FIX: Explicitly convert unknown error types to string to resolve 'unknown' to 'string' assignment issues.
             const message = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(message);
         } finally {

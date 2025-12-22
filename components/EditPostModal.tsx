@@ -40,6 +40,7 @@ const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Ic
 
 const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, onSave }) => {
     const [formData, setFormData] = useState<Partial<Post>>({});
+    const [expiresAtStr, setExpiresAtStr] = useState<string>('');
     const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [mediaPreview, setMediaPreview] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -48,8 +49,8 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
         if (post && isOpen) {
             setFormData({
                 ...post,
-                expiresAt: timestampToInputDate(post.expiresAt as Timestamp),
             });
+            setExpiresAtStr(timestampToInputDate(post.expiresAt as Timestamp));
             setMediaFile(null);
             setMediaPreview(null);
             if (post.mediaUrl) {
@@ -67,7 +68,12 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const isCheckbox = type === 'checkbox';
-        setFormData(prev => ({ ...prev, [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value }));
+        
+        if (name === 'expiresAt') {
+            setExpiresAtStr(value);
+        } else {
+            setFormData(prev => ({ ...prev, [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value }));
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,11 +87,12 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
     const handleSave = async () => {
         setIsSaving(true);
         const dataToSave: Partial<Post> = { ...formData };
-        if (formData.expiresAt && typeof formData.expiresAt === 'string') {
-            const [year, month, day] = formData.expiresAt.split('-').map(Number);
+        
+        if (expiresAtStr) {
+            const [year, month, day] = expiresAtStr.split('-').map(Number);
             const expiryTimestamp = new Date(Date.UTC(year, month - 1, day, 23, 59, 59));
             dataToSave.expiresAt = firebase.firestore.Timestamp.fromDate(expiryTimestamp);
-        } else if (formData.expiresAt === '' || formData.expiresAt === null) {
+        } else {
             dataToSave.expiresAt = null;
         }
 
@@ -151,7 +158,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({ isOpen, onClose, post, on
                     
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Data Limite (opcional)</label>
-                        <input type="date" name="expiresAt" value={formData.expiresAt as string || ''} onChange={handleChange} className={formInputStyle} style={{colorScheme: 'dark'}}/>
+                        <input type="date" name="expiresAt" value={expiresAtStr} onChange={handleChange} className={formInputStyle} style={{colorScheme: 'dark'}}/>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700">
