@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
@@ -229,6 +230,7 @@ const PostCheck: React.FC = () => {
     // Push Notification Status
     const pushInitializedFor = useRef<string | null>(null);
     const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
+    const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
 
     // Justification states
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
@@ -275,11 +277,13 @@ const PostCheck: React.FC = () => {
             pushInitializedFor.current = promoter.id;
             
             const timer = setTimeout(() => {
-                initPushNotifications(promoter.id, (status) => {
+                initPushNotifications(promoter.id, (status, detail) => {
                     setPushStatus(status);
+                    if (detail) setPushErrorDetail(detail);
                 }).catch(err => {
                     console.error("Push Init Fail:", err.message);
                     setPushStatus('error');
+                    setPushErrorDetail(err.message);
                 });
             }, 1000);
             
@@ -292,6 +296,7 @@ const PostCheck: React.FC = () => {
         setPromoter(null); setSearched(false); setEmail(''); setAssignments([]);
         pushInitializedFor.current = null;
         setPushStatus('idle');
+        setPushErrorDetail(null);
         clearPushListeners();
     };
 
@@ -355,7 +360,7 @@ const PostCheck: React.FC = () => {
             denied: 'Notificações Desativadas',
             syncing: 'Vinculando dispositivo...',
             success: 'Alertas Ativados!',
-            error: 'Erro ao ativar alertas push',
+            error: pushErrorDetail || 'Erro ao ativar alertas push',
         };
 
         const icons = {
@@ -372,7 +377,9 @@ const PostCheck: React.FC = () => {
         return (
             <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-2 rounded-full border text-[9px] font-black uppercase tracking-widest ${currentStyle}`}>
                 {icons[pushStatus as keyof typeof icons]}
-                {labels[pushStatus as keyof typeof labels]}
+                <span className="max-w-[150px] truncate" title={labels[pushStatus as keyof typeof labels]}>
+                    {labels[pushStatus as keyof typeof labels]}
+                </span>
             </div>
         );
     };

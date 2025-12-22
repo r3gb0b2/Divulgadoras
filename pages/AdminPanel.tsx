@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -550,7 +551,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
      * Busca uma divulgadora globalmente pelo e-mail.
      */
     const handleLookupPromoter = async (emailToSearch?: any) => {
-        // FIX: Explicitly handle potential unknown types by checking emailToSearch and lookupEmail to string before using them.
+        // Fixed: Explicitly handle potential unknown types by checking emailToSearch and lookupEmail to string before using them.
         const emailArg: string = (typeof emailToSearch === 'string' ? emailToSearch : String(lookupEmail || '')).trim();
         
         if (!emailArg) return;
@@ -562,9 +563,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
-            // FIX: Safely handle error by using any and fallback string
-            setLookupError(err?.message || 'Erro desconhecido');
+        } catch (err: unknown) {
+            // Fixed: Robustly handle unknown error type from modern TypeScript configuration
+            const errorMessage = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
+            setLookupError(errorMessage);
         } finally {
             setIsLookingUp(false);
         }
@@ -1012,7 +1014,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                             )}
                             <div className="relative">
                                 <img src={promoter.facePhotoUrl || promoter.photoUrls[0] || 'https://via.placeholder.com/100'} alt={promoter.name} className="w-24 h-24 object-cover rounded-md cursor-pointer" onClick={() => openPhotoViewer(promoter.photoUrls, 0)} />
-                                {/* FIX: Explicitly cast to dateOfBirth to string to handle potential unknown type issues */}
+                                {/* Fixed: Explicitly cast to dateOfBirth to string to handle potential unknown type issues */}
                                 <div className="absolute bottom-1 right-1 bg-black/50 px-1.5 py-0.5 rounded text-xs font-bold">{calculateAge(promoter.dateOfBirth as string)}</div>
                             </div>
                         </div>
