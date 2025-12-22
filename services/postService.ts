@@ -188,9 +188,15 @@ export const updateAssignment = async (assignmentId: string, data: Partial<PostA
 /**
  * Busca posts de uma organização, opcionalmente filtrando por visibilidade do admin.
  */
-export const getPostsForOrg = async (organizationId: string, adminData?: AdminUserData): Promise<Post[]> => {
+export const getPostsForOrg = async (organizationId?: string, adminData?: AdminUserData): Promise<Post[]> => {
   try {
-    let q: firebase.firestore.Query = firestore.collection('posts').where('organizationId', '==', organizationId);
+    let q: firebase.firestore.Query = firestore.collection('posts');
+    
+    // Se organizationId for fornecido, filtra por ele. Caso contrário (Super Admin), traz todos.
+    if (organizationId) {
+      q = q.where('organizationId', '==', organizationId);
+    }
+    
     const snapshot = await q.get();
     let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
     
@@ -200,6 +206,7 @@ export const getPostsForOrg = async (organizationId: string, adminData?: AdminUs
     
     return posts.sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
   } catch (error) {
+    console.error("Error fetching posts:", error);
     return [];
   }
 };
@@ -306,14 +313,15 @@ export const sendPendingReminders = async (postId: string): Promise<{ success: b
 };
 
 /**
- * Deleta um post e suas atribuições.
+ * Deleta um post e suas atribuições chamando a Cloud Function.
  */
 export const deletePost = async (postId: string): Promise<void> => {
   try {
     const deletePostAndAssignments = functions.httpsCallable('deletePostAndAssignments');
     await deletePostAndAssignments({ postId });
-  } catch (error) {
-    throw new Error("Falha ao deletar post.");
+  } catch (error: any) {
+    console.error("Error in deletePost:", error);
+    throw new Error(error.message || "Falha ao deletar post.");
   }
 };
 
@@ -427,7 +435,7 @@ export const getOneTimePostsForOrg = async (organizationId: string): Promise<One
         const q = firestore.collection('oneTimePosts').where('organizationId', '==', organizationId);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OneTimePost))
-            .sort((a, b) => toMillisSafe(b.createdAt) - toMillisSafe(a.createdAt));
+            .sort((a, b) => toMillisSafe(a.createdAt) - toMillisSafe(a.createdAt));
     } catch (error) {
         return [];
     }

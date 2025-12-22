@@ -189,3 +189,32 @@ exports.createPostAndAssignments = functions.region("southamerica-east1").https.
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
+
+exports.deletePostAndAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { postId } = data;
+    try {
+        const assignments = await db.collection('postAssignments').where('postId', '==', postId).get();
+        const batch = db.batch();
+        assignments.forEach(doc => batch.delete(doc.ref));
+        batch.delete(db.collection('posts').doc(postId));
+        await batch.commit();
+        return { success: true };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.removePromoterFromAllAssignments = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { promoterId } = data;
+    try {
+        const assignments = await db.collection('postAssignments').where('promoterId', '==', promoterId).get();
+        const batch = db.batch();
+        assignments.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        return { success: true };
+    } catch (e) {
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});

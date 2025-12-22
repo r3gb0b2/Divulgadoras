@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -552,6 +551,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
     const handleLookupPromoter = async (emailToSearch?: string) => {
         let emailArg: string = '';
         
+        // FIX: Argument of type 'unknown' is not assignable to parameter of type 'string'
+        // and safely narrowing emailToSearch to string before use.
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
         } else if (typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
