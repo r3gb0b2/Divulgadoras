@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -5,7 +6,7 @@ import { getAllPromoters, getPromoterStats, updatePromoter, deletePromoter, getR
 import { getOrganization, getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAssignmentsForOrganization } from '../services/postService';
-import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp, FollowInteraction } from '../types';
+import { Promoter, AdminUserData, PromoterStatus, RejectionReason, Organization, Campaign, PostAssignment, Timestamp } from '../types';
 import { states, stateMap } from '../constants/states';
 import { Link, useNavigate } from 'react-router-dom';
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
@@ -545,10 +546,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    /**
-     * Busca uma divulgadora globalmente pelo e-mail.
-     */
-    // FIX: Refined parameter type to 'string | undefined' and added better error handling for catch block to resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 509.
     const handleLookupPromoter = async (emailToSearch?: string) => {
         let emailArg: string = '';
         
@@ -568,14 +565,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            let message = 'Erro desconhecido';
-            if (err instanceof Error) {
-                message = err.message;
-            } else if (typeof err === 'string') {
-                message = err;
-            } else {
-                message = String(err ?? 'Erro desconhecido');
-            }
+            // FIX: Ensure message is always a string to fix potential "unknown" to "string" assignment issues.
+            const message = err instanceof Error ? err.message : String(err || 'Erro desconhecido');
             setLookupError(message);
         } finally {
             setIsLookingUp(false);
@@ -1006,7 +997,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             {selectedPromoterIds.size > 0 && (
                 <div className="sticky top-20 z-10 bg-blue-900/90 backdrop-blur-sm p-3 rounded-md flex flex-col sm:flex-row justify-between items-center my-4 gap-3">
                     <span className="font-semibold text-white">{selectedPromoterIds.size} selecionadas</span>
-                    <div className="flex wrap gap-2 justify-center">
+                    <div className="flex flex-wrap gap-2 justify-center">
                         <button onClick={() => handleBulkUpdate({ status: 'approved' }, 'approve')} disabled={isBulkProcessing} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded-md text-sm font-semibold">Aprovar</button>
                         <button onClick={handleBulkRejectClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-sm font-semibold">Rejeitar</button>
                         <button onClick={handleBulkRemoveClick} disabled={isBulkProcessing} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold">Remover da Equipe</button>
@@ -1039,4 +1030,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
                                     <p className="text-sm text-gray-400">{promoter.email}</p>
                                     <PromoterHistoryBadge promoter={promoter} allPromoters={allPromoters} onClick={(targetEmail: string) => { handleLookupPromoter(targetEmail); }} />
                                 </div>
-                               
+                                {getStatusBadge(promoter.status)}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm mt-2 text-gray-300">
+                                <a href={`https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-green-400"><WhatsAppIcon className="w-4 h-4" /><span>{promoter.whatsapp}</span></a>
+                                <a href={`https://instagram.com/${promoter.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-pink-400"><InstagramIcon className="w-4 h-4" /><span>{promoter.instagram}</span></a>
+                                {promoter.tiktok && <a href={`https://tiktok.com/@${promoter.tiktok.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-blue-400"><TikTokIcon className="w-4 h-4" /><span>{promoter.tiktok}</span></a>}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                                <span>{promoter.campaignName}</span> | <span>Cadastrado {formatRelativeTime(promoter.createdAt as Timestamp)}</span>
+                            </div>
+                            {promoter.observation && (
+                                <p className="text-xs text-yellow-300 bg-yellow-900/30 p-2 rounded-md mt-2 italic"><strong>Obs:</strong> {promoter.observation}</p>
+                            )}
+                            {promoter.actionTakenByEmail && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {getActionLabel(promoter.status)} {promoter.actionTakenByEmail} em {formatDate(promoter.statusChangedAt as Timestamp)}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
+                            {filter === 'pending' && canManage && (
+                                <>
+                                    <button onClick={() => handleUpdatePromoter(promoter.id, { status: 'approved' })} className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold">Aprovar</button>
+                                    <button onClick={() => openRejectionModal(promoter)} className="w-full px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-semibold">Rejeitar</button>
+                                </>
+                            )}
+                            {filter === 'approved' && canManage && (
+                                <>
+                                    <button onClick={() => handleManualNotify(promoter)} disabled={notifyingId === promoter.id} className={`w-full px-4 py-2 text-white rounded-md text-sm font-semibold ${promoter.lastManualNotificationAt ? 'bg-gray-600 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                                        {notifyingId === promoter.id ? 'Enviando...' : (promoter.lastManualNotificationAt ? 'Reenviar' : 'Notificar')}
+                                    </button>
+                                    <button onClick={() => handleRemoveFromTeam(promoter)} disabled={processingId === promoter.id} className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-semibold">Remover</button>
+                                </>
+                            )}
+                             {isSuperAdmin && <button onClick={() => handleDeletePromoter(promoter.id)} className="w-full px-4 py-2 bg-gray-800 text-red-400 border border-red-900/50 rounded-md hover:bg-red-900/30 text-xs">Excluir Inscrição</button>}
+                            <button onClick={() => openEditModal(promoter)} className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm font-semibold">Detalhes</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {totalFilteredCount > PROMOTERS_PER_PAGE && (
+                <div className="mt-6 flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Página {currentPage} de {pageCount} ({totalFilteredCount} resultados)</span>
+                    <div className="flex gap-2">
+                        <button onClick={handlePrevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Anterior</button>
+                        <button onClick={handleNextPage} disabled={currentPage === pageCount} className="px-4 py-2 bg-gray-700 rounded-md disabled:opacity-50">Próxima</button>
+                    </div>
+                </div>
+            )}
+
+            <PhotoViewerModal isOpen={isPhotoViewerOpen} onClose={() => setIsPhotoViewerOpen(false)} imageUrls={photoViewerUrls} startIndex={photoViewerStartIndex} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={handleUpdatePromoter} promoter={editingPromoter} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setRejectingPromoter(null); setIsBulkRejection(false); }} onConfirm={handleConfirmReject} reasons={rejectionReasons} />
+            {organizationIdForReasons && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} onReasonsUpdated={refreshReasons} organizationId={organizationIdForReasons} />}
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} error={lookupError} results={lookupResults} onGoToPromoter={handleGoToPromoter} organizationsMap={organizationsMap} />
+        </div>
+    );
+};
+
+export default AdminPanel;
