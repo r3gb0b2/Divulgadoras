@@ -9,13 +9,14 @@ import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, Gro
  */
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
+  const campaign = data.campaignName || null;
   
   try {
     // 1. Verificar se já existe cadastro pendente ou aprovado para este evento
     const existing = await firestore.collection("promoters")
       .where("email", "==", emailLower)
       .where("organizationId", "==", data.organizationId)
-      .where("campaignName", "==", data.campaignName || null)
+      .where("campaignName", "==", campaign)
       .limit(1).get();
       
     // Se houver um cadastro que não seja 'rejected' (rejeitado definitivo), bloqueia
@@ -26,7 +27,7 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       }
     }
 
-    // 2. Upload das fotos com retry simples e organização por pasta
+    // 2. Upload das fotos
     const photoUrls = await Promise.all(
       data.photos.map(async (file, index) => {
         const extension = file.name.split('.').pop() || 'jpg';
@@ -55,8 +56,10 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       state: data.state,
-      campaignName: data.campaignName || null,
+      campaignName: campaign,
       organizationId: data.organizationId,
+      // CRITICAL: Initialize allCampaigns with the current campaign so association is immediate
+      allCampaigns: campaign ? [campaign] : []
     };
 
     await firestore.collection('promoters').add(newPromoter);

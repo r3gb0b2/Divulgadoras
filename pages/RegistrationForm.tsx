@@ -1,16 +1,18 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
+import { getCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon, SparklesIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon 
+  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { Campaign } from '../types';
 
 const RegistrationForm: React.FC = () => {
-  const { organizationId, state, campaignName } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
+  const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -20,8 +22,11 @@ const RegistrationForm: React.FC = () => {
     instagram: '',
     tiktok: '',
     dateOfBirth: '',
+    campaignName: campaignNameFromUrl ? decodeURIComponent(campaignNameFromUrl) : '',
   });
   
+  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,6 +34,26 @@ const RegistrationForm: React.FC = () => {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [dataFound, setDataFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Busca as campanhas disponíveis para o estado e organização
+  useEffect(() => {
+    if (organizationId && state) {
+      setIsLoadingCampaigns(true);
+      getCampaigns(state, organizationId)
+        .then(camps => {
+          // Filtra apenas campanhas ativas
+          const actives = camps.filter(c => c.status === 'active');
+          setAvailableCampaigns(actives);
+          
+          // Se houver apenas uma campanha e nenhuma na URL, seleciona automaticamente
+          if (!campaignNameFromUrl && actives.length === 1) {
+            setFormData(prev => ({ ...prev, campaignName: actives[0].name }));
+          }
+        })
+        .catch(err => console.error("Erro ao carregar eventos:", err))
+        .finally(() => setIsLoadingCampaigns(false));
+    }
+  }, [organizationId, state, campaignNameFromUrl]);
 
   // Função para limpar links de redes sociais
   const sanitizeHandle = (input: string) => {
@@ -94,6 +119,11 @@ const RegistrationForm: React.FC = () => {
       return;
     }
 
+    if (!formData.campaignName) {
+      setError("Por favor, selecione para qual evento você deseja se candidatar.");
+      return;
+    }
+
     if (formData.name.trim().split(/\s+/).length < 2) {
       setError("Por favor, insira seu nome completo (Nome e Sobrenome).");
       return;
@@ -117,8 +147,7 @@ const RegistrationForm: React.FC = () => {
         tiktok: sanitizeHandle(formData.tiktok),
         photos,
         state,
-        campaignName: campaignName ? decodeURIComponent(campaignName) : undefined,
-        organizationId // Crucial para aparecer na lista do admin certo
+        organizationId 
       };
 
       await addPromoter(finalData);
@@ -178,7 +207,7 @@ const RegistrationForm: React.FC = () => {
           </h1>
           <div className="inline-block mt-4 px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
             <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px] relative z-10">
-                {campaignName ? decodeURIComponent(campaignName) : 'Inscrição Oficial'} • {stateMap[state || ''] || state}
+                {formData.campaignName || 'Inscrição Oficial'} • {stateMap[state || ''] || state}
             </p>
           </div>
         </div>
@@ -190,6 +219,39 @@ const RegistrationForm: React.FC = () => {
               {error}
             </div>
           )}
+
+          {/* Seção 0: Seleção de Evento */}
+          <div className="space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">00</div>
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">Evento / Grupo</h2>
+            </div>
+            
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Para qual evento deseja se candidatar?</label>
+                <div className="relative group">
+                  <MegaphoneIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
+                  <select 
+                    name="campaignName"
+                    value={formData.campaignName}
+                    onChange={e => setFormData({...formData, campaignName: e.target.value})}
+                    disabled={!!campaignNameFromUrl}
+                    className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all appearance-none font-bold disabled:opacity-70 disabled:cursor-not-allowed"
+                    required
+                  >
+                    <option value="" className="bg-gray-900">Selecione o Evento...</option>
+                    {availableCampaigns.map(c => (
+                        <option key={c.id} value={c.name} className="bg-gray-900">{c.name}</option>
+                    ))}
+                    {!isLoadingCampaigns && availableCampaigns.length === 0 && (
+                        <option value="Geral" className="bg-gray-900">Banco de Talentos (Geral)</option>
+                    )}
+                  </select>
+                  {isLoadingCampaigns && <div className="absolute right-10 top-1/2 -translate-y-1/2"><div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div></div>}
+                </div>
+                {campaignNameFromUrl && <p className="text-[10px] text-gray-500 ml-4 italic mt-1">* Você está usando um link exclusivo para este evento.</p>}
+            </div>
+          </div>
 
           {/* Seção 1: Identidade */}
           <div className="space-y-8">
