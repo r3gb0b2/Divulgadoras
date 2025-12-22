@@ -4,6 +4,34 @@ import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
 
 /**
+ * Remove recursivamente objetos não serializáveis (como FieldValue sentinels) 
+ * antes de enviar dados para uma Cloud Function Callable.
+ */
+const cleanForCallable = (obj: any): any => {
+    if (obj === null || typeof obj !== 'object') return obj;
+    
+    // Se for um sentinel do Firestore, removemos para que a Function use o seu próprio ou ignore
+    if (obj instanceof firebase.firestore.FieldValue) {
+        return undefined; 
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(cleanForCallable);
+    }
+
+    const cleaned: any = {};
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            const val = cleanForCallable(obj[key]);
+            if (val !== undefined) {
+                cleaned[key] = val;
+            }
+        }
+    }
+    return cleaned;
+};
+
+/**
  * Adiciona uma nova divulgadora, enviando as fotos para o Storage
  * e salvando os dados no Firestore com normalização.
  */
@@ -232,7 +260,9 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
   try {
     if (data.status === 'approved') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
-        await updateFunc({ promoterId: id, data });
+        // CRITICAL: Clean data to remove non-serializable objects (FieldValue sentinels)
+        const cleanedData = cleanForCallable(data);
+        await updateFunc({ promoterId: id, data: cleanedData });
     } else {
         await firestore.collection('promoters').doc(id).update(data);
     }

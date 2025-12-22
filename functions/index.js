@@ -23,6 +23,11 @@ function normalizePhoneNumber(phone) {
     if (!phone) return null;
     let cleaned = phone.replace(/\D/g, '');
     
+    // Remove zero à esquerda se existir (ex: 085...)
+    if (cleaned.startsWith('0') && cleaned.length > 10) {
+        cleaned = cleaned.substring(1);
+    }
+
     // Se não tem o 55 no início e parece um número brasileiro (10 ou 11 dígitos)
     if (!cleaned.startsWith('55') && (cleaned.length === 10 || cleaned.length === 11)) {
         cleaned = '55' + cleaned;
@@ -35,7 +40,7 @@ async function sendWhatsApp(to, message, organizationId) {
     const phone = normalizePhoneNumber(to);
     
     if (!phone) {
-        console.error("WhatsApp Error: Número de telefone inválido ou ausente.");
+        console.error(`[WhatsApp Error] Número de telefone inválido ou ausente: ${to}`);
         return { success: false, message: "Invalid phone number" };
     }
 
@@ -46,13 +51,13 @@ async function sendWhatsApp(to, message, organizationId) {
     const token = zapiConfig.token;
 
     if (!instance || !token) {
-        console.warn(`WhatsApp Ignorado: Credenciais Z-API não configuradas para a Org: ${organizationId}`);
+        console.warn(`[WhatsApp Ignorado] Credenciais Z-API não configuradas para a Org: ${organizationId}. Execute: firebase functions:config:set zapi.instance="ID" zapi.token="TOKEN"`);
         return { success: false, message: "Z-API credentials missing" };
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
     
-    console.log(`Tentando enviar WhatsApp para ${phone}...`);
+    console.log(`[WhatsApp] Tentando enviar para ${phone}...`);
     
     try {
         const response = await fetch(url, {
@@ -67,14 +72,14 @@ async function sendWhatsApp(to, message, organizationId) {
         const data = await response.json();
         
         if (response.ok) {
-            console.log(`WhatsApp enviado com sucesso para ${phone}. ID: ${data.messageId || 'N/A'}`);
+            console.log(`[WhatsApp Sucesso] Enviado para ${phone}. ID Mensagem: ${data.messageId || 'N/A'}`);
             return { success: true, data };
         } else {
-            console.error(`Erro Z-API (${response.status}):`, JSON.stringify(data));
+            console.error(`[WhatsApp Erro Z-API] Status ${response.status}:`, JSON.stringify(data));
             return { success: false, error: data };
         }
     } catch (error) {
-        console.error("Erro crítico ao conectar com Z-API:", error.message);
+        console.error(`[WhatsApp Erro Crítico] Falha na requisição: ${error.message}`);
         return { success: false, error: error.message };
     }
 }
@@ -147,6 +152,12 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Promoter not found");
         
         const oldPromoterData = snapshot.data();
+
+        // Tratamento interno de Timestamps caso o cliente tenha enviado lixo ou esquecido
+        if (updateData.status && updateData.status !== oldPromoterData.status) {
+            updateData.statusChangedAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+
         await promoterRef.update(updateData);
 
         // AÇÃO: Se o status mudou para APROVADO
@@ -160,6 +171,8 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                 }
             }
             
+            console.log(`[Aprovação] Iniciando notificações para ${oldPromoterData.name} (${promoterId})`);
+
             // 1. Enviar E-mail
             const html = `
                 <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
@@ -184,11 +197,13 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                 const waMessage = `Olá *${firstName}*! Seu cadastro na equipe *${orgName}* foi APROVADO! 🎉\n\nAcesse seu portal para ver suas tarefas e materiais:\n${portalLink}`;
                 
                 await sendWhatsApp(oldPromoterData.whatsapp, waMessage, oldPromoterData.organizationId);
+            } else {
+                console.warn(`[Aprovação] WhatsApp não enviado: Número ausente para ${promoterId}`);
             }
         }
         return { success: true };
     } catch (e) {
-        console.error("Erro na função updatePromoterAndSync:", e.message);
+        console.error(`[Erro Função] updatePromoterAndSync: ${e.message}`);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });

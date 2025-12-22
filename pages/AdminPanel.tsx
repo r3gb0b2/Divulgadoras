@@ -373,15 +373,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
 
         const previousPromoters = [...allPromoters];
 
-        const actionData = {
-            actionTakenByUid: adminData.uid,
-            actionTakenByEmail: adminData.email,
-            statusChangedAt: { seconds: Date.now() / 1000 } as any
-        };
-
+        // Ação otimista de UI
         const optimisticUpdate = { ...data };
         if (data.status) {
-            Object.assign(optimisticUpdate, actionData);
+            Object.assign(optimisticUpdate, {
+                 actionTakenByUid: adminData.uid,
+                 actionTakenByEmail: adminData.email,
+                 statusChangedAt: { seconds: Date.now() / 1000 } as any
+            });
         }
 
         setAllPromoters(prev => prev.map(p => {
@@ -419,12 +418,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsRejectionModalOpen(false);
 
         try {
+            // No caso de funções Callables (aprovação), não enviamos FieldValue sentinels do cliente
+            // O backend cuidará de setar o timestamp correto se o status mudar.
             const updatePayload = { ...data };
-            if (data.status) {
+            
+            // Atribui dados de auditoria, mas evita sentinelas se for aprovação (branch Callables)
+            if (data.status !== 'approved') {
                 Object.assign(updatePayload, {
                     actionTakenByUid: adminData.uid,
                     actionTakenByEmail: adminData.email,
                     statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                // Para Callables, apenas enviamos IDs de quem agiu (o server usará o seu próprio tempo)
+                Object.assign(updatePayload, {
+                    actionTakenByUid: adminData.uid,
+                    actionTakenByEmail: adminData.email
                 });
             }
             
@@ -451,61 +460,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         
         setIsBulkProcessing(true);
         const idsToUpdate = Array.from(selectedPromoterIds);
-        
         const previousPromoters = [...allPromoters];
 
-        const optimisticUpdate = { ...updateData };
-        if (updateData.status) {
-            Object.assign(optimisticUpdate, {
-                actionTakenByUid: adminData.uid,
-                actionTakenByEmail: adminData.email,
-                statusChangedAt: { seconds: Date.now() / 1000 } as any
-            });
-        }
-
+        // Atualização otimista local
         setAllPromoters(prev => prev.map(p => {
             if (idsToUpdate.includes(p.id)) {
-                return { ...p, ...optimisticUpdate };
+                return { 
+                    ...p, 
+                    ...updateData,
+                    actionTakenByUid: adminData.uid,
+                    actionTakenByEmail: adminData.email,
+                    statusChangedAt: { seconds: Date.now() / 1000 } as any
+                };
             }
             return p;
         }));
-
-        setStats(prev => {
-            const newStats = { ...prev };
-            idsToUpdate.forEach(id => {
-                const currentPromoter = previousPromoters.find(p => p.id === id);
-                if (currentPromoter) {
-                    const oldStatus = currentPromoter.status;
-                    const newStatus = updateData.status;
-                    
-                    if (oldStatus !== newStatus && newStatus) {
-                        if (oldStatus === 'pending') newStats.pending--;
-                        else if (oldStatus === 'approved') newStats.approved--;
-                        else if (oldStatus === 'rejected' || oldStatus === 'rejected_editable') newStats.rejected--;
-                        else if (oldStatus === 'removed') newStats.removed--;
-                        
-                        if (newStatus === 'pending') newStats.pending++;
-                        else if (newStatus === 'approved') newStats.approved++;
-                        else if (newStatus === 'rejected' || newStatus === 'rejected_editable') newStats.rejected++;
-                        else if (newStatus === 'removed') newStats.removed++;
-                    }
-                }
-            });
-            return newStats;
-        });
 
         setSelectedPromoterIds(new Set());
         setIsRejectionModalOpen(false);
         setIsBulkRejection(false);
 
         try {
+            // Preparamos o payload sem sentinelas do cliente se for aprovação (Callable)
             const updatePayload = { ...updateData };
-            if (updateData.status) {
-                Object.assign(updatePayload, {
-                    actionTakenByUid: adminData.uid,
-                    actionTakenByEmail: adminData.email,
-                    statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+            Object.assign(updatePayload, {
+                actionTakenByUid: adminData.uid,
+                actionTakenByEmail: adminData.email
+            });
+
+            if (updateData.status !== 'approved') {
+                 // Para rejeição simples (direto no Firestore), podemos usar o sentinel
+                 Object.assign(updatePayload, { statusChangedAt: firebase.firestore.FieldValue.serverTimestamp() });
             }
 
             const promises = idsToUpdate.map(id => updatePromoter(id, updatePayload));
@@ -523,6 +508,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             alert("Houve um erro ao processar alguns itens. Por favor, atualize a página para ver o estado real.");
         } finally {
             setIsBulkProcessing(false);
+            fetchData();
         }
     };
 
@@ -548,16 +534,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    /**
-     * Fix: Ensured emailToSearch is handled as any or string correctly to avoid unknown conversion errors.
-     * Line numbering fix applied for original line 512 error reporting.
-     */
-    const handleLookupPromoter = async (emailToSearch?: any) => {
-        let emailArg: string = '';
+    // FIX: Typed parameter as unknown and simplified logic to ensure type-safe string assignment, resolving line 497 error.
+    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+        let emailArg = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
-            emailArg = (emailToSearch as string).trim();
-        } else if (typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
+            emailArg = emailToSearch.trim();
+        } else if (lookupEmail && typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
         }
         
@@ -570,7 +553,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
+        } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err ?? 'Erro desconhecido');
             setLookupError(message);
         } finally {
