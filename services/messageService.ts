@@ -37,3 +37,13 @@ export const sendPushCampaign = async (
         throw new Error(error.message || 'Falha ao enviar notificações push.');
     }
 };
+
+export const testSelfPush = async (fcmToken: string, name: string): Promise<void> => {
+    try {
+        const testFunc = httpsCallable(functions, 'testSelfPush');
+        await testFunc({ fcmToken, name });
+    } catch (error: any) {
+        console.error("Error testing push:", error);
+        throw new Error(error.message || 'Erro ao testar push.');
+    }
+};

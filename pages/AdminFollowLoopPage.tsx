@@ -18,8 +18,8 @@ import { getOrganization, updateOrganization } from '../services/organizationSer
 import { FollowLoopParticipant, FollowInteraction, FollowLoop } from '../types';
 import { ArrowLeftIcon, SearchIcon, InstagramIcon, UserPlusIcon, CogIcon, RefreshIcon, PencilIcon, LinkIcon, HeartIcon, PlusIcon, TrashIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
-import { auth } from '../firebase/config';
 
+// FIX: Ensure ParticipantWithStats explicitly extends FollowLoopParticipant.
 interface ParticipantWithStats extends FollowLoopParticipant {
     taskCompletionRate: number;
 }
@@ -156,15 +156,15 @@ const AdminFollowLoopPage: React.FC = () => {
                 getAllFollowInteractions(selectedOrgId, loopId)
             ]);
             
-            // Enrich participants with stats (optional, could be slow if many)
+            // Enrich participants with stats
             const enriched = await Promise.all(loopParticipants.map(async (p) => {
                 try {
                     const { stats } = await getStatsForPromoter(p.promoterId);
                     const successful = stats.completed + stats.acceptedJustifications;
                     const rate = stats.assigned > 0 ? Math.round((successful / stats.assigned) * 100) : -1;
-                    return { ...p, taskCompletionRate: rate };
+                    return { ...p, taskCompletionRate: rate } as ParticipantWithStats;
                 } catch (e) {
-                    return { ...p, taskCompletionRate: -1 };
+                    return { ...p, taskCompletionRate: -1 } as ParticipantWithStats;
                 }
             }));
 

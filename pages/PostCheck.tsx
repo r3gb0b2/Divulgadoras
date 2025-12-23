@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, scheduleProofPushReminder } from '../services/postService';
 import { findPromotersByEmail, changePromoterEmail } from '../services/promoterService';
+import { testSelfPush } from '../services/messageService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
 import { 
     ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, 
@@ -67,9 +68,16 @@ const CountdownTimer: React.FC<{ targetDate: any, prefix?: string }> = ({ target
     return <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isExpired ? 'bg-red-900/30 text-red-400' : 'bg-primary/20 text-primary'}`}><ClockIcon className="h-3 w-3" /><span>{prefix}{timeLeft}</span></div>;
 };
 
-const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, onConfirm: (assignment: PostAssignment) => void, onJustify: (assignment: PostAssignment) => void, onRefresh: () => void }> = ({ assignment, onConfirm, onJustify, onRefresh }) => {
+const PostCard: React.FC<{ 
+    assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
+    promoter: Promoter,
+    onConfirm: (assignment: PostAssignment) => void, 
+    onJustify: (assignment: PostAssignment) => void, 
+    onRefresh: () => void 
+}> = ({ assignment, promoter, onConfirm, onJustify, onRefresh }) => {
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
+    const [isSchedulingReminder, setIsSchedulingReminder] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
@@ -134,8 +142,25 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
 
     const handleConfirm = async () => {
         setIsConfirming(true);
-        try { await confirmAssignment(assignment.id); await onConfirm(assignment); }
+        try { 
+            await confirmAssignment(assignment.id); 
+            await onConfirm(assignment); 
+        }
         catch (err: any) { alert(err.message); } finally { setIsConfirming(false); }
+    };
+
+    const handleScheduleReminder = async () => {
+        if (isSchedulingReminder || assignment.reminderScheduled) return;
+        setIsSchedulingReminder(true);
+        try {
+            await scheduleProofPushReminder(assignment, promoter);
+            await onRefresh();
+            alert("Lembrete agendado! Você receberá uma notificação em 6 horas.");
+        } catch (err: any) {
+            alert(err.message);
+        } finally {
+            setIsSchedulingReminder(false);
+        }
     };
 
     const handleDownloadLink1 = async () => {
@@ -238,7 +263,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                          {assignment.status === 'pending' ? (
                             <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 <button 
                                     onClick={() => navigate(`/proof/${assignment.id}`)} 
                                     disabled={!isProofButtonEnabled} 
@@ -246,6 +271,19 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                                 >
                                     {isProofButtonEnabled ? 'ENVIAR PRINT' : 'AGUARDE O TEMPO ABAIXO'}
                                 </button>
+                                
+                                {/* BOTÃO DE LEMBRETE 6H */}
+                                {!isProofButtonEnabled && promoter.fcmToken && (
+                                    <button 
+                                        onClick={handleScheduleReminder} 
+                                        disabled={isSchedulingReminder || assignment.reminderScheduled}
+                                        className={`w-full py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all ${assignment.reminderScheduled ? 'bg-indigo-900/20 border-indigo-500/50 text-indigo-400' : 'bg-dark/40 border-white/10 text-gray-400 hover:bg-indigo-900/10 hover:border-indigo-500/30'}`}
+                                    >
+                                        <FaceIdIcon className="w-4 h-4" />
+                                        {assignment.reminderScheduled ? 'Lembrete Push Ativado (6h)' : 'Me avisar via Push em 6h'}
+                                    </button>
+                                )}
+
                                 <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl border border-white/5">
                                     <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
                                     <span className={`text-[10px] font-black uppercase tracking-widest ${countdownColor}`}>
@@ -279,6 +317,7 @@ const PostCheck: React.FC = () => {
     const pushInitializedFor = useRef<string | null>(null);
     const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
     const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
+    const [pushTestCountdown, setPushTestCountdown] = useState<number | null>(null);
 
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
@@ -292,14 +331,11 @@ const PostCheck: React.FC = () => {
         if (!searchEmail) return;
         setIsLoading(true); setSearched(true);
         try {
-            // Busca todos os perfis vinculados a este e-mail
             const profiles = await findPromotersByEmail(searchEmail);
             if (profiles.length === 0) { 
               alert("E-mail não encontrado."); setSearched(false); setIsLoading(false); return; 
             }
             
-            // LÓGICA DE DESBLOQUEIO POR PRODUTORA (ORGANIZAÇÃO)
-            // Cria um mapa de quais produtoras a divulgadora já aceitou as regras
             const producerRuleAccepted = new Map<string, boolean>();
             profiles.forEach(p => {
                 if (p.hasJoinedGroup === true) {
@@ -307,7 +343,6 @@ const PostCheck: React.FC = () => {
                 }
             });
 
-            // Seleciona o perfil mais relevante (aprovado ou mais recente) para o cabeçalho
             const sortedProfiles = [...profiles].sort((a, b) => {
               if (a.status === 'approved' && b.status !== 'approved') return -1;
               if (a.status !== 'approved' && b.status === 'approved') return 1;
@@ -319,10 +354,8 @@ const PostCheck: React.FC = () => {
             setPromoter(sortedProfiles[0]);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
             
-            // Busca as tarefas
             const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
             
-            // Mapeia as tarefas verificando se a regra daquela produtora específica foi aceita em algum momento
             const mappedAssignments = fetchedAssignments.map(a => ({
                 ...a,
                 promoterHasJoinedGroup: producerRuleAccepted.get(a.organizationId) || false
@@ -370,6 +403,29 @@ const PostCheck: React.FC = () => {
         } catch (err: any) { alert(err.message); } finally { setIsUpdatingEmail(false); }
     };
 
+    const handleTestPush = async () => {
+        if (!promoter?.fcmToken || pushTestCountdown !== null) return;
+        
+        setPushTestCountdown(10);
+        const timer = setInterval(() => {
+            setPushTestCountdown(prev => {
+                if (prev === null || prev <= 1) {
+                    clearInterval(timer);
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        setTimeout(async () => {
+            try {
+                await testSelfPush(promoter.fcmToken!, promoter.name);
+            } catch (e: any) {
+                alert("Falha no disparo do teste: " + e.message);
+            }
+        }, 10000);
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (files) {
@@ -410,7 +466,6 @@ const PostCheck: React.FC = () => {
 
     return (
         <div className="max-w-xl mx-auto pb-20">
-            {/* HEADER FIXO DE DIVULGADORA */}
             <div className="flex justify-between items-start mb-8 px-2">
                 <div className="flex-grow overflow-hidden">
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight truncate">Olá, {promoter.name.split(' ')[0]}!</h1>
@@ -438,6 +493,16 @@ const PostCheck: React.FC = () => {
 
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                         <button onClick={() => setIsStatsModalOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"><ChartBarIcon className="w-3 h-3" /> MEU STATUS</button>
+                        {promoter.fcmToken && (
+                            <button 
+                                onClick={handleTestPush}
+                                disabled={pushTestCountdown !== null}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-900/20 text-indigo-400 border border-indigo-900/30 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pushTestCountdown !== null ? 'animate-pulse' : 'hover:bg-indigo-900/40'}`}
+                            >
+                                <FaceIdIcon className="w-3 h-3" />
+                                {pushTestCountdown !== null ? `ENVIANDO EM ${pushTestCountdown}S...` : 'TESTAR PUSH'}
+                            </button>
+                        )}
                         {pushStatus === 'success' && <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-900/20 text-green-400 border border-green-900/30 rounded-full text-[10px] font-black uppercase tracking-widest"><CheckCircleIcon className="w-3 h-3"/> APP CONECTADO</span>}
                     </div>
                 </div>
@@ -452,10 +517,10 @@ const PostCheck: React.FC = () => {
             <div className="space-y-2">
                 {isLoading ? <div className="text-center py-20 animate-pulse text-primary font-black uppercase">Sincronizando tarefas...</div> : (
                     activeTab === 'pending' ? (
-                        pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} onRefresh={() => performSearch(email)} />) 
+                        pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} onRefresh={() => performSearch(email)} />) 
                         : <div className="text-center py-20"><div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircleIcon className="w-8 h-8 text-green-500" /></div><p className="text-gray-400 font-bold">Tudo em dia! 🎉</p></div>
                     ) : (
-                        history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
+                        history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
                         : <p className="text-center text-gray-500 py-10 font-bold uppercase tracking-widest text-[10px]">Histórico Vazio</p>
                     )
                 )}
