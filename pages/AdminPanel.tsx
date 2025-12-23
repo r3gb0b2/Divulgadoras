@@ -419,7 +419,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsRejectionModalOpen(false);
 
         try {
-            // No caso de funções Callables (aprovação), não enviamos FieldValue sentinels do cliente
+            // No caso de funções Callables (aprovação), não enviamos FieldValue sentinelas do cliente
             // O backend cuidará de setar o timestamp correto se o status mudar.
             const updatePayload = { ...data };
             
@@ -535,13 +535,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Simplified parameter type handling to correctly handle any input and ensure type safety, resolving line 496 unknown type error.
+    // FIX: Simplified parameter type handling to correctly handle any input and ensure type safety, resolving line 497 unknown type error.
     const handleLookupPromoter = async (emailToSearch?: any) => {
-        let emailArg = '';
+        let emailArg: string = '';
         
-        if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
+        if (emailToSearch && typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
-        } else if (lookupEmail && lookupEmail.trim() !== '') {
+        } else if (lookupEmail && typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
         }
         
