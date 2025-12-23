@@ -535,8 +535,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Optimized parameter handling to ensure type safety and resolve 'unknown' type assignment issues.
-    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
+    // FIX: Changed parameter type to 'any' to ensure type safety and resolve 'unknown' type assignment issues with setLookupError.
+    const handleLookupPromoter = async (emailToSearch?: any) => {
         let emailArg: string = '';
         
         if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
@@ -554,7 +554,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: unknown) {
+        } catch (err: any) {
             const message = err instanceof Error ? err.message : "Erro desconhecido.";
             setLookupError(message);
         } finally {
