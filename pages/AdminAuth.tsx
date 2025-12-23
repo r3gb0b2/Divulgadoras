@@ -71,7 +71,7 @@ const AdminAuth: React.FC = () => {
                 </>
             )}
 
-            <Route path="promoters" element={<ProtectedRoute><AdminPanel adminData={adminData!} /></ProtectedRoute>} />
+            <Route path="promoters" element={<ProtectedRoute>{adminData ? <AdminPanel adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
