@@ -1,13 +1,9 @@
 
-
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 
 /**
  * Handles errors from Firebase Callable Functions, providing more specific user-facing messages.
- * @param {any} error - The error object caught from the `httpsCallable` promise.
- * @param {string} defaultMessage - The default message to show for generic errors.
- * @returns {Error} A new Error object with a more descriptive message.
  */
 const handleCallableError = (error: any, defaultMessage: string): Error => {
     console.error("Error calling Firebase function:", error);
@@ -21,11 +17,8 @@ const handleCallableError = (error: any, defaultMessage: string): Error => {
     return new Error(`${defaultMessage}. Detalhes: ${details}`);
 };
 
-
 /**
  * Fetches the currently active email template for approved promoters.
- * This will return the custom template if it exists, otherwise the default.
- * @returns {Promise<string>} A promise that resolves to the HTML content of the template.
  */
 export const getEmailTemplate = async (): Promise<string> => {
     try {
@@ -39,8 +32,7 @@ export const getEmailTemplate = async (): Promise<string> => {
 };
 
 /**
- * Fetches the system's hardcoded default email template, ignoring any custom template.
- * @returns {Promise<string>} A promise that resolves to the default HTML content.
+ * Fetches the system's hardcoded default email template.
  */
 export const getDefaultEmailTemplate = async (): Promise<string> => {
     try {
@@ -55,7 +47,6 @@ export const getDefaultEmailTemplate = async (): Promise<string> => {
 
 /**
  * Saves the custom HTML template for approved promoters.
- * @param {string} htmlContent - The new HTML content to save.
  */
 export const setEmailTemplate = async (htmlContent: string): Promise<void> => {
     try {
@@ -80,8 +71,6 @@ export const resetEmailTemplate = async (): Promise<void> => {
 
 /**
  * Sends a test email using the provided HTML content.
- * @param {string} htmlContent - The HTML content to test.
- * @returns {Promise<{ success: boolean; message: string }>} A promise with the result.
  */
 export const sendCustomTestEmail = async (htmlContent: string): Promise<{ success: boolean; message: string }> => {
      try {
@@ -90,5 +79,18 @@ export const sendCustomTestEmail = async (htmlContent: string): Promise<{ succes
         return result.data as { success: boolean; message: string };
     } catch (error) {
         throw handleCallableError(error, "Falha no envio do teste");
+    }
+};
+
+/**
+ * Realiza um teste básico de envio de e-mail via sistema (Brevo/SMTP).
+ */
+export const testEmailSystem = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+        const sendTest = httpsCallable(functions, 'sendTestEmail');
+        const result = await sendTest({ testType: 'system_check' });
+        return result.data as { success: boolean; message: string };
+    } catch (error) {
+        throw handleCallableError(error, "Falha ao testar sistema de e-mail");
     }
 };
