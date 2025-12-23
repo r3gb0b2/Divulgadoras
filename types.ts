@@ -223,7 +223,7 @@ export interface GuestList {
     [promoterId: string]: { 
       guestAllowance: number; 
       info?: string; 
-      closesAt?: Timestamp | null 
+      closesAt?: Timestamp | FieldValue | null 
     } 
   };
 }

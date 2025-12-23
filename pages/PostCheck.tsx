@@ -327,6 +327,25 @@ const PostCheck: React.FC = () => {
 
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
+    // Efeito para gerenciar a contagem regressiva de 10s do Push
+    useEffect(() => {
+        let interval: any;
+        if (pushTestCountdown !== null && pushTestCountdown > 0) {
+            interval = setInterval(() => {
+                setPushTestCountdown(prev => (prev !== null ? prev - 1 : null));
+            }, 1000);
+        } else if (pushTestCountdown === 0) {
+            // Quando a contagem acaba, dispara o serviço
+            if (promoter?.fcmToken) {
+                testSelfPush(promoter.fcmToken, promoter.name).catch(e => {
+                    alert("Erro ao enviar push: " + e.message);
+                });
+            }
+            setPushTestCountdown(null);
+        }
+        return () => clearInterval(interval);
+    }, [pushTestCountdown, promoter]);
+
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true); setSearched(true);
@@ -403,27 +422,9 @@ const PostCheck: React.FC = () => {
         } catch (err: any) { alert(err.message); } finally { setIsUpdatingEmail(false); }
     };
 
-    const handleTestPush = async () => {
+    const handleTestPush = () => {
         if (!promoter?.fcmToken || pushTestCountdown !== null) return;
-        
         setPushTestCountdown(10);
-        const timer = setInterval(() => {
-            setPushTestCountdown(prev => {
-                if (prev === null || prev <= 1) {
-                    clearInterval(timer);
-                    return null;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        setTimeout(async () => {
-            try {
-                await testSelfPush(promoter.fcmToken!, promoter.name);
-            } catch (e: any) {
-                alert("Falha no disparo do teste: " + e.message);
-            }
-        }, 10000);
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -493,16 +494,19 @@ const PostCheck: React.FC = () => {
 
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                         <button onClick={() => setIsStatsModalOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"><ChartBarIcon className="w-3 h-3" /> MEU STATUS</button>
+                        
+                        {/* BOTÃO DE TESTE DE PUSH */}
                         {promoter.fcmToken && (
                             <button 
                                 onClick={handleTestPush}
                                 disabled={pushTestCountdown !== null}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-900/20 text-indigo-400 border border-indigo-900/30 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pushTestCountdown !== null ? 'animate-pulse' : 'hover:bg-indigo-900/40'}`}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-900/20 text-indigo-400 border border-indigo-900/30 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pushTestCountdown !== null ? 'animate-pulse scale-105' : 'hover:bg-indigo-900/40 hover:scale-105'}`}
                             >
                                 <FaceIdIcon className="w-3 h-3" />
-                                {pushTestCountdown !== null ? `ENVIANDO EM ${pushTestCountdown}S...` : 'TESTAR PUSH'}
+                                {pushTestCountdown !== null ? `RECEBER EM ${pushTestCountdown}S...` : 'TESTAR PUSH'}
                             </button>
                         )}
+
                         {pushStatus === 'success' && <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-900/20 text-green-400 border border-green-900/30 rounded-full text-[10px] font-black uppercase tracking-widest"><CheckCircleIcon className="w-3 h-3"/> APP CONECTADO</span>}
                     </div>
                 </div>

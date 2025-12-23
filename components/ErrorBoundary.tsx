@@ -14,8 +14,7 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Explicitly define the state property to avoid TypeScript member lookup errors.
-  public state: ErrorBoundaryState;
+  // Removed redundant state property declaration to fix inheritance member lookup.
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -40,9 +39,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // FIX: Access state directly from this to resolve property lookup errors.
+    // FIX: Inherited properties 'state' and 'props' are correctly resolved when not shadowed by manual declarations.
     const { hasError, error } = this.state;
-    // FIX: Access children from this.props.
     const { children } = this.props;
 
     if (hasError) {

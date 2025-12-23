@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
@@ -141,9 +142,12 @@ const AdminApplicationsListPage: React.FC = () => {
         }
     };
 
-    const formatDate = (timestamp: Timestamp | undefined) => {
+    // FIX: Alterado para 'any' para evitar erros de tipagem com FieldValue em ambiente de build, 
+    // ou usamos uma checagem de toDate().
+    const formatDate = (timestamp: any) => {
         if (!timestamp) return 'N/A';
-        return timestamp.toDate().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     const renderContent = () => {
