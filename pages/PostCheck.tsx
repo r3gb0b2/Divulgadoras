@@ -298,6 +298,16 @@ const PostCheck: React.FC = () => {
               alert("E-mail não encontrado. Verifique se digitou corretamente."); 
               setSearched(false); setIsLoading(false); return; 
             }
+            
+            // Lógica para encontrar o aceite de regras de forma agregada por organização
+            // Mapeamos para cada organização se existe pelo menos um perfil aprovado que tenha hasJoinedGroup: true
+            const joinedStatusByOrg = new Map<string, boolean>();
+            profiles.forEach(p => {
+                if (p.status === 'approved' && p.hasJoinedGroup) {
+                    joinedStatusByOrg.set(p.organizationId, true);
+                }
+            });
+
             const sortedProfiles = [...profiles].sort((a, b) => {
               if (a.status === 'approved' && b.status !== 'approved') return -1;
               if (a.status !== 'approved' && b.status === 'approved') return 1;
@@ -308,12 +318,12 @@ const PostCheck: React.FC = () => {
             const mainProfile = sortedProfiles[0];
             setPromoter(mainProfile);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
-            const profileByOrg = new Map<string, Promoter>();
-            sortedProfiles.forEach(p => { if (!profileByOrg.has(p.organizationId) || p.status === 'approved') profileByOrg.set(p.organizationId, p); });
+            
             const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
             const mappedAssignments = fetchedAssignments.map(a => {
-              const orgProfile = profileByOrg.get(a.organizationId);
-              return { ...a, promoterHasJoinedGroup: orgProfile ? (orgProfile.hasJoinedGroup || false) : false };
+              // Verifica o status de "entrou no grupo" de forma agregada para a organização desta tarefa
+              const hasJoined = joinedStatusByOrg.get(a.organizationId) || false;
+              return { ...a, promoterHasJoinedGroup: hasJoined };
             });
             setAssignments(mappedAssignments);
         } catch (err: any) { alert("Erro ao carregar dados: " + err.message); } finally { setIsLoading(false); }

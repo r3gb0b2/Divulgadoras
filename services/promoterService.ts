@@ -98,8 +98,33 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
     } catch (error) { return null; }
 };
 
+/**
+ * Confirma a entrada no grupo e aceitação de regras.
+ * Agora sincroniza com TODAS as inscrições da mesma divulgadora na mesma organização.
+ */
 export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
-    await firestore.collection('promoters').doc(id).update({ hasJoinedGroup: true });
+    try {
+        const doc = await firestore.collection('promoters').doc(id).get();
+        if (!doc.exists) return;
+        const data = doc.data() as Promoter;
+        
+        // Busca todos os registros deste e-mail nesta organização
+        const relatedSnap = await firestore.collection('promoters')
+            .where('email', '==', data.email)
+            .where('organizationId', '==', data.organizationId)
+            .get();
+        
+        const batch = firestore.batch();
+        relatedSnap.forEach(doc => {
+            batch.update(doc.ref, { hasJoinedGroup: true });
+        });
+        
+        await batch.commit();
+    } catch (error) {
+        console.error("Erro ao sincronizar aceite de regras:", error);
+        // Fallback para o ID individual se a busca falhar
+        await firestore.collection('promoters').doc(id).update({ hasJoinedGroup: true });
+    }
 };
 
 export const getPromoterById = async (id: string): Promise<Promoter | null> => {
