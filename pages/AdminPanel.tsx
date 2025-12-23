@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import firebase from 'firebase/compat/app';
 import { auth, functions } from '../firebase/config';
@@ -535,7 +534,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Changed parameter type to 'any' to ensure type safety and resolve 'unknown' type assignment issues with setLookupError.
     const handleLookupPromoter = async (emailToSearch?: any) => {
         let emailArg: string = '';
         
@@ -555,7 +553,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            const message = err instanceof Error ? err.message : "Erro desconhecido.";
+            // FIX: Explicitly cast error message to string to resolve 'unknown' type assignment issues with setLookupError.
+            const message = (err instanceof Error ? err.message : "Erro desconhecido.") as string;
             setLookupError(message);
         } finally {
             setIsLookingUp(false);

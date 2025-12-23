@@ -21,20 +21,13 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
  */
 function normalizePhoneNumber(phone) {
     if (!phone) return null;
-    // Remove tudo que não for número, inclusive o "+"
     let cleaned = phone.toString().replace(/\D/g, '');
-    
-    // Se o número começar com 0, remove o zero (ex: 085... -> 85...)
     if (cleaned.startsWith('0')) {
         cleaned = cleaned.substring(1);
     }
-
-    // Se o número tem 10 ou 11 dígitos (formato brasileiro sem DDI), adiciona 55
     if (cleaned.length === 10 || cleaned.length === 11) {
         cleaned = '55' + cleaned;
     }
-    
-    // Z-API prefere sem o 9 extra em alguns casos, mas o padrão 55 + DDD + Numero é o mais seguro
     return cleaned;
 }
 
@@ -43,12 +36,9 @@ function normalizePhoneNumber(phone) {
  */
 async function sendWhatsApp(to, message) {
     const phone = normalizePhoneNumber(to);
-    
     if (!phone) {
         return { success: false, message: "Número de telefone inválido." };
     }
-
-    // PRIORIDADE: Tenta buscar do functions.config(), depois do process.env
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance || process.env.ZAPI_INSTANCE;
     const token = zapiConfig.token || process.env.ZAPI_TOKEN;
@@ -59,27 +49,16 @@ async function sendWhatsApp(to, message) {
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
-    
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                phone: phone,
-                message: message
-            })
+            body: JSON.stringify({ phone: phone, message: message })
         });
-
         const data = await response.json();
-        
-        if (response.ok) {
-            return { success: true, data };
-        } else {
-            console.error(`[WhatsApp Erro Z-API] Status ${response.status}:`, JSON.stringify(data));
-            return { success: false, message: data.message || "Erro na Z-API", raw: data };
-        }
+        if (response.ok) return { success: true, data };
+        else return { success: false, message: data.message || "Erro na Z-API", raw: data };
     } catch (error) {
-        console.error(`[WhatsApp Erro Crítico]: ${error.message}`);
         return { success: false, message: "Falha de conexão com o servidor da Z-API." };
     }
 }
@@ -107,7 +86,6 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
         await brevoApi.sendTransacEmail(email);
         return { success: true };
     } catch (e) {
-        console.error("ERRO BREVO:", e.message);
         return { success: false, error: e.message };
     }
 }
@@ -115,58 +93,92 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
 // --- Cloud Functions ---
 
 /**
- * Função para testar se as chaves da Z-API estão funcionando
+ * Altera o e-mail de uma divulgadora e sincroniza em todos os documentos vinculados
  */
+exports.updatePromoterEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { promoterId, oldEmail, newEmail } = data;
+    if (!promoterId || !oldEmail || !newEmail) {
+        throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
+    }
+
+    const emailLower = newEmail.toLowerCase().trim();
+
+    try {
+        // 1. Verifica se o novo e-mail já está em uso em outro perfil (mesma org)
+        const pDoc = await db.collection('promoters').doc(promoterId).get();
+        if (!pDoc.exists) throw new Error("Perfil não encontrado.");
+        const orgId = pDoc.data().organizationId;
+
+        const checkEmail = await db.collection('promoters')
+            .where('email', '==', emailLower)
+            .where('organizationId', '==', orgId)
+            .limit(1).get();
+        
+        if (!checkEmail.empty) throw new Error("Este novo e-mail já possui um cadastro nesta organização.");
+
+        const batch = db.batch();
+
+        // 2. Atualiza documento principal da divulgadora
+        batch.update(db.collection('promoters').doc(promoterId), { email: emailLower });
+
+        // 3. Atualiza todas as postagens (assignments) associadas
+        const assignments = await db.collection('postAssignments').where('promoterEmail', '==', oldEmail).get();
+        assignments.forEach(doc => {
+            batch.update(doc.ref, { promoterEmail: emailLower });
+        });
+
+        // 4. Atualiza todas as confirmações de lista de convidados
+        const confirmations = await db.collection('guestListConfirmations').where('promoterEmail', '==', oldEmail).get();
+        confirmations.forEach(doc => {
+            batch.update(doc.ref, { promoterEmail: emailLower });
+        });
+
+        // 5. Atualiza solicitações de remoção de grupo
+        const removals = await db.collection('groupRemovalRequests').where('promoterEmail', '==', oldEmail).get();
+        removals.forEach(doc => {
+            batch.update(doc.ref, { promoterEmail: emailLower });
+        });
+
+        await batch.commit();
+        return { success: true, message: "E-mail atualizado com sucesso em todos os registros." };
+
+    } catch (e) {
+        console.error("ERRO updatePromoterEmail:", e.message);
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
 exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance || "NÃO CONFIGURADO";
     const token = zapiConfig.token ? "CONFIGURADO (Oculto)" : "NÃO CONFIGURADO";
-
     const testResult = await sendWhatsApp("5585982280780", "Teste de integração Equipe Certa. Se recebeu isso, está tudo OK! ✅");
-    
-    return {
-        instanceId: instance,
-        tokenStatus: token,
-        result: testResult
-    };
+    return { instanceId: instance, tokenStatus: token, result: testResult };
 });
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId, data: updateData } = data;
-
     try {
         const promoterRef = db.collection('promoters').doc(promoterId);
         const snapshot = await promoterRef.get();
         if (!snapshot.exists) throw new Error("Promoter not found");
-        
         const oldData = snapshot.data();
-
-        // Salva as alterações no Firestore
         if (updateData.status && updateData.status !== oldData.status) {
             updateData.statusChangedAt = admin.firestore.FieldValue.serverTimestamp();
         }
         await promoterRef.update(updateData);
-
-        // Dispara notificações se for aprovada agora
         if (updateData.status === 'approved' && oldData.status !== 'approved') {
             let orgName = "Equipe Certa";
             if (oldData.organizationId) {
                 const orgSnap = await db.collection('organizations').doc(oldData.organizationId).get();
                 if (orgSnap.exists) orgName = orgSnap.data().name || orgName;
             }
-
-            // 1. E-mail
             await sendEmail({
-                toEmail: oldData.email,
-                toName: oldData.name,
-                subject: `Parabéns! Seu cadastro na ${orgName} foi aprovado! 🎉`,
+                toEmail: oldData.email, toName: oldData.name, subject: `Parabéns! Seu cadastro na ${orgName} foi aprovado! 🎉`,
                 htmlContent: `<div style="font-family:sans-serif;padding:20px;border:1px solid #eee;border-radius:10px;"><h2>Olá ${oldData.name}!</h2><p>Seu cadastro foi <b>APROVADO</b>. Acesse seu portal para começar:</p><p><a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}" style="background:#7e39d5;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">Acessar Portal</a></p></div>`
             });
-
-            // 2. WhatsApp
             const phone = updateData.whatsapp || oldData.whatsapp;
             if (phone) {
                 const msg = `Olá *${oldData.name.split(' ')[0]}*! Seu cadastro na equipe *${orgName}* foi APROVADO! 🎉\n\nAcesse seu portal para ver tarefas e materiais:\nhttps://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
@@ -174,13 +186,9 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             }
         }
         return { success: true };
-    } catch (e) {
-        console.error("ERRO updatePromoterAndSync:", e.message);
-        throw new functions.https.HttpsError("internal", e.message);
-    }
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
 });
 
-// ... (resto das funções mantidas conforme original)
 exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const { promoterId } = data;
