@@ -47,3 +47,13 @@ export const testSelfPush = async (fcmToken: string, name: string): Promise<void
         throw new Error(error.message || 'Erro ao testar push.');
     }
 };
+
+export const sendPushReminderImmediately = async (reminderId: string): Promise<void> => {
+    try {
+        const sendFunc = httpsCallable(functions, 'sendPushReminderImmediately');
+        await sendFunc({ reminderId });
+    } catch (error: any) {
+        console.error("Error sending push reminder manually:", error);
+        throw new Error(error.message || 'Falha ao enviar push manualmente.');
+    }
+};

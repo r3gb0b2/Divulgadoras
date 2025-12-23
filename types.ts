@@ -45,20 +45,6 @@ export interface Promoter {
   };
 }
 
-// Added missing PromoterApplicationData interface
-export interface PromoterApplicationData {
-  name: string;
-  email: string;
-  whatsapp: string;
-  instagram: string;
-  tiktok?: string;
-  dateOfBirth: string;
-  photos: File[];
-  state: string;
-  organizationId: string;
-  campaignName: string;
-}
-
 export interface Post {
   id: string;
   organizationId: string;
@@ -107,6 +93,54 @@ export interface PostAssignment {
   reminderSentAt?: Timestamp | null;
 }
 
+export interface GuestList {
+  id: string;
+  organizationId: string;
+  campaignId: string;
+  campaignName: string;
+  stateAbbr: string;
+  name: string;
+  description?: string;
+  guestAllowance: number;
+  startsAt?: Timestamp | FieldValue | null;
+  closesAt?: Timestamp | FieldValue | null;
+  isActive: boolean;
+  askEmail: boolean;
+  createdByEmail: string;
+  createdAt: Timestamp | FieldValue;
+  assignments?: { 
+    [promoterId: string]: { 
+      guestAllowance: number; 
+      info?: string; 
+      closesAt?: Timestamp | FieldValue | null 
+    } 
+  };
+  guestListAccess?: 'all' | 'specific';
+  guestListAssignments?: { [promoterId: string]: string[] };
+  guestListTypes?: string[];
+}
+
+export interface PushReminder {
+    id: string;
+    promoterId: string;
+    fcmToken: string;
+    title: string;
+    body: string;
+    url: string;
+    scheduledFor: Timestamp | FieldValue;
+    status: 'pending' | 'sent' | 'error';
+    assignmentId: string;
+}
+
+export interface AdminApplication {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  createdAt: Timestamp | FieldValue;
+  message?: string;
+}
+
 export interface Campaign {
   id: string;
   organizationId: string;
@@ -153,28 +187,150 @@ export interface Organization {
   followLoopThreshold?: number;
 }
 
-export interface GuestList {
+export interface AppleTestRegistrant {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
+}
+
+export interface InstructionTemplate {
+  id: string;
+  text: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
+}
+
+export interface LinkTemplate {
+  id: string;
+  name: string;
+  url: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
+}
+
+// Added missing types based on application errors
+export interface PromoterApplicationData {
+  name: string;
+  email: string;
+  whatsapp: string;
+  instagram: string;
+  tiktok?: string;
+  dateOfBirth: string;
+  photos: File[];
+  state: string;
+  organizationId: string;
+  campaignName: string;
+}
+
+export interface RejectionReason {
+  id: string;
+  text: string;
+  organizationId: string;
+}
+
+export interface GroupRemovalRequest {
+  id: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  campaignName: string;
+  organizationId: string;
+  status: 'pending' | 'completed' | 'ignored';
+  requestedAt: Timestamp | FieldValue;
+  actionTakenBy?: string;
+  actionTakenAt?: Timestamp | FieldValue;
+}
+
+export interface StateConfig {
+  isActive: boolean;
+  rules: string;
+}
+
+export interface StatesConfig {
+  [stateAbbr: string]: StateConfig;
+}
+
+export interface ScheduledPostData {
+  campaignName: string;
+  eventName?: string;
+  stateAbbr: string;
+  type: 'text' | 'image' | 'video';
+  textContent?: string;
+  instructions: string;
+  postLink?: string;
+  isActive: boolean;
+  expiresAt: Timestamp | null;
+  autoAssignToNewPromoters?: boolean;
+  allowLateSubmissions?: boolean;
+  allowImmediateProof?: boolean;
+  postFormats?: ('story' | 'reels')[];
+  skipProofRequirement?: boolean;
+  allowJustification?: boolean;
+  ownerOnly?: boolean;
+  googleDriveUrl?: string;
+  mediaUrl?: string;
+}
+
+export interface ScheduledPost {
+  id: string;
+  organizationId: string;
+  postData: ScheduledPostData;
+  assignedPromoters: { id: string; email: string; name: string }[];
+  scheduledAt: Timestamp | FieldValue;
+  status: 'pending' | 'sent' | 'error';
+  createdByEmail: string;
+  error?: string;
+  createdAt?: Timestamp | FieldValue;
+}
+
+export interface OneTimePost {
   id: string;
   organizationId: string;
   campaignId: string;
   campaignName: string;
-  stateAbbr: string;
-  name: string;
-  description?: string;
-  guestAllowance: number;
-  startsAt?: Timestamp | FieldValue | null;
-  closesAt?: Timestamp | FieldValue | null;
+  eventName: string;
+  guestListName: string;
+  type: 'image' | 'text' | 'video';
+  instructions: string;
   isActive: boolean;
-  askEmail: boolean;
   createdByEmail: string;
   createdAt: Timestamp | FieldValue;
-  assignments?: { 
-    [promoterId: string]: { 
-      guestAllowance: number; 
-      info?: string; 
-      closesAt?: Timestamp | FieldValue | null 
-    } 
-  };
+  expiresAt: Timestamp | null;
+  submissionLimit?: number;
+  successMessage?: string;
+  femaleOnly?: boolean;
+  askEmail?: boolean;
+  textContent?: string;
+  mediaUrl?: string;
+  googleDriveUrl?: string;
+  submissionCount?: number;
+}
+
+export interface OneTimePostSubmission {
+  id: string;
+  oneTimePostId: string;
+  organizationId: string;
+  campaignId: string;
+  guestName: string;
+  email?: string;
+  instagram: string;
+  proofImageUrls: string[];
+  submittedAt: Timestamp | FieldValue;
+}
+
+export interface WhatsAppReminder {
+  id: string;
+  promoterId: string;
+  promoterName: string;
+  promoterWhatsapp: string;
+  postCampaignName: string;
+  organizationId: string;
+  sendAt: Timestamp | FieldValue;
+  status: 'pending' | 'sent' | 'error';
+  error?: string;
 }
 
 export interface GuestListConfirmation {
@@ -189,29 +345,25 @@ export interface GuestListConfirmation {
   listName: string;
   isPromoterAttending: boolean;
   guests?: { name: string; email: string }[];
-  guestNames?: string[];
+  guestNames: string[];
   isLocked: boolean;
   confirmedAt: Timestamp | FieldValue;
-  promoterCheckedInAt?: Timestamp | null;
-  promoterCheckedOutAt?: Timestamp | null;
-  guestsCheckedIn?: { 
-    name: string; 
-    checkedInAt: Timestamp; 
-    checkedOutAt?: Timestamp | null 
-  }[];
+  promoterCheckedInAt?: Timestamp | FieldValue | null;
+  promoterCheckedOutAt?: Timestamp | FieldValue | null;
+  guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; checkedOutAt: Timestamp | FieldValue | null }[];
 }
 
 export interface GuestListChangeRequest {
   id: string;
   organizationId: string;
   campaignId: string;
-  campaignName: string;
   guestListId: string;
   confirmationId: string;
   promoterId: string;
   promoterName: string;
   promoterEmail: string;
   listName: string;
+  campaignName: string;
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: Timestamp | FieldValue;
   actionTakenBy?: string;
@@ -226,52 +378,13 @@ export interface PromoterStats extends Promoter {
   completionRate: number;
 }
 
-export interface ScheduledPostData extends Omit<Post, 'id' | 'organizationId' | 'createdAt' | 'createdByEmail'> {}
-
-export interface ScheduledPost {
-  id: string;
-  organizationId: string;
-  postData: ScheduledPostData;
-  assignedPromoters: { id: string; email: string; name: string }[];
-  scheduledAt: Timestamp | FieldValue;
-  status: 'pending' | 'sent' | 'error';
-  createdByEmail: string;
-  error?: string;
-}
-
-export interface OneTimePost {
-  id: string;
-  organizationId: string;
-  campaignId: string;
-  campaignName: string;
-  eventName: string;
-  guestListName: string;
-  type: 'image' | 'text' | 'video';
-  textContent?: string;
-  mediaUrl?: string;
-  googleDriveUrl?: string;
-  instructions: string;
-  isActive: boolean;
-  createdByEmail: string;
-  createdAt: Timestamp | FieldValue;
-  expiresAt: Timestamp | null;
-  submissionLimit?: number;
-  submissionCount?: number;
-  successMessage?: string;
-  femaleOnly?: boolean;
-  askEmail?: boolean;
-}
-
-export interface OneTimePostSubmission {
-  id: string;
-  oneTimePostId: string;
-  organizationId: string;
-  campaignId: string;
-  guestName: string;
-  email: string;
-  instagram: string;
-  proofImageUrls: string[];
-  submittedAt: Timestamp | FieldValue;
+export interface FollowLoop {
+    id: string;
+    name: string;
+    description?: string;
+    organizationId: string;
+    isActive: boolean;
+    createdAt?: Timestamp | FieldValue;
 }
 
 export interface FollowLoopParticipant {
@@ -305,105 +418,4 @@ export interface FollowInteraction {
   followerInstagram: string;
   followedName: string;
   followedInstagram: string;
-}
-
-export interface FollowLoop {
-  id: string;
-  organizationId: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  createdAt?: Timestamp | FieldValue;
-}
-
-export interface AppleTestRegistrant {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  organizationId: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-export interface WhatsAppReminder {
-  id: string;
-  promoterId: string;
-  promoterName: string;
-  promoterWhatsapp: string;
-  organizationId: string;
-  postId: string;
-  postCampaignName: string;
-  sendAt: Timestamp;
-  status: 'pending' | 'sent' | 'error';
-  error?: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-export interface PushReminder {
-    id: string;
-    promoterId: string;
-    fcmToken: string;
-    title: string;
-    body: string;
-    url: string;
-    scheduledFor: Timestamp;
-    status: 'pending' | 'sent' | 'error';
-    assignmentId: string;
-}
-
-// Added missing RejectionReason interface
-export interface RejectionReason {
-  id: string;
-  text: string;
-  organizationId: string;
-}
-
-// Added missing GroupRemovalRequest interface
-export interface GroupRemovalRequest {
-  id: string;
-  promoterId: string;
-  promoterName: string;
-  promoterEmail: string;
-  campaignName: string;
-  organizationId: string;
-  status: 'pending' | 'completed' | 'ignored';
-  requestedAt: Timestamp | FieldValue;
-  actionTakenBy?: string;
-  actionTakenAt?: Timestamp | FieldValue;
-}
-
-// Added missing AdminApplication interface
-export interface AdminApplication {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-// Added missing StateConfig and StatesConfig interfaces
-export interface StateConfig {
-  isActive: boolean;
-  rules: string;
-}
-
-export interface StatesConfig {
-  [stateAbbr: string]: StateConfig;
-}
-
-// Added missing InstructionTemplate interface
-export interface InstructionTemplate {
-  id: string;
-  text: string;
-  organizationId: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-// Added missing LinkTemplate interface
-export interface LinkTemplate {
-  id: string;
-  name: string;
-  url: string;
-  organizationId: string;
-  createdAt: Timestamp | FieldValue;
 }

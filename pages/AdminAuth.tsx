@@ -30,6 +30,7 @@ import GuestListChangeRequestsPage from './GuestListChangeRequestsPage';
 import PromoterDiagnosticsPage from './PromoterDiagnosticsPage';
 import GeminiPage from './Gemini';
 import AdminPushCampaignPage from './AdminPushCampaignPage';
+import AdminPushQueuePage from './AdminPushQueuePage';
 import AdminCleanupPage from './AdminCleanupPage';
 import EmailTemplateEditor from './EmailTemplateEditor';
 import EditPrivacyPolicyPage from './EditPrivacyPolicyPage';
@@ -66,6 +67,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="email-templates" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
                     <Route path="edit-privacy" element={<ProtectedRoute><EditPrivacyPolicyPage /></ProtectedRoute>} />
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
+                    <Route path="push-queue" element={<ProtectedRoute><AdminPushQueuePage /></ProtectedRoute>} />
                 </>
             )}
 

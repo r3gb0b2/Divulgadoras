@@ -141,10 +141,9 @@ const AdminApplicationsListPage: React.FC = () => {
 
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'N/A';
-        // Check for FieldValue vs Timestamp vs Date
         const date = (timestamp && typeof timestamp.toDate === 'function') 
             ? timestamp.toDate() 
-            : new Date(timestamp);
+            : (timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp));
         
         if (isNaN(date.getTime())) return 'N/A';
         return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });

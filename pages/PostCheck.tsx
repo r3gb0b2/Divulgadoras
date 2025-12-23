@@ -317,17 +317,18 @@ const PostCheck: React.FC = () => {
     const pushInitializedFor = useRef<string | null>(null);
     const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
     const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
+    
+    // Contagem regressiva unificada para o teste de push
     const [pushTestCountdown, setPushTestCountdown] = useState<number | null>(null);
 
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
     const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
-    const [justificationPreviews, setJustificationPreviews] = useState<string[]>([]);
     const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
 
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
-    // Gerenciador da contagem regressiva de 10s para o Teste de Push
+    // Efeito para gerenciar a contagem do teste de push
     useEffect(() => {
         let interval: any;
         if (pushTestCountdown !== null && pushTestCountdown > 0) {
@@ -337,7 +338,7 @@ const PostCheck: React.FC = () => {
         } else if (pushTestCountdown === 0) {
             if (promoter?.fcmToken) {
                 testSelfPush(promoter.fcmToken, promoter.name).catch(e => {
-                    alert("Erro no disparo: " + e.message);
+                    console.error("Erro no teste:", e);
                 });
             }
             setPushTestCountdown(null);

@@ -14,6 +14,7 @@ import {
     PencilIcon,
     WhatsAppIcon,
     RefreshIcon,
+    ClockIcon,
     ClipboardDocumentListIcon
 } from '../components/Icons';
 
@@ -101,6 +102,10 @@ const SuperAdminDashboard: React.FC = () => {
                         <Link to="/admin/applications" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
                             <KeyIcon className="w-5 h-5 text-primary" />
                             <span className="text-sm font-semibold">Solicitações de Acesso</span>
+                        </Link>
+                        <Link to="/admin/push-queue" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
+                            <FaceIdIcon className="w-5 h-5 text-indigo-400" />
+                            <span className="text-sm font-semibold">Fila de Disparos Push</span>
                         </Link>
                         <Link to="/admin/cleanup" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
                             <TrashIcon className="w-5 h-5 text-red-400" />
