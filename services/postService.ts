@@ -4,6 +4,19 @@ import { firestore, storage, functions } from '../firebase/config';
 import { Post, PostAssignment, Promoter, Timestamp, PushReminder, OneTimePost, OneTimePostSubmission, ScheduledPost, WhatsAppReminder, AdminUserData } from '../types';
 
 /**
+ * Remove propriedades 'undefined' de um objeto para evitar erros no Firestore.
+ */
+const stripUndefined = (obj: any): any => {
+    const newObj: any = {};
+    Object.keys(obj).forEach(key => {
+        if (obj[key] !== undefined) {
+            newObj[key] = obj[key];
+        }
+    });
+    return newObj;
+};
+
+/**
  * Agenda um lembrete Push para ser enviado em 6 horas.
  */
 export const scheduleProofPushReminder = async (assignment: PostAssignment, promoter: Promoter): Promise<void> => {
@@ -11,8 +24,6 @@ export const scheduleProofPushReminder = async (assignment: PostAssignment, prom
 
     try {
         const batch = firestore.batch();
-        
-        // 1. Cria o lembrete na fila
         const reminderRef = firestore.collection('pushReminders').doc();
         const sixHoursInMs = 6 * 60 * 60 * 1000;
         const scheduledDate = new Date(Date.now() + sixHoursInMs);
@@ -28,9 +39,7 @@ export const scheduleProofPushReminder = async (assignment: PostAssignment, prom
             assignmentId: assignment.id
         };
 
-        batch.set(reminderRef, reminderData);
-
-        // 2. Atualiza a tarefa marcando que o lembrete está agendado
+        batch.set(reminderRef, stripUndefined(reminderData));
         const assignmentRef = firestore.collection('postAssignments').doc(assignment.id);
         batch.update(assignmentRef, { reminderScheduled: true });
 
@@ -101,8 +110,6 @@ export const submitJustification = async (assignmentId: string, text: string, fi
   }
 };
 
-// FIX: Added missing exported functions
-
 export const getAssignmentsForOrganization = async (orgId: string): Promise<PostAssignment[]> => {
     const q = firestore.collection('postAssignments').where('organizationId', '==', orgId);
     const snap = await q.get();
@@ -138,7 +145,7 @@ export const getPostsForOrg = async (orgId: string, adminData?: AdminUserData): 
 };
 
 export const updatePost = async (postId: string, data: Partial<Post>): Promise<void> => {
-    await firestore.collection('posts').doc(postId).update(data);
+    await firestore.collection('posts').doc(postId).update(stripUndefined(data));
 };
 
 export const deletePost = async (postId: string): Promise<void> => {
@@ -160,13 +167,14 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, promo
     const batch = firestore.batch();
     const now = firebase.firestore.FieldValue.serverTimestamp();
     
-    batch.set(postRef, { ...postData, id: postRef.id, createdAt: now });
+    // CORREÇÃO: stripUndefined evita erro de campos inválidos
+    batch.set(postRef, { ...stripUndefined(postData), id: postRef.id, createdAt: now });
     
     promoters.forEach(p => {
         const assignmentRef = firestore.collection('postAssignments').doc();
         batch.set(assignmentRef, {
             postId: postRef.id,
-            post: { ...postData, id: postRef.id },
+            post: { ...stripUndefined(postData), id: postRef.id },
             promoterId: p.id,
             promoterEmail: p.email,
             promoterName: p.name,
@@ -192,7 +200,7 @@ export const getPostWithAssignments = async (postId: string): Promise<{ post: Po
 
 export const schedulePost = async (data: any): Promise<void> => {
     await firestore.collection('scheduledPosts').add({
-        ...data,
+        ...stripUndefined(data),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 };
@@ -203,7 +211,7 @@ export const getScheduledPostById = async (id: string): Promise<ScheduledPost | 
 };
 
 export const updateScheduledPost = async (id: string, data: any): Promise<void> => {
-    await firestore.collection('scheduledPosts').doc(id).update(data);
+    await firestore.collection('scheduledPosts').doc(id).update(stripUndefined(data));
 };
 
 export const deleteScheduledPost = async (id: string): Promise<void> => {
@@ -217,7 +225,7 @@ export const getScheduledPosts = async (orgId: string): Promise<ScheduledPost[]>
 };
 
 export const updateAssignment = async (id: string, data: Partial<PostAssignment>): Promise<void> => {
-    await firestore.collection('postAssignments').doc(id).update(data);
+    await firestore.collection('postAssignments').doc(id).update(stripUndefined(data));
 };
 
 export const submitProof = async (assignmentId: string, files: File[]): Promise<void> => {
@@ -301,13 +309,12 @@ export const deleteOneTimePost = async (postId: string): Promise<void> => {
 };
 
 export const updateOneTimePost = async (postId: string, data: Partial<OneTimePost>): Promise<void> => {
-    await firestore.collection('oneTimePosts').doc(postId).update(data);
+    await firestore.collection('oneTimePosts').doc(postId).update(stripUndefined(data));
 };
 
-// FIX: Added missing createOneTimePost function.
 export const createOneTimePost = async (data: Omit<OneTimePost, 'id' | 'createdAt'>): Promise<string> => {
     const docRef = await firestore.collection('oneTimePosts').add({
-        ...data,
+        ...stripUndefined(data),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     return docRef.id;
@@ -325,7 +332,7 @@ export const getOneTimePostSubmissions = async (postId: string): Promise<OneTime
 };
 
 export const updateOneTimePostSubmission = async (id: string, data: Partial<OneTimePostSubmission>): Promise<void> => {
-    await firestore.collection('oneTimePostSubmissions').doc(id).update(data);
+    await firestore.collection('oneTimePostSubmissions').doc(id).update(stripUndefined(data));
 };
 
 export const deleteOneTimePostSubmission = async (id: string): Promise<void> => {
@@ -334,7 +341,7 @@ export const deleteOneTimePostSubmission = async (id: string): Promise<void> => 
 
 export const submitOneTimePostSubmission = async (data: any): Promise<void> => {
     await firestore.collection('oneTimePostSubmissions').add({
-        ...data,
+        ...stripUndefined(data),
         submittedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 };

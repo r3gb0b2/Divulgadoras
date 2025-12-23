@@ -497,7 +497,7 @@ const CreatePost: React.FC = () => {
                     eventName: eventName.trim() || undefined,
                     stateAbbr: campaign.stateAbbr,
                     type: postType,
-                    textContent: postType === 'text' ? undefined : (textContent || undefined), 
+                    textContent: (postType !== 'text' && textContent) ? textContent : undefined, 
                     instructions,
                     postLink: postLink.trim() || undefined,
                     isActive,
