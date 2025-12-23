@@ -535,11 +535,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         setIsBulkRejection(false);
     };
 
-    // FIX: Simplified parameter type handling to correctly handle any input and ensure type safety, resolving line 497 unknown type error.
-    const handleLookupPromoter = async (emailToSearch?: any) => {
+    // FIX: Optimized parameter handling to ensure type safety and resolve 'unknown' type assignment issues.
+    const handleLookupPromoter = async (emailToSearch?: string | unknown) => {
         let emailArg: string = '';
         
-        if (emailToSearch && typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
+        if (typeof emailToSearch === 'string' && emailToSearch.trim() !== '') {
             emailArg = emailToSearch.trim();
         } else if (lookupEmail && typeof lookupEmail === 'string' && lookupEmail.trim() !== '') {
             emailArg = lookupEmail.trim();
@@ -554,8 +554,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
         try {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
-        } catch (err: any) {
-            setLookupError(err.message || "Erro desconhecido.");
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Erro desconhecido.";
+            setLookupError(message);
         } finally {
             setIsLookingUp(false);
         }

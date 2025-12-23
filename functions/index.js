@@ -36,28 +36,31 @@ function normalizePhoneNumber(phone) {
     return cleaned;
 }
 
+/**
+ * Envia mensagem via Z-API
+ */
 async function sendWhatsApp(to, message, organizationId) {
     const phone = normalizePhoneNumber(to);
     
     if (!phone) {
         console.error(`[WhatsApp Error] Número de telefone inválido ou ausente: ${to}`);
-        return { success: false, message: "Invalid phone number" };
+        return { success: false, message: "Número de telefone inválido." };
     }
 
-    // Configurações da Z-API (Devem ser configuradas no Firebase Config)
-    // firebase functions:config:set zapi.instance="SUA_INSTANCIA" zapi.token="SEU_TOKEN"
+    // Tenta buscar credenciais do config ou variáveis de ambiente
     const zapiConfig = functions.config().zapi || {};
-    const instance = zapiConfig.instance;
-    const token = zapiConfig.token;
+    const instance = zapiConfig.instance || process.env.ZAPI_INSTANCE;
+    const token = zapiConfig.token || process.env.ZAPI_TOKEN;
 
     if (!instance || !token) {
-        console.warn(`[WhatsApp Ignorado] Credenciais Z-API não configuradas para a Org: ${organizationId}. Execute: firebase functions:config:set zapi.instance="ID" zapi.token="TOKEN"`);
-        return { success: false, message: "Z-API credentials missing" };
+        const errorMsg = `[WhatsApp Ignorado] Credenciais Z-API não configuradas. Execute: firebase functions:config:set zapi.instance="ID" zapi.token="TOKEN"`;
+        console.warn(errorMsg);
+        return { success: false, message: "Z-API não configurada no servidor." };
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
     
-    console.log(`[WhatsApp] Tentando enviar para ${phone}...`);
+    console.log(`[WhatsApp] Tentando enviar para ${phone} via instância ${instance}...`);
     
     try {
         const response = await fetch(url, {
@@ -72,15 +75,15 @@ async function sendWhatsApp(to, message, organizationId) {
         const data = await response.json();
         
         if (response.ok) {
-            console.log(`[WhatsApp Sucesso] Enviado para ${phone}. ID Mensagem: ${data.messageId || 'N/A'}`);
+            console.log(`[WhatsApp Sucesso] Enviado para ${phone}. ID: ${data.messageId || 'N/A'}`);
             return { success: true, data };
         } else {
             console.error(`[WhatsApp Erro Z-API] Status ${response.status}:`, JSON.stringify(data));
-            return { success: false, error: data };
+            return { success: false, error: data, message: data.message || "Erro na Z-API" };
         }
     } catch (error) {
         console.error(`[WhatsApp Erro Crítico] Falha na requisição: ${error.message}`);
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, message: "Falha de conexão com Z-API." };
     }
 }
 
@@ -103,7 +106,7 @@ const setupBrevo = () => {
 const brevoApi = setupBrevo();
 
 async function sendEmail({ toEmail, toName, subject, htmlContent }) {
-    if (!brevoApi) return { success: false, message: "API Key missing" };
+    if (!brevoApi) return { success: false, message: "API Key do Brevo ausente." };
     try {
         const email = new sib.SendSmtpEmail();
         email.sender = { name: "Equipe Certa", email: "contato@equipecerta.com.br" };
@@ -153,7 +156,7 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         
         const oldPromoterData = snapshot.data();
 
-        // Tratamento interno de Timestamps caso o cliente tenha enviado lixo ou esquecido
+        // Tratamento interno de Timestamps
         if (updateData.status && updateData.status !== oldPromoterData.status) {
             updateData.statusChangedAt = admin.firestore.FieldValue.serverTimestamp();
         }
@@ -171,7 +174,7 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                 }
             }
             
-            console.log(`[Aprovação] Iniciando notificações para ${oldPromoterData.name} (${promoterId})`);
+            console.log(`[Aprovação] Iniciando notificações de boas-vindas para ${oldPromoterData.name}`);
 
             // 1. Enviar E-mail
             const html = `
@@ -191,19 +194,73 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             });
 
             // 2. Enviar WhatsApp Automático
-            if (oldPromoterData.whatsapp) {
+            // Prioriza o telefone que pode ter sido atualizado no updateData
+            const targetPhone = updateData.whatsapp || oldPromoterData.whatsapp;
+            
+            if (targetPhone) {
                 const firstName = oldPromoterData.name.split(' ')[0];
                 const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldPromoterData.email)}`;
                 const waMessage = `Olá *${firstName}*! Seu cadastro na equipe *${orgName}* foi APROVADO! 🎉\n\nAcesse seu portal para ver suas tarefas e materiais:\n${portalLink}`;
                 
-                await sendWhatsApp(oldPromoterData.whatsapp, waMessage, oldPromoterData.organizationId);
-            } else {
-                console.warn(`[Aprovação] WhatsApp não enviado: Número ausente para ${promoterId}`);
+                const waResult = await sendWhatsApp(targetPhone, waMessage, oldPromoterData.organizationId);
+                console.log(`[Aprovação] Resultado WhatsApp: ${waResult.success ? 'Sucesso' : 'Falha (' + waResult.message + ')'}`);
             }
         }
         return { success: true };
     } catch (e) {
         console.error(`[Erro Função] updatePromoterAndSync: ${e.message}`);
+        throw new functions.https.HttpsError("internal", e.message);
+    }
+});
+
+exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
+    const { promoterId } = data;
+    
+    try {
+        const pSnap = await db.collection('promoters').doc(promoterId).get();
+        if (!pSnap.exists) throw new Error("Promoter not found");
+        
+        const p = pSnap.data();
+        let orgName = "Equipe Certa";
+        
+        if (p.organizationId) {
+            const orgSnap = await db.collection('organizations').doc(p.organizationId).get();
+            if (orgSnap.exists) orgName = orgSnap.data().name || orgName;
+        }
+
+        // 1. Enviar E-mail
+        const html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #7e39d5;">Olá, ${p.name}!</h2>
+                <p>Este é um lembrete de que seu acesso ao portal da equipe <strong>${orgName}</strong> está disponível.</p>
+                <p><a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}" style="background:#7e39d5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; display:inline-block;">Acessar Meu Portal</a></p>
+            </div>
+        `;
+        
+        const emailRes = await sendEmail({
+            toEmail: p.email,
+            toName: p.name,
+            subject: `Lembrete: Seu acesso está liberado! - ${orgName}`,
+            htmlContent: html
+        });
+
+        // 2. Enviar WhatsApp
+        let waStatus = "Não enviado (sem número)";
+        if (p.whatsapp) {
+            const firstName = p.name.split(' ')[0];
+            const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
+            const waMessage = `Olá *${firstName}*! Passando para lembrar que seu acesso à equipe *${orgName}* está liberado. 🎉\n\nAcompanhe tudo por aqui:\n${portalLink}`;
+            
+            const waRes = await sendWhatsApp(p.whatsapp, waMessage, p.organizationId);
+            waStatus = waRes.success ? "Sucesso" : `Falha (${waRes.message})`;
+        }
+
+        return { 
+            success: true, 
+            message: `Notificações processadas. E-mail: ${emailRes.success ? 'OK' : 'Falha'}. WhatsApp: ${waStatus}` 
+        };
+    } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
@@ -306,26 +363,6 @@ exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(a
         };
         const response = await admin.messaging().sendEachForMulticast(message);
         return { success: true, message: `Enviado com sucesso para ${response.successCount} aparelhos.` };
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
-});
-
-exports.manuallySendStatusEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
-    const { promoterId } = data;
-    try {
-        const pSnap = await db.collection('promoters').doc(promoterId).get();
-        const p = pSnap.data();
-        if (!p) throw new Error("Promoter not found");
-        const html = `<div style="font-family: sans-serif;"><h2>Olá, ${p.name}</h2><p>Este é um lembrete de que seu cadastro foi aprovado.</p></div>`;
-        await sendEmail({
-            toEmail: p.email,
-            toName: p.name,
-            subject: "Lembrete: Seu cadastro está aprovado! 🎉",
-            htmlContent: html
-        });
-        return { success: true, message: "E-mail reenviado." };
     } catch (e) {
         throw new functions.https.HttpsError("internal", e.message);
     }
