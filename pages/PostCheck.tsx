@@ -69,26 +69,65 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
     const [linkCopied, setLinkCopied] = useState(false);
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
+    const [countdownColor, setCountdownColor] = useState('text-gray-400');
     
     useEffect(() => {
-        if (assignment.status !== 'confirmed' || !assignment.confirmedAt) return;
+        if (assignment.status !== 'confirmed' || !assignment.confirmedAt || assignment.proofSubmittedAt) return;
+        
         const confirmationTime = toDateSafe(assignment.confirmedAt);
         if (!confirmationTime) return;
+
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
         const calculatedEnableTime = new Date(confirmationTime.getTime() + 6 * 60 * 60 * 1000);
+
+        const formatDiff = (diff: number) => {
+            const h = Math.floor(diff / (1000 * 60 * 60));
+            const m = Math.floor((diff / (1000 * 60)) % 60);
+            const s = Math.floor((diff / 1000) % 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
         const timer = setInterval(() => {
             const now = new Date();
+
             if (now > expireTime) {
-                setTimeLeftForProof(assignment.post.allowLateSubmissions ? 'Envio liberado (fora do prazo)' : 'Tempo esgotado');
-                setIsProofButtonEnabled(assignment.post.allowLateSubmissions === true);
-                clearInterval(timer); return;
+                if (assignment.post.allowLateSubmissions) {
+                    setTimeLeftForProof('Envio liberado (fora do prazo)');
+                    setIsProofButtonEnabled(true);
+                    setCountdownColor('text-yellow-500');
+                } else {
+                    setTimeLeftForProof('Prazo esgotado');
+                    setIsProofButtonEnabled(false);
+                    setCountdownColor('text-red-500');
+                }
+                clearInterval(timer);
+                return;
             }
-            if (assignment.post.allowImmediateProof) { setTimeLeftForProof('Envio liberado!'); setIsProofButtonEnabled(true); return; }
-            if (now < calculatedEnableTime) { setTimeLeftForProof('Aguardando 6h para print...'); setIsProofButtonEnabled(false); }
-            else { setTimeLeftForProof('Envio liberado!'); setIsProofButtonEnabled(true); }
+
+            if (assignment.post.allowImmediateProof) {
+                const diff = expireTime.getTime() - now.getTime();
+                setTimeLeftForProof(`Envio Liberado! Expira em: ${formatDiff(diff)}`);
+                setIsProofButtonEnabled(true);
+                setCountdownColor('text-green-400');
+                return;
+            }
+
+            if (now < calculatedEnableTime) {
+                const diff = calculatedEnableTime.getTime() - now.getTime();
+                setTimeLeftForProof(`Liberando em: ${formatDiff(diff)}`);
+                setIsProofButtonEnabled(false);
+                setCountdownColor('text-orange-400');
+            } 
+            else {
+                const diff = expireTime.getTime() - now.getTime();
+                setTimeLeftForProof(`Envio Liberado! Expira em: ${formatDiff(diff)}`);
+                setIsProofButtonEnabled(true);
+                setCountdownColor('text-green-400 font-black');
+            }
         }, 1000);
+
         return () => clearInterval(timer);
-    }, [assignment.status, assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof]);
+    }, [assignment.status, assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof, assignment.proofSubmittedAt]);
 
     const handleConfirm = async () => {
         setIsConfirming(true);
@@ -196,7 +235,21 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                          {assignment.status === 'pending' ? (
                             <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-green-600 text-white font-black rounded-2xl shadow-lg shadow-green-900/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
                         ) : (
-                            <button onClick={() => navigate(`/proof/${assignment.id}`)} disabled={!isProofButtonEnabled} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30 text-lg">{isProofButtonEnabled ? 'ENVIAR COMPROVANTE' : timeLeftForProof}</button>
+                            <div className="space-y-2">
+                                <button 
+                                    onClick={() => navigate(`/proof/${assignment.id}`)} 
+                                    disabled={!isProofButtonEnabled} 
+                                    className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30 text-lg transition-all"
+                                >
+                                    {isProofButtonEnabled ? 'ENVIAR COMPROVANTE' : 'AGUARDE O TEMPO ABAIXO'}
+                                </button>
+                                <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl border border-white/5">
+                                    <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
+                                    <span className={`text-xs font-black uppercase tracking-widest ${countdownColor}`}>
+                                        {timeLeftForProof}
+                                    </span>
+                                </div>
+                            </div>
                         )}
                         <button onClick={() => onJustify(assignment)} className="w-full py-2 bg-red-900/10 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-900/20 transition-colors">ENVIAR UMA JUSTIFICATIVA</button>
                     </div>
@@ -219,7 +272,6 @@ const PostCheck: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
     
-    // Email change state
     const [isChangingEmail, setIsChangingEmail] = useState(false);
     const [newEmailValue, setNewEmailValue] = useState('');
     const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
@@ -394,7 +446,6 @@ const PostCheck: React.FC = () => {
                 <div className="flex-grow">
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight">Olá, {promoter.name.split(' ')[0]}!</h1>
                     
-                    {/* EMAIL DISPLAY WITH EDIT OPTION */}
                     <div className="flex items-center gap-2 mt-1">
                         {isChangingEmail ? (
                             <form onSubmit={handleEmailChangeSubmit} className="flex items-center gap-2 w-full max-w-sm">

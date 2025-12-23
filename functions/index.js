@@ -16,9 +16,6 @@ db.settings({ ignoreUndefinedProperties: true });
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- WhatsApp Helper (Z-API) ---
-/**
- * Garante que o número esteja no formato 55DD999998888
- */
 function normalizePhoneNumber(phone) {
     if (!phone) return null;
     let cleaned = phone.toString().replace(/\D/g, '');
@@ -32,7 +29,7 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Envia mensagem via Z-API
+ * Envia mensagem via Z-API com suporte a Client-Token
  */
 async function sendWhatsApp(to, message) {
     const phone = normalizePhoneNumber(to);
@@ -42,17 +39,23 @@ async function sendWhatsApp(to, message) {
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance || process.env.ZAPI_INSTANCE;
     const token = zapiConfig.token || process.env.ZAPI_TOKEN;
+    const clientToken = zapiConfig.client_token || process.env.ZAPI_CLIENT_TOKEN;
 
     if (!instance || !token) {
         console.error("[WhatsApp Erro] Chaves Z-API não encontradas no servidor.");
-        return { success: false, message: "Credenciais (ID/Token) não configuradas no Firebase." };
+        return { success: false, message: "Credenciais (ID/Token) não configuradas." };
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
     try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (clientToken) {
+            headers['Client-Token'] = clientToken;
+        }
+
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify({ phone: phone, message: message })
         });
         const data = await response.json();
@@ -93,7 +96,7 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
 // --- Cloud Functions ---
 
 /**
- * Altera o e-mail de uma divulgadora e sincroniza em todos os documentos vinculados
+ * Altera o e-mail da divulgadora e sincroniza em todos os registros vinculados
  */
 exports.updatePromoterEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, oldEmail, newEmail } = data;
@@ -104,7 +107,7 @@ exports.updatePromoterEmail = functions.region("southamerica-east1").https.onCal
     const emailLower = newEmail.toLowerCase().trim();
 
     try {
-        // 1. Verifica se o novo e-mail já está em uso em outro perfil (mesma org)
+        // Verifica se o novo e-mail já existe na mesma org
         const pDoc = await db.collection('promoters').doc(promoterId).get();
         if (!pDoc.exists) throw new Error("Perfil não encontrado.");
         const orgId = pDoc.data().organizationId;
@@ -118,32 +121,25 @@ exports.updatePromoterEmail = functions.region("southamerica-east1").https.onCal
 
         const batch = db.batch();
 
-        // 2. Atualiza documento principal da divulgadora
+        // 1. Atualiza documento principal
         batch.update(db.collection('promoters').doc(promoterId), { email: emailLower });
 
-        // 3. Atualiza todas as postagens (assignments) associadas
+        // 2. Atualiza tarefas (assignments)
         const assignments = await db.collection('postAssignments').where('promoterEmail', '==', oldEmail).get();
         assignments.forEach(doc => {
             batch.update(doc.ref, { promoterEmail: emailLower });
         });
 
-        // 4. Atualiza todas as confirmações de lista de convidados
+        // 3. Atualiza confirmações de lista
         const confirmations = await db.collection('guestListConfirmations').where('promoterEmail', '==', oldEmail).get();
         confirmations.forEach(doc => {
             batch.update(doc.ref, { promoterEmail: emailLower });
         });
 
-        // 5. Atualiza solicitações de remoção de grupo
-        const removals = await db.collection('groupRemovalRequests').where('promoterEmail', '==', oldEmail).get();
-        removals.forEach(doc => {
-            batch.update(doc.ref, { promoterEmail: emailLower });
-        });
-
         await batch.commit();
-        return { success: true, message: "E-mail atualizado com sucesso em todos os registros." };
+        return { success: true, message: "E-mail atualizado e dados sincronizados." };
 
     } catch (e) {
-        console.error("ERRO updatePromoterEmail:", e.message);
         throw new functions.https.HttpsError("internal", e.message);
     }
 });
@@ -152,9 +148,11 @@ exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.o
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance || "NÃO CONFIGURADO";
-    const token = zapiConfig.token ? "CONFIGURADO (Oculto)" : "NÃO CONFIGURADO";
-    const testResult = await sendWhatsApp("5585982280780", "Teste de integração Equipe Certa. Se recebeu isso, está tudo OK! ✅");
-    return { instanceId: instance, tokenStatus: token, result: testResult };
+    const token = zapiConfig.token ? "CONFIGURADO" : "NÃO CONFIGURADO";
+    const clientToken = zapiConfig.client_token ? "CONFIGURADO" : "NÃO CONFIGURADO";
+    
+    const testResult = await sendWhatsApp("5585982280780", "Teste Equipe Certa: Diagnóstico Concluído! ✅");
+    return { instanceId: instance, tokenStatus: token, clientTokenStatus: clientToken, result: testResult };
 });
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {

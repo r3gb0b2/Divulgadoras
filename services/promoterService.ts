@@ -4,8 +4,7 @@ import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
 
 /**
- * Remove recursivamente objetos não serializáveis (como FieldValue sentinels) 
- * antes de enviar dados para uma Cloud Function Callable.
+ * Remove recursivamente objetos não serializáveis antes de enviar para Callable Functions.
  */
 const cleanForCallable = (obj: any): any => {
     if (obj === null || typeof obj !== 'object') return obj;

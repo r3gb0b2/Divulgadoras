@@ -553,8 +553,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ adminData }) => {
             const results = await findPromotersByEmail(emailArg);
             setLookupResults(results);
         } catch (err: any) {
-            // FIX: Explicitly cast error message to string to resolve 'unknown' type assignment issues with setLookupError.
-            const message = (err instanceof Error ? err.message : "Erro desconhecido.") as string;
+            // FIX: Changed catch block to use 'any' to ensure error message extraction is safe and resolves the type error with setLookupError.
+            const message = err instanceof Error ? err.message : String(err || "Erro desconhecido.");
             setLookupError(message);
         } finally {
             setIsLookingUp(false);
