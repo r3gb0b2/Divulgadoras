@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import { testEmailSystem } from '../services/emailService';
 import { 
     UsersIcon, 
     BuildingOfficeIcon, 
@@ -21,6 +22,9 @@ import {
 const SuperAdminDashboard: React.FC = () => {
     const [isTestingWa, setIsTestingWa] = useState(false);
     const [waTestResult, setWaTestResult] = useState<any>(null);
+    
+    const [isTestingEmail, setIsTestingEmail] = useState(false);
+    const [emailTestResult, setEmailTestResult] = useState<string | null>(null);
 
     const handleTestWhatsApp = async () => {
         setIsTestingWa(true);
@@ -36,6 +40,19 @@ const SuperAdminDashboard: React.FC = () => {
         }
     };
 
+    const handleTestEmail = async () => {
+        setIsTestingEmail(true);
+        setEmailTestResult(null);
+        try {
+            const res = await testEmailSystem();
+            setEmailTestResult(res.message);
+        } catch (err: any) {
+            setEmailTestResult("ERRO: " + err.message);
+        } finally {
+            setIsTestingEmail(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold">Painel Super Admin</h1>
@@ -47,23 +64,15 @@ const SuperAdminDashboard: React.FC = () => {
                         <WhatsAppIcon className="w-6 h-6 text-green-400" />
                         Z-API: Configuração e Diagnóstico
                     </h2>
-                    <p className="text-sm text-gray-400 mb-6">Para o WhatsApp funcionar, as 3 chaves abaixo devem estar configuradas no ambiente do Firebase.</p>
+                    <p className="text-sm text-gray-400 mb-6">Valide se as mensagens automáticas de aprovação e postagem nova estão saindo.</p>
                     
-                    <div className="bg-dark/50 p-4 rounded-xl border border-gray-700 mb-6">
-                        <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Comando para configurar (Terminal):</h3>
-                        <pre className="text-[10px] font-mono bg-black p-3 rounded-lg text-green-400 overflow-x-auto whitespace-pre-wrap">
-                            firebase functions:config:set zapi.instance="SUA_INSTANCIA" zapi.token="SEU_TOKEN" zapi.client_token="SEU_CLIENT_TOKEN"
-                        </pre>
-                        <p className="text-[9px] text-yellow-500 mt-2 italic">* Após rodar o comando, você precisa dar deploy: <strong>firebase deploy --only functions</strong></p>
-                    </div>
-
                     <button 
                         onClick={handleTestWhatsApp}
                         disabled={isTestingWa}
                         className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-500 disabled:opacity-50 transition-all font-bold shadow-lg shadow-green-900/20"
                     >
                         {isTestingWa ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <WhatsAppIcon className="w-5 h-5" />}
-                        {isTestingWa ? "Validando Chaves..." : "Testar Conexão Agora"}
+                        {isTestingWa ? "Validando..." : "Testar WhatsApp"}
                     </button>
 
                     {waTestResult && (
@@ -74,68 +83,60 @@ const SuperAdminDashboard: React.FC = () => {
                                     {waTestResult.result.success ? 'CONECTADO' : 'ERRO'}
                                 </span>
                             </h4>
-                            <div className="space-y-2">
-                                <p><span className="text-gray-500">ID da Instância:</span> <span className="text-white">{waTestResult.instanceId}</span></p>
-                                <p><span className="text-gray-500">Token Instância:</span> <span className={waTestResult.instanceToken === 'CONFIGURADO' ? 'text-green-400' : 'text-red-400'}>{waTestResult.instanceToken}</span></p>
-                                <p><span className="text-gray-500">Client-Token:</span> <span className={waTestResult.clientToken === 'CONFIGURADO' ? 'text-green-400' : 'text-red-400'}>{waTestResult.clientToken}</span></p>
-                                
-                                <div className={`mt-4 p-3 rounded-lg border ${waTestResult.result.success ? 'bg-green-900/20 border-green-800 text-green-300' : 'bg-red-900/20 border-red-800 text-red-300'}`}>
-                                    <p className="font-bold uppercase text-[9px] mb-1">Status do Último Envio:</p>
-                                    <p>{waTestResult.result.message}</p>
-                                    {waTestResult.result.raw && (
-                                        <pre className="mt-2 text-[9px] opacity-70 overflow-x-auto">{JSON.stringify(waTestResult.result.raw, null, 2)}</pre>
-                                    )}
-                                </div>
-                            </div>
+                            <p>{waTestResult.result.message}</p>
                         </div>
                     )}
                 </div>
 
-                {/* ATALHOS RÁPIDOS */}
-                <div className="bg-secondary p-6 rounded-2xl border border-gray-700">
-                    <h2 className="text-xl font-bold text-white mb-4">Acesso Rápido</h2>
-                    <div className="space-y-3">
-                        <Link to="/admin/organizations" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
-                            <BuildingOfficeIcon className="w-5 h-5 text-primary" />
-                            <span className="text-sm font-semibold">Organizações</span>
-                        </Link>
-                        <Link to="/admin/applications" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
-                            <KeyIcon className="w-5 h-5 text-primary" />
-                            <span className="text-sm font-semibold">Solicitações de Acesso</span>
-                        </Link>
-                        <Link to="/admin/push-queue" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
-                            <FaceIdIcon className="w-5 h-5 text-indigo-400" />
-                            <span className="text-sm font-semibold">Fila de Disparos Push</span>
-                        </Link>
-                        <Link to="/admin/cleanup" className="flex items-center gap-3 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors">
-                            <TrashIcon className="w-5 h-5 text-red-400" />
-                            <span className="text-sm font-semibold">Limpeza de Dados</span>
-                        </Link>
-                    </div>
+                {/* DIAGNÓSTICO BREVO / EMAIL */}
+                <div className="bg-blue-900/10 border border-blue-700/50 rounded-2xl p-6">
+                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                        <EnvelopeIcon className="w-6 h-6 text-blue-400" />
+                        Brevo: Teste de E-mail
+                    </h2>
+                    <p className="text-sm text-gray-400 mb-6">Verifique se as notificações de aprovação via Brevo estão chegando no seu e-mail.</p>
+                    
+                    <button 
+                        onClick={handleTestEmail}
+                        disabled={isTestingEmail}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 transition-all font-bold shadow-lg shadow-blue-900/20"
+                    >
+                        {isTestingEmail ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <EnvelopeIcon className="w-5 h-5" />}
+                        {isTestingEmail ? "Enviando..." : "Disparar E-mail de Teste"}
+                    </button>
+
+                    {emailTestResult && (
+                        <div className="mt-4 p-3 bg-black/30 rounded-xl border border-blue-800 text-[10px] text-blue-300 font-mono">
+                            {emailTestResult}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Link to="/admin/organizations" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                    <div className="flex items-center">
+                        <BuildingOfficeIcon className="w-8 h-8 text-primary" />
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Organizações</h2>
+                    </div>
+                </Link>
+                <Link to="/admin/applications" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
+                    <div className="flex items-center">
+                        <KeyIcon className="w-8 h-8 text-primary" />
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações</h2>
+                    </div>
+                </Link>
                 <Link to="/admin/newsletter" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                     <div className="flex items-center">
                         <EnvelopeIcon className="w-8 h-8 text-primary" />
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Newsletter</h2>
                     </div>
-                    <p className="mt-2 text-gray-400">Enviar e-mails em massa para as divulgadoras.</p>
                 </Link>
                 <Link to="/admin/email-templates" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
                     <div className="flex items-center">
                         <PencilIcon className="w-8 h-8 text-primary" />
-                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Templates de Email</h2>
+                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Templates</h2>
                     </div>
-                    <p className="mt-2 text-gray-400">Editar o visual dos e-mails automáticos de aprovação.</p>
-                </Link>
-                <Link to="/admin/edit-privacy" className="group block p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all duration-300">
-                    <div className="flex items-center">
-                        <ShieldCheckIcon className="w-8 h-8 text-primary" />
-                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Política de Privacidade</h2>
-                    </div>
-                    <p className="mt-2 text-gray-400">Atualizar o texto legal da plataforma.</p>
                 </Link>
             </div>
         </div>

@@ -16,8 +16,7 @@ const setupBrevo = () => {
     return apiInstance;
 };
 
-// --- FUNÇÕES DE TEMPLATE DE EMAIL ---
-
+// --- TEMPLATE PADRÃO ---
 const DEFAULT_TEMPLATE = `
 <!DOCTYPE html>
 <html>
@@ -48,6 +47,7 @@ const DEFAULT_TEMPLATE = `
 </html>
 `;
 
+// --- CHAMADAS PARA TEMPLATES ---
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const doc = await db.collection("settings").doc("emailTemplate").get();
     return { htmlContent: doc.exists ? doc.data().htmlContent : DEFAULT_TEMPLATE };
@@ -69,8 +69,7 @@ exports.resetEmailTemplate = functions.region("southamerica-east1").https.onCall
     return { success: true };
 });
 
-// --- DISPARO DE TESTE E PRODUÇÃO ---
-
+// --- DISPARO DE TESTE DE E-MAIL ---
 exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const brevo = setupBrevo();
     if (!brevo) throw new functions.https.HttpsError("failed-precondition", "API Key da Brevo não configurada no Firebase.");
@@ -78,135 +77,118 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
     const senderEmail = functions.config().brevo?.email || "contato@agenciavitrine.com";
     const testTarget = context.auth.token.email;
     
-    let htmlContent = data.testType === 'system_check' ? "<h1>Teste de Sistema</h1><p>Se você recebeu isso, a integração Brevo/SMTP está funcionando corretamente.</p>" : data.customHtmlContent;
-
-    // Replace placeholders for test
-    htmlContent = htmlContent
-        .replace(/{{promoterName}}/g, "Administrador Teste")
-        .replace(/{{campaignName}}/g, "Evento Demonstração")
-        .replace(/{{orgName}}/g, "Minha Produtora")
-        .replace(/{{portalLink}}/g, "https://divulgadoras.vercel.app");
+    let html = data.testType === 'system_check' ? "<h1>Teste de Conexão</h1><p>Brevo operando corretamente.</p>" : data.customHtmlContent;
+    html = html.replace(/{{promoterName}}/g, "Admin").replace(/{{campaignName}}/g, "Evento Teste").replace(/{{orgName}}/g, "Org Teste").replace(/{{portalLink}}/g, "#");
 
     try {
         await brevo.sendTransacEmail({
             sender: { email: senderEmail, name: "Equipe Certa (Teste)" },
             to: [{ email: testTarget }],
-            subject: data.testType === 'system_check' ? "Teste de Conexão Brevo" : "Teste de Layout de Aprovação",
-            htmlContent: htmlContent
+            subject: "Teste de E-mail Brevo",
+            htmlContent: html
         });
-        return { success: true, message: `E-mail enviado com sucesso para ${testTarget}` };
+        return { success: true, message: `E-mail enviado para ${testTarget}` };
     } catch (error) {
-        console.error("Erro Brevo:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
 });
 
-// --- SINCRONIZAÇÃO E NOTIFICAÇÃO DE APROVAÇÃO ---
-
+// --- FUNÇÃO DE APROVAÇÃO (WhatsApp e E-mail) ---
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, data: updateData } = data;
-    if (!promoterId) throw new functions.https.HttpsError("invalid-argument", "ID ausente.");
-
     const promoterRef = db.collection("promoters").doc(promoterId);
-    const promoterSnap = await promoterRef.get();
-    if (!promoterSnap.exists) throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
+    const snap = await promoterRef.get();
     
-    const oldData = promoterSnap.data();
+    if (!snap.exists) throw new functions.https.HttpsError("not-found", "Divulgadora não encontrada.");
+    const oldData = snap.data();
     const isApproving = updateData.status === 'approved' && oldData.status !== 'approved';
 
-    // 1. Atualiza Perfil Principal
     await promoterRef.update({
         ...updateData,
         statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
         actionTakenByEmail: context.auth.token.email
     });
 
-    // 2. Se for APROVAÇÃO, dispara notificações
     if (isApproving) {
         const orgDoc = await db.collection("organizations").doc(oldData.organizationId).get();
         const orgName = orgDoc.exists ? orgDoc.data().name : "Sua Produtora";
-        const campaignName = updateData.campaignName || oldData.campaignName || "Evento";
+        const campaignName = updateData.campaignName || oldData.campaignName || "Evento Selecionado";
         const portalUrl = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(oldData.email)}`;
 
-        // A) Enviar Email
-        try {
-            const brevo = setupBrevo();
-            if (brevo) {
-                const templateDoc = await db.collection("settings").doc("emailTemplate").get();
-                let html = templateDoc.exists ? templateDoc.data().htmlContent : DEFAULT_TEMPLATE;
-                
-                html = html
-                    .replace(/{{promoterName}}/g, oldData.name)
-                    .replace(/{{campaignName}}/g, campaignName)
-                    .replace(/{{orgName}}/g, orgName)
-                    .replace(/{{portalLink}}/g, portalUrl);
-
-                await brevo.sendTransacEmail({
-                    sender: { email: functions.config().brevo?.email || "contato@agenciavitrine.com", name: orgName },
-                    to: [{ email: oldData.email }],
-                    subject: `✅ Seu perfil foi aprovado para: ${campaignName}`,
-                    htmlContent: html
-                });
-            }
-        } catch (e) { console.error("Falha ao enviar email de aprovacao:", e); }
-
-        // B) Enviar WhatsApp (Aprovação e Postagem Nova)
-        try {
-            const zToken = functions.config().zapi?.token;
-            const zInstance = functions.config().zapi?.instance;
+        // WhatsApp via Fetch Nativo (Node 20)
+        const zToken = functions.config().zapi?.token;
+        const zInstance = functions.config().zapi?.instance;
+        if (zToken && zInstance) {
+            const msg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para participar da equipe do evento: *${campaignName}*.\n\n🚀 *Postagem Nova:* Já temos materiais disponíveis para você. Acesse agora para garantir sua participação!\n\n🔗 *Seu Portal:* ${portalUrl}\n\nSeja bem-vinda!`;
             
-            if (zToken && zInstance) {
-                const waMessage = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para participar da equipe do evento *${campaignName}*.\n\n🚀 *Postagem Nova:* Já temos materiais disponíveis no seu portal. Acesse agora para garantir sua participação!\n\n🔗 *Seu Portal:* ${portalUrl}\n\nSeja bem-vinda!`;
-                
-                const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+            try {
                 await fetch(`https://api.z-api.io/instances/${zInstance}/token/${zToken}/send-text`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, text: waMessage })
+                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, text: msg })
                 });
-            }
-        } catch (e) { console.error("Falha ao enviar WA de aprovacao:", e); }
-    }
+            } catch (e) { console.error("Erro WA:", e.message); }
+        }
 
+        // Email via Brevo
+        const brevo = setupBrevo();
+        if (brevo) {
+            try {
+                const templateDoc = await db.collection("settings").doc("emailTemplate").get();
+                let html = templateDoc.exists ? templateDoc.data().htmlContent : DEFAULT_TEMPLATE;
+                html = html.replace(/{{promoterName}}/g, oldData.name).replace(/{{campaignName}}/g, campaignName).replace(/{{orgName}}/g, orgName).replace(/{{portalLink}}/g, portalUrl);
+                
+                await brevo.sendTransacEmail({
+                    sender: { email: functions.config().brevo?.email || "contato@agenciavitrine.com", name: orgName },
+                    to: [{ email: oldData.email }],
+                    subject: `✅ Aprovada para o evento: ${campaignName}`,
+                    htmlContent: html
+                });
+            } catch (e) { console.error("Erro Email:", e.message); }
+        }
+    }
     return { success: true };
 });
 
-// --- MOTOR DE PUSH (MANTIDO DO ANTERIOR) ---
+// --- TESTE DE INTEGRAÇÃO WHATSAPP ---
+exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const zToken = functions.config().zapi?.token;
+    const zInstance = functions.config().zapi?.instance;
+    const clientToken = functions.config().zapi?.client_token;
 
-const sendPushToToken = async (token, title, body, url, metadata = {}) => {
-    if (!token) return { success: false, error: "Token ausente." };
-    const message = {
-        notification: { title, body },
-        data: { url: url || "/#/posts", ...metadata },
-        token: token,
-        android: { priority: "high" },
-        apns: { payload: { aps: { sound: "default", badge: 1 } } }
-    };
-    try {
-        await admin.messaging().send(message);
-        return { success: true };
-    } catch (error) {
-        console.error("Erro FCM:", error.message);
-        return { success: false, error: error.message };
+    if (!zToken || !zInstance) {
+        return { result: { success: false, message: "Token ou Instância não configurados nas functions:config." } };
     }
-};
 
-exports.testSelfPush = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { fcmToken, name } = data;
-    if (!fcmToken) throw new functions.https.HttpsError("invalid-argument", "Token não encontrado.");
-    return await sendPushToToken(fcmToken, "Teste de Conexão 🚀", `Olá ${name.split(' ')[0]}, seu celular está pronto!`, "/#/posts", { type: "test_push" });
+    try {
+        const response = await fetch(`https://api.z-api.io/instances/${zInstance}/token/${zToken}/send-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'client-token': clientToken },
+            body: JSON.stringify({ phone: "5585982280780", text: "Teste de conexão Super Admin - Equipe Certa" })
+        });
+        const resData = await response.json();
+        return { 
+            result: { success: response.ok, message: response.ok ? "Conexão OK! Mensagem de teste enviada para suporte." : "Erro na API: " + (resData.message || "Desconhecido") },
+            instanceId: zInstance, instanceToken: "CONFIGURADO", clientToken: clientToken ? "CONFIGURADO" : "AUSENTE"
+        };
+    } catch (error) {
+        return { result: { success: false, message: "Erro de rede: " + error.message } };
+    }
 });
 
-exports.sendPushReminderImmediately = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { reminderId } = data;
-    const snap = await db.collection("pushReminders").doc(reminderId).get();
-    if (!snap.exists) throw new functions.https.HttpsError("not-found", "Lembrete não encontrado.");
+// --- OUTRAS FUNÇÕES DE PUSH (MANTIDAS) ---
+const sendPushToToken = async (token, title, body, url, metadata = {}) => {
+    const message = { notification: { title, body }, data: { url: url || "/#/posts", ...metadata }, token: token };
+    try { await admin.messaging().send(message); return { success: true }; }
+    catch (error) { return { success: false, error: error.message }; }
+};
+
+exports.testSelfPush = functions.region("southamerica-east1").https.onCall(async (data) => {
+    return await sendPushToToken(data.fcmToken, "Teste Push", "Funcionando!", "/#/posts");
+});
+
+exports.sendPushReminderImmediately = functions.region("southamerica-east1").https.onCall(async (data) => {
+    const snap = await db.collection("pushReminders").doc(data.reminderId).get();
     const r = snap.data();
-    const result = await sendPushToToken(r.fcmToken, r.title, r.body, r.url, { assignmentId: r.assignmentId });
-    if (result.success) {
-        await snap.ref.update({ status: "sent", sentAt: admin.firestore.Timestamp.now() });
-        return { success: true };
-    } else {
-        throw new functions.https.HttpsError("internal", result.error);
-    }
+    return await sendPushToToken(r.fcmToken, r.title, r.body, r.url);
 });
