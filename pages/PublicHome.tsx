@@ -1,15 +1,26 @@
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublicOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
-import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon } from '../components/Icons';
+import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon, CheckCircleIcon } from '../components/Icons';
+import { Capacitor } from '@capacitor/core';
 
 const PublicHome: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Detecta se é App Nativo
+  const isNative = Capacitor.isNativePlatform();
+  
   useEffect(() => {
+    // Só buscamos organizações se NÃO for nativo, para economizar recursos no App
+    if (isNative) {
+        setIsLoading(false);
+        return;
+    }
+
     const fetchOrgs = async () => {
       setIsLoading(true);
       setError(null);
@@ -23,7 +34,7 @@ const PublicHome: React.FC = () => {
       }
     };
     fetchOrgs();
-  }, []);
+  }, [isNative]);
   
   const renderContent = () => {
     if (isLoading) {
@@ -60,7 +71,7 @@ const PublicHome: React.FC = () => {
                 </span>
                 <span className="text-gray-400 font-bold text-xs uppercase tracking-widest group-hover:text-purple-100 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-primary rounded-full group-hover:bg-white"></span>
-                    Cadastrar agora
+                    CADASTRAR NESTA EQUIPE
                 </span>
               </div>
               <div className="bg-gray-700/50 p-3 rounded-2xl group-hover:bg-white/20 transition-colors flex-shrink-0">
@@ -75,76 +86,110 @@ const PublicHome: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-8 px-4">
       
-      {/* Badge Superior */}
-      <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-6 py-2 bg-primary/20 border border-primary/30 rounded-full text-primary text-[10px] font-black uppercase tracking-widest animate-pulse">
-              <SparklesIcon className="w-3 h-3" />
-              Portal de Seleção Oficial
+      {/* Hero Section */}
+      <section className="text-center space-y-6 animate-fadeIn">
+          <div className="inline-flex items-center gap-2 px-6 py-2 bg-green-500/10 border border-green-500/30 rounded-full text-green-400 text-[10px] font-black uppercase tracking-widest">
+              <CheckCircleIcon className="w-3 h-3" />
+              {isNative ? 'Portal da Divulgadora Equipe Certa' : 'Sistema de Cadastro Web Oficial (Online)'}
           </div>
-      </div>
+          
+          <h1 className="text-5xl md:text-7xl font-black text-white uppercase tracking-tighter leading-none">
+            {isNative ? 'BEM-VINDA AO' : 'SEJA UMA'} <br/><span className="text-primary">{isNative ? 'APP EQUIPE' : 'DIVULGADORA'}</span>
+          </h1>
+          
+          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto font-medium">
+            {isNative 
+              ? 'Acompanhe seu status, pegue suas tarefas e gerencie suas listas VIP diretamente do seu celular.' 
+              : 'O primeiro passo para entrar nas melhores equipes de eventos. Faça sua inscrição agora, de forma rápida e 100% segura.'
+            }
+          </p>
 
-      {/* Seção Principal */}
-      <div className="relative">
-          <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-purple-600/10 to-transparent rounded-[40px] blur-3xl opacity-50 -z-10"></div>
-          <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[40px] p-6 md:p-10 border border-white/5">
-              <div className="flex flex-col items-center gap-6 mb-10 border-b border-white/5 pb-8 text-center">
-                  <div className="space-y-2 w-full">
-                    <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
-                        Escolha a <span className="text-primary">Produtora</span>
-                    </h2>
-                    <p className="text-gray-400 font-medium text-sm md:text-base">Selecione para qual equipe você deseja se candidatar hoje.</p>
-                  </div>
-                  <div className="flex flex-wrap justify-center gap-3 w-full">
-                     <Link to="/status" className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-2xl hover:bg-gray-700 transition-all flex items-center gap-2 border border-white/5 text-sm">
-                        <SearchIcon className="w-4 h-4" /> MEU STATUS
-                    </Link>
-                    <Link to="/posts" className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-2xl hover:bg-gray-700 transition-all flex items-center gap-2 border border-white/5 text-sm">
-                        <MegaphoneIcon className="w-4 h-4" /> CONFERIR POSTAGENS
-                    </Link>
-                  </div>
-              </div>
+          <div className="flex flex-wrap justify-center gap-4 pt-4">
+              {/* SÓ MOSTRA CADASTRO SE NÃO FOR APP NATIVO */}
+              {!isNative && (
+                <a href="#agencias" className="px-10 py-4 bg-primary text-white font-black rounded-2xl shadow-2xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest text-sm">
+                    QUERO ME CADASTRAR
+                </a>
+              )}
               
-              {renderContent()}
+              <Link to="/status" className={`px-10 py-4 font-black rounded-2xl transition-all uppercase tracking-widest text-sm ${isNative ? 'bg-primary text-white shadow-2xl shadow-primary/30' : 'bg-gray-800 text-white border border-gray-700 hover:bg-gray-700'}`}>
+                  VER MEU STATUS
+              </Link>
+              
+              {isNative && (
+                 <Link to="/posts" className="px-10 py-4 bg-gray-800 text-white font-black rounded-2xl border border-gray-700 hover:bg-gray-700 transition-all uppercase tracking-widest text-sm">
+                    MINHAS TAREFAS
+                </Link>
+              )}
           </div>
+      </section>
+
+      {/* Seção de Seleção - OCULTA NO APP */}
+      {!isNative && (
+        <div id="agencias" className="relative pt-10">
+            <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-purple-600/10 to-transparent rounded-[40px] blur-3xl opacity-50 -z-10"></div>
+            <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[40px] p-6 md:p-10 border border-white/5">
+                <div className="flex flex-col items-center gap-6 mb-10 border-b border-white/5 pb-8 text-center">
+                    <div className="space-y-2 w-full">
+                        <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">
+                            Selecione a <span className="text-primary">Produtora</span>
+                        </h2>
+                        <p className="text-gray-400 font-medium text-sm md:text-base">Escolha para qual equipe você deseja enviar suas fotos e dados.</p>
+                    </div>
+                </div>
+                
+                {renderContent()}
+            </div>
+        </div>
+      )}
+
+      {/* Info Rápida */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto py-10 border-y border-white/5">
+        <div className="flex gap-4 items-start">
+           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary flex-shrink-0">
+               <MegaphoneIcon className="w-6 h-6" />
+           </div>
+           <div>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">Avisos Push</h3>
+               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">No App, você recebe alertas de "Hora de Postar" diretamente na tela do seu celular.</p>
+           </div>
+        </div>
+        <div className="flex gap-4 items-start">
+           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary flex-shrink-0">
+               <SearchIcon className="w-6 h-6" />
+           </div>
+           <div>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">Portal Exclusivo</h3>
+               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">Gerencie suas tarefas e comprovantes sem precisar de links externos ou grupos lotados.</p>
+           </div>
+        </div>
+        <div className="flex gap-4 items-start">
+           <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary flex-shrink-0">
+               <SparklesIcon className="w-6 h-6" />
+           </div>
+           <div>
+               <h3 className="text-white font-black text-xs uppercase tracking-widest">Check-in Ágil</h3>
+               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">No dia do evento, sua entrada é validada em segundos através do sistema integrado do App.</p>
+           </div>
+        </div>
       </div>
 
       {/* Rodapé de Ações */}
-      <section className="flex flex-wrap justify-center gap-6 pt-2">
-        <Link to="/como-funciona" className="text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-colors">
-           VER GUIA COMPLETO DE USO
-        </Link>
+      <section className="flex flex-col items-center gap-6 pt-10">
+        <div className="flex flex-wrap justify-center gap-8">
+            <Link to="/como-funciona" className="text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors underline decoration-primary/50 underline-offset-4">
+               GUIA DA DIVULGADORA
+            </Link>
+            {!isNative && (
+                <Link to="/apple-test" className="text-gray-600 hover:text-primary font-black text-[10px] uppercase tracking-widest transition-colors">
+                    VERSÃO APP IPHONE (BETA)
+                </Link>
+            )}
+        </div>
+        <p className="text-[9px] text-gray-700 uppercase font-black tracking-[0.3em]">
+            Equipe Certa • Gestão Profissional de Eventos
+        </p>
       </section>
-
-      {/* Info Rápida */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 opacity-60 hover:opacity-100 transition-opacity max-w-4xl mx-auto">
-        <div className="flex gap-4 items-start">
-           <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
-               <UsersIcon className="w-5 h-5" />
-           </div>
-           <div>
-               <h3 className="text-white font-bold text-xs uppercase">Perfil Único</h3>
-               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">Seus dados são salvos para facilitar o acesso em vários eventos.</p>
-           </div>
-        </div>
-        <div className="flex gap-4 items-start">
-           <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
-               <UsersIcon className="w-5 h-5" />
-           </div>
-           <div>
-               <h3 className="text-white font-bold text-xs uppercase">Portal Exclusivo</h3>
-               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">Gerencie suas tarefas, postagens e listas VIP em um só lugar.</p>
-           </div>
-        </div>
-        <div className="flex gap-4 items-start">
-           <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
-               <UsersIcon className="w-5 h-5" />
-           </div>
-           <div>
-               <h3 className="text-white font-bold text-xs uppercase">Transparência</h3>
-               <p className="text-gray-500 text-[11px] mt-1 leading-relaxed">Acompanhe seu desempenho e aprovações em tempo real.</p>
-           </div>
-        </div>
-      </div>
     </div>
   );
 };
