@@ -12,9 +12,7 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Using Component explicitly and adding constructor to ensure state and props are correctly inherited and recognized by TypeScript.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Initializing state directly as a property for cleaner code and reliable type inference.
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
@@ -39,11 +37,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   public render(): ReactNode {
-    // FIX: Accessing state and props from this to resolve Property 'props' does not exist error.
-    const { hasError, error } = this.state;
-    const { children } = this.props;
-
-    if (hasError) {
+    // FIX: Using this.state and this.props explicitly to resolve Property 'props' does not exist error.
+    if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white p-4">
           <div className="max-w-md w-full bg-gray-800 p-6 rounded-lg shadow-lg border border-red-500">
@@ -51,9 +46,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <p className="mb-4 text-gray-300">
               Ocorreu um erro inesperado na aplicação. Por favor, tente recarregar a página.
             </p>
-            {error && (
+            {this.state.error && (
               <div className="bg-gray-900 p-3 rounded border border-gray-700 text-sm font-mono overflow-auto mb-4">
-                <p className="text-red-400">{error.toString()}</p>
+                <p className="text-red-400">{this.state.error.toString()}</p>
               </div>
             )}
              <button
@@ -70,7 +65,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       );
     }
 
-    return children;
+    return this.props.children;
   }
 }
 

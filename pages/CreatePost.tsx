@@ -8,8 +8,8 @@ import { getApprovedPromoters } from '../services/promoterService';
 import { createPost, getPostWithAssignments, schedulePost, getScheduledPostById, updateScheduledPost } from '../services/postService';
 import { Campaign, Promoter, ScheduledPostData, InstructionTemplate, LinkTemplate, Timestamp } from '../types';
 import { ArrowLeftIcon, LinkIcon, FaceIdIcon } from '../components/Icons';
-import { auth } from '../firebase/config';
-import { storage } from '../firebase/config';
+import { auth, functions, storage } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import firebase from 'firebase/compat/app';
 
 const timestampToInputDate = (ts: Timestamp | undefined | null | any): string => {
@@ -451,14 +451,6 @@ const CreatePost: React.FC = () => {
         if (selectedCampaigns.size === 0) { setError("Selecione pelo menos um evento/gênero."); return; }
         if (selectedPromoters.size === 0) { setError("Selecione pelo menos uma divulgadora."); return; }
         if ((postType === 'image' || postType === 'video') && !mediaFile && !googleDriveUrl && !originalMediaPath) { setError("Selecione um arquivo de mídia (upload) ou forneça um link do Google Drive."); return; }
-        if (postType === 'text') {
-            if (!postLink.trim()) {
-                setError("O link da interação é obrigatório.");
-                return;
-            }
-            // For interaction type, textContent is not used, but we can set a descriptive default
-            setTextContent("Interação"); 
-        }
         
         if (isScheduling && (!scheduleDate || !scheduleTime)) { setError("Defina a data e hora para o agendamento."); return; }
     
@@ -476,6 +468,7 @@ const CreatePost: React.FC = () => {
             }
 
             const creationPromises = [];
+            const postIdsToNotify: string[] = [];
     
             for (const campaignId of selectedCampaigns) {
                 const campaign = campaigns.find(c => c.id === campaignId);
@@ -525,14 +518,17 @@ const CreatePost: React.FC = () => {
                     };
 
                     if (editingScheduledPostId) {
-                         // When editing a schedule, we assume it's for one event, so just update.
                          creationPromises.push(updateScheduledPost(editingScheduledPostId, scheduledData));
                     } else {
                         creationPromises.push(schedulePost(scheduledData));
                     }
                 } else {
                     const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
-                    creationPromises.push(createPost(finalPostData, promotersToAssign));
+                    const creationPromise = createPost(finalPostData, promotersToAssign).then(id => {
+                        if (isActive) postIdsToNotify.push(id);
+                        return id;
+                    });
+                    creationPromises.push(creationPromise);
                 }
             }
 
@@ -541,12 +537,20 @@ const CreatePost: React.FC = () => {
             }
     
             await Promise.all(creationPromises);
+
+            // GATILHO DE PUSH AUTOMÁTICO
+            if (!isScheduling && postIdsToNotify.length > 0) {
+                const notifyPostPush = httpsCallable(functions, 'notifyPostPush');
+                for (const pid of postIdsToNotify) {
+                    notifyPostPush({ postId: pid }).catch(console.error); // Dispara em background
+                }
+            }
     
             if (isScheduling) {
                  alert(`${creationPromises.length} publicação(ões) agendada(s) com sucesso!`);
                  navigate('/admin/scheduled-posts');
             } else {
-                 alert(`${creationPromises.length} publicação(ões) criada(s) e atribuída(s) com sucesso!`);
+                 alert(`${creationPromises.length} publicação(ões) criada(s) e o alerta PUSH foi enviado para a equipe!`);
                  navigate('/admin/posts');
             }
     
@@ -667,20 +671,10 @@ const CreatePost: React.FC = () => {
                         
                         <div>
                             <div className="flex justify-between items-center mb-1">
-                                <label className="block text-sm font-medium text-gray-300">
-                                    {postType === 'text' ? 'Link da Interação (Obrigatório)' : 'Link da Postagem'}
-                                </label>
+                                <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
                                 <button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button>
                             </div>
-                            <InputWithIcon 
-                                Icon={LinkIcon} 
-                                type="url" 
-                                name="postLink" 
-                                placeholder={postType === 'text' ? "Link para o conteúdo de interação" : "Link da Postagem (Ex: instagram)"} 
-                                value={postLink} 
-                                onChange={e => setPostLink(e.target.value)} 
-                                required={postType === 'text'}
-                            />
+                            <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
                             <select onChange={e => setPostLink(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de link...</option>{linkTemplates.map(t => <option key={t.id} value={t.url}>{t.name}</option>)}</select>
                         </div>
                     </fieldset>
