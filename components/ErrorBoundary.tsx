@@ -12,12 +12,15 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// FIX: Explicitly extending React.Component with props and state types to resolve property resolution errors like 'this.props'.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-  };
+// FIX: Using named Component import to resolve visibility issues for this.props and this.state.
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
+  }
 
   /**
    * Static method for error state transformation.
@@ -29,15 +32,13 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   /**
    * Standard lifecycle method for side-effects when an error is caught.
    */
-  // FIX: Removed 'override' as base class resolution might be failing in this specific environment, and ensuring parameters are typed.
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  // FIX: Explicitly using render method without 'override' keyword to prevent resolution errors while maintaining standard React functionality.
   public render(): ReactNode {
+    // FIX: Safely accessing state and props from this class instance.
     const { hasError, error } = this.state;
-    // FIX: Successfully accessing children from props now that inheritance is properly recognized.
     const { children } = this.props;
 
     if (hasError) {

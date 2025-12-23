@@ -4,7 +4,12 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
 import { findPromotersByEmail, changePromoterEmail } from '../services/promoterService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
-import { ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, PencilIcon } from '../components/Icons';
+import { 
+    ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, 
+    ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, 
+    LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, 
+    XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, PencilIcon 
+} from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
@@ -175,11 +180,11 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                   </button>
                 </div>
                 <p className="text-gray-400 text-xs leading-relaxed mb-6">
-                  Você precisa entrar no grupo oficial desta produtora para que as tarefas sejam liberadas automaticamente no seu portal.
+                  Você precisa entrar no grupo oficial desta produtora (e aceitar os termos de uso) para que as tarefas sejam liberadas automaticamente no seu portal.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">PEGAR LINK DO GRUPO</Link>
-                  <button onClick={onRefresh} className="flex-1 py-3 bg-gray-800 text-gray-300 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-gray-700 transition-colors border border-gray-700">JÁ ENTREI, ATUALIZAR</button>
+                  <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">ACEITAR REGRAS</Link>
+                  <button onClick={onRefresh} className="flex-1 py-3 bg-gray-800 text-gray-300 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-gray-700 transition-colors border border-gray-700">JÁ ACEITEI, ATUALIZAR</button>
                 </div>
             </div>
         );
@@ -233,7 +238,7 @@ const PostCard: React.FC<{ assignment: PostAssignment & { promoterHasJoinedGroup
                 {!assignment.proofSubmittedAt && !assignment.justification && (
                     <div className="flex flex-col gap-4">
                          {assignment.status === 'pending' ? (
-                            <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-green-600 text-white font-black rounded-2xl shadow-lg shadow-green-900/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
+                            <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
                         ) : (
                             <div className="space-y-2">
                                 <button 
@@ -299,15 +304,16 @@ const PostCheck: React.FC = () => {
               setSearched(false); setIsLoading(false); return; 
             }
             
-            // Lógica para encontrar o aceite de regras de forma agregada por organização
-            // Mapeamos para cada organização se existe pelo menos um perfil aprovado que tenha hasJoinedGroup: true
+            // Mapeamento de status de entrada no grupo por organização
             const joinedStatusByOrg = new Map<string, boolean>();
             profiles.forEach(p => {
-                if (p.status === 'approved' && p.hasJoinedGroup) {
+                // Se algum cadastro aprovado deste e-mail nesta organização já aceitou regras
+                if (p.status === 'approved' && p.hasJoinedGroup === true) {
                     joinedStatusByOrg.set(p.organizationId, true);
                 }
             });
 
+            // Ordena perfis para pegar o mais relevante como "principal"
             const sortedProfiles = [...profiles].sort((a, b) => {
               if (a.status === 'approved' && b.status !== 'approved') return -1;
               if (a.status !== 'approved' && b.status === 'approved') return 1;
@@ -321,9 +327,9 @@ const PostCheck: React.FC = () => {
             
             const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
             const mappedAssignments = fetchedAssignments.map(a => {
-              // Verifica o status de "entrou no grupo" de forma agregada para a organização desta tarefa
-              const hasJoined = joinedStatusByOrg.get(a.organizationId) || false;
-              return { ...a, promoterHasJoinedGroup: hasJoined };
+              // Verifica o status agregado para a organização da tarefa
+              const hasJoinedInOrg = joinedStatusByOrg.get(a.organizationId) || false;
+              return { ...a, promoterHasJoinedGroup: hasJoinedInOrg };
             });
             setAssignments(mappedAssignments);
         } catch (err: any) { alert("Erro ao carregar dados: " + err.message); } finally { setIsLoading(false); }
@@ -452,6 +458,7 @@ const PostCheck: React.FC = () => {
 
     return (
         <div className="max-w-xl mx-auto pb-20">
+            {/* CABEÇALHO SEMPRE VISÍVEL QUANDO LOGADA */}
             <div className="flex justify-between items-start mb-8 px-2">
                 <div className="flex-grow">
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight">Olá, {promoter.name.split(' ')[0]}!</h1>
@@ -468,8 +475,8 @@ const PostCheck: React.FC = () => {
                                     autoFocus
                                     disabled={isUpdatingEmail}
                                 />
-                                <button type="submit" disabled={isUpdatingEmail} className="text-green-400 font-bold text-[10px] uppercase">{isUpdatingEmail ? '...' : 'OK'}</button>
-                                <button type="button" onClick={() => setIsChangingEmail(false)} className="text-gray-500 font-bold text-[10px] uppercase">Sair</button>
+                                <button type="submit" disabled={isUpdatingEmail} className="text-green-400 font-bold text-[10px] uppercase p-1">OK</button>
+                                <button type="button" onClick={() => setIsChangingEmail(false)} className="text-gray-500 font-bold text-[10px] uppercase p-1">Sair</button>
                             </form>
                         ) : (
                             <div className="flex items-center gap-2">

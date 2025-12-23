@@ -100,7 +100,7 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
 
 /**
  * Confirma a entrada no grupo e aceitação de regras.
- * Agora sincroniza com TODAS as inscrições da mesma divulgadora na mesma organização.
+ * Agora sincroniza com TODAS as inscrições APROVADAS da mesma divulgadora na mesma organização.
  */
 export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
     try {
@@ -108,10 +108,11 @@ export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
         if (!doc.exists) return;
         const data = doc.data() as Promoter;
         
-        // Busca todos os registros deste e-mail nesta organização
+        // Busca todos os registros deste e-mail nesta organização que estejam aprovados
         const relatedSnap = await firestore.collection('promoters')
-            .where('email', '==', data.email)
+            .where('email', '==', data.email.toLowerCase().trim())
             .where('organizationId', '==', data.organizationId)
+            .where('status', '==', 'approved')
             .get();
         
         const batch = firestore.batch();

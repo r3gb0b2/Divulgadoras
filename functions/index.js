@@ -30,27 +30,35 @@ function normalizePhoneNumber(phone) {
 
 /**
  * Envia mensagem via Z-API com suporte a Client-Token
+ * Requer: zapi.instance, zapi.token e zapi.client_token
  */
 async function sendWhatsApp(to, message) {
     const phone = normalizePhoneNumber(to);
     if (!phone) {
         return { success: false, message: "Número de telefone inválido." };
     }
+    
+    // Prioriza config do Firebase (setado via CLI), depois env vars
     const zapiConfig = functions.config().zapi || {};
     const instance = zapiConfig.instance || process.env.ZAPI_INSTANCE;
     const token = zapiConfig.token || process.env.ZAPI_TOKEN;
     const clientToken = zapiConfig.client_token || process.env.ZAPI_CLIENT_TOKEN;
 
     if (!instance || !token) {
-        console.error("[WhatsApp Erro] Chaves Z-API não encontradas no servidor.");
-        return { success: false, message: "Credenciais (ID/Token) não configuradas." };
+        console.error("[WhatsApp Erro] Instância ou Token principal não configurados.");
+        return { success: false, message: "Instância ou Token principal ausentes." };
     }
 
     const url = `https://api.z-api.io/instances/${instance}/token/${token}/send-text`;
     try {
-        const headers = { 'Content-Type': 'application/json' };
+        const headers = { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+
         if (clientToken) {
-            headers['Client-Token'] = clientToken;
+            // O Client-Token deve ser enviado EXATAMENTE como está no painel, sem espaços
+            headers['Client-Token'] = clientToken.trim();
         }
 
         const response = await fetch(url, {
@@ -58,10 +66,23 @@ async function sendWhatsApp(to, message) {
             headers: headers,
             body: JSON.stringify({ phone: phone, message: message })
         });
+        
         const data = await response.json();
-        if (response.ok) return { success: true, data };
-        else return { success: false, message: data.message || "Erro na Z-API", raw: data };
+        
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            console.error(`[Z-API Error] Status: ${response.status}`, data);
+            // Se o erro for "Client-Token ... not allowed", o data.error conterá essa string
+            return { 
+                success: false, 
+                message: data.error || data.message || `Erro Z-API (${response.status})`, 
+                status: response.status,
+                raw: data 
+            };
+        }
     } catch (error) {
+        console.error("[Z-API Connection Error]", error);
         return { success: false, message: "Falha de conexão com o servidor da Z-API." };
     }
 }
@@ -95,64 +116,46 @@ async function sendEmail({ toEmail, toName, subject, htmlContent }) {
 
 // --- Cloud Functions ---
 
-/**
- * Altera o e-mail da divulgadora e sincroniza em todos os registros vinculados
- */
 exports.updatePromoterEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, oldEmail, newEmail } = data;
     if (!promoterId || !oldEmail || !newEmail) {
         throw new functions.https.HttpsError("invalid-argument", "Dados incompletos.");
     }
-
     const emailLower = newEmail.toLowerCase().trim();
-
     try {
-        // Verifica se o novo e-mail já existe na mesma org
         const pDoc = await db.collection('promoters').doc(promoterId).get();
         if (!pDoc.exists) throw new Error("Perfil não encontrado.");
         const orgId = pDoc.data().organizationId;
-
-        const checkEmail = await db.collection('promoters')
-            .where('email', '==', emailLower)
-            .where('organizationId', '==', orgId)
-            .limit(1).get();
-        
+        const checkEmail = await db.collection('promoters').where('email', '==', emailLower).where('organizationId', '==', orgId).limit(1).get();
         if (!checkEmail.empty) throw new Error("Este novo e-mail já possui um cadastro nesta organização.");
-
         const batch = db.batch();
-
-        // 1. Atualiza documento principal
         batch.update(db.collection('promoters').doc(promoterId), { email: emailLower });
-
-        // 2. Atualiza tarefas (assignments)
         const assignments = await db.collection('postAssignments').where('promoterEmail', '==', oldEmail).get();
-        assignments.forEach(doc => {
-            batch.update(doc.ref, { promoterEmail: emailLower });
-        });
-
-        // 3. Atualiza confirmações de lista
+        assignments.forEach(doc => { batch.update(doc.ref, { promoterEmail: emailLower }); });
         const confirmations = await db.collection('guestListConfirmations').where('promoterEmail', '==', oldEmail).get();
-        confirmations.forEach(doc => {
-            batch.update(doc.ref, { promoterEmail: emailLower });
-        });
-
+        confirmations.forEach(doc => { batch.update(doc.ref, { promoterEmail: emailLower }); });
         await batch.commit();
-        return { success: true, message: "E-mail atualizado e dados sincronizados." };
-
-    } catch (e) {
-        throw new functions.https.HttpsError("internal", e.message);
-    }
+        return { success: true, message: "E-mail atualizado." };
+    } catch (e) { throw new functions.https.HttpsError("internal", e.message); }
 });
 
 exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Não autorizado.");
     const zapiConfig = functions.config().zapi || {};
-    const instance = zapiConfig.instance || "NÃO CONFIGURADO";
-    const token = zapiConfig.token ? "CONFIGURADO" : "NÃO CONFIGURADO";
-    const clientToken = zapiConfig.client_token ? "CONFIGURADO" : "NÃO CONFIGURADO";
     
-    const testResult = await sendWhatsApp("5585982280780", "Teste Equipe Certa: Diagnóstico Concluído! ✅");
-    return { instanceId: instance, tokenStatus: token, clientTokenStatus: clientToken, result: testResult };
+    const instance = zapiConfig.instance || "NÃO DEFINIDO";
+    const tokenStatus = zapiConfig.token ? "CONFIGURADO" : "AUSENTE";
+    const clientTokenStatus = zapiConfig.client_token ? "CONFIGURADO" : "AUSENTE (Segurança desativada?)";
+
+    // Tenta enviar uma mensagem de teste
+    const testResult = await sendWhatsApp("5585982280780", "Teste Equipe Certa: Diagnóstico Completo ✅");
+    
+    return { 
+        instanceId: instance, 
+        instanceToken: tokenStatus,
+        clientToken: clientTokenStatus,
+        result: testResult 
+    };
 });
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
