@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { testEmailSystem } from '../services/emailService';
 import { 
     UsersIcon, 
     BuildingOfficeIcon, 
@@ -11,25 +10,26 @@ import {
     EnvelopeIcon, 
     PencilIcon,
     WhatsAppIcon,
-    RefreshIcon
+    RefreshIcon,
+    AlertTriangleIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
     const [isTestingWa, setIsTestingWa] = useState(false);
-    const [waTestResult, setWaTestResult] = useState<any>(null);
+    const [waResult, setWaResult] = useState<any>(null);
     
     const [isTestingEmail, setIsTestingEmail] = useState(false);
-    const [emailTestResult, setEmailTestResult] = useState<string | null>(null);
+    const [emailResult, setEmailResult] = useState<any>(null);
 
     const handleTestWhatsApp = async () => {
         setIsTestingWa(true);
-        setWaTestResult(null);
+        setWaResult(null);
         try {
-            const testIntegration = httpsCallable(functions, 'testWhatsAppIntegration');
-            const result = await testIntegration();
-            setWaTestResult(result.data);
+            const func = httpsCallable(functions, 'testWhatsAppIntegration');
+            const res: any = await func();
+            setWaResult(res.data);
         } catch (err: any) {
-            alert("Erro na chamada da função: " + err.message);
+            setWaResult({ success: false, message: err.message });
         } finally {
             setIsTestingWa(false);
         }
@@ -37,12 +37,13 @@ const SuperAdminDashboard: React.FC = () => {
 
     const handleTestEmail = async () => {
         setIsTestingEmail(true);
-        setEmailTestResult(null);
+        setEmailResult(null);
         try {
-            const res = await testEmailSystem();
-            setEmailTestResult(res.message);
+            const func = httpsCallable(functions, 'sendTestEmail');
+            const res: any = await func();
+            setEmailResult(res.data);
         } catch (err: any) {
-            setEmailTestResult("ERRO: " + err.message);
+            setEmailResult({ success: false, message: err.message });
         } finally {
             setIsTestingEmail(false);
         }
@@ -52,53 +53,60 @@ const SuperAdminDashboard: React.FC = () => {
         <div className="space-y-6">
             <h1 className="text-3xl font-bold">Painel Super Admin</h1>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* WHATSAPP DIAGNOSTIC */}
-                <div className="lg:col-span-2 bg-green-900/10 border border-green-700/50 rounded-2xl p-6">
-                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                        <WhatsAppIcon className="w-6 h-6 text-green-400" />
-                        WhatsApp (Z-API)
-                    </h2>
-                    <p className="text-sm text-gray-400 mb-6">Valide se as mensagens automáticas estão sendo enviadas corretamente.</p>
-                    
-                    <button 
-                        onClick={handleTestWhatsApp}
-                        disabled={isTestingWa}
-                        className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-500 disabled:opacity-50 transition-all font-bold"
-                    >
-                        {isTestingWa ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <WhatsAppIcon className="w-5 h-5" />}
-                        {isTestingWa ? "Validando..." : "Testar WhatsApp"}
-                    </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* WHATSAPP CARD */}
+                <div className="bg-green-900/10 border border-green-700/50 rounded-2xl p-6 flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <WhatsAppIcon className="w-6 h-6 text-green-400" /> WhatsApp (Z-API)
+                        </h2>
+                        <button 
+                            onClick={handleTestWhatsApp}
+                            disabled={isTestingWa}
+                            className="bg-green-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-500 disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isTestingWa ? <RefreshIcon className="w-4 h-4 animate-spin" /> : "Testar Agora"}
+                        </button>
+                    </div>
 
-                    {waTestResult && (
-                        <div className="mt-4 p-4 bg-black/40 rounded-xl border border-gray-700 font-mono text-[11px]">
-                            <p className={waTestResult.result.success ? 'text-green-400' : 'text-red-400'}>
-                                {waTestResult.result.message}
-                            </p>
+                    {waResult && (
+                        <div className={`mt-2 p-4 rounded-xl text-sm border ${waResult.success ? 'bg-green-900/20 border-green-800 text-green-300' : 'bg-red-900/20 border-red-800 text-red-300'}`}>
+                            <p className="font-bold">{waResult.message}</p>
+                            <div className="mt-3 p-2 bg-black/40 rounded font-mono text-[10px] overflow-auto max-h-40">
+                                <p className="text-gray-500 mb-1">// Resposta Bruta da API:</p>
+                                {JSON.stringify(waResult.debug, null, 2)}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* EMAIL DIAGNOSTIC */}
-                <div className="bg-blue-900/10 border border-blue-700/50 rounded-2xl p-6">
-                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                        <EnvelopeIcon className="w-6 h-6 text-blue-400" />
-                        E-mail (Brevo)
-                    </h2>
-                    <p className="text-sm text-gray-400 mb-6">Teste o disparo de e-mails transacionais.</p>
-                    
-                    <button 
-                        onClick={handleTestEmail}
-                        disabled={isTestingEmail}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 font-bold"
-                    >
-                        {isTestingEmail ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <EnvelopeIcon className="w-5 h-5" />}
-                        {isTestingEmail ? "Enviando..." : "Disparar Teste"}
-                    </button>
+                {/* EMAIL CARD */}
+                <div className="bg-blue-900/10 border border-blue-700/50 rounded-2xl p-6 flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <EnvelopeIcon className="w-6 h-6 text-blue-400" /> E-mail (Brevo)
+                        </h2>
+                        <button 
+                            onClick={handleTestEmail}
+                            disabled={isTestingEmail}
+                            className="bg-blue-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-500 disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isTestingEmail ? <RefreshIcon className="w-4 h-4 animate-spin" /> : "Testar Agora"}
+                        </button>
+                    </div>
 
-                    {emailTestResult && (
-                        <div className="mt-4 p-3 bg-black/30 rounded-xl border border-blue-800 text-[10px] text-blue-300 font-mono">
-                            {emailTestResult}
+                    {emailResult && (
+                        <div className={`mt-2 p-4 rounded-xl text-sm border ${emailResult.success ? 'bg-green-900/20 border-green-800 text-green-300' : 'bg-red-900/20 border-red-800 text-red-300'}`}>
+                            <p className="font-bold">{emailResult.message}</p>
+                            {!emailResult.success && (
+                                <div className="mt-3 bg-yellow-900/20 p-2 rounded text-[10px] text-yellow-200">
+                                    <p>💡 <strong>Dica:</strong> Verifique se o e-mail remetente está na lista de "Senders & IP" no painel da Brevo.</p>
+                                </div>
+                            )}
+                            <div className="mt-3 p-2 bg-black/40 rounded font-mono text-[10px] overflow-auto max-h-40">
+                                <p className="text-gray-500 mb-1">// Logs do Servidor:</p>
+                                {JSON.stringify(emailResult.debug, null, 2)}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -109,12 +117,6 @@ const SuperAdminDashboard: React.FC = () => {
                     <div className="flex items-center">
                         <BuildingOfficeIcon className="w-8 h-8 text-primary" />
                         <h2 className="ml-4 text-xl font-semibold text-gray-100">Organizações</h2>
-                    </div>
-                </Link>
-                <Link to="/admin/applications" className="p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all">
-                    <div className="flex items-center">
-                        <KeyIcon className="w-8 h-8 text-primary" />
-                        <h2 className="ml-4 text-xl font-semibold text-gray-100">Solicitações</h2>
                     </div>
                 </Link>
                 <Link to="/admin/newsletter" className="p-6 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-all">
