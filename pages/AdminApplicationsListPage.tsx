@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getAdminApplications, deleteAdminApplication, acceptAdminApplication } from '../services/adminService';
 import { getOrganizations } from '../services/organizationService';
-import { AdminApplication, Organization, Timestamp } from '../types';
+import { AdminApplication, Organization } from '../types';
 import { ArrowLeftIcon } from '../components/Icons';
 
 // Approval Modal Component
@@ -26,7 +26,7 @@ const ApprovalModal: React.FC<{
         setError('');
         try {
             await onConfirm(application, selectedOrgId);
-            onClose(); // Close on success
+            onClose(); 
         } catch (err: any) {
             setError(err.message || 'Ocorreu um erro.');
         } finally {
@@ -85,7 +85,6 @@ const AdminApplicationsListPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    // State for modal
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AdminApplication | null>(null);
 
@@ -98,7 +97,6 @@ const AdminApplicationsListPage: React.FC = () => {
                 getOrganizations()
             ]);
             setApplications(apps);
-            // Sort orgs for the dropdown
             orgs.sort((a,b) => a.name.localeCompare(b.name));
             setOrganizations(orgs);
         } catch (err: any) {
@@ -122,9 +120,8 @@ const AdminApplicationsListPage: React.FC = () => {
         setError(null);
         try {
             await acceptAdminApplication(app, orgId);
-            await fetchApplications(); // Refresh the list
+            await fetchApplications(); 
         } catch (err: any) {
-            // Re-throw to show error in modal
             throw err;
         } finally {
             setIsProcessing(null);
@@ -132,72 +129,25 @@ const AdminApplicationsListPage: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm("Tem certeza que deseja recusar e remover esta solicitação? Esta ação é permanente.")) {
+        if (window.confirm("Remover esta solicitação?")) {
             try {
                 await deleteAdminApplication(id);
-                fetchApplications(); // Refresh the list
+                fetchApplications(); 
             } catch (err: any) {
-                setError(err.message || "Falha ao remover a solicitação.");
+                setError(err.message || "Falha ao remover.");
             }
         }
     };
 
-    // FIX: Alterado para 'any' para evitar erros de tipagem com FieldValue em ambiente de build, 
-    // ou usamos uma checagem de toDate().
     const formatDate = (timestamp: any) => {
         if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        // Check for FieldValue vs Timestamp vs Date
+        const date = (timestamp && typeof timestamp.toDate === 'function') 
+            ? timestamp.toDate() 
+            : new Date(timestamp);
+        
+        if (isNaN(date.getTime())) return 'N/A';
         return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    };
-
-    const renderContent = () => {
-        if (isLoading) {
-            return (
-                <div className="flex justify-center items-center py-10">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                </div>
-            );
-        }
-        if (error) {
-            return <p className="text-red-400 text-center">{error}</p>;
-        }
-        if (applications.length === 0) {
-            return <p className="text-gray-400 text-center py-8">Nenhuma solicitação de acesso pendente.</p>;
-        }
-        return (
-            <div className="space-y-4">
-                {applications.map(app => (
-                    <div key={app.id} className="bg-gray-700/50 p-4 rounded-lg">
-                        <div className="flex flex-col md:flex-row justify-between md:items-start">
-                            <div>
-                                <p className="font-bold text-lg text-white">{app.name}</p>
-                                <p className="text-sm text-gray-300">{app.email} | {app.phone}</p>
-                                {app.message && <p className="text-sm text-gray-400 mt-2 italic border-l-2 border-gray-600 pl-2">"{app.message}"</p>}
-                            </div>
-                            <div className="flex-shrink-0 mt-3 md:mt-0 text-right space-y-2">
-                                <p className="text-xs text-gray-500">Enviado em: {formatDate(app.createdAt)}</p>
-                                <div className="flex justify-end gap-2">
-                                     <button
-                                        onClick={() => handleAccept(app)}
-                                        disabled={isProcessing === app.id}
-                                        className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold disabled:opacity-50"
-                                    >
-                                        {isProcessing === app.id ? 'Aprovando...' : 'Aprovar'}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(app.id)}
-                                        disabled={isProcessing === app.id}
-                                        className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm disabled:opacity-50"
-                                    >
-                                        Recusar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        );
     };
 
     return (
@@ -210,16 +160,35 @@ const AdminApplicationsListPage: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="bg-blue-900/50 border border-blue-700 text-blue-300 p-3 mb-6 rounded-md text-sm">
-                    <p className="font-bold">Como processar uma solicitação:</p>
-                    <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Clique em <strong>Aprovar</strong> para abrir a janela de aprovação.</li>
-                        <li>Selecione a <strong>organização</strong> à qual o novo admin será vinculado.</li>
-                        <li>Aprovar cria um usuário com permissão de 'Admin' e remove a solicitação da lista.</li>
-                        <li>Clique em <strong>Recusar</strong> para remover permanentemente a solicitação.</li>
-                    </ul>
-                </div>
-                {renderContent()}
+                {isLoading ? (
+                    <div className="flex justify-center items-center py-10">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    </div>
+                ) : error ? (
+                    <p className="text-red-400 text-center">{error}</p>
+                ) : applications.length === 0 ? (
+                    <p className="text-gray-400 text-center py-8">Nenhuma solicitação pendente.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {applications.map(app => (
+                            <div key={app.id} className="bg-gray-700/50 p-4 rounded-lg">
+                                <div className="flex flex-col md:flex-row justify-between md:items-start">
+                                    <div>
+                                        <p className="font-bold text-lg text-white">{app.name}</p>
+                                        <p className="text-sm text-gray-300">{app.email} | {app.phone}</p>
+                                    </div>
+                                    <div className="flex-shrink-0 mt-3 md:mt-0 text-right space-y-2">
+                                        <p className="text-xs text-gray-500">Enviado em: {formatDate(app.createdAt)}</p>
+                                        <div className="flex justify-end gap-2">
+                                            <button onClick={() => handleAccept(app)} className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-semibold">Aprovar</button>
+                                            <button onClick={() => handleDelete(app.id)} className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm">Recusar</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
             {isModalOpen && selectedApp && (
                 <ApprovalModal

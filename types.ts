@@ -45,6 +45,7 @@ export interface Promoter {
   };
 }
 
+// Added missing PromoterApplicationData interface
 export interface PromoterApplicationData {
   name: string;
   email: string;
@@ -152,58 +153,6 @@ export interface Organization {
   followLoopThreshold?: number;
 }
 
-export interface StateConfig {
-  isActive: boolean;
-  rules: string;
-}
-
-export interface StatesConfig {
-  [stateAbbr: string]: StateConfig;
-}
-
-export interface InstructionTemplate {
-  id: string;
-  text: string;
-  organizationId: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-export interface LinkTemplate {
-  id: string;
-  name: string;
-  url: string;
-  organizationId: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-export interface AdminApplication {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  message?: string;
-  createdAt: Timestamp | FieldValue;
-}
-
-export interface RejectionReason {
-  id: string;
-  text: string;
-  organizationId: string;
-}
-
-export interface GroupRemovalRequest {
-  id: string;
-  promoterId: string;
-  promoterName: string;
-  promoterEmail: string;
-  campaignName: string;
-  organizationId: string;
-  status: 'pending' | 'completed' | 'ignored';
-  requestedAt: Timestamp | FieldValue;
-  actionTakenBy?: string;
-  actionTakenAt?: Timestamp | FieldValue;
-}
-
 export interface GuestList {
   id: string;
   organizationId: string;
@@ -213,8 +162,8 @@ export interface GuestList {
   name: string;
   description?: string;
   guestAllowance: number;
-  startsAt?: Timestamp | null;
-  closesAt?: Timestamp | null;
+  startsAt?: Timestamp | FieldValue | null;
+  closesAt?: Timestamp | FieldValue | null;
   isActive: boolean;
   askEmail: boolean;
   createdByEmail: string;
@@ -400,4 +349,61 @@ export interface PushReminder {
     scheduledFor: Timestamp;
     status: 'pending' | 'sent' | 'error';
     assignmentId: string;
+}
+
+// Added missing RejectionReason interface
+export interface RejectionReason {
+  id: string;
+  text: string;
+  organizationId: string;
+}
+
+// Added missing GroupRemovalRequest interface
+export interface GroupRemovalRequest {
+  id: string;
+  promoterId: string;
+  promoterName: string;
+  promoterEmail: string;
+  campaignName: string;
+  organizationId: string;
+  status: 'pending' | 'completed' | 'ignored';
+  requestedAt: Timestamp | FieldValue;
+  actionTakenBy?: string;
+  actionTakenAt?: Timestamp | FieldValue;
+}
+
+// Added missing AdminApplication interface
+export interface AdminApplication {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  createdAt: Timestamp | FieldValue;
+}
+
+// Added missing StateConfig and StatesConfig interfaces
+export interface StateConfig {
+  isActive: boolean;
+  rules: string;
+}
+
+export interface StatesConfig {
+  [stateAbbr: string]: StateConfig;
+}
+
+// Added missing InstructionTemplate interface
+export interface InstructionTemplate {
+  id: string;
+  text: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
+}
+
+// Added missing LinkTemplate interface
+export interface LinkTemplate {
+  id: string;
+  name: string;
+  url: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -66,7 +67,7 @@ const GuestListAssignments: React.FC = () => {
             if (!listData) throw new Error("Lista de convidados não encontrada.");
             
             if (!listData.stateAbbr) {
-                throw new Error("Dados da lista incompletos (Falta a Região/Estado). Por favor, edite a lista na página 'Gerenciar Listas', selecione o evento novamente e salve para corrigir.");
+                throw new Error("Dados da lista incompletos. Por favor, edite e salve a lista novamente para corrigir.");
             }
 
             const [approvedPromoters, orgAssignments] = await Promise.all([
@@ -82,7 +83,9 @@ const GuestListAssignments: React.FC = () => {
             approvedPromoters.sort((a, b) => (a.instagram || a.name).localeCompare(b.instagram || b.name));
             setPromoters(approvedPromoters);
             setPostAssignments(orgAssignments);
-            setAssignments(listData.assignments || {});
+            
+            // Garantindo compatibilidade de tipo na inicialização do estado local
+            setAssignments(listData.assignments as any || {});
             setBulkAllowance(listData.guestAllowance || 0);
 
         } catch (err: any) {
@@ -128,11 +131,7 @@ const GuestListAssignments: React.FC = () => {
 
     const filteredPromoters = useMemo(() => {
         let results = promotersWithStats;
-
-        if (filterInGroup) {
-            results = results.filter(p => p.hasJoinedGroup === true);
-        }
-
+        if (filterInGroup) results = results.filter(p => p.hasJoinedGroup === true);
         if (searchQuery.trim()) {
             const lowerQuery = searchQuery.toLowerCase();
             results = results.filter(p => p.name.toLowerCase().includes(lowerQuery) || (p.instagram && p.instagram.toLowerCase().includes(lowerQuery)));
@@ -175,7 +174,7 @@ const GuestListAssignments: React.FC = () => {
     const handleInfoChange = (promoterId: string, value: string) => {
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { ...prev[promoterId], guestAllowance: prev[promoterId]?.guestAllowance ?? 0, info: value }
+            [promoterId]: { ...prev[promoterId], info: value }
         }));
     };
     
@@ -183,10 +182,7 @@ const GuestListAssignments: React.FC = () => {
         const date = value ? firebase.firestore.Timestamp.fromDate(new Date(value)) : null;
         setAssignments(prev => ({
             ...prev,
-            [promoterId]: { 
-                ...(prev[promoterId] || { guestAllowance: 0, info: '' }), 
-                closesAt: date 
-            }
+            [promoterId]: { ...prev[promoterId], closesAt: date }
         }));
     };
 
@@ -209,14 +205,9 @@ const GuestListAssignments: React.FC = () => {
     };
     
     const handleApplyBulkAllowance = () => {
-        const selectedIds = Object.keys(assignments);
-        if(selectedIds.length === 0) {
-            alert("Nenhuma divulgadora selecionada para aplicar a quantidade.");
-            return;
-        }
         setAssignments(prev => {
             const newAssignments = { ...prev };
-            selectedIds.forEach(id => {
+            Object.keys(newAssignments).forEach(id => {
                 newAssignments[id] = { ...newAssignments[id], guestAllowance: bulkAllowance };
             });
             return newAssignments;
@@ -224,14 +215,9 @@ const GuestListAssignments: React.FC = () => {
     };
 
     const handleApplyBulkInfo = () => {
-        const selectedIds = Object.keys(assignments);
-        if(selectedIds.length === 0) {
-            alert("Nenhuma divulgadora selecionada para aplicar o informativo.");
-            return;
-        }
         setAssignments(prev => {
             const newAssignments = { ...prev };
-            selectedIds.forEach(id => {
+            Object.keys(newAssignments).forEach(id => {
                 newAssignments[id] = { ...newAssignments[id], info: bulkInfo };
             });
             return newAssignments;
@@ -239,15 +225,10 @@ const GuestListAssignments: React.FC = () => {
     };
     
     const handleApplyBulkDate = () => {
-        const selectedIds = Object.keys(assignments);
-        if (selectedIds.length === 0) {
-            alert("Nenhuma divulgadora selecionada para aplicar a data.");
-            return;
-        }
         const date = bulkClosesAt ? firebase.firestore.Timestamp.fromDate(new Date(bulkClosesAt)) : null;
         setAssignments(prev => {
             const newAssignments = { ...prev };
-            selectedIds.forEach(id => {
+            Object.keys(newAssignments).forEach(id => {
                 newAssignments[id] = { ...newAssignments[id], closesAt: date };
             });
             return newAssignments;
@@ -259,123 +240,14 @@ const GuestListAssignments: React.FC = () => {
         setIsSaving(true);
         setError(null);
         try {
-            await updateGuestList(listId, { assignments });
-            alert("Atribuições salvas com sucesso!");
+            await updateGuestList(listId, { assignments: assignments as any });
+            alert("Atribuições salvas!");
             navigate('/admin/lists');
         } catch (err: any) {
             setError(err.message || "Falha ao salvar.");
         } finally {
             setIsSaving(false);
         }
-    };
-
-    const renderContent = () => {
-        if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-        if (error) return <p className="text-red-400 text-center">{error}</p>;
-        
-        const areAllVisibleSelected = filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id]);
-
-        return (
-            <div className="space-y-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
-                    <div className="relative flex-grow w-full">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                        <input type="text" placeholder="Buscar por nome ou @..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800"/>
-                    </div>
-                    <div className="flex items-center gap-x-2 flex-shrink-0">
-                        <span className="font-semibold text-gray-300 text-xs">Filtrar:</span>
-                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                            {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                <button key={f} type="button" onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    <span className="hidden sm:inline">{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
-                     <div className="flex flex-wrap justify-between items-center gap-4">
-                        <label className="flex items-center space-x-2 font-semibold cursor-pointer">
-                            <input type="checkbox" onChange={handleToggleAll} checked={areAllVisibleSelected} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                            <span>Marcar/Desmarcar Todos Visíveis ({Object.keys(assignments).length} no total)</span>
-                        </label>
-                         <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer flex-shrink-0">
-                            <input
-                                type="checkbox"
-                                checked={filterInGroup}
-                                onChange={(e) => setFilterInGroup(e.target.checked)}
-                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
-                            />
-                            <span>Mostrar somente quem está no grupo</span>
-                        </label>
-                    </div>
-                    <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <input id="bulk-allowance" type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
-                            <label htmlFor="bulk-allowance" className="text-sm font-medium">convidado(s)</label>
-                            <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Qtde</button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <input id="bulk-info" type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Informativo..."/>
-                            <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Info</button>
-                        </div>
-                         <div className="flex items-center gap-2">
-                            <input id="bulk-closes-at" type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
-                            <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-sm font-semibold rounded-md">Aplicar Data</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead className="bg-gray-700/50">
-                            <tr>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase w-12"></th>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Nº de Convidados</th>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
-                                <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Data Limite</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-700">
-                            {filteredPromoters.map(p => (
-                                <tr key={p.id} className="hover:bg-gray-700/40">
-                                    <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
-                                    <td className="p-3 whitespace-nowrap"><span className={`font-medium ${p.hasJoinedGroup ? 'text-green-400' : 'text-white'}`}>{p.instagram || p.name}</span></td>
-                                    <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
-                                    <td className="p-3 whitespace-nowrap">
-                                        <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-24 px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"/>
-                                    </td>
-                                    <td className="p-3 whitespace-nowrap">
-                                        <input 
-                                            type="text" 
-                                            value={assignments[p.id]?.info ?? ''} 
-                                            onChange={e => handleInfoChange(p.id, e.target.value)} 
-                                            disabled={!assignments[p.id]} 
-                                            placeholder="Ex: VIP até 00h" 
-                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
-                                        />
-                                    </td>
-                                    <td className="p-3 whitespace-nowrap">
-                                        <input 
-                                            type="datetime-local" 
-                                            value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} 
-                                            onChange={e => handleDateChange(p.id, e.target.value)}
-                                            disabled={!assignments[p.id]}
-                                            className="w-full px-2 py-1 border border-gray-600 rounded-md bg-gray-800 disabled:bg-gray-900 disabled:cursor-not-allowed"
-                                            style={{colorScheme: 'dark'}}
-                                        />
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                     {filteredPromoters.length === 0 && <p className="text-gray-400 text-center p-6">Nenhuma divulgadora encontrada.</p>}
-                </div>
-            </div>
-        );
     };
 
     return (
@@ -388,7 +260,70 @@ const GuestListAssignments: React.FC = () => {
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                {renderContent()}
+                 <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                        <div className="relative flex-grow w-full">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                            <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800"/>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
+                         <div className="flex flex-wrap justify-between items-center gap-4">
+                            <label className="flex items-center space-x-2 font-semibold cursor-pointer">
+                                <input type="checkbox" onChange={handleToggleAll} checked={filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                                <span>Marcar/Desmarcar Visíveis ({Object.keys(assignments).length} total)</span>
+                            </label>
+                        </div>
+                        <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <input type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
+                                <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Qtde em Massa</button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Info..."/>
+                                <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Info em Massa</button>
+                            </div>
+                             <div className="flex items-center gap-2">
+                                <input type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
+                                <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Data em Massa</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead className="bg-gray-700/50">
+                                <tr>
+                                    <th className="p-3 text-left w-12"></th>
+                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
+                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
+                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Qtde</th>
+                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
+                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Limite</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-700">
+                                {filteredPromoters.map(p => (
+                                    <tr key={p.id} className="hover:bg-gray-700/40">
+                                        <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
+                                        <td className="p-3 whitespace-nowrap"><span className={`font-medium ${p.hasJoinedGroup ? 'text-green-400' : 'text-white'}`}>{p.instagram || p.name}</span></td>
+                                        <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
+                                        <td className="p-3">
+                                            <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-16 px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30"/>
+                                        </td>
+                                        <td className="p-3">
+                                            <input type="text" value={assignments[p.id]?.info ?? ''} onChange={e => handleInfoChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-full px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30"/>
+                                        </td>
+                                        <td className="p-3">
+                                            <input type="datetime-local" value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} onChange={e => handleDateChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30 text-xs" style={{colorScheme: 'dark'}}/>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
                 <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end">
                     <button onClick={handleSave} disabled={isSaving || isLoading} className="px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
                         {isSaving ? 'Salvando...' : 'Salvar Atribuições'}

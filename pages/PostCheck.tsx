@@ -327,7 +327,7 @@ const PostCheck: React.FC = () => {
 
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
-    // Efeito para gerenciar a contagem regressiva de 10s do Push
+    // Gerenciador da contagem regressiva de 10s para o Teste de Push
     useEffect(() => {
         let interval: any;
         if (pushTestCountdown !== null && pushTestCountdown > 0) {
@@ -335,10 +335,9 @@ const PostCheck: React.FC = () => {
                 setPushTestCountdown(prev => (prev !== null ? prev - 1 : null));
             }, 1000);
         } else if (pushTestCountdown === 0) {
-            // Quando a contagem acaba, dispara o serviço
             if (promoter?.fcmToken) {
                 testSelfPush(promoter.fcmToken, promoter.name).catch(e => {
-                    alert("Erro ao enviar push: " + e.message);
+                    alert("Erro no disparo: " + e.message);
                 });
             }
             setPushTestCountdown(null);
@@ -374,12 +373,10 @@ const PostCheck: React.FC = () => {
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
             
             const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
-            
             const mappedAssignments = fetchedAssignments.map(a => ({
                 ...a,
                 promoterHasJoinedGroup: producerRuleAccepted.get(a.organizationId) || false
             }));
-            
             setAssignments(mappedAssignments);
         } catch (err: any) { alert("Erro ao carregar dados."); } finally { setIsLoading(false); }
     }, []);
@@ -422,18 +419,9 @@ const PostCheck: React.FC = () => {
         } catch (err: any) { alert(err.message); } finally { setIsUpdatingEmail(false); }
     };
 
-    const handleTestPush = () => {
+    const handleTestPushClick = () => {
         if (!promoter?.fcmToken || pushTestCountdown !== null) return;
         setPushTestCountdown(10);
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files) {
-            const fileList = Array.from(files).slice(0, 2);
-            setJustificationFiles(fileList);
-            setJustificationPreviews(fileList.map(file => URL.createObjectURL(file as Blob)));
-        }
     };
 
     const handleJustificationSubmit = async () => {
@@ -473,32 +461,24 @@ const PostCheck: React.FC = () => {
                     
                     {isChangingEmail ? (
                         <form onSubmit={handleEmailChangeSubmit} className="flex items-center gap-2 mt-1">
-                            <input 
-                                type="email" 
-                                value={newEmailValue} 
-                                onChange={e => setNewEmailValue(e.target.value)}
-                                className="bg-gray-800 border border-gray-700 text-[10px] text-white px-2 py-1 rounded-lg outline-none flex-grow"
-                                autoFocus
-                            />
+                            <input type="email" value={newEmailValue} onChange={e => setNewEmailValue(e.target.value)} className="bg-gray-800 border border-gray-700 text-[10px] text-white px-2 py-1 rounded-lg outline-none flex-grow" autoFocus />
                             <button type="submit" className="text-green-400 font-bold text-[10px] uppercase">OK</button>
                             <button type="button" onClick={() => setIsChangingEmail(false)} className="text-gray-500 font-bold text-[10px] uppercase">Sair</button>
                         </form>
                     ) : (
                         <div className="flex items-center gap-2 mt-1">
                             <p className="text-xs text-gray-500 font-mono truncate max-w-[200px]">{promoter.email}</p>
-                            <button onClick={() => { setIsChangingEmail(true); setNewEmailValue(promoter.email); }} className="text-gray-600 hover:text-primary transition-colors">
-                                <PencilIcon className="w-3.5 h-3.5" />
-                            </button>
+                            <button onClick={() => { setIsChangingEmail(true); setNewEmailValue(promoter.email); }} className="text-gray-600 hover:text-primary transition-colors"><PencilIcon className="w-3.5 h-3.5" /></button>
                         </div>
                     )}
 
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                         <button onClick={() => setIsStatsModalOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"><ChartBarIcon className="w-3 h-3" /> MEU STATUS</button>
                         
-                        {/* BOTÃO DE TESTE DE PUSH */}
+                        {/* BOTÃO TESTAR PUSH */}
                         {promoter.fcmToken && (
                             <button 
-                                onClick={handleTestPush}
+                                onClick={handleTestPushClick}
                                 disabled={pushTestCountdown !== null}
                                 className={`inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-900/20 text-indigo-400 border border-indigo-900/30 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${pushTestCountdown !== null ? 'animate-pulse scale-105' : 'hover:bg-indigo-900/40 hover:scale-105'}`}
                             >
