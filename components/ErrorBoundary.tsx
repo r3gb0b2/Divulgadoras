@@ -14,12 +14,14 @@ interface ErrorBoundaryState {
  * Error boundary component to catch and handle uncaught errors in child components.
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Use property initializer for state to ensure it's correctly recognized by TypeScript.
-  // This resolves errors where 'state' and 'props' are not recognized as members of the class.
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-  };
+  // FIX: Added constructor to correctly initialize props and state, resolving the error where 'props' was not recognized on type 'ErrorBoundary'.
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
+  }
 
   /**
    * Static method for error state transformation.

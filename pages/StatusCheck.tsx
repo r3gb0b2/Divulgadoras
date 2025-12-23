@@ -4,7 +4,7 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon } from '../components/Icons';
+import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, ClipboardDocumentListIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
 
@@ -25,7 +25,7 @@ const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaig
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><XIcon className="w-6 h-6" /></button>
         </div>
         <div className="flex-grow overflow-y-auto pr-2 space-y-4 text-gray-300 text-sm leading-relaxed">
-           <div dangerouslySetInnerHTML={{ __html: rules.replace(/\n/g, '<br />') || 'Nenhuma regra cadastrada.' }} />
+           <div dangerouslySetInnerHTML={{ __html: rules?.replace(/\n/g, '<br />') || 'Nenhuma regra cadastrada.' }} />
         </div>
         <div className="mt-8 flex justify-end">
           <button onClick={onClose} className="px-8 py-3 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark transition-all uppercase text-xs tracking-widest">Entendi</button>
@@ -40,8 +40,12 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
+    // Ajuste na busca da campanha para ser mais tolerante com espaços
     const campaign = useMemo(() => 
-        allCampaigns.find(c => c.name === promoter.campaignName && c.organizationId === promoter.organizationId),
+        allCampaigns.find(c => 
+            c.name.trim().toLowerCase() === promoter.campaignName?.trim().toLowerCase() && 
+            c.organizationId === promoter.organizationId
+        ),
     [allCampaigns, promoter]);
 
     const statusStyles = {
@@ -76,7 +80,7 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
             >
                 <div className="flex-grow overflow-hidden">
                     <p className="text-white font-bold text-sm truncate uppercase tracking-tight">{promoter.campaignName || 'Geral'}</p>
-                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">{promoter.state}</p>
+                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">{promoter.state} • {orgName}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusStyles[promoter.status]}`}>
@@ -96,37 +100,52 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
                         </div>
                     )}
 
-                    {promoter.status === 'approved' && campaign && (
+                    {campaign && (
                         <div className="space-y-4 mt-2 bg-dark/30 p-4 rounded-2xl border border-white/5">
+                            {/* Bloco de Regras: Visível para Pendentes e Aprovadas */}
                             <div className="flex items-start gap-3">
                                 <div className="w-5 h-5 bg-primary/20 rounded-full flex items-center justify-center text-[10px] font-black text-primary border border-primary/20 flex-shrink-0">1</div>
                                 <div className="flex-grow">
-                                    <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Aceite as Regras</p>
+                                    <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Leia as Regras</p>
                                     <div className="flex flex-col sm:flex-row gap-3 mt-2">
-                                        <button onClick={() => setIsRulesModalOpen(true)} className="px-3 py-1.5 bg-gray-700 text-white text-[9px] font-black rounded-lg border border-gray-600 uppercase tracking-widest hover:bg-gray-600 transition-colors">VER REGRAS</button>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={hasAcceptedRules} onChange={handleAcceptRules} className="w-4 h-4 rounded bg-gray-900 border-gray-700 text-primary focus:ring-0" />
-                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">LI E CONCORDO</span>
-                                        </label>
+                                        <button onClick={() => setIsRulesModalOpen(true)} className="px-3 py-1.5 bg-gray-700 text-white text-[9px] font-black rounded-lg border border-gray-600 uppercase tracking-widest hover:bg-gray-600 transition-colors">VER REGRAS DO EVENTO</button>
+                                        
+                                        {promoter.status === 'approved' && (
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={hasAcceptedRules} onChange={handleAcceptRules} className="w-4 h-4 rounded bg-gray-900 border-gray-700 text-primary focus:ring-0" />
+                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">LI E CONCORDO</span>
+                                            </label>
+                                        )}
                                     </div>
                                 </div>
                             </div>
                             
-                            <div className="flex items-start gap-3">
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black border transition-colors flex-shrink-0 ${hasAcceptedRules ? 'bg-green-600 text-white border-green-500' : 'bg-gray-800 text-gray-600 border-gray-700'}`}>2</div>
-                                <div className="flex-grow">
-                                    <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Grupo do Evento</p>
-                                    <a 
-                                        href={hasAcceptedRules ? campaign.whatsappLink : undefined} 
-                                        target="_blank" 
-                                        rel="noreferrer"
-                                        className={`mt-2 inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-black rounded-xl text-[9px] uppercase tracking-widest transition-all ${!hasAcceptedRules ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:scale-105 active:scale-95 shadow-lg shadow-green-900/20'}`}
-                                        onClick={(e) => !hasAcceptedRules && e.preventDefault()}
-                                    >
-                                        <WhatsAppIcon className="w-3.5 h-3.5" /> ENTRAR NO WHATSAPP
-                                    </a>
+                            {/* Bloco de WhatsApp: Apenas para Aprovadas */}
+                            {promoter.status === 'approved' && (
+                                <div className="flex items-start gap-3 border-t border-white/5 pt-4">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black border transition-colors flex-shrink-0 ${hasAcceptedRules ? 'bg-green-600 text-white border-green-500' : 'bg-gray-800 text-gray-600 border-gray-700'}`}>2</div>
+                                    <div className="flex-grow">
+                                        <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Grupo do Evento</p>
+                                        <a 
+                                            href={hasAcceptedRules ? campaign.whatsappLink : undefined} 
+                                            target="_blank" 
+                                            rel="noreferrer"
+                                            className={`mt-2 inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-black rounded-xl text-[9px] uppercase tracking-widest transition-all ${!hasAcceptedRules ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:scale-105 active:scale-95 shadow-lg shadow-green-900/20'}`}
+                                            onClick={(e) => !hasAcceptedRules && e.preventDefault()}
+                                        >
+                                            <WhatsAppIcon className="w-3.5 h-3.5" /> ENTRAR NO WHATSAPP
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {promoter.status === 'pending' && (
+                                <div className="mt-2 p-2 bg-blue-900/10 rounded-lg border border-blue-900/20">
+                                    <p className="text-[9px] text-blue-300 uppercase font-black leading-tight">
+                                        Seu perfil está sendo analisado. O link do grupo será liberado assim que você for aprovada.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -160,7 +179,7 @@ const StatusCheck: React.FC = () => {
             const [result, orgs, campaigns] = await Promise.all([
                 checkPromoterStatus(searchEmail),
                 getOrganizations(),
-                getAllCampaigns()
+                getAllCampaigns() // Busca global de campanhas para o status
             ]);
             
             setPromoters(result);

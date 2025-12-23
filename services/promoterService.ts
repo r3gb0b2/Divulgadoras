@@ -100,7 +100,6 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
 
 /**
  * Confirma a entrada no grupo e aceitação de regras.
- * Agora sincroniza com TODAS as inscrições APROVADAS da mesma divulgadora na mesma organização.
  */
 export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
     try {
@@ -108,7 +107,6 @@ export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
         if (!doc.exists) return;
         const data = doc.data() as Promoter;
         
-        // Busca todos os registros deste e-mail nesta organização que estejam aprovados
         const relatedSnap = await firestore.collection('promoters')
             .where('email', '==', data.email.toLowerCase().trim())
             .where('organizationId', '==', data.organizationId)
@@ -123,7 +121,6 @@ export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
         await batch.commit();
     } catch (error) {
         console.error("Erro ao sincronizar aceite de regras:", error);
-        // Fallback para o ID individual se a busca falhar
         await firestore.collection('promoters').doc(id).update({ hasJoinedGroup: true });
     }
 };
@@ -165,19 +162,34 @@ export const getAllPromoters = async (options: {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         else if (options.filterOrgId && options.filterOrgId !== 'all') q = q.where("organizationId", "==", options.filterOrgId);
+        
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        // CORREÇÃO: Filtro de campanha deve ser aplicado apenas se for específico
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+            q = q.where("campaignName", "==", options.selectedCampaign);
+        }
+        
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        if (options.statesForScope && !options.filterState) results = results.filter(p => options.statesForScope!.includes(p.state));
+        
+        // Filtro de estados (Escopo)
+        if (options.statesForScope && options.statesForScope.length > 0 && !options.filterState) {
+            results = results.filter(p => options.statesForScope!.includes(p.state));
+        }
+        
+        // CORREÇÃO: Filtro de campanhas permitidas (Escopo)
+        // Se o admin tiver restrições por campanha, aplicamos aqui.
+        // Se o array de campanhas para o estado estiver vazio, significa "Acesso a Tudo" no estado.
         if (options.assignedCampaignsForScope) {
             results = results.filter(p => {
-                const allowed = options.assignedCampaignsForScope![p.state];
-                if (!allowed) return true;
-                return allowed.includes(p.campaignName || '');
+                const allowedInState = options.assignedCampaignsForScope![p.state];
+                if (!allowedInState || allowedInState.length === 0) return true; // Acesso total no estado
+                return allowedInState.includes(p.campaignName || '');
             });
         }
+        
         return results;
     } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
 };
@@ -185,6 +197,7 @@ export const getAllPromoters = async (options: {
 export const getPromoterStats = async (options: {
     organizationId?: string; statesForScope?: string[] | null;
     filterOrgId?: string; filterState?: string; selectedCampaign?: string;
+    assignedCampaignsForScope?: { [state: string]: string[] };
 }): Promise<{ total: number, pending: number, approved: number, rejected: number, removed: number }> => {
     const all = await getAllPromoters({ ...options, status: 'all' });
     return {
@@ -244,7 +257,7 @@ export const requestGroupRemoval = async (promoterId: string, campaignName: stri
         if (!promoter) throw new Error("Divulgadora não encontrada.");
         await firestore.collection('groupRemovalRequests').add({
             promoterId, promoterName: promoter.name, promoterEmail: promoter.email,
-            campaignName, organizationId, status: 'pending', requestedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            campaignName, organizationId, status: 'pending', requestedAt: firebase.firestore.Timestamp.now(),
         });
     } catch (error) { throw new Error("Falha ao registrar solicitação."); }
 };
