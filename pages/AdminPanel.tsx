@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -185,12 +186,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // FIX: Explicitly typed parameters to avoid potential unknown inference issues in RejectionModal's onConfirm callback.
+    // FIX: Optimized narrowing and ensured pId is explicitly handled to avoid potential unknown inference errors.
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
-        if (!selectedPromoter) return;
+        const promoterToReject = selectedPromoter;
+        if (!promoterToReject) return;
+        
         setIsRejectionModalOpen(false);
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
-        const pId = selectedPromoter.id as string;
+        const pId = promoterToReject.id;
         
         setPromoters(prev => prev.filter(p => p.id !== pId));
         setStats(prev => ({
@@ -500,7 +503,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            {/* FIX: Explicitly typed id to avoid potential unknown inference error when calling updatePromoter. */}
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
