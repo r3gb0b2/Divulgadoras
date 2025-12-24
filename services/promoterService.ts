@@ -156,7 +156,7 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
 export const getAllPromoters = async (options: {
     organizationId?: string; statesForScope?: string[] | null; status?: PromoterStatus | 'all';
     assignedCampaignsForScope?: { [state: string]: string[] }; selectedCampaign?: string;
-    filterOrgId?: string; filterState?: string;
+    filterOrgId?: string; filterState?: string; limitCount?: number;
 }): Promise<Promoter[]> => {
     try {
         let q: firebase.firestore.Query = firestore.collection("promoters");
@@ -166,26 +166,26 @@ export const getAllPromoters = async (options: {
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         
-        // CORREÇÃO: Filtro de campanha deve ser aplicado apenas se for específico
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("campaignName", "==", options.selectedCampaign);
+        }
+
+        // Adicionado limite para performance mobile
+        if (options.limitCount) {
+            q = q.limit(options.limitCount);
         }
         
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         
-        // Filtro de estados (Escopo)
         if (options.statesForScope && options.statesForScope.length > 0 && !options.filterState) {
             results = results.filter(p => options.statesForScope!.includes(p.state));
         }
         
-        // CORREÇÃO: Filtro de campanhas permitidas (Escopo)
-        // Se o admin tiver restrições por campanha, aplicamos aqui.
-        // Se o array de campanhas para o estado estiver vazio, significa "Acesso a Tudo" no estado.
         if (options.assignedCampaignsForScope) {
             results = results.filter(p => {
                 const allowedInState = options.assignedCampaignsForScope![p.state];
-                if (!allowedInState || allowedInState.length === 0) return true; // Acesso total no estado
+                if (!allowedInState || allowedInState.length === 0) return true;
                 return allowedInState.includes(p.campaignName || '');
             });
         }

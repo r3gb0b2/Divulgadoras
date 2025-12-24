@@ -55,6 +55,7 @@ const getDaysSince = (timestamp: any): string => {
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const isFetching = useRef(false);
+    const lastFetchHash = useRef('');
     
     // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -100,11 +101,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const assignedStatesKey = adminData.assignedStates?.join(',') || '';
     const assignedCampaignsKey = JSON.stringify(adminData.assignedCampaigns || {});
 
-    const fetchData = useCallback(async () => {
-        // Bloqueia se já estiver buscando para evitar race conditions e loops
+    const fetchData = useCallback(async (force = false) => {
+        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+        
+        // Hash de parâmetros para evitar re-fetch idêntico
+        const currentHash = `${orgId}-${filterStatus}-${filterState}-${selectedCampaign}-${assignedStatesKey}`;
+        if (!force && lastFetchHash.current === currentHash && promoters.length > 0) return;
         if (isFetching.current) return;
         
-        const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) {
             setError("Nenhuma organização selecionada.");
             setIsLoading(false);
@@ -122,7 +126,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
                 statesForScope: adminData.assignedStates,
-                assignedCampaignsForScope: adminData.assignedCampaigns
+                assignedCampaignsForScope: adminData.assignedCampaigns,
+                limitCount: 30 // LIMITE DE 30 REGISTROS PARA MOBILE
             };
 
             const [promoterData, statsData, camps, reasons, allOrgs] = await Promise.all([
@@ -138,6 +143,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setCampaigns(camps);
             setRejectionReasons(reasons);
             setSelectedIds(new Set()); 
+            lastFetchHash.current = currentHash;
             
             if (isSuperAdmin) {
                 const map = (allOrgs as Organization[]).reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
@@ -149,7 +155,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setIsLoading(false);
             isFetching.current = false;
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey, promoters.length]);
 
     useEffect(() => {
         fetchData();
@@ -160,7 +166,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         if (!window.confirm(`Aprovar ${p.name}?`)) return;
         try {
             await updatePromoter(p.id, { status: 'approved' });
-            fetchData();
+            fetchData(true);
         } catch (err: any) { alert(err.message); }
     };
 
@@ -177,7 +183,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
             }
             setIsRejectionModalOpen(false);
-            fetchData();
+            fetchData(true);
         } catch (err: any) { 
             alert("Erro ao processar registros: " + err.message); 
         } finally {
@@ -196,7 +202,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             for (const id of ids) {
                 await updatePromoter(id, { status: 'approved' });
             }
-            fetchData();
+            fetchData(true);
         } catch (err: any) {
             alert("Erro ao aprovar em massa: " + err.message);
         } finally {
@@ -330,7 +336,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         </button>
                     </form>
 
-                    <button onClick={fetchData} className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors font-black text-[10px] uppercase tracking-widest">
+                    <button onClick={() => fetchData(true)} className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors font-black text-[10px] uppercase tracking-widest">
                         <RefreshIcon className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -397,7 +403,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         <th className="px-6 py-5">Redes Sociais</th>
                                         <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
-                                        <th className="px-6 py-5 text-right">Ações</th>
+                                        <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
@@ -428,7 +434,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 </td>
                                                 <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                                 <td className="px-6 py-5">{statusBadge(p.status)}</td>
-                                                <td className="px-6 py-5 text-right">
+                                                <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                         {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
                                                         {(p.status === 'pending' || p.status === 'approved') && <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>}
@@ -493,6 +499,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </div>
                                 );
                             })}
+                            <div className="p-4 text-center">
+                                <p className="text-[9px] text-gray-600 uppercase font-black tracking-widest italic">Mostrando os últimos 30 registros para preservar bateria.</p>
+                            </div>
                         </div>
                     </>
                 )}
@@ -501,8 +510,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={fetchData} />}
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(); }} />
+            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={() => fetchData(true)} />}
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(true); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
     );
