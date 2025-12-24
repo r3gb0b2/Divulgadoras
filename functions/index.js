@@ -124,7 +124,6 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
             return { email: p.email, name: p.name };
         });
 
-        // Envio em lotes para evitar timeout (Brevo suporta múltiplos destinatários num único comando)
         await brevo.sendTransacEmail({
             sender: { email: config.brevoEmail, name: "Equipe Certa" },
             to: emails,
@@ -152,7 +151,6 @@ exports.setPromoterStatusToRemoved = functions.region("southamerica-east1").http
         removedBy: context.auth?.token.email || "sistema"
     });
 
-    // Remove atribuições pendentes
     const assignments = await db.collection("postAssignments")
         .where("promoterId", "==", promoterId)
         .where("status", "==", "pending")
@@ -178,7 +176,7 @@ exports.removePromoterFromAllAssignments = functions.region("southamerica-east1"
     return { success: true };
 });
 
-// --- CORE SYNC ---
+// --- CORE SYNC (ATUALIZADO PARA WHATSAPP) ---
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, data: updateData } = data;
@@ -196,14 +194,49 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     });
 
     if (isApproving) {
+        // 1. Envio de E-mail (Brevo)
         const brevo = setupBrevo(config.brevoKey);
         if (brevo) {
-            await brevo.sendTransacEmail({
-                sender: { email: config.brevoEmail, name: "Equipe Certa" },
-                to: [{ email: oldData.email, name: oldData.name }],
-                subject: "✅ Cadastro Aprovado!",
-                htmlContent: `<p>Olá ${oldData.name}, seu perfil foi aprovado! Acesse seu portal para começar.</p>`
-            });
+            try {
+                await brevo.sendTransacEmail({
+                    sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                    to: [{ email: oldData.email, name: oldData.name }],
+                    subject: "✅ Cadastro Aprovado!",
+                    htmlContent: `
+                        <div style="font-family: sans-serif; color: #333;">
+                            <h2>Olá ${oldData.name}, seu perfil foi aprovado!</h2>
+                            <p>Parabéns! Agora você faz parte oficialmente da equipe para o evento: <strong>${oldData.campaignName || "Equipe Geral"}</strong>.</p>
+                            <p>Acesse seu portal agora para ver suas tarefas e entrar no grupo do WhatsApp:</p>
+                            <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}" 
+                               style="display: inline-block; padding: 12px 24px; background: #7e39d5; color: white; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                               ACESSAR MEU PORTAL
+                            </a>
+                        </div>
+                    `
+                });
+            } catch (e) { console.error("Brevo Sync Error:", e); }
+        }
+
+        // 2. Envio de WhatsApp (Z-API)
+        if (config.zApiToken && config.zApiInstance && oldData.whatsapp) {
+            try {
+                const cleanPhone = oldData.whatsapp.replace(/\D/g, "");
+                const waMessage = `✅ *Olá ${oldData.name}!* Seu perfil foi aprovado para a equipe do evento: *${oldData.campaignName || "Equipe Geral"}*.\n\n🚀 *Acesse seu portal para ver suas tarefas e o link do grupo:* https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
+
+                await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'client-token': config.zApiClientToken 
+                    },
+                    body: JSON.stringify({ 
+                        phone: `55${cleanPhone}`, 
+                        message: waMessage 
+                    })
+                });
+            } catch (waErr) {
+                console.error("WhatsApp Approval Notification Error:", waErr);
+            }
         }
     }
     

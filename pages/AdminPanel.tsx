@@ -170,33 +170,37 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     // APROVAÇÃO DIRETA (Sem Confirmação)
     const handleApprove = async (p: Promoter) => {
+        // Narrow ID to avoid unknown inference issues
+        const pId = p.id;
         // Atualização Otimista da UI
-        setPromoters(prev => prev.filter(item => item.id !== p.id));
-        setStats(prev => ({ 
+        setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
+        setStats((prev: typeof stats) => ({ 
             ...prev, 
             pending: Math.max(0, prev.pending - 1), 
             approved: prev.approved + 1 
         }));
 
         try {
-            await updatePromoter(p.id, { status: 'approved' });
+            await updatePromoter(pId, { status: 'approved' });
         } catch (err: any) {
             // Reverte em caso de erro
             fetchData(null); 
         }
     };
 
-    // FIX: Optimized narrowing and ensured pId is explicitly handled to avoid potential unknown inference errors.
+    /**
+     * Explicitly typed selectedPromoter and narrowed pId to prevent unknown inference error.
+     */
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
-        const promoterToReject = selectedPromoter;
+        const promoterToReject: Promoter | null = selectedPromoter;
         if (!promoterToReject) return;
         
         setIsRejectionModalOpen(false);
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
-        const pId = promoterToReject.id;
+        const pId: string = promoterToReject.id;
         
-        setPromoters(prev => prev.filter(p => p.id !== pId));
-        setStats(prev => ({
+        setPromoters((prev: Promoter[]) => prev.filter(p => p.id !== pId));
+        setStats((prev: typeof stats) => ({
             ...prev,
             pending: Math.max(0, prev.pending - 1),
             rejected: prev.rejected + 1
@@ -241,7 +245,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
-            {/* Estatísticas Superiores - RESTAURADO */}
+            {/* Estatísticas Superiores */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
@@ -260,7 +264,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Filtros Avançados - COM IDADE E MODO GLOBAL */}
+            {/* Filtros Avançados */}
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     <div className="md:col-span-4 relative">
@@ -410,7 +414,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* Mobile: Card View - COM LINKS SOCIAIS CLICÁVEIS */}
+                        {/* Mobile: Card View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
                             {filteredPromoters.map(p => (
                                 <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
@@ -429,7 +433,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500 hover:text-white"><PencilIcon className="w-5 h-5" /></button>
                                     </div>
 
-                                    {/* Links de Redes Sociais - MOBILE CLICÁVEL */}
+                                    {/* Links de Redes Sociais */}
                                     <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/5">
                                         <a 
                                             href={`https://instagram.com/${p.instagram.replace('@', '')}`} 

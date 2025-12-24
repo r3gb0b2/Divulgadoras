@@ -52,7 +52,7 @@ const AdminLoginPage: React.FC = () => {
                     <div className="space-y-4">
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <MailIcon className="h-5 w-5 text-gray-500" />
+                                <MailIcon className="h-5 w-5 text-gray-400" />
                             </span>
                             <input
                                 type="email"
@@ -66,7 +66,7 @@ const AdminLoginPage: React.FC = () => {
 
                         <div className="relative">
                             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                <LockClosedIcon className="h-5 w-5 text-gray-500" />
+                                <LockClosedIcon className="h-5 w-5 text-gray-400" />
                             </span>
                             <input
                                 type="password"
@@ -92,18 +92,9 @@ const AdminLoginPage: React.FC = () => {
                         ) : 'Acessar Painel'}
                     </button>
                 </form>
-
-                <div className="mt-8 pt-6 border-t border-gray-700 text-center space-y-3">
-                    <p className="text-sm text-gray-400">
-                        Ainda não utiliza o Equipe Certa?
-                    </p>
-                    <Link to="/planos" className="inline-block text-primary hover:text-primary-dark font-semibold text-sm">
-                        Conheça nossos planos &rarr;
-                    </Link>
-                </div>
             </div>
             
-            <Link to="/" className="mt-6 flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm">
+            <Link to="/" className="mt-6 flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">
                 <ArrowLeftIcon className="w-4 h-4" />
                 Voltar para a página inicial
             </Link>

@@ -49,6 +49,14 @@
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
       }
+      
+      /* Previne o crash ao segurar imagens/vídeos no iOS/Android */
+      img, video {
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+      }
+
       input, textarea {
         -webkit-user-select: text;
         user-select: text;
