@@ -25,6 +25,64 @@ const setupBrevo = (apiKey) => {
     return apiInstance;
 };
 
+// --- TESTES DE INTEGRAÇÃO (SUPER ADMIN) ---
+
+exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const config = getConfig();
+    
+    if (!config.zApiToken || !config.zApiInstance) {
+        return { 
+            success: false, 
+            message: "Configuração ausente: Token ou Instância não definidos no Firebase Config.",
+            debug: { configPresent: !!config.zApiToken }
+        };
+    }
+
+    try {
+        // Testamos enviando para um número de log ou o próprio suporte para validar a conexão
+        const response = await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'client-token': config.zApiClientToken 
+            },
+            body: JSON.stringify({ 
+                phone: "5585982280780", 
+                text: "🛠️ *Teste de Integração Equipe Certa*\nO sistema de notificações via WhatsApp está operando corretamente." 
+            })
+        });
+
+        const resData = await response.json();
+
+        if (response.ok) {
+            return { success: true, message: "Conexão com Z-API estabelecida e mensagem de teste enviada!", debug: resData };
+        } else {
+            return { success: false, message: `Erro na Z-API: ${resData.message || 'Status ' + response.status}`, debug: resData };
+        }
+    } catch (error) {
+        return { success: false, message: "Erro de rede ao contactar Z-API: " + error.message, debug: error };
+    }
+});
+
+exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const config = getConfig();
+    const brevo = setupBrevo(config.brevoKey);
+
+    if (!brevo) return { success: false, message: "Brevo Key não configurada." };
+
+    try {
+        await brevo.sendTransacEmail({
+            sender: { email: config.brevoEmail, name: "Equipe Certa Teste" },
+            to: [{ email: config.brevoEmail }],
+            subject: "Teste de Sistema",
+            htmlContent: "<h1>Funciona!</h1><p>Integração com Brevo ativa.</p>"
+        });
+        return { success: true, message: "E-mail de teste enviado para " + config.brevoEmail };
+    } catch (e) {
+        return { success: false, message: e.message, debug: e };
+    }
+});
+
 // --- GESTÃO DE TOKENS PUSH ---
 exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, token, metadata } = data;
@@ -52,7 +110,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
     if (!postId) return { success: false, message: "ID do post obrigatório." };
 
     try {
-        // 1. Busca os dados do post e as atribuições
         const postDoc = await db.collection("posts").doc(postId).get();
         if (!postDoc.exists) return { success: false, message: "Post não encontrado." };
         const postData = postDoc.data();
@@ -63,12 +120,10 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
 
         if (assignmentsSnap.empty) return { success: false, message: "Nenhuma divulgadora vinculada." };
 
-        // 2. Coleta IDs de promotoras
         const promoterIds = [...new Set(assignmentsSnap.docs.map(doc => doc.data().promoterId))];
         
-        // 3. Busca tokens das promotoras
         const promotersSnap = await db.collection("promoters")
-            .where(admin.firestore.FieldPath.documentId(), "in", promoterIds.slice(0, 30)) // Limite do 'in' query
+            .where(admin.firestore.FieldPath.documentId(), "in", promoterIds.slice(0, 30))
             .get();
 
         const tokens = promotersSnap.docs
@@ -77,7 +132,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
 
         if (tokens.length === 0) return { success: true, message: "Nenhum dispositivo com App instalado encontrado." };
 
-        // 4. Envia via FCM
         const message = {
             notification: {
                 title: "🚀 Nova Tarefa Disponível!",
@@ -93,7 +147,7 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
         const response = await admin.messaging().sendEachForMulticast(message);
         return { 
             success: true, 
-            message: `Notificações enviadas: ${response.successCount} sucesso, ${response.failureCount} falhas.`,
+            message: `Notificações enviadas: ${response.successCount} sucesso.`,
             details: response 
         };
 
@@ -126,21 +180,31 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
 
         if (config.zApiToken && config.zApiInstance) {
             const msg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para o evento: *${campaignName}*.\n\n🔗 *Acesse seu Portal:* ${portalUrl}`;
-            fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
-                body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, text: msg })
-            }).catch(e => console.error("Erro WA Aprov:", e.message));
+            
+            // CORREÇÃO: AWAIT OBRIGATÓRIO PARA GARANTIR O ENVIO
+            try {
+                await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
+                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, text: msg })
+                });
+            } catch (e) {
+                console.error("Erro WA Aprov:", e.message);
+            }
         }
 
         const brevo = setupBrevo(config.brevoKey);
         if (brevo) {
-            brevo.sendTransacEmail({
-                sender: { email: config.brevoEmail, name: "Equipe Certa" },
-                to: [{ email: oldData.email }],
-                subject: `✅ Aprovada: ${campaignName}`,
-                htmlContent: `<p>Olá ${oldData.name}, você foi aprovada! <a href="${portalUrl}">Clique aqui para acessar o portal.</a></p>`
-            }).catch(e => console.error("Erro Email Aprov:", e.message));
+            try {
+                await brevo.sendTransacEmail({
+                    sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                    to: [{ email: oldData.email }],
+                    subject: `✅ Aprovada: ${campaignName}`,
+                    htmlContent: `<p>Olá ${oldData.name}, você foi aprovada! <a href="${portalUrl}">Clique aqui para acessar o portal.</a></p>`
+                });
+            } catch (e) {
+                console.error("Erro Email Aprov:", e.message);
+            }
         }
     }
     return { success: true };
