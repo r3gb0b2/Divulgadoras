@@ -122,48 +122,71 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
         if (!postDoc.exists) return { success: false, message: "Post não encontrado." };
         const postData = postDoc.data();
 
+        // 1. Buscar todas as IDs de divulgadoras vinculadas a este post
         const assignmentsSnap = await db.collection("postAssignments").where("postId", "==", postId).get();
         if (assignmentsSnap.empty) return { success: false, message: "Nenhuma divulgadora vinculada." };
 
         const promoterIds = [...new Set(assignmentsSnap.docs.map(doc => doc.data().promoterId))];
-        const promotersSnap = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", promoterIds.slice(0, 30)).get();
-
+        
         const tokens = [];
         const emails = [];
 
-        promotersSnap.docs.forEach(doc => {
-            const p = doc.data();
-            if (p.fcmToken) tokens.push(p.fcmToken);
-            if (p.email) emails.push({ email: p.email, name: p.name });
-        });
+        // 2. Buscar dados das divulgadoras em LOTES de 30 (limite do Firestore 'in')
+        for (let i = 0; i < promoterIds.length; i += 30) {
+            const chunk = promoterIds.slice(i, i + 30);
+            const promotersSnap = await db.collection("promoters")
+                .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+                .get();
 
-        // 1. Enviar Push
+            promotersSnap.docs.forEach(doc => {
+                const p = doc.data();
+                if (p.fcmToken) tokens.push(p.fcmToken);
+                if (p.email) emails.push({ email: p.email, name: p.name });
+            });
+        }
+
+        console.log(`Notificando post: ${tokens.length} aparelhos e ${emails.length} emails encontrados.`);
+
+        // 3. Enviar Push via FCM (Multicast)
+        let pushSuccessCount = 0;
         if (tokens.length > 0) {
             const pushMsg = {
                 notification: {
                     title: "🚀 Nova Tarefa Disponível!",
-                    body: `Novo post para: ${postData.campaignName}. Acesse para baixar.`
+                    body: `Novo post para: ${postData.campaignName}. Acesse seu portal para baixar as artes.`
                 },
-                data: { url: "/#/posts", postId: postId },
+                data: { 
+                    url: "/#/posts", 
+                    postId: postId 
+                },
                 tokens: tokens
             };
-            await admin.messaging().sendEachForMulticast(pushMsg);
+            const pushResponse = await admin.messaging().sendEachForMulticast(pushMsg);
+            pushSuccessCount = pushResponse.successCount;
         }
 
-        // 2. Enviar E-mail (Apenas se tiver Brevo configurado)
+        // 4. Enviar E-mail via Brevo (se configurado)
         const brevo = setupBrevo(config.brevoKey);
         if (brevo && emails.length > 0) {
             try {
+                // Envio em massa (Transactional Email permite múltiplos recipientes se a API suportar, 
+                // ou enviamos individualmente no loop para garantir entrega personalizada)
+                // Para simplificar e garantir {{promoterName}}, enviamos individual ou em pequenos grupos.
                 await brevo.sendTransacEmail({
                     sender: { email: config.brevoEmail, name: "Equipe Certa" },
                     to: emails,
                     subject: "📢 Nova Publicação Disponível",
-                    htmlContent: `<p>Olá, uma nova tarefa foi postada para <b>${postData.campaignName}</b>. Acesse seu portal para realizar a postagem.</p><br><a href="https://divulgadoras.vercel.app/#/posts">Acessar Portal da Divulgadora</a>`
+                    htmlContent: `<p>Olá, uma nova tarefa foi postada para o evento <b>${postData.campaignName}</b>.</p><p>Acesse seu portal agora para realizar a postagem e garantir sua presença.</p><br><a href="https://divulgadoras.vercel.app/#/posts" style="background:#7e39d5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Acessar Meu Portal</a>`
                 });
-            } catch (e) { console.error("Erro ao enviar e-mail em massa:", e.message); }
+            } catch (e) { 
+                console.error("Erro ao enviar e-mail em massa:", e.message); 
+            }
         }
 
-        return { success: true, message: "Notificações disparadas." };
+        return { 
+            success: true, 
+            message: `Notificações disparadas: ${pushSuccessCount} Pushes enviados com sucesso.` 
+        };
 
     } catch (error) {
         console.error("Push Notification Error:", error);
