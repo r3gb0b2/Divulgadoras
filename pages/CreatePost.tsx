@@ -525,7 +525,8 @@ const CreatePost: React.FC = () => {
                 } else {
                     const finalPostData = { ...postPayload, organizationId: selectedOrgId, createdByEmail: adminData.email };
                     const creationPromise = createPost(finalPostData, promotersToAssign).then(id => {
-                        if (isActive) postIdsToNotify.push(id);
+                        // Coleta IDs apenas se a postagem for ativa e for criação imediata
+                        if (finalPostData.isActive) postIdsToNotify.push(id);
                         return id;
                     });
                     creationPromises.push(creationPromise);
@@ -538,11 +539,14 @@ const CreatePost: React.FC = () => {
     
             await Promise.all(creationPromises);
 
-            // GATILHO DE PUSH AUTOMÁTICO
+            // GATILHO DE PUSH AUTOMÁTICO - Movido para garantir que ocorra após a persistência total
             if (!isScheduling && postIdsToNotify.length > 0) {
                 const notifyPostPush = httpsCallable(functions, 'notifyPostPush');
                 for (const pid of postIdsToNotify) {
-                    notifyPostPush({ postId: pid }).catch(console.error); // Dispara em background
+                    // Notifica apenas pendentes (todos neste momento de criação)
+                    notifyPostPush({ postId: pid, onlyPending: true }).catch(err => {
+                        console.error(`Push falhou para o post ${pid}:`, err);
+                    });
                 }
             }
     
@@ -550,7 +554,7 @@ const CreatePost: React.FC = () => {
                  alert(`${creationPromises.length} publicação(ões) agendada(s) com sucesso!`);
                  navigate('/admin/scheduled-posts');
             } else {
-                 alert(`${creationPromises.length} publicação(ões) criada(s) e o alerta PUSH foi enviado para a equipe!`);
+                 alert(`${creationPromises.length} publicação(ões) criada(s) e enviadas para a equipe!`);
                  navigate('/admin/posts');
             }
     

@@ -126,11 +126,11 @@ const AdminPosts: React.FC = () => {
     };
 
     const handleNotifyPush = async (postId: string) => {
-        if (!window.confirm("Deseja enviar um aviso Push para todas as divulgadoras deste post?")) return;
+        if (!window.confirm("Deseja enviar um aviso Push SOMENTE para as divulgadoras que ainda não enviaram o print desta postagem?")) return;
         setNotifyingPostId(postId);
         try {
             const notifyPostPush = httpsCallable(functions, 'notifyPostPush');
-            const result = await notifyPostPush({ postId });
+            const result = await notifyPostPush({ postId, onlyPending: true });
             const data = result.data as { success: boolean, message: string };
             alert(data.message);
         } catch (e: any) {
@@ -223,13 +223,13 @@ const AdminPosts: React.FC = () => {
                                                 onClick={() => handleNotifyPush(post.id)} 
                                                 disabled={notifyingPostId === post.id || !post.isActive}
                                                 className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-900/40 disabled:opacity-30 transition-all"
-                                                title="Notificar toda a equipe via PUSH"
+                                                title="Notificar pendentes via PUSH"
                                             >
                                                 {notifyingPostId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <FaceIdIcon className="w-4 h-4" />}
                                             </button>
                                         </div>
 
-                                        {/* QUICK CHECKS - Restaurados e Ampliados */}
+                                        {/* QUICK CHECKS */}
                                         <div className="grid grid-cols-1 gap-2 my-4 py-4 border-y border-white/5">
                                             <label className="flex items-center gap-3 cursor-pointer group/item">
                                                 <input 
@@ -269,7 +269,7 @@ const AdminPosts: React.FC = () => {
                                             </label>
                                         </div>
 
-                                        {/* JUSTIFICATIONS BUTTON - Com Modal */}
+                                        {/* JUSTIFICATIONS BUTTON */}
                                         <button 
                                             onClick={() => handleOpenJustifications(post)}
                                             className={`w-full py-2.5 rounded-xl mb-4 border transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest ${pendingJustifications.length > 0 ? 'bg-orange-900/30 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-gray-800/30 text-gray-500 border-gray-700/50 hover:text-white'}`}
