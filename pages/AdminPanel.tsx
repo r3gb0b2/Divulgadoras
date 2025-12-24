@@ -42,7 +42,7 @@ const calculateAge = (dob: string): number => {
 const PAGE_SIZE = 30;
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
-    const { selectedOrgId } = useAdminAuth();
+    const { selectedOrgId, organizationsForAdmin } = useAdminAuth();
     
     // Dados Principais e Paginação
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -83,6 +83,19 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
     const isSuperAdmin = adminData.role === 'superadmin';
+
+    // Obtém a organização atual para filtrar os estados
+    const currentOrg = useMemo(() => {
+        return organizationsForAdmin.find(o => o.id === selectedOrgId);
+    }, [organizationsForAdmin, selectedOrgId]);
+
+    // Filtra a lista global de estados para mostrar apenas os da produtora
+    const statesToShow = useMemo(() => {
+        if (isSuperAdmin || !currentOrg?.assignedStates || currentOrg.assignedStates.length === 0) {
+            return states;
+        }
+        return states.filter(s => currentOrg.assignedStates.includes(s.abbr));
+    }, [currentOrg, isSuperAdmin]);
 
     const fetchData = useCallback(async (cursor: any = null) => {
         const orgId = isSuperAdmin ? undefined : (selectedOrgId as string | undefined);
@@ -156,10 +169,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const handleBulkApprove = async () => {
         if (selectedIds.size === 0) return;
+        if (!window.confirm(`Deseja aprovar ${selectedIds.size} perfis selecionados?`)) return;
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            await Promise.all(idsArray.map(id => updatePromoter(id, { status: 'approved' })));
+            // Fix: Cast id to string to resolve unknown type error when mapping over Set elements
+            await Promise.all(idsArray.map(id => updatePromoter(id as string, { status: 'approved' })));
             setSelectedIds(new Set());
             fetchData(null);
         } catch (e) {
@@ -168,11 +183,30 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // APROVAÇÃO DIRETA (Sem Confirmação)
+    const handleBulkReject = async () => {
+        if (selectedIds.size === 0) return;
+        const reason = window.prompt(`Digite o motivo da recusa para os ${selectedIds.size} perfis selecionados:`, "Perfil não aprovado no momento.");
+        if (reason === null) return;
+
+        const idsArray = Array.from(selectedIds);
+        setIsLoading(true);
+        try {
+            // Fix: Cast id to string to resolve unknown type error when mapping over Set elements
+            await Promise.all(idsArray.map(id => updatePromoter(id as string, { 
+                status: 'rejected',
+                rejectionReason: reason 
+            })));
+            setSelectedIds(new Set());
+            fetchData(null);
+        } catch (e) {
+            alert("Erro ao recusar em massa.");
+            setIsLoading(false);
+        }
+    };
+
+    // APROVAÇÃO DIRETA
     const handleApprove = async (p: Promoter) => {
-        // Narrow ID to avoid unknown inference issues
         const pId = p.id;
-        // Atualização Otimista da UI
         setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
         setStats((prev: typeof stats) => ({ 
             ...prev, 
@@ -183,14 +217,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { status: 'approved' });
         } catch (err: any) {
-            // Reverte em caso de erro
             fetchData(null); 
         }
     };
 
-    /**
-     * Explicitly typed selectedPromoter and narrowed pId to prevent unknown inference error.
-     */
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         const promoterToReject: Promoter | null = selectedPromoter;
         if (!promoterToReject) return;
@@ -324,8 +354,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </select>
 
                     <select value={filterState} onChange={e => setFilterState(e.target.value)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
-                        <option value="all">Todos Estados</option>
-                        {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
+                        <option value="all">Todos Estados da Produtora</option>
+                        {statesToShow.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
 
                     <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
@@ -341,6 +371,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
                     <div className="flex gap-2">
                         <button onClick={handleBulkApprove} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-all">Aprovar Selecionadas</button>
+                        <button onClick={handleBulkReject} className="px-4 py-2 bg-red-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-red-500 transition-all">Rejeitar Selecionadas</button>
                         <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl hover:bg-black/30">Cancelar</button>
                     </div>
                 </div>
@@ -370,6 +401,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5 text-center">Idade</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
+                                        <th className="px-6 py-5">Grupo?</th>
                                         <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
@@ -399,6 +431,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
                                                 </div>
                                             </td>
+                                            <td className="px-6 py-5">
+                                                {p.status === 'approved' && (
+                                                    <div className={`p-2 rounded-xl border w-fit ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`} title={p.hasJoinedGroup ? 'Já entrou no grupo' : 'Ainda não entrou no grupo'}>
+                                                        <WhatsAppIcon className="w-4 h-4" />
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
@@ -427,7 +466,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <div className="overflow-hidden">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name}</p>
                                                 <p className="text-gray-500 text-[10px] font-bold mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
-                                                {statusBadge(p.status)}
+                                                <div className="flex items-center gap-2">
+                                                    {statusBadge(p.status)}
+                                                    {p.status === 'approved' && (
+                                                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`}>
+                                                            {p.hasJoinedGroup ? 'No Grupo' : 'Fora'}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500 hover:text-white"><PencilIcon className="w-5 h-5" /></button>
