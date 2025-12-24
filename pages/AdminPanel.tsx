@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   getAllPromoters, 
   getPromoterStats, 
@@ -54,6 +54,7 @@ const getDaysSince = (timestamp: any): string => {
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
+    const isInitialMount = useRef(true);
     
     // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -95,6 +96,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
+    // ESTABILIZADO: Usando apenas valores primitivos nas dependências para evitar loop infinito no mobile
     const fetchData = useCallback(async () => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) {
@@ -127,11 +129,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setStats(statsData);
             setCampaigns(camps);
             setRejectionReasons(reasons);
-            setSelectedIds(new Set()); // Limpa seleção ao atualizar
+            setSelectedIds(new Set()); 
             
             if (isSuperAdmin) {
-                // FIX: Added Record type to reduce accumulator to prevent indexing errors.
-                const map = allOrgs.reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
+                const map = (allOrgs as Organization[]).reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
                 setOrgsMap(map);
             }
         } catch (err: any) {
@@ -139,7 +140,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } finally {
             setIsLoading(false);
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, adminData, isSuperAdmin]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, adminData.assignedStates, adminData.assignedCampaigns]);
 
     useEffect(() => {
         fetchData();
@@ -155,8 +156,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
-        // Lógica para rejeição individual ou em massa
-        // FIX: Cast Array.from result to string[] to resolve "unknown" to "string" assignment error.
         const idsToProcess = selectedPromoter ? [selectedPromoter.id] : (Array.from(selectedIds) as string[]);
         
         if (idsToProcess.length === 0) return;
@@ -185,8 +184,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
         setIsBulkProcessing(true);
         try {
-            // FIX: Cast Array.from result to string[] to resolve "unknown" to "string" assignment error.
-            for (const id of (Array.from(selectedIds) as string[])) {
+            const ids = Array.from(selectedIds) as string[];
+            for (const id of ids) {
                 await updatePromoter(id, { status: 'approved' });
             }
             fetchData();
@@ -205,14 +204,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             const results = await findPromotersByEmail(lookupEmail);
             setLookupResults(results);
-        } catch (err: any) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
+        } catch (err) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
     };
 
-    // Filtro Local Unificado (Pesquisa + Idade)
+    // Filtro Local Unificado
     const filteredPromoters = useMemo(() => {
         let list = promoters;
-
-        // Filtro de Texto
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             list = list.filter(p => 
@@ -221,8 +218,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 p.email.toLowerCase().includes(q)
             );
         }
-
-        // Filtro de Idade
         if (minAge || maxAge) {
             list = list.filter(p => {
                 const age = calculateAge(p.dateOfBirth);
@@ -231,11 +226,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 return age >= min && age <= max;
             });
         }
-
         return list;
     }, [promoters, searchQuery, minAge, maxAge]);
 
-    // Estados Disponíveis para Filtro (Baseado na Organização)
     const availableStates = useMemo(() => {
         if (isSuperAdmin) return states;
         if (!adminData.assignedStates || adminData.assignedStates.length === 0) return states;
@@ -272,7 +265,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     return (
         <div className="space-y-6 pb-32">
             {/* Header com Stats */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Divulgadoras</h1>
                 <div className="flex flex-wrap gap-2">
                     <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[80px]">
@@ -287,13 +280,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             </div>
 
             {/* Barra de Filtros e Busca */}
-            <div className="bg-secondary p-6 rounded-3xl border border-white/5 shadow-xl space-y-4">
+            <div className="bg-secondary p-4 md:p-6 rounded-[2rem] border border-white/5 shadow-xl space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div className="md:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Pesquisar nome, @insta ou e-mail..." 
+                            placeholder="Pesquisar..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -303,14 +296,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     <div className="flex gap-2 items-center md:col-span-1">
                          <input 
                             type="number" 
-                            placeholder="Idade Mín" 
+                            placeholder="Min" 
                             value={minAge}
                             onChange={e => setMinAge(e.target.value)}
                             className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
                         />
                         <input 
                             type="number" 
-                            placeholder="Máx" 
+                            placeholder="Max" 
                             value={maxAge}
                             onChange={e => setMaxAge(e.target.value)}
                             className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
@@ -349,60 +342,36 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         {availableStates.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
 
-                    <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-primary max-w-[150px]">
+                    <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-primary max-w-[140px]">
                         <option value="all">Todas Campanhas</option>
                         {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
 
-                    <div className="ml-auto">
-                        <button onClick={() => setIsReasonsModalOpen(true)} className="px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4">Configurar Motivos</button>
-                    </div>
+                    <button onClick={() => setIsReasonsModalOpen(true)} className="ml-auto px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4">Configurar Motivos</button>
                 </div>
             </div>
 
-            {/* BARRA DE AÇÃO EM MASSA (FLUTUANTE) */}
+            {/* BARRA DE AÇÃO EM MASSA */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 animate-slideUp">
-                    <span className="text-sm font-black uppercase tracking-widest">{selectedIds.size} selecionadas</span>
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 animate-slideUp border border-white/20">
+                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">{selectedIds.size} selecionadas</span>
                     <div className="h-6 w-[1px] bg-white/20"></div>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={handleBulkApprove} 
-                            disabled={isBulkProcessing}
-                            className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50"
-                            title="Aprovar Selecionadas"
-                        >
-                            <CheckCircleIcon className="w-6 h-6" />
-                        </button>
-                        <button 
-                            onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }}
-                            disabled={isBulkProcessing}
-                            className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95 disabled:opacity-50"
-                            title="Rejeitar Selecionadas"
-                        >
-                            <XIcon className="w-6 h-6" />
-                        </button>
-                        <button 
-                            onClick={() => setSelectedIds(new Set())}
-                            className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
-                            title="Limpar Seleção"
-                        >
-                            <RefreshIcon className="w-6 h-6" />
-                        </button>
+                        <button onClick={handleBulkApprove} disabled={isBulkProcessing} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50"><CheckCircleIcon className="w-6 h-6" /></button>
+                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95 disabled:opacity-50"><XIcon className="w-6 h-6" /></button>
+                        <button onClick={() => setSelectedIds(new Set())} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><RefreshIcon className="w-6 h-6" /></button>
                     </div>
                 </div>
             )}
 
-            {/* Lista Principal - Adaptada para Mobile */}
-            <div className="bg-secondary rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
+            {/* Lista Principal */}
+            <div className="bg-secondary rounded-[2rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
                 {isLoading ? (
                     <div className="py-20 text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div></div>
-                ) : error ? (
-                    <div className="p-10 text-center text-red-400">{error}</div>
                 ) : filteredPromoters.length === 0 ? (
                     <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
                          <SearchIcon className="w-12 h-12 opacity-20" />
-                         <span>Nenhuma divulgadora corresponde aos filtros</span>
+                         <span>Vazio</span>
                     </div>
                 ) : (
                     <>
@@ -412,16 +381,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} 
-                                                onChange={toggleSelectAll} 
-                                                className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary"
-                                            />
+                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
-                                        <th className="px-6 py-5">Evento / Origem</th>
+                                        <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-5 text-right">Ações</th>
                                     </tr>
@@ -429,65 +393,36 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 <tbody className="divide-y divide-white/5">
                                     {filteredPromoters.map(p => {
                                         const age = calculateAge(p.dateOfBirth);
-                                        const daysAgo = getDaysSince(p.createdAt);
                                         return (
                                             <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
                                                 <td className="px-6 py-5">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedIds.has(p.id)} 
-                                                        onChange={() => toggleSelect(p.id)} 
-                                                        className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary"
-                                                    />
+                                                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-5">
-                                                        <div 
-                                                            className="relative w-16 h-16 rounded-2xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0"
-                                                            onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}
-                                                        >
+                                                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
                                                             <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
-                                                            <div className="absolute top-0.5 right-0.5 px-1 py-0.5 bg-black/60 rounded-lg">
-                                                                <span className="text-[8px] font-black text-white">{age}a</span>
-                                                            </div>
+                                                            <div className="absolute top-0.5 right-0.5 px-1 py-0.5 bg-black/60 rounded-lg"><span className="text-[8px] font-black text-white">{age}a</span></div>
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate">{p.name}</p>
-                                                            <p className="text-gray-500 text-[10px] truncate">{p.email}</p>
-                                                            <span className="text-[8px] font-black text-gray-600 uppercase">{daysAgo}</span>
+                                                            <p className="text-gray-500 text-[10px] truncate font-mono">{p.email}</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-2">
-                                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all" title="Instagram">
-                                                            <InstagramIcon className="w-4 h-4" />
-                                                        </a>
-                                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all" title="WhatsApp">
-                                                            <WhatsAppIcon className="w-4 h-4" />
-                                                        </a>
+                                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all"><InstagramIcon className="w-4 h-4" /></a>
+                                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5">
-                                                    <p className="text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</p>
-                                                    <p className="text-[8px] text-primary font-black uppercase">{p.state}</p>
-                                                </td>
+                                                <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                                 <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                        {p.status === 'pending' && (
-                                                            <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all" title="Aprovar">
-                                                                <CheckCircleIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {(p.status === 'pending' || p.status === 'approved') && (
-                                                            <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all" title="Rejeitar">
-                                                                <XIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all" title="Editar">
-                                                            <PencilIcon className="w-4 h-4" />
-                                                        </button>
+                                                        {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
+                                                        {(p.status === 'pending' || p.status === 'approved') && <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>}
+                                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -497,16 +432,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* VIEW MOBILE: CARDS (NOVA E RESPONSIVA) */}
-                        <div className="md:hidden divide-y divide-white/5">
-                            <div className="p-4 bg-dark/30 flex justify-between items-center">
+                        {/* VIEW MOBILE: CARDS RESPONSIVOS */}
+                        <div className="md:hidden divide-y divide-white/5 bg-secondary">
+                            <div className="p-4 bg-dark/20 flex justify-between items-center border-b border-white/5">
                                 <label className="flex items-center gap-3 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} 
-                                        onChange={toggleSelectAll} 
-                                        className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary"
-                                    />
+                                    <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" />
                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Selecionar Todas</span>
                                 </label>
                             </div>
@@ -515,27 +445,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 return (
                                     <div key={p.id} className={`p-4 transition-colors ${selectedIds.has(p.id) ? 'bg-primary/10' : ''}`}>
                                         <div className="flex gap-4">
-                                            {/* Checkbox e Foto */}
                                             <div className="flex flex-col gap-3 items-center">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={selectedIds.has(p.id)} 
-                                                    onChange={() => toggleSelect(p.id)} 
-                                                    className="w-6 h-6 rounded border-gray-600 bg-dark text-primary focus:ring-primary"
-                                                />
-                                                <div 
-                                                    className="w-14 h-14 rounded-xl overflow-hidden border-2 border-gray-700"
-                                                    onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}
-                                                >
+                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-6 h-6 rounded border-gray-600 bg-dark text-primary" />
+                                                <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
                                                     <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
                                                 </div>
                                             </div>
-
-                                            {/* Dados e Info */}
                                             <div className="flex-grow min-w-0">
-                                                <div className="flex justify-between items-start">
+                                                <div className="flex justify-between items-start gap-2">
                                                     <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
-                                                    {statusBadge(p.status)}
+                                                    <div className="flex-shrink-0">{statusBadge(p.status)}</div>
                                                 </div>
                                                 <p className="text-gray-500 text-[10px] font-mono mt-0.5 truncate">{p.email}</p>
                                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
@@ -545,33 +464,21 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </div>
                                         </div>
 
-                                        {/* AÇÕES (GRID DE BOTÕES PARA MOBILE) */}
-                                        <div className="grid grid-cols-5 gap-2 mt-4">
-                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="col-span-1 flex items-center justify-center p-2.5 bg-green-600/20 text-green-500 rounded-xl border border-green-600/30">
-                                                <WhatsAppIcon className="w-5 h-5" />
-                                            </a>
-                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="col-span-1 flex items-center justify-center p-2.5 bg-pink-600/20 text-pink-500 rounded-xl border border-pink-600/30">
-                                                <InstagramIcon className="w-5 h-5" />
-                                            </a>
+                                        {/* AÇÕES MOBILE - AJUSTADAS PARA NÃO TRANSBORDAR */}
+                                        <div className="flex flex-wrap gap-2 mt-4">
+                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center p-3 bg-green-600/20 text-green-500 rounded-2xl border border-green-600/30"><WhatsAppIcon className="w-5 h-5" /></a>
+                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center p-3 bg-pink-600/20 text-pink-500 rounded-2xl border border-pink-600/30"><InstagramIcon className="w-5 h-5" /></a>
                                             
                                             {p.status === 'pending' ? (
                                                 <>
-                                                    <button onClick={() => handleApprove(p)} className="col-span-1 flex items-center justify-center p-2.5 bg-green-600 text-white rounded-xl shadow-lg shadow-green-900/20">
-                                                        <CheckCircleIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="col-span-1 flex items-center justify-center p-2.5 bg-red-600 text-white rounded-xl shadow-lg shadow-red-900/20">
-                                                        <XIcon className="w-5 h-5" />
-                                                    </button>
+                                                    <button onClick={() => handleApprove(p)} className="flex-1 flex items-center justify-center p-3 bg-green-600 text-white rounded-2xl shadow-lg shadow-green-900/20"><CheckCircleIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-red-600 text-white rounded-2xl shadow-lg shadow-red-900/20"><XIcon className="w-5 h-5" /></button>
                                                 </>
                                             ) : (
-                                                <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="col-span-2 flex items-center justify-center p-2.5 bg-red-600/40 text-white rounded-xl border border-red-600/50">
-                                                    <TrashIcon className="w-5 h-5" />
-                                                </button>
+                                                <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-red-600/20 text-red-500 rounded-2xl border border-red-600/30"><TrashIcon className="w-5 h-5" /></button>
                                             )}
                                             
-                                            <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="col-span-1 flex items-center justify-center p-2.5 bg-gray-700 text-gray-300 rounded-xl">
-                                                <PencilIcon className="w-5 h-5" />
-                                            </button>
+                                            <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-gray-700 text-gray-300 rounded-2xl"><PencilIcon className="w-5 h-5" /></button>
                                         </div>
                                     </div>
                                 );
@@ -582,49 +489,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             </div>
 
             {/* Modais */}
-            <PhotoViewerModal 
-                isOpen={photoViewer.isOpen} 
-                imageUrls={photoViewer.urls} 
-                startIndex={photoViewer.index} 
-                onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} 
-            />
-            
-            <RejectionModal 
-                isOpen={isRejectionModalOpen} 
-                onClose={() => setIsRejectionModalOpen(false)} 
-                onConfirm={handleRejectConfirm} 
-                reasons={rejectionReasons} 
-            />
-            
-            {selectedOrgId && (
-                <ManageReasonsModal 
-                    isOpen={isReasonsModalOpen} 
-                    onClose={() => setIsReasonsModalOpen(false)} 
-                    organizationId={selectedOrgId} 
-                    onReasonsUpdated={fetchData} 
-                />
-            )}
-
-            <EditPromoterModal 
-                isOpen={isEditModalOpen} 
-                onClose={() => setIsEditModalOpen(false)} 
-                promoter={selectedPromoter} 
-                onSave={async (id, data) => { await updatePromoter(id, data); fetchData(); }} 
-            />
-
-            <PromoterLookupModal 
-                isOpen={isLookupModalOpen} 
-                onClose={() => setIsLookupModalOpen(false)} 
-                isLoading={isLookingUp} 
-                results={lookupResults} 
-                error={null} 
-                organizationsMap={orgsMap} 
-                onGoToPromoter={(p) => { 
-                    setIsLookupModalOpen(false); 
-                    setSearchQuery(p.email); 
-                    setFilterStatus('all'); 
-                }} 
-            />
+            <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
+            <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
+            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={fetchData} />}
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(); }} />
+            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
     );
 };
