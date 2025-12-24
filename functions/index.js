@@ -39,7 +39,6 @@ exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.o
     }
 
     try {
-        // Testamos enviando para um número de log ou o próprio suporte para validar a conexão
         const response = await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
             method: 'POST',
             headers: { 
@@ -48,7 +47,7 @@ exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.o
             },
             body: JSON.stringify({ 
                 phone: "5585982280780", 
-                text: "🛠️ *Teste de Integração Equipe Certa*\nO sistema de notificações via WhatsApp está operando corretamente." 
+                message: "🛠️ *Teste de Integração Equipe Certa*\nO sistema de notificações via WhatsApp está operando corretamente." 
             })
         });
 
@@ -57,10 +56,14 @@ exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.o
         if (response.ok) {
             return { success: true, message: "Conexão com Z-API estabelecida e mensagem de teste enviada!", debug: resData };
         } else {
-            return { success: false, message: `Erro na Z-API: ${resData.message || 'Status ' + response.status}`, debug: resData };
+            return { success: false, message: `Erro retornado pela Z-API (Status ${response.status})`, debug: resData };
         }
     } catch (error) {
-        return { success: false, message: "Erro de rede ao contactar Z-API: " + error.message, debug: error };
+        return { 
+            success: false, 
+            message: "Erro de rede ou exceção ao contactar Z-API", 
+            debug: { error: error.message, stack: error.stack } 
+        };
     }
 });
 
@@ -79,7 +82,7 @@ exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(asyn
         });
         return { success: true, message: "E-mail de teste enviado para " + config.brevoEmail };
     } catch (e) {
-        return { success: false, message: e.message, debug: e };
+        return { success: false, message: e.message, debug: { error: e.message } };
     }
 });
 
@@ -181,12 +184,14 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         if (config.zApiToken && config.zApiInstance) {
             const msg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para o evento: *${campaignName}*.\n\n🔗 *Acesse seu Portal:* ${portalUrl}`;
             
-            // CORREÇÃO: AWAIT OBRIGATÓRIO PARA GARANTIR O ENVIO
             try {
                 await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
-                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, text: msg })
+                    body: JSON.stringify({ 
+                        phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, 
+                        message: msg 
+                    })
                 });
             } catch (e) {
                 console.error("Erro WA Aprov:", e.message);
