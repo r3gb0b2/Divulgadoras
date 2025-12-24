@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   getAllPromoters, 
@@ -39,17 +38,6 @@ const calculateAge = (dob: string): number => {
         age--;
     }
     return age;
-};
-
-const getDaysSince = (timestamp: any): string => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Cadastrada hoje';
-    if (diffDays === 1) return 'Há 1 dia';
-    return `Há ${diffDays} dias`;
 };
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
@@ -97,20 +85,19 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    // ESTABILIZAÇÃO CRÍTICA: Strings para evitar loop infinito com referências de objetos do contexto
+    // ESTABILIZAÇÃO CRÍTICA: Strings para evitar loop infinito
     const assignedStatesKey = adminData.assignedStates?.join(',') || '';
     const assignedCampaignsKey = JSON.stringify(adminData.assignedCampaigns || {});
 
     const fetchData = useCallback(async (force = false) => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         
-        // Hash de parâmetros para evitar re-fetch idêntico
+        // Bloqueio de redundância
         const currentHash = `${orgId}-${filterStatus}-${filterState}-${selectedCampaign}-${assignedStatesKey}`;
-        if (!force && lastFetchHash.current === currentHash && promoters.length > 0) return;
+        if (!force && lastFetchHash.current === currentHash) return;
         if (isFetching.current) return;
         
         if (!isSuperAdmin && !orgId) {
-            setError("Nenhuma organização selecionada.");
             setIsLoading(false);
             return;
         }
@@ -127,7 +114,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 selectedCampaign: selectedCampaign,
                 statesForScope: adminData.assignedStates,
                 assignedCampaignsForScope: adminData.assignedCampaigns,
-                limitCount: 30 // LIMITE DE 30 REGISTROS PARA MOBILE
+                limitCount: 30 
             };
 
             const [promoterData, statsData, camps, reasons, allOrgs] = await Promise.all([
@@ -155,58 +142,87 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setIsLoading(false);
             isFetching.current = false;
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey, promoters.length]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    // Handlers de Ação
+    // HANDLER DE APROVAÇÃO OTIMISTA (SEM DELAY E SEM RECARREGAR)
     const handleApprove = async (p: Promoter) => {
         if (!window.confirm(`Aprovar ${p.name}?`)) return;
+
+        // 1. Atualiza estado local imediatamente (Optimistic Update)
+        setPromoters(prev => prev.filter(item => item.id !== p.id));
+        setStats(prev => ({ 
+            ...prev, 
+            pending: Math.max(0, prev.pending - 1), 
+            approved: prev.approved + 1 
+        }));
+
         try {
+            // 2. Envia para o servidor em background
             await updatePromoter(p.id, { status: 'approved' });
-            fetchData(true);
-        } catch (err: any) { alert(err.message); }
+        } catch (err: any) {
+            // 3. Rollback silencioso apenas em erro crítico (opcional: alertar usuário)
+            console.error("Erro ao aprovar no servidor:", err);
+            fetchData(true); 
+        }
     };
 
+    // HANDLER DE REJEIÇÃO OTIMISTA
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
-        const idsToProcess = selectedPromoter ? [selectedPromoter.id] : (Array.from(selectedIds) as string[]);
+        const idsToProcess = selectedPromoter ? [selectedPromoter.id] : Array.from(selectedIds);
         if (idsToProcess.length === 0) return;
 
-        setIsBulkProcessing(true);
+        // 1. Esconde modal e atualiza local imediatamente
+        setIsRejectionModalOpen(false);
+        const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
+        
+        setPromoters(prev => prev.filter(p => !idsToProcess.includes(p.id)));
+        setStats(prev => ({
+            ...prev,
+            pending: Math.max(0, prev.pending - idsToProcess.length),
+            rejected: prev.rejected + idsToProcess.length
+        }));
+        setSelectedIds(new Set());
+        setSelectedPromoter(null);
+
         try {
+            // 2. Processa no servidor em background
             for (const id of idsToProcess) {
-                await updatePromoter(id, { 
-                    status: allowEdit ? 'rejected_editable' : 'rejected', 
+                updatePromoter(id, { 
+                    status: statusToSet, 
                     rejectionReason: reason 
                 });
             }
-            setIsRejectionModalOpen(false);
+        } catch (err: any) {
+            console.error("Erro ao rejeitar no servidor:", err);
             fetchData(true);
-        } catch (err: any) { 
-            alert("Erro ao processar registros: " + err.message); 
-        } finally {
-            setIsBulkProcessing(false);
-            setSelectedPromoter(null);
         }
     };
 
     const handleBulkApprove = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Aprovar ${selectedIds.size} divulgadoras selecionadas?`)) return;
+        if (!window.confirm(`Aprovar ${selectedIds.size} selecionadas?`)) return;
 
-        setIsBulkProcessing(true);
+        const idsToProcess = Array.from(selectedIds);
+
+        // Atualização Otimista
+        setPromoters(prev => prev.filter(p => !idsToProcess.includes(p.id)));
+        setStats(prev => ({
+            ...prev,
+            pending: Math.max(0, prev.pending - idsToProcess.length),
+            approved: prev.approved + idsToProcess.length
+        }));
+        setSelectedIds(new Set());
+
         try {
-            const ids = Array.from(selectedIds) as string[];
-            for (const id of ids) {
-                await updatePromoter(id, { status: 'approved' });
+            for (const id of idsToProcess) {
+                updatePromoter(id, { status: 'approved' });
             }
-            fetchData(true);
         } catch (err: any) {
-            alert("Erro ao aprovar em massa: " + err.message);
-        } finally {
-            setIsBulkProcessing(false);
+            fetchData(true);
         }
     };
 
@@ -218,7 +234,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             const results = await findPromotersByEmail(lookupEmail);
             setLookupResults(results);
-        } catch (err) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
+        // FIX: Add explicit any type to err to fix 'unknown' type assignability error.
+        } catch (err: any) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
     };
 
     const filteredPromoters = useMemo(() => {
@@ -292,7 +309,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Barra de Filtros e Busca */}
+            {/* Filtros */}
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div className="md:col-span-2 relative">
@@ -359,19 +376,17 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="all">Todas Campanhas</option>
                         {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
-
-                    <button onClick={() => setIsReasonsModalOpen(true)} className="ml-auto px-4 py-2 text-[8px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4">Configurar Motivos</button>
                 </div>
             </div>
 
-            {/* BARRA DE AÇÃO EM MASSA FLUTUANTE */}
+            {/* Ação em Massa */}
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-5 py-4 rounded-3xl shadow-2xl flex items-center gap-4 animate-slideUp border border-white/20 w-[90%] md:w-auto">
                     <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{selectedIds.size} selecionadas</span>
                     <div className="h-6 w-[1px] bg-white/20"></div>
                     <div className="flex gap-2 flex-grow justify-end">
-                        <button onClick={handleBulkApprove} disabled={isBulkProcessing} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50"><CheckCircleIcon className="w-5 h-5" /></button>
-                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95 disabled:opacity-50"><XIcon className="w-5 h-5" /></button>
+                        <button onClick={handleBulkApprove} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95"><CheckCircleIcon className="w-5 h-5" /></button>
+                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95"><XIcon className="w-5 h-5" /></button>
                         <button onClick={() => setSelectedIds(new Set())} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><RefreshIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
@@ -379,7 +394,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             {/* Lista Principal */}
             <div className="bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
-                {isLoading ? (
+                {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando banco de dados...</p>
@@ -391,13 +406,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </div>
                 ) : (
                     <>
-                        {/* VIEW DESKTOP: TABELA */}
+                        {/* VIEW DESKTOP */}
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
+                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
@@ -448,7 +463,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* VIEW MOBILE: CARDS RESPONSIVOS E SEM TRANSBORDO */}
+                        {/* VIEW MOBILE */}
                         <div className="md:hidden divide-y divide-white/5">
                             <div className="p-4 bg-dark/20 flex justify-between items-center">
                                 <label className="flex items-center gap-3 cursor-pointer">
@@ -475,12 +490,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <p className="text-gray-500 text-[9px] font-mono mt-0.5 truncate">{p.email}</p>
                                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                                                     <span className="text-[9px] font-black text-primary uppercase">{p.state} • {age} anos</span>
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase truncate max-w-[80px]">{p.campaignName || 'Geral'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* AÇÕES MOBILE - AJUSTADAS PARA NÃO TRANSBORDAR EM TELAS PEQUENAS */}
                                         <div className="flex gap-2 mt-4 overflow-hidden">
                                             <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-green-600/20 text-green-500 rounded-2xl border border-green-600/30"><WhatsAppIcon className="w-5 h-5" /></a>
                                             <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-pink-600/20 text-pink-500 rounded-2xl border border-pink-600/30"><InstagramIcon className="w-5 h-5" /></a>
@@ -499,9 +512,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </div>
                                 );
                             })}
-                            <div className="p-4 text-center">
-                                <p className="text-[9px] text-gray-600 uppercase font-black tracking-widest italic">Mostrando os últimos 30 registros para preservar bateria.</p>
-                            </div>
                         </div>
                     </>
                 )}
@@ -510,7 +520,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={() => fetchData(true)} />}
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(true); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
