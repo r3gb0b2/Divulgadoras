@@ -136,8 +136,6 @@ export const deleteCampaignProofs = async (orgId: string, campaignName?: string,
 export const getPostsForOrg = async (orgId?: string, adminData?: AdminUserData): Promise<Post[]> => {
     let q: firebase.firestore.Query = firestore.collection('posts');
     
-    // CORREÇÃO: Se não houver orgId (SuperAdmin), busca tudo. 
-    // Se houver, filtra por organização para evitar erro na query.
     if (orgId) {
         q = q.where('organizationId', '==', orgId);
     }
@@ -198,7 +196,8 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, promo
 export const getPostWithAssignments = async (postId: string): Promise<{ post: Post, assignments: PostAssignment[] }> => {
     const postDoc = await firestore.collection('posts').doc(postId).get();
     if (!postDoc.exists) throw new Error("Post não encontrado");
-    // FIX: Correcting 'doc.data()' to 'postDoc.data()' on line 202 to fix reference error.
+    
+    // CORREÇÃO: Usando postDoc.data() em vez do doc inexistente
     const post = { id: postDoc.id, ...postDoc.data() } as Post;
     const assignmentsSnap = await firestore.collection('postAssignments').where('postId', '==', postId).get();
     const assignments = assignmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as PostAssignment));

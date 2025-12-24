@@ -1,4 +1,3 @@
-
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 const SibApiV3Sdk = require("@getbrevo/brevo");
@@ -74,7 +73,7 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
 
         const tokens = promotersSnap.docs
             .map(doc => doc.data().fcmToken)
-            .filter(t => !!t);
+            .filter(t => !!t && typeof t === 'string' && t.length > 10);
 
         if (tokens.length === 0) return { success: true, message: "Nenhum dispositivo com App instalado encontrado." };
 
