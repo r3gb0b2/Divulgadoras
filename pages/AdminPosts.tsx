@@ -6,7 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Post, Organization, PostAssignment, AdminUserData, Campaign } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon, PencilIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -147,6 +147,7 @@ const AdminPosts: React.FC = () => {
 
     const handleAcceptAll = async () => {
         if (!selectedPostForJustifications) return;
+        if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
         setIsAcceptingAll(true);
         try {
             await acceptAllJustifications(selectedPostForJustifications.id);
@@ -162,7 +163,7 @@ const AdminPosts: React.FC = () => {
 
     return (
         <div className="pb-20">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Posts e Tarefas</h1>
                 <div className="flex gap-2">
                     <button onClick={() => navigate('/admin/posts/new')} className="px-4 py-2 bg-primary text-white font-black rounded-xl hover:bg-primary-dark text-xs uppercase tracking-widest shadow-lg shadow-primary/20">+ Novo Post</button>
@@ -202,6 +203,11 @@ const AdminPosts: React.FC = () => {
                                                 {post.isActive ? 'Ativo' : 'Inativo'}
                                             </span>
                                         </div>
+                                        <div className="absolute top-4 right-4">
+                                            <button onClick={() => navigate(`/admin/posts/${post.id}`)} className="p-2 bg-black/50 backdrop-blur-md text-white rounded-full hover:bg-primary transition-colors">
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     <div className="p-6 flex flex-col flex-grow">
@@ -223,7 +229,7 @@ const AdminPosts: React.FC = () => {
                                             </button>
                                         </div>
 
-                                        {/* QUICK CHECKS */}
+                                        {/* QUICK CHECKS - Restaurados e Ampliados */}
                                         <div className="grid grid-cols-1 gap-2 my-4 py-4 border-y border-white/5">
                                             <label className="flex items-center gap-3 cursor-pointer group/item">
                                                 <input 
@@ -246,6 +252,15 @@ const AdminPosts: React.FC = () => {
                                             <label className="flex items-center gap-3 cursor-pointer group/item">
                                                 <input 
                                                     type="checkbox" 
+                                                    checked={post.allowJustification !== false} 
+                                                    onChange={e => handleQuickUpdate(post.id, { allowJustification: e.target.checked })}
+                                                    className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-primary focus:ring-primary" 
+                                                />
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest group-hover/item:text-white transition-colors">Aceitar Justificativas</span>
+                                            </label>
+                                            <label className="flex items-center gap-3 cursor-pointer group/item">
+                                                <input 
+                                                    type="checkbox" 
                                                     checked={post.ownerOnly} 
                                                     onChange={e => handleQuickUpdate(post.id, { ownerOnly: e.target.checked })}
                                                     className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-primary focus:ring-primary" 
@@ -254,7 +269,7 @@ const AdminPosts: React.FC = () => {
                                             </label>
                                         </div>
 
-                                        {/* JUSTIFICATIONS BUTTON */}
+                                        {/* JUSTIFICATIONS BUTTON - Com Modal */}
                                         <button 
                                             onClick={() => handleOpenJustifications(post)}
                                             className={`w-full py-2.5 rounded-xl mb-4 border transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest ${pendingJustifications.length > 0 ? 'bg-orange-900/30 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-gray-800/30 text-gray-500 border-gray-700/50 hover:text-white'}`}
