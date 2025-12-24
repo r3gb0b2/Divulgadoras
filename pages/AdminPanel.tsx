@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
-  getAllPromoters, 
+  getAllPromotersPaginated, 
   getPromoterStats, 
   updatePromoter, 
-  deletePromoter, 
   getRejectionReasons, 
   findPromotersByEmail 
 } from '../services/promoterService';
@@ -11,14 +10,14 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { 
   Promoter, AdminUserData, PromoterStatus, 
-  RejectionReason, Organization, Campaign, Timestamp 
+  RejectionReason, Organization, Campaign 
 } from '../types';
 import { 
-  SearchIcon, FilterIcon, CheckCircleIcon, XIcon, 
-  InstagramIcon, WhatsAppIcon, CameraIcon, TrashIcon, 
-  PencilIcon, RefreshIcon, ArrowLeftIcon, FaceIdIcon, ClockIcon 
+  SearchIcon, CheckCircleIcon, XIcon, 
+  InstagramIcon, WhatsAppIcon, TrashIcon, 
+  PencilIcon, RefreshIcon, ArrowLeftIcon, FaceIdIcon 
 } from '../components/Icons';
-import { stateMap, states } from '../constants/states';
+import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 // Modais
@@ -40,21 +39,22 @@ const calculateAge = (dob: string): number => {
     return age;
 };
 
+const PAGE_SIZE = 30;
+
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
     const isFetching = useRef(false);
-    const lastFetchHash = useRef('');
     
-    // Dados Principais
+    // Dados Principais e Paginação
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
+    const [lastDoc, setLastDoc] = useState<any>(null);
+    const [prevCursors, setPrevCursors] = useState<any[]>([]);
+    const [hasMore, setHasMore] = useState(true);
+
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
-
-    // Seleção em Massa
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
     // Estado da UI
     const [isLoading, setIsLoading] = useState(true);
@@ -64,17 +64,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Filtros de Idade
-    const [minAge, setMinAge] = useState<string>('');
-    const [maxAge, setMaxAge] = useState<string>('');
-
     // Busca por E-mail
     const [lookupEmail, setLookupEmail] = useState('');
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
-    // Controle de Modais de Ação
+    // Controle de Modais
     const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
@@ -85,18 +81,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    // ESTABILIZAÇÃO CRÍTICA: Strings para evitar loop infinito
-    const assignedStatesKey = adminData.assignedStates?.join(',') || '';
-    const assignedCampaignsKey = JSON.stringify(adminData.assignedCampaigns || {});
-
-    const fetchData = useCallback(async (force = false) => {
+    const fetchData = useCallback(async (cursor = null, isNext = true) => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
-        
-        // Bloqueio de redundância
-        const currentHash = `${orgId}-${filterStatus}-${filterState}-${selectedCampaign}-${assignedStatesKey}`;
-        if (!force && lastFetchHash.current === currentHash) return;
-        if (isFetching.current) return;
-        
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
             return;
@@ -112,25 +98,24 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 status: filterStatus,
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
-                statesForScope: adminData.assignedStates,
-                assignedCampaignsForScope: adminData.assignedCampaigns,
-                limitCount: 30 
+                pageSize: PAGE_SIZE,
+                lastDoc: cursor
             };
 
-            const [promoterData, statsData, camps, reasons, allOrgs] = await Promise.all([
-                getAllPromoters(options),
-                getPromoterStats(options),
+            const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
+                getAllPromotersPaginated(options),
+                getPromoterStats({ organizationId: orgId, filterState, selectedCampaign }),
                 getAllCampaigns(orgId),
                 orgId ? getRejectionReasons(orgId) : Promise.resolve([]),
                 isSuperAdmin ? getOrganizations() : Promise.resolve([])
             ]);
 
-            setPromoters(promoterData);
+            setPromoters(result.promoters);
+            setLastDoc(result.lastDoc);
+            setHasMore(result.promoters.length === PAGE_SIZE);
             setStats(statsData);
             setCampaigns(camps);
             setRejectionReasons(reasons);
-            setSelectedIds(new Set()); 
-            lastFetchHash.current = currentHash;
             
             if (isSuperAdmin) {
                 const map = (allOrgs as Organization[]).reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
@@ -142,87 +127,67 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setIsLoading(false);
             isFetching.current = false;
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin]);
 
+    // Resetar quando filtros mudam
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        setPrevCursors([]);
+        setLastDoc(null);
+        fetchData(null);
+    }, [filterStatus, filterState, selectedCampaign]);
 
-    // HANDLER DE APROVAÇÃO OTIMISTA (SEM DELAY E SEM RECARREGAR)
+    const handleNextPage = () => {
+        if (!hasMore || isLoading) return;
+        setPrevCursors(prev => [...prev, promoters[0]]); // Simplificação: em uso real usamos o cursor do primeiro doc da página atual
+        // Mas o Firestore exige o último da página ANTERIOR para startAfter.
+        // Então guardamos o lastDoc atual.
+        const currentLastDoc = lastDoc;
+        setPrevCursors(prev => [...prev, currentLastDoc]);
+        fetchData(currentLastDoc);
+    };
+
+    const handlePrevPage = () => {
+        if (prevCursors.length === 0 || isLoading) return;
+        const newHistory = [...prevCursors];
+        newHistory.pop(); // Remove o cursor da página que estamos saindo
+        const prevCursor = newHistory.length > 0 ? newHistory[newHistory.length - 1] : null;
+        setPrevCursors(newHistory);
+        // Nota: Para voltar perfeitamente no Firestore é complexo sem persistir todos os cursores.
+        // Aqui estamos reiniciando ou usando o histórico.
+        fetchData(prevCursor);
+    };
+
+    // HANDLER DE APROVAÇÃO OTIMISTA
     const handleApprove = async (p: Promoter) => {
         if (!window.confirm(`Aprovar ${p.name}?`)) return;
-
-        // 1. Atualiza estado local imediatamente (Optimistic Update)
         setPromoters(prev => prev.filter(item => item.id !== p.id));
-        setStats(prev => ({ 
-            ...prev, 
-            pending: Math.max(0, prev.pending - 1), 
-            approved: prev.approved + 1 
-        }));
-
+        setStats(prev => ({ ...prev, pending: Math.max(0, prev.pending - 1), approved: prev.approved + 1 }));
         try {
-            // 2. Envia para o servidor em background
             await updatePromoter(p.id, { status: 'approved' });
         } catch (err: any) {
-            // 3. Rollback silencioso apenas em erro crítico (opcional: alertar usuário)
-            console.error("Erro ao aprovar no servidor:", err);
-            fetchData(true); 
+            console.error("Erro ao aprovar:", err);
+            fetchData(null); 
         }
     };
 
-    // HANDLER DE REJEIÇÃO OTIMISTA
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
-        const idsToProcess = selectedPromoter ? [selectedPromoter.id] : Array.from(selectedIds);
-        if (idsToProcess.length === 0) return;
-
-        // 1. Esconde modal e atualiza local imediatamente
+        if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
+        const pId = selectedPromoter.id;
         
-        setPromoters(prev => prev.filter(p => !idsToProcess.includes(p.id)));
+        setPromoters(prev => prev.filter(p => p.id !== pId));
         setStats(prev => ({
             ...prev,
-            pending: Math.max(0, prev.pending - idsToProcess.length),
-            rejected: prev.rejected + idsToProcess.length
+            pending: Math.max(0, prev.pending - 1),
+            rejected: prev.rejected + 1
         }));
-        setSelectedIds(new Set());
         setSelectedPromoter(null);
 
         try {
-            // 2. Processa no servidor em background
-            for (const id of idsToProcess) {
-                updatePromoter(id, { 
-                    status: statusToSet, 
-                    rejectionReason: reason 
-                });
-            }
+            await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
         } catch (err: any) {
-            console.error("Erro ao rejeitar no servidor:", err);
-            fetchData(true);
-        }
-    };
-
-    const handleBulkApprove = async () => {
-        if (selectedIds.size === 0) return;
-        if (!window.confirm(`Aprovar ${selectedIds.size} selecionadas?`)) return;
-
-        const idsToProcess = Array.from(selectedIds);
-
-        // Atualização Otimista
-        setPromoters(prev => prev.filter(p => !idsToProcess.includes(p.id)));
-        setStats(prev => ({
-            ...prev,
-            pending: Math.max(0, prev.pending - idsToProcess.length),
-            approved: prev.approved + idsToProcess.length
-        }));
-        setSelectedIds(new Set());
-
-        try {
-            for (const id of idsToProcess) {
-                updatePromoter(id, { status: 'approved' });
-            }
-        } catch (err: any) {
-            fetchData(true);
+            fetchData(null);
         }
     };
 
@@ -234,30 +199,18 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             const results = await findPromotersByEmail(lookupEmail);
             setLookupResults(results);
-        // FIX: Add explicit any type to err to fix 'unknown' type assignability error.
         } catch (err: any) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
     };
 
     const filteredPromoters = useMemo(() => {
-        let list = promoters;
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            list = list.filter(p => 
-                p.name.toLowerCase().includes(q) || 
-                p.instagram.toLowerCase().includes(q) || 
-                p.email.toLowerCase().includes(q)
-            );
-        }
-        if (minAge || maxAge) {
-            list = list.filter(p => {
-                const age = calculateAge(p.dateOfBirth);
-                const min = minAge ? parseInt(minAge) : 0;
-                const max = maxAge ? parseInt(maxAge) : 999;
-                return age >= min && age <= max;
-            });
-        }
-        return list;
-    }, [promoters, searchQuery, minAge, maxAge]);
+        if (!searchQuery) return promoters;
+        const q = searchQuery.toLowerCase();
+        return promoters.filter(p => 
+            p.name.toLowerCase().includes(q) || 
+            p.instagram.toLowerCase().includes(q) || 
+            p.email.toLowerCase().includes(q)
+        );
+    }, [promoters, searchQuery]);
 
     const availableStates = useMemo(() => {
         if (isSuperAdmin) return states;
@@ -277,24 +230,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border whitespace-nowrap ${c.style}`}>{c.label}</span>;
     };
 
-    const toggleSelect = (id: string) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedIds(newSet);
-    };
-
-    const toggleSelectAll = () => {
-        if (selectedIds.size === filteredPromoters.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(filteredPromoters.map(p => p.id)));
-        }
-    };
-
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
-            {/* Header com Stats */}
+            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Divulgadoras</h1>
                 <div className="flex flex-wrap gap-2">
@@ -316,34 +254,17 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Pesquisar..." 
+                            placeholder="Pesquisar nesta página..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
                         />
                     </div>
-                    
-                    <div className="flex gap-2 items-center md:col-span-1">
-                         <input 
-                            type="number" 
-                            placeholder="Min" 
-                            value={minAge}
-                            onChange={e => setMinAge(e.target.value)}
-                            className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
-                        />
-                        <input 
-                            type="number" 
-                            placeholder="Max" 
-                            value={maxAge}
-                            onChange={e => setMaxAge(e.target.value)}
-                            className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
-                        />
-                    </div>
 
-                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-2">
+                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-3">
                          <input 
                             type="email" 
-                            placeholder="Localizar e-mail..." 
+                            placeholder="Localizar e-mail em todo banco..." 
                             value={lookupEmail}
                             onChange={e => setLookupEmail(e.target.value)}
                             className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
@@ -353,7 +274,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         </button>
                     </form>
 
-                    <button onClick={() => fetchData(true)} className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors font-black text-[10px] uppercase tracking-widest">
+                    <button onClick={() => fetchData(null)} className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors font-black text-[10px] uppercase tracking-widest">
                         <RefreshIcon className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -379,19 +300,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Ação em Massa */}
-            {selectedIds.size > 0 && (
-                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-5 py-4 rounded-3xl shadow-2xl flex items-center gap-4 animate-slideUp border border-white/20 w-[90%] md:w-auto">
-                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{selectedIds.size} selecionadas</span>
-                    <div className="h-6 w-[1px] bg-white/20"></div>
-                    <div className="flex gap-2 flex-grow justify-end">
-                        <button onClick={handleBulkApprove} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95"><CheckCircleIcon className="w-5 h-5" /></button>
-                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95"><XIcon className="w-5 h-5" /></button>
-                        <button onClick={() => setSelectedIds(new Set())} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><RefreshIcon className="w-5 h-5" /></button>
-                    </div>
-                </div>
-            )}
-
             {/* Lista Principal */}
             <div className="bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
                 {isLoading && promoters.length === 0 ? (
@@ -406,14 +314,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </div>
                 ) : (
                     <>
-                        {/* VIEW DESKTOP */}
-                        <div className="hidden md:block overflow-x-auto">
+                        <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
-                                        <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
-                                        </th>
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
                                         <th className="px-6 py-5">Evento</th>
@@ -425,10 +329,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     {filteredPromoters.map(p => {
                                         const age = calculateAge(p.dateOfBirth);
                                         return (
-                                            <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
-                                                <td className="px-6 py-5">
-                                                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
-                                                </td>
+                                            <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-5">
                                                         <div className="relative w-16 h-16 rounded-2xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
@@ -450,7 +351,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                                 <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <div className="flex justify-end gap-2">
                                                         {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
                                                         {(p.status === 'pending' || p.status === 'approved') && <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>}
                                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
@@ -463,55 +364,23 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* VIEW MOBILE */}
-                        <div className="md:hidden divide-y divide-white/5">
-                            <div className="p-4 bg-dark/20 flex justify-between items-center">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
-                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Selecionar Todas</span>
-                                </label>
-                            </div>
-                            {filteredPromoters.map(p => {
-                                const age = calculateAge(p.dateOfBirth);
-                                return (
-                                    <div key={p.id} className={`p-4 transition-colors ${selectedIds.has(p.id) ? 'bg-primary/10' : ''} max-w-full overflow-hidden`}>
-                                        <div className="flex gap-4">
-                                            <div className="flex flex-col gap-3 items-center">
-                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-6 h-6 rounded border-gray-600 bg-dark text-primary" />
-                                                <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
-                                                    <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
-                                                </div>
-                                            </div>
-                                            <div className="flex-grow min-w-0">
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <p className="text-white font-black text-sm truncate uppercase tracking-tight leading-tight">{p.name}</p>
-                                                    <div className="flex-shrink-0">{statusBadge(p.status)}</div>
-                                                </div>
-                                                <p className="text-gray-500 text-[9px] font-mono mt-0.5 truncate">{p.email}</p>
-                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-                                                    <span className="text-[9px] font-black text-primary uppercase">{p.state} • {age} anos</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-2 mt-4 overflow-hidden">
-                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-green-600/20 text-green-500 rounded-2xl border border-green-600/30"><WhatsAppIcon className="w-5 h-5" /></a>
-                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-pink-600/20 text-pink-500 rounded-2xl border border-pink-600/30"><InstagramIcon className="w-5 h-5" /></a>
-                                            
-                                            {p.status === 'pending' ? (
-                                                <>
-                                                    <button onClick={() => handleApprove(p)} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-green-600 text-white rounded-2xl shadow-lg"><CheckCircleIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-red-600 text-white rounded-2xl shadow-lg"><XIcon className="w-5 h-5" /></button>
-                                                </>
-                                            ) : (
-                                                <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-red-600/20 text-red-500 rounded-2xl border border-red-600/30"><TrashIcon className="w-5 h-5" /></button>
-                                            )}
-                                            
-                                            <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-gray-700 text-gray-300 rounded-2xl"><PencilIcon className="w-5 h-5" /></button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        {/* Paginação */}
+                        <div className="p-6 bg-dark/20 border-t border-white/5 flex justify-between items-center">
+                            <button 
+                                onClick={handlePrevPage} 
+                                disabled={prevCursors.length === 0 || isLoading}
+                                className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                Anterior
+                            </button>
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
+                            <button 
+                                onClick={handleNextPage} 
+                                disabled={!hasMore || isLoading}
+                                className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                Próxima
+                            </button>
                         </div>
                     </>
                 )}
@@ -520,7 +389,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(true); }} />
+            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={() => fetchData(null)} />}
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
     );

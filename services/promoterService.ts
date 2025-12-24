@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -20,9 +19,6 @@ const cleanForCallable = (obj: any): any => {
     return cleaned;
 };
 
-/**
- * Altera o e-mail da divulgadora chamando uma Cloud Function para sincronizar dados vinculados.
- */
 export const changePromoterEmail = async (promoterId: string, oldEmail: string, newEmail: string): Promise<void> => {
     try {
         const updateFunc = functions.httpsCallable('updatePromoterEmail');
@@ -33,10 +29,6 @@ export const changePromoterEmail = async (promoterId: string, oldEmail: string, 
     }
 };
 
-/**
- * Adiciona uma nova divulgadora, enviando as fotos para o Storage
- * e salvando os dados no Firestore com normalização.
- */
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
   const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Geral";
@@ -98,9 +90,6 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
     } catch (error) { return null; }
 };
 
-/**
- * Confirma a entrada no grupo e aceitação de regras.
- */
 export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
     try {
         const doc = await firestore.collection('promoters').doc(id).get();
@@ -153,6 +142,43 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
     } catch (error) { return []; }
 };
 
+export const getAllPromotersPaginated = async (options: {
+    organizationId?: string; status?: PromoterStatus | 'all';
+    filterState?: string; selectedCampaign?: string;
+    pageSize: number; lastDoc?: any;
+}): Promise<{ promoters: Promoter[], lastDoc: any }> => {
+    try {
+        let q: firebase.firestore.Query = firestore.collection("promoters");
+        
+        // Filtros básicos que funcionam bem com índices compostos simples
+        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
+        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
+        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        // Ordenação obrigatória para paginação consistente
+        q = q.orderBy("createdAt", "desc");
+
+        if (options.lastDoc) {
+            q = q.startAfter(options.lastDoc);
+        }
+        
+        q = q.limit(options.pageSize);
+        
+        const snap = await q.get();
+        const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        const lastVisible = snap.docs[snap.docs.length - 1];
+        
+        return { promoters, lastDoc: lastVisible };
+    } catch (error) { 
+        console.error("Error fetching promoters:", error);
+        throw new Error("Falha ao buscar divulgadoras."); 
+    }
+};
+
+/**
+ * Legado mantido para compatibilidade onde paginação não é desejada
+ */
 export const getAllPromoters = async (options: {
     organizationId?: string; statesForScope?: string[] | null; status?: PromoterStatus | 'all';
     assignedCampaignsForScope?: { [state: string]: string[] }; selectedCampaign?: string;
@@ -165,15 +191,9 @@ export const getAllPromoters = async (options: {
         
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
         
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
-            q = q.where("campaignName", "==", options.selectedCampaign);
-        }
-
-        // Adicionado limite para performance mobile
-        if (options.limitCount) {
-            q = q.limit(options.limitCount);
-        }
+        if (options.limitCount) q = q.limit(options.limitCount);
         
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
@@ -182,30 +202,32 @@ export const getAllPromoters = async (options: {
             results = results.filter(p => options.statesForScope!.includes(p.state));
         }
         
-        if (options.assignedCampaignsForScope) {
-            results = results.filter(p => {
-                const allowedInState = options.assignedCampaignsForScope![p.state];
-                if (!allowedInState || allowedInState.length === 0) return true;
-                return allowedInState.includes(p.campaignName || '');
-            });
-        }
-        
         return results;
     } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
 };
 
 export const getPromoterStats = async (options: {
-    organizationId?: string; statesForScope?: string[] | null;
-    filterOrgId?: string; filterState?: string; selectedCampaign?: string;
-    assignedCampaignsForScope?: { [state: string]: string[] };
+    organizationId?: string; filterState?: string; selectedCampaign?: string;
 }): Promise<{ total: number, pending: number, approved: number, rejected: number, removed: number }> => {
-    const all = await getAllPromoters({ ...options, status: 'all' });
-    return {
-        total: all.length, pending: all.filter(p => p.status === 'pending').length,
-        approved: all.filter(p => p.status === 'approved').length,
-        rejected: all.filter(p => p.status === 'rejected' || p.status === 'rejected_editable').length,
-        removed: all.filter(p => p.status === 'removed').length,
-    };
+    try {
+        let q: firebase.firestore.Query = firestore.collection("promoters");
+        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
+        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        const snap = await q.get();
+        const all = snap.docs.map(doc => doc.data() as Promoter);
+        
+        return {
+            total: all.length,
+            pending: all.filter(p => p.status === 'pending').length,
+            approved: all.filter(p => p.status === 'approved').length,
+            rejected: all.filter(p => p.status === 'rejected' || p.status === 'rejected_editable').length,
+            removed: all.filter(p => p.status === 'removed').length,
+        };
+    } catch (error) {
+        return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 };
+    }
 };
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {

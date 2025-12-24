@@ -169,9 +169,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
         const brevo = setupBrevo(config.brevoKey);
         if (brevo && emails.length > 0) {
             try {
-                // Envio em massa (Transactional Email permite múltiplos recipientes se a API suportar, 
-                // ou enviamos individualmente no loop para garantir entrega personalizada)
-                // Para simplificar e garantir {{promoterName}}, enviamos individual ou em pequenos grupos.
                 await brevo.sendTransacEmail({
                     sender: { email: config.brevoEmail, name: "Equipe Certa" },
                     to: emails,
@@ -214,13 +211,14 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
 
     // Se for aprovação, dispara notificações
     if (isApproving) {
-        const portalUrl = `https://divulgadoras.vercel.app/#/posts?email=${encodeURIComponent(oldData.email)}`;
+        // MUDANÇA SOLICITADA: Redirecionar para Status (onde ficam as regras e o link do WhatsApp)
+        const statusUrl = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
         const campaignName = updateData.campaignName || oldData.campaignName || "Evento";
 
         // WHATSAPP
         if (config.zApiToken && config.zApiInstance) {
             try {
-                const waMsg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para o evento: *${campaignName}*.\n\n🔗 *Acesse seu Portal:* ${portalUrl}`;
+                const waMsg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para o evento: *${campaignName}*.\n\n🔗 *Veja o status e entre no grupo:* ${statusUrl}`;
                 await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
@@ -245,9 +243,9 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                         <div style="font-family: sans-serif; color: #333;">
                             <h2>Boas-vindas à equipe, ${oldData.name}!</h2>
                             <p>Seu perfil foi analisado e <b>APROVADO</b> para o evento <b>${campaignName}</b>.</p>
-                            <p>Agora você já pode acessar suas tarefas e baixar os materiais de divulgação.</p>
+                            <p>Agora você já pode entrar no grupo oficial e acessar suas tarefas.</p>
                             <br>
-                            <a href="${portalUrl}" style="background: #7e39d5; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACESSAR MEU PORTAL</a>
+                            <a href="${statusUrl}" style="background: #7e39d5; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MEU STATUS E REGRAS</a>
                             <br><br>
                             <p>Sucesso em suas postagens!</p>
                         </div>
