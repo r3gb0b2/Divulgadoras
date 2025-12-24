@@ -324,6 +324,7 @@ const PostCheck: React.FC = () => {
     const [justificationAssignment, setJustificationAssignment] = useState<PostAssignment | null>(null);
     const [justificationText, setJustificationText] = useState('');
     const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
+    const [justificationPreviews, setJustificationPreviews] = useState<string[]>([]);
     const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
 
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
@@ -425,13 +426,26 @@ const PostCheck: React.FC = () => {
         setPushTestCountdown(10);
     };
 
+    const handleJustificationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            // Fix: Cast Array.from result to File[] to prevent type error when calling URL.createObjectURL
+            const files = Array.from(e.target.files) as File[];
+            setJustificationFiles(files);
+            setJustificationPreviews(files.map(f => URL.createObjectURL(f as Blob)));
+        }
+    };
+
     const handleJustificationSubmit = async () => {
         if (!justificationAssignment || !justificationText.trim()) return;
         setIsSubmittingJustification(true);
         try {
             await submitJustification(justificationAssignment.id, justificationText, justificationFiles);
-            setJustificationAssignment(null); setJustificationText(''); setJustificationFiles([]);
+            setJustificationAssignment(null); 
+            setJustificationText(''); 
+            setJustificationFiles([]);
+            setJustificationPreviews([]);
             performSearch(email);
+            alert("Justificativa enviada com sucesso!");
         } catch (err: any) { alert(err.message); } finally { setIsSubmittingJustification(false); }
     };
 
@@ -461,7 +475,7 @@ const PostCheck: React.FC = () => {
                     <h1 className="text-2xl font-black text-white uppercase tracking-tight truncate">Olá, {promoter.name.split(' ')[0]}!</h1>
                     
                     {isChangingEmail ? (
-                        <form onSubmit={handleEmailChangeSubmit} className="flex items-center gap-2 mt-1">
+                        <form onSubmit={handleEmailChangeSubmit} className="flex disabled:cursor-not-allowed items-center gap-2 mt-1">
                             <input type="email" value={newEmailValue} onChange={e => setNewEmailValue(e.target.value)} className="bg-gray-800 border border-gray-700 text-[10px] text-white px-2 py-1 rounded-lg outline-none flex-grow" autoFocus />
                             <button type="submit" className="text-green-400 font-bold text-[10px] uppercase">OK</button>
                             <button type="button" onClick={() => setIsChangingEmail(false)} className="text-gray-500 font-bold text-[10px] uppercase">Sair</button>
@@ -516,7 +530,28 @@ const PostCheck: React.FC = () => {
                     <div className="bg-secondary w-full max-w-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Justificar</h3>
                         <p className="text-gray-400 text-sm mb-6 leading-relaxed">Por que você não poderá realizar esta postagem?</p>
-                        <textarea value={justificationText} onChange={e => setJustificationText(e.target.value)} placeholder="Descreva aqui..." rows={4} className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-6" />
+                        
+                        <textarea 
+                            value={justificationText} 
+                            onChange={e => setJustificationText(e.target.value)} 
+                            placeholder="Descreva aqui o motivo..." 
+                            rows={4} 
+                            className="w-full p-4 bg-gray-800 border border-gray-700 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary mb-4" 
+                        />
+
+                        <div className="mb-6">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase mb-2 ml-1">Anexar Comprovante (Opcional)</label>
+                            <div className="flex flex-wrap gap-2">
+                                <label className="w-16 h-16 bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
+                                    <CameraIcon className="w-6 h-6 text-gray-500" />
+                                    <input type="file" multiple accept="image/*" onChange={handleJustificationFileChange} className="hidden" />
+                                </label>
+                                {justificationPreviews.map((src, i) => (
+                                    <img key={i} src={src} className="w-16 h-16 object-cover rounded-xl border border-gray-700" alt="" />
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="flex gap-4">
                            <button onClick={() => setJustificationAssignment(null)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl">CANCELAR</button>
                            <button onClick={handleJustificationSubmit} disabled={isSubmittingJustification || !justificationText.trim()} className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl disabled:opacity-30 uppercase text-xs tracking-widest">{isSubmittingJustification ? 'ENVIANDO...' : 'ENVIAR'}</button>

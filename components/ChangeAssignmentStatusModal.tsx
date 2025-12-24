@@ -124,32 +124,32 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
             </div>
             {assignment.justificationImageUrls && assignment.justificationImageUrls.length > 0 && (
                 <div className="mb-4">
-                    <p className="text-xs text-gray-400 mb-1">Imagens da Justificativa:</p>
-                    <div className="flex gap-2">
+                    <p className="text-xs text-gray-400 mb-2 font-bold uppercase tracking-widest">Imagens Anexadas:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-2">
                         {assignment.justificationImageUrls.map((url, index) => (
-                           <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                <img src={url} alt={`Justificativa ${index + 1}`} className="w-16 h-16 object-cover rounded-md border-2 border-yellow-500" />
+                           <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                                <img src={url} alt={`Justificativa ${index + 1}`} className="w-20 h-20 object-cover rounded-xl border-2 border-yellow-500/50 hover:border-yellow-500 transition-colors" />
                             </a>
                         ))}
                     </div>
                 </div>
             )}
-            <div className="space-y-2">
+            <div className="space-y-2 mt-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" value="accepted" checked={justificationStatus === 'accepted'} onChange={() => setJustificationStatus('accepted')} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 focus:ring-primary" />
-                    <span className="text-green-400">Aceitar Justificativa</span>
+                    <span className="text-green-400 font-bold text-sm">Aceitar Justificativa</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" value="rejected" checked={justificationStatus === 'rejected'} onChange={() => setJustificationStatus('rejected')} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 focus:ring-primary" />
-                    <span className="text-red-400">Rejeitar Justificativa</span>
+                    <span className="text-red-400 font-bold text-sm">Rejeitar Justificativa</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" value="pending" checked={justificationStatus === 'pending'} onChange={() => setJustificationStatus('pending')} className="h-4 w-4 text-primary bg-gray-700 border-gray-600 focus:ring-primary" />
-                    <span className="text-yellow-400">Manter como Pendente</span>
+                    <span className="text-yellow-400 font-bold text-sm">Manter como Pendente</span>
                 </label>
             </div>
             <div className="mt-4">
-                <label htmlFor="justificationResponse" className="block text-sm font-medium text-gray-300">
+                <label htmlFor="justificationResponse" className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">
                     Resposta para a Divulgadora (Opcional)
                 </label>
                 <textarea
