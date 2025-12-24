@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
@@ -12,10 +13,9 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fixed: Using the imported Component class and ensuring correct type parameters to resolve inherited members like 'this.props'.
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Use property initializer for state
-  public state: ErrorBoundaryState = {
+  public override state: ErrorBoundaryState = {
     hasError: false,
     error: null,
   };
@@ -30,14 +30,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   /**
    * Standard lifecycle method for side-effects when an error is caught.
    */
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  public render(): ReactNode {
+  public override render(): ReactNode {
     // Access state and props from 'this' which are inherited from Component
     const { hasError, error } = this.state;
-    // Fixed: Correctly accessing 'props' from 'this' which is now properly typed by extending 'Component'.
     const { children } = this.props;
 
     if (hasError) {

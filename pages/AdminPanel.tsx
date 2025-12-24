@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
   getPromoterStats, 
@@ -15,7 +16,7 @@ import {
 import { 
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
-  PencilIcon, RefreshIcon 
+  PencilIcon, RefreshIcon, FilterIcon 
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -55,35 +56,38 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
 
-    // Estado da UI
+    // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
     const [filterStatus, setFilterStatus] = useState<PromoterStatus | 'all'>('pending');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [minAge, setMinAge] = useState('');
+    const [maxAge, setMaxAge] = useState('');
     
+    // Seleção em Massa
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    // Controle de Modais
+    const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
+    const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean, urls: string[], index: number }>({ 
+        isOpen: false, urls: [], index: 0 
+    });
+
     // Busca por E-mail
     const [lookupEmail, setLookupEmail] = useState('');
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
 
-    // Controle de Modais
-    const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
-    const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
-    const [isReasonsModalOpen, setIsReasonsModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [photoViewer, setPhotoViewer] = useState<{ isOpen: boolean, urls: string[], index: number }>({ 
-        isOpen: false, urls: [], index: 0 
-    });
-
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    const fetchData = useCallback(async (cursor = null) => {
+    // Fix: Explicitly typed cursor as any to resolve potential unknown argument issues.
+    const fetchData = useCallback(async (cursor: any = null) => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
-        
-        // Se não for superadmin e não tiver organização selecionada, não busca
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
             setPromoters([]);
@@ -123,40 +127,52 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 setOrgsMap(map);
             }
         } catch (err: any) {
-            console.error("Fetch Error:", err);
             setError(err.message || 'Falha técnica ao carregar dados.');
         } finally {
             setIsLoading(false);
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin]);
 
-    // Efeito para carregar dados quando filtros ou organização mudam
     useEffect(() => {
         setPrevCursors([]);
         setLastDoc(null);
+        setSelectedIds(new Set());
         fetchData(null);
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign]);
 
-    const handleNextPage = () => {
-        if (!hasMore || isLoading || !lastDoc) return;
-        setPrevCursors(prev => [...prev, lastDoc]);
-        fetchData(lastDoc);
+    // Ações em massa
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredPromoters.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredPromoters.map(p => p.id)));
+        }
     };
 
-    const handlePrevPage = () => {
-        if (prevCursors.length === 0 || isLoading) return;
-        const newCursors = [...prevCursors];
-        newCursors.pop(); // Remove o cursor da página atual
-        const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
-        setPrevCursors(newCursors);
-        fetchData(prevCursor);
+    const toggleSelectOne = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
     };
 
-    // HANDLER DE APROVAÇÃO OTIMISTA
+    const handleBulkApprove = async () => {
+        if (selectedIds.size === 0) return;
+        const idsArray = Array.from(selectedIds);
+        setIsLoading(true);
+        try {
+            await Promise.all(idsArray.map(id => updatePromoter(id, { status: 'approved' })));
+            setSelectedIds(new Set());
+            fetchData(null);
+        } catch (e) {
+            alert("Erro ao aprovar em massa.");
+            setIsLoading(false);
+        }
+    };
+
+    // HANDLER DE APROVAÇÃO DIRETA (Sem Confirm)
     const handleApprove = async (p: Promoter) => {
-        if (!window.confirm(`Aprovar ${p.name}?`)) return;
-        
-        // Atualização Otimista: Remove da lista local e incrementa aprovados
+        // Atualização Otimista
         setPromoters(prev => prev.filter(item => item.id !== p.id));
         setStats(prev => ({ 
             ...prev, 
@@ -167,8 +183,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(p.id, { status: 'approved' });
         } catch (err: any) {
-            console.error("Erro ao aprovar:", err);
-            // Em caso de erro, reinicia a busca para sincronizar com o banco
             fetchData(null); 
         }
     };
@@ -176,11 +190,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
-        
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
-        const pId = selectedPromoter.id;
+        // Fix: Explicitly cast selectedPromoter.id to string to fix potential unknown argument error.
+        const pId = selectedPromoter.id as string;
         
-        // Otimista
         setPromoters(prev => prev.filter(p => p.id !== pId));
         setStats(prev => ({
             ...prev,
@@ -192,42 +205,26 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
         } catch (err: any) {
-            console.error("Erro ao rejeitar:", err);
             fetchData(null);
         }
     };
 
-    const handleLookup = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!lookupEmail.trim()) return;
-        setIsLookingUp(true);
-        setIsLookupModalOpen(true);
-        try {
-            const results = await findPromotersByEmail(lookupEmail);
-            setLookupResults(results);
-        } catch (err: any) { 
-            console.error("Lookup error:", err);
-            alert("Erro na busca."); 
-        } finally { 
-            setIsLookingUp(false); 
-        }
-    };
-
     const filteredPromoters = useMemo(() => {
-        if (!searchQuery) return promoters;
-        const q = searchQuery.toLowerCase();
-        return promoters.filter(p => 
-            p.name.toLowerCase().includes(q) || 
-            p.instagram.toLowerCase().includes(q) || 
-            p.email.toLowerCase().includes(q)
-        );
-    }, [promoters, searchQuery]);
+        return promoters.filter(p => {
+            const age = calculateAge(p.dateOfBirth);
+            const q = searchQuery.toLowerCase();
+            
+            const matchesSearch = !searchQuery || 
+                p.name.toLowerCase().includes(q) || 
+                p.instagram.toLowerCase().includes(q) || 
+                p.email.toLowerCase().includes(q);
+            
+            const matchesMinAge = !minAge || age >= parseInt(minAge);
+            const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
 
-    const availableStates = useMemo(() => {
-        if (isSuperAdmin) return states;
-        if (!adminData.assignedStates || adminData.assignedStates.length === 0) return states;
-        return states.filter(s => adminData.assignedStates?.includes(s.abbr));
-    }, [isSuperAdmin, adminData.assignedStates]);
+            return matchesSearch && matchesMinAge && matchesMaxAge;
+        });
+    }, [promoters, searchQuery, minAge, maxAge]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -243,39 +240,64 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
-            {/* Header */}
+            {/* Estatísticas Superiores */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-                <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Divulgadoras</h1>
-                <div className="flex flex-wrap gap-2">
-                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[70px]">
-                        <p className="text-[8px] font-black text-gray-500 uppercase">Total</p>
-                        <p className="text-base font-black text-white">{stats.total}</p>
-                    </div>
-                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[70px]">
-                        <p className="text-[8px] font-black text-gray-500 uppercase">Pendentes</p>
-                        <p className="text-base font-black text-blue-400">{stats.pending}</p>
-                    </div>
+                <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
+                <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
+                    {[
+                        { label: 'Total', val: stats.total, color: 'text-white' },
+                        { label: 'Pendentes', val: stats.pending, color: 'text-blue-400' },
+                        { label: 'Aprovadas', val: stats.approved, color: 'text-green-400' },
+                        { label: 'Rejeitadas', val: stats.rejected, color: 'text-red-400' },
+                        { label: 'Removidas', val: stats.removed, color: 'text-gray-500' }
+                    ].map(s => (
+                        <div key={s.label} className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[85px] flex-shrink-0">
+                            <p className="text-[8px] font-black text-gray-500 uppercase">{s.label}</p>
+                            <p className={`text-base font-black ${s.color}`}>{s.val}</p>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* Filtros */}
+            {/* Filtros Avançados */}
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                    <div className="md:col-span-2 relative">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-4 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Pesquisar nesta página..." 
+                            placeholder="Nome, @instagram ou e-mail..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
                         />
                     </div>
 
-                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-3">
+                    <div className="md:col-span-3 flex gap-2">
+                        <div className="relative flex-1">
+                             <input 
+                                type="number" 
+                                placeholder="Idade Min" 
+                                value={minAge}
+                                onChange={e => setMinAge(e.target.value)}
+                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
+                            />
+                        </div>
+                        <div className="relative flex-1">
+                             <input 
+                                type="number" 
+                                placeholder="Idade Max" 
+                                value={maxAge}
+                                onChange={e => setMaxAge(e.target.value)}
+                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <form onSubmit={(e) => { e.preventDefault(); if(lookupEmail) setIsLookupModalOpen(true); }} className="flex gap-2 md:col-span-4">
                          <input 
                             type="email" 
-                            placeholder="Localizar e-mail em todo banco..." 
+                            placeholder="Buscar e-mail global..." 
                             value={lookupEmail}
                             onChange={e => setLookupEmail(e.target.value)}
                             className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
@@ -285,8 +307,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         </button>
                     </form>
 
-                    <button onClick={() => fetchData(null)} className="flex items-center justify-center gap-2 py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors font-black text-[10px] uppercase tracking-widest">
-                        <RefreshIcon className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                    <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
+                        <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
 
@@ -296,12 +318,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="approved">✅ Aprovadas</option>
                         <option value="rejected">❌ Rejeitadas</option>
                         <option value="rejected_editable">⚠️ Corrigir</option>
+                        <option value="removed">🗑️ Removidas</option>
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
 
                     <select value={filterState} onChange={e => setFilterState(e.target.value)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todos Estados</option>
-                        {availableStates.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
+                        {states.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
 
                     <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
@@ -311,31 +334,41 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Lista Principal */}
-            <div className="bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
-                {error && (
-                    <div className="p-4 bg-red-900/20 border-b border-red-800 text-red-400 text-center text-xs font-bold uppercase tracking-widest animate-shake">
-                        {error}
+            {/* Barra de Ações em Massa */}
+            {selectedIds.size > 0 && (
+                <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn">
+                    <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
+                    <div className="flex gap-2">
+                        <button onClick={handleBulkApprove} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-all">Aprovar Selecionadas</button>
+                        <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl hover:bg-black/30">Cancelar</button>
                     </div>
-                )}
+                </div>
+            )}
 
+            {/* Lista Principal - Responsiva */}
+            <div className="mx-2 md:mx-0">
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando banco de dados...</p>
                     </div>
                 ) : filteredPromoters.length === 0 ? (
-                    <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
+                    <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
                          <SearchIcon className="w-12 h-12 opacity-20" />
                          <span>{isLoading ? 'Carregando...' : 'Nenhum registro encontrado'}</span>
                     </div>
                 ) : (
                     <>
-                        <div className="overflow-x-auto">
+                        {/* Desktop: Table View */}
+                        <div className="hidden md:block bg-secondary rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
+                                        <th className="px-6 py-5 w-10">
+                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                        </th>
                                         <th className="px-6 py-5">Perfil</th>
+                                        <th className="px-6 py-5 text-center">Idade</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
                                         <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
@@ -343,48 +376,103 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {filteredPromoters.map(p => {
-                                        const age = calculateAge(p.dateOfBirth);
-                                        return (
-                                            <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-5">
-                                                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
-                                                            <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
-                                                            <div className="absolute top-0.5 right-0.5 px-1 py-0.5 bg-black/60 rounded-lg"><span className="text-[8px] font-black text-white">{age}a</span></div>
-                                                        </div>
-                                                        <div className="overflow-hidden">
-                                                            <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
-                                                            <p className="text-gray-500 text-[10px] truncate font-mono">{p.email}</p>
-                                                        </div>
+                                    {filteredPromoters.map(p => (
+                                        <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
+                                            <td className="px-6 py-5">
+                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-5">
+                                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
+                                                        <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-2">
-                                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all"><InstagramIcon className="w-4 h-4" /></a>
-                                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
+                                                    <div className="overflow-hidden">
+                                                        <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
+                                                        <p className="text-gray-500 text-[10px] truncate font-mono">{p.email}</p>
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
-                                                <td className="px-6 py-5">{statusBadge(p.status)}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                        {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
-                                                        {(p.status === 'pending' || p.status === 'approved') && <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>}
-                                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 text-center font-bold text-gray-300">{calculateAge(p.dateOfBirth)}a</td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-2">
+                                                    <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all"><InstagramIcon className="w-4 h-4" /></a>
+                                                    <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
+                                            <td className="px-6 py-5">{statusBadge(p.status)}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
 
+                        {/* Mobile: Card View */}
+                        <div className="md:hidden grid grid-cols-1 gap-4">
+                            {filteredPromoters.map(p => (
+                                <div key={p.id} className={`bg-secondary p-4 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-4`}>
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-3">
+                                            <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-5 h-5 rounded-lg border-gray-700 bg-dark text-primary" />
+                                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
+                                                <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
+                                            </div>
+                                            <div>
+                                                <p className="text-white font-black uppercase text-sm leading-tight">{p.name}</p>
+                                                <p className="text-gray-500 text-[10px] font-mono mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
+                                                {statusBadge(p.status)}
+                                            </div>
+                                        </div>
+                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500"><PencilIcon className="w-5 h-5" /></button>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        {p.status === 'pending' && (
+                                            <button onClick={() => handleApprove(p)} className="flex-1 py-3 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2">
+                                                <CheckCircleIcon className="w-4 h-4" /> Aprovar
+                                            </button>
+                                        )}
+                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-3 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2">
+                                            <XIcon className="w-4 h-4" /> Rejeitar
+                                        </button>
+                                    </div>
+
+                                    <div className="flex justify-around pt-2 border-t border-white/5">
+                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1">
+                                            <InstagramIcon className="w-6 h-6 text-pink-500" />
+                                            <span className="text-[8px] font-black text-gray-500 uppercase">Insta</span>
+                                        </a>
+                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1">
+                                            <WhatsAppIcon className="w-6 h-6 text-green-500" />
+                                            <span className="text-[8px] font-black text-gray-500 uppercase">Whats</span>
+                                        </a>
+                                        <div className="flex flex-col items-center gap-1">
+                                            <span className="text-[10px] font-black text-primary uppercase">{p.campaignName || 'Geral'}</span>
+                                            <span className="text-[8px] font-black text-gray-500 uppercase">Evento</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         {/* Paginação */}
-                        <div className="p-6 bg-dark/20 border-t border-white/5 flex justify-between items-center">
+                        <div className="mt-6 p-6 bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 flex justify-between items-center">
                             <button 
-                                onClick={handlePrevPage} 
+                                onClick={() => {
+                                    if (prevCursors.length === 0 || isLoading) return;
+                                    const newCursors = [...prevCursors];
+                                    newCursors.pop();
+                                    const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
+                                    setPrevCursors(newCursors);
+                                    fetchData(prevCursor);
+                                }} 
                                 disabled={prevCursors.length === 0 || isLoading}
                                 className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
@@ -392,7 +480,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </button>
                             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
                             <button 
-                                onClick={handleNextPage} 
+                                onClick={() => {
+                                    if (!hasMore || isLoading || !lastDoc) return;
+                                    setPrevCursors(prev => [...prev, lastDoc]);
+                                    fetchData(lastDoc);
+                                }} 
                                 disabled={!hasMore || isLoading}
                                 className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
