@@ -37,53 +37,34 @@
               secondary: '#1a1a2e',
               dark: '#0f0f1a',
               accent: '#fbbd08'
-            },
-            animation: {
-              slideRight: 'slideRight 0.4s ease-out forwards',
-              shake: 'shake 0.5s ease-in-out',
-              fadeIn: 'fadeIn 0.3s ease-out'
-            },
-            keyframes: {
-              slideRight: {
-                '0%': { opacity: '0', transform: 'translateX(-20px)' },
-                '100%': { opacity: '1', transform: 'translateX(0)' }
-              },
-              shake: {
-                '0%, 100%': { transform: 'translateX(0)' },
-                '25%': { transform: 'translateX(-5px)' },
-                '75%': { transform: 'translateX(5px)' }
-              },
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' }
-              }
             }
           }
         }
       }
     </script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
       body {
-        font-family: 'Plus Jakarta Sans', sans-serif;
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
-        background-color: #0f0f1a;
       }
-      input, textarea, select {
+      input, textarea {
         -webkit-user-select: text;
         user-select: text;
       }
       :root {
         --sat: env(safe-area-inset-top);
         --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+        --sar: env(safe-area-inset-right);
       }
     </style>
     <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

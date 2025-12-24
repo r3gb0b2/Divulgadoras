@@ -565,12 +565,7 @@ const CreatePost: React.FC = () => {
         const fetchPromotersForCampaign = async () => {
             if (selectedCampaigns.size === 0 || !selectedState) { setPromoters([]); return; }
             try {
-                // FIX: Explicitly typed filter to ensure 'c' is Campaign and avoid 'unknown' type errors when accessing 'name'.
-                const campaignNames = Array.from(selectedCampaigns)
-                    .map(id => (campaigns as Campaign[]).find(c => c.id === id))
-                    .filter((c): c is Campaign => !!c)
-                    .map(c => c.name);
-
+                const campaignNames = Array.from(selectedCampaigns).map(id => campaigns.find(c => c.id === id)?.name).filter(Boolean) as string[];
                 const approvedPromoters = await Promise.all(
                     campaignNames.map(name => getApprovedPromoters(selectedOrgId!, selectedState, name))
                 );
