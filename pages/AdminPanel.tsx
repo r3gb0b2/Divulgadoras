@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -84,9 +83,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    // Fix: Updated signature to use optional parameter to avoid unknown to string/any issues
-    const fetchData = useCallback(async (cursor?: any) => {
-        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+    const fetchData = useCallback(async (cursor: any = null) => {
+        const orgId = isSuperAdmin ? undefined : (selectedOrgId as string | undefined);
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
             setPromoters([]);
@@ -103,7 +101,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
                 pageSize: PAGE_SIZE,
-                lastDoc: cursor || null
+                lastDoc: cursor
             };
 
             const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
@@ -136,9 +134,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setPrevCursors([]);
         setLastDoc(null);
         setSelectedIds(new Set());
-        fetchData();
+        fetchData(null);
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData]);
 
+    // Ações em massa
     const toggleSelectAll = () => {
         if (selectedIds.size === filteredPromoters.length) {
             setSelectedIds(new Set());
@@ -160,15 +159,17 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setIsLoading(true);
         try {
             await Promise.all(idsArray.map(id => updatePromoter(id, { status: 'approved' })));
-            setSelectedIds(new Set<string>());
-            fetchData();
-        } catch (e: any) {
+            setSelectedIds(new Set());
+            fetchData(null);
+        } catch (e) {
             alert("Erro ao aprovar em massa.");
             setIsLoading(false);
         }
     };
 
+    // APROVAÇÃO DIRETA (Sem Confirmação)
     const handleApprove = async (p: Promoter) => {
+        // Atualização Otimista da UI
         setPromoters(prev => prev.filter(item => item.id !== p.id));
         setStats(prev => ({ 
             ...prev, 
@@ -179,10 +180,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(p.id, { status: 'approved' });
         } catch (err: any) {
-            fetchData(); 
+            // Reverte em caso de erro
+            fetchData(null); 
         }
     };
 
+    // FIX: Explicitly typed parameters to avoid potential unknown inference issues in RejectionModal's onConfirm callback.
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
@@ -200,7 +203,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
         } catch (err: any) {
-            fetchData();
+            fetchData(null);
         }
     };
 
@@ -235,7 +238,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
-            {/* Estatísticas Superiores */}
+            {/* Estatísticas Superiores - RESTAURADO */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
@@ -254,7 +257,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Filtros Avançados */}
+            {/* Filtros Avançados - COM IDADE E MODO GLOBAL */}
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     <div className="md:col-span-4 relative">
@@ -269,24 +272,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </div>
 
                     <div className="md:col-span-3 flex gap-2">
-                        <div className="relative flex-1">
-                             <input 
-                                type="number" 
-                                placeholder="Idade Min" 
-                                value={minAge}
-                                onChange={e => setMinAge(e.target.value)}
-                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
-                            />
-                        </div>
-                        <div className="relative flex-1">
-                             <input 
-                                type="number" 
-                                placeholder="Idade Max" 
-                                value={maxAge}
-                                onChange={e => setMaxAge(e.target.value)}
-                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
-                            />
-                        </div>
+                        <input 
+                            type="number" 
+                            placeholder="Idade Mín" 
+                            value={minAge}
+                            onChange={e => setMinAge(e.target.value)}
+                            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"
+                        />
+                        <input 
+                            type="number" 
+                            placeholder="Idade Máx" 
+                            value={maxAge}
+                            onChange={e => setMaxAge(e.target.value)}
+                            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"
+                        />
                     </div>
 
                     <form onSubmit={(e) => { e.preventDefault(); if(lookupEmail) setIsLookupModalOpen(true); }} className="flex gap-2 md:col-span-4">
@@ -302,7 +301,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         </button>
                     </form>
 
-                    <button onClick={() => fetchData()} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
+                    <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
                         <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -312,7 +311,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="pending">⏳ Pendentes</option>
                         <option value="approved">✅ Aprovadas</option>
                         <option value="rejected">❌ Rejeitadas</option>
-                        <option value="rejected_editable">⚠️ Ajuste Necessário</option>
+                        <option value="rejected_editable">⚠️ Corrigir</option>
                         <option value="removed">🗑️ Removidas</option>
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
@@ -329,7 +328,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Barra de Ações em Massa */}
+            {/* Seleção em Massa */}
             {selectedIds.size > 0 && (
                 <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn">
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
@@ -345,16 +344,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando banco de dados...</p>
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando...</p>
                     </div>
                 ) : filteredPromoters.length === 0 ? (
-                    <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
-                         <SearchIcon className="w-12 h-12 opacity-20" />
-                         <span>{isLoading ? 'Carregando...' : 'Nenhum registro encontrado'}</span>
+                    <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">
+                         Nenhum registro encontrado
                     </div>
                 ) : (
                     <>
-                        {/* Desktop View */}
+                        {/* Desktop: Table View */}
                         <div className="hidden md:block bg-secondary rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -398,9 +396,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all" title="Aprovar"><CheckCircleIcon className="w-4 h-4" /></button>}
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all" title="Rejeitar / Ajuste"><XIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -409,34 +407,58 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* Mobile View */}
+                        {/* Mobile: Card View - COM LINKS SOCIAIS CLICÁVEIS */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
                             {filteredPromoters.map(p => (
-                                <div key={p.id} className={`bg-secondary p-4 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-4`}>
+                                <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
                                     <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-4">
                                             <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-5 h-5 rounded-lg border-gray-700 bg-dark text-primary" />
-                                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
+                                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
                                                 <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
                                             </div>
-                                            <div>
-                                                <p className="text-white font-black uppercase text-sm leading-tight">{p.name}</p>
-                                                <p className="text-gray-500 text-[10px] font-mono mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
+                                            <div className="overflow-hidden">
+                                                <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name}</p>
+                                                <p className="text-gray-500 text-[10px] font-bold mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
                                                 {statusBadge(p.status)}
                                             </div>
                                         </div>
-                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500"><PencilIcon className="w-5 h-5" /></button>
+                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500 hover:text-white"><PencilIcon className="w-5 h-5" /></button>
+                                    </div>
+
+                                    {/* Links de Redes Sociais - MOBILE CLICÁVEL */}
+                                    <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/5">
+                                        <a 
+                                            href={`https://instagram.com/${p.instagram.replace('@', '')}`} 
+                                            target="_blank" 
+                                            rel="noreferrer" 
+                                            className="flex items-center justify-center gap-2 py-2 bg-pink-500/10 text-pink-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-pink-500/20 active:bg-pink-500 active:text-white transition-all"
+                                        >
+                                            <InstagramIcon className="w-4 h-4" /> Instagram
+                                        </a>
+                                        <a 
+                                            href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} 
+                                            target="_blank" 
+                                            rel="noreferrer" 
+                                            className="flex items-center justify-center gap-2 py-2 bg-green-500/10 text-green-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-green-500/20 active:bg-green-500 active:text-white transition-all"
+                                        >
+                                            <WhatsAppIcon className="w-4 h-4" /> WhatsApp
+                                        </a>
                                     </div>
                                     
                                     <div className="flex gap-2">
                                         {p.status === 'pending' && (
-                                            <button onClick={() => handleApprove(p)} className="flex-1 py-3 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2">
+                                            <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all">
                                                 <CheckCircleIcon className="w-4 h-4" /> Aprovar
                                             </button>
                                         )}
-                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-3 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2">
-                                            <XIcon className="w-4 h-4" /> Rejeitar/Ajuste
+                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all">
+                                            <XIcon className="w-4 h-4" /> Rejeitar
                                         </button>
+                                    </div>
+                                    
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">{p.campaignName || 'Geral'}</p>
                                     </div>
                                 </div>
                             ))}
@@ -478,7 +500,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(); }} />
+            {/* FIX: Explicitly typed id to avoid potential unknown inference error when calling updatePromoter. */}
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
     );
