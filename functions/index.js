@@ -209,11 +209,48 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         actionTakenByEmail: context.auth?.token?.email || "sistema"
     });
 
-    // Se for aprovação, dispara notificações
+    // Se for aprovação, dispara notificações e ATRIBUIÇÃO AUTOMÁTICA
     if (isApproving) {
-        // MUDANÇA SOLICITADA: Redirecionar para Status (onde ficam as regras e o link do WhatsApp)
+        const campaignName = updateData.campaignName || oldData.campaignName || "Geral";
+        const orgId = oldData.organizationId;
+
+        // --- LÓGICA DE ATRIBUIÇÃO AUTOMÁTICA ---
+        // Busca todos os posts ativos com marcação de auto-atribuição para este evento
+        try {
+            const postsToAssignSnap = await db.collection("posts")
+                .where("organizationId", "==", orgId)
+                .where("campaignName", "==", campaignName)
+                .where("isActive", "==", true)
+                .where("autoAssignToNewPromoters", "==", true)
+                .get();
+
+            if (!postsToAssignSnap.empty) {
+                console.log(`Atribuindo automaticamente ${postsToAssignSnap.size} posts para ${oldData.email}`);
+                const batch = db.batch();
+                
+                postsToAssignSnap.docs.forEach(postDoc => {
+                    const postData = postDoc.data();
+                    const assignmentRef = db.collection("postAssignments").doc();
+                    batch.set(assignmentRef, {
+                        postId: postDoc.id,
+                        post: { ...postData, id: postDoc.id },
+                        promoterId: promoterId,
+                        promoterEmail: oldData.email,
+                        promoterName: oldData.name,
+                        organizationId: orgId,
+                        status: 'pending',
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        completionRate: 0 
+                    });
+                });
+                
+                await batch.commit();
+            }
+        } catch (e) {
+            console.error("Erro na auto-atribuição:", e.message);
+        }
+
         const statusUrl = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
-        const campaignName = updateData.campaignName || oldData.campaignName || "Evento";
 
         // WHATSAPP
         if (config.zApiToken && config.zApiInstance) {

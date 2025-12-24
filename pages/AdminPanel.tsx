@@ -15,7 +15,7 @@ import {
 import { 
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
-  PencilIcon, RefreshIcon, ArrowLeftIcon, FaceIdIcon 
+  PencilIcon, RefreshIcon 
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -43,7 +43,6 @@ const PAGE_SIZE = 30;
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
-    const isFetching = useRef(false);
     
     // Dados Principais e Paginação
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -81,14 +80,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    const fetchData = useCallback(async (cursor = null, isNext = true) => {
+    const fetchData = useCallback(async (cursor = null) => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
+        
+        // Se não for superadmin e não tiver organização selecionada, não busca
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
+            setPromoters([]);
             return;
         }
 
-        isFetching.current = true;
         setIsLoading(true);
         setError('');
         
@@ -122,50 +123,52 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 setOrgsMap(map);
             }
         } catch (err: any) {
-            setError(err.message || 'Falha ao carregar dados.');
+            console.error("Fetch Error:", err);
+            setError(err.message || 'Falha técnica ao carregar dados.');
         } finally {
             setIsLoading(false);
-            isFetching.current = false;
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin]);
 
-    // Resetar quando filtros mudam
+    // Efeito para carregar dados quando filtros ou organização mudam
     useEffect(() => {
         setPrevCursors([]);
         setLastDoc(null);
         fetchData(null);
-    }, [filterStatus, filterState, selectedCampaign]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign]);
 
     const handleNextPage = () => {
-        if (!hasMore || isLoading) return;
-        setPrevCursors(prev => [...prev, promoters[0]]); // Simplificação: em uso real usamos o cursor do primeiro doc da página atual
-        // Mas o Firestore exige o último da página ANTERIOR para startAfter.
-        // Então guardamos o lastDoc atual.
-        const currentLastDoc = lastDoc;
-        setPrevCursors(prev => [...prev, currentLastDoc]);
-        fetchData(currentLastDoc);
+        if (!hasMore || isLoading || !lastDoc) return;
+        setPrevCursors(prev => [...prev, lastDoc]);
+        fetchData(lastDoc);
     };
 
     const handlePrevPage = () => {
         if (prevCursors.length === 0 || isLoading) return;
-        const newHistory = [...prevCursors];
-        newHistory.pop(); // Remove o cursor da página que estamos saindo
-        const prevCursor = newHistory.length > 0 ? newHistory[newHistory.length - 1] : null;
-        setPrevCursors(newHistory);
-        // Nota: Para voltar perfeitamente no Firestore é complexo sem persistir todos os cursores.
-        // Aqui estamos reiniciando ou usando o histórico.
+        const newCursors = [...prevCursors];
+        newCursors.pop(); // Remove o cursor da página atual
+        const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
+        setPrevCursors(newCursors);
         fetchData(prevCursor);
     };
 
     // HANDLER DE APROVAÇÃO OTIMISTA
     const handleApprove = async (p: Promoter) => {
         if (!window.confirm(`Aprovar ${p.name}?`)) return;
+        
+        // Atualização Otimista: Remove da lista local e incrementa aprovados
         setPromoters(prev => prev.filter(item => item.id !== p.id));
-        setStats(prev => ({ ...prev, pending: Math.max(0, prev.pending - 1), approved: prev.approved + 1 }));
+        setStats(prev => ({ 
+            ...prev, 
+            pending: Math.max(0, prev.pending - 1), 
+            approved: prev.approved + 1 
+        }));
+
         try {
             await updatePromoter(p.id, { status: 'approved' });
         } catch (err: any) {
             console.error("Erro ao aprovar:", err);
+            // Em caso de erro, reinicia a busca para sincronizar com o banco
             fetchData(null); 
         }
     };
@@ -173,9 +176,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
+        
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         const pId = selectedPromoter.id;
         
+        // Otimista
         setPromoters(prev => prev.filter(p => p.id !== pId));
         setStats(prev => ({
             ...prev,
@@ -187,6 +192,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
         } catch (err: any) {
+            console.error("Erro ao rejeitar:", err);
             fetchData(null);
         }
     };
@@ -199,7 +205,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             const results = await findPromotersByEmail(lookupEmail);
             setLookupResults(results);
-        } catch (err: any) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
+        } catch (err: any) { 
+            console.error("Lookup error:", err);
+            alert("Erro na busca."); 
+        } finally { 
+            setIsLookingUp(false); 
+        }
     };
 
     const filteredPromoters = useMemo(() => {
@@ -302,6 +313,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             {/* Lista Principal */}
             <div className="bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
+                {error && (
+                    <div className="p-4 bg-red-900/20 border-b border-red-800 text-red-400 text-center text-xs font-bold uppercase tracking-widest animate-shake">
+                        {error}
+                    </div>
+                )}
+
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
@@ -310,7 +327,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 ) : filteredPromoters.length === 0 ? (
                     <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
                          <SearchIcon className="w-12 h-12 opacity-20" />
-                         <span>Nenhum registro encontrado</span>
+                         <span>{isLoading ? 'Carregando...' : 'Nenhum registro encontrado'}</span>
                     </div>
                 ) : (
                     <>
@@ -351,7 +368,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                                 <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
+                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                         {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
                                                         {(p.status === 'pending' || p.status === 'approved') && <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>}
                                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
@@ -369,7 +386,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             <button 
                                 onClick={handlePrevPage} 
                                 disabled={prevCursors.length === 0 || isLoading}
-                                className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                                 Anterior
                             </button>
@@ -377,7 +394,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             <button 
                                 onClick={handleNextPage} 
                                 disabled={!hasMore || isLoading}
-                                className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                             >
                                 Próxima
                             </button>
@@ -389,7 +406,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            {selectedOrgId && <ManageReasonsModal isOpen={isReasonsModalOpen} onClose={() => setIsReasonsModalOpen(false)} organizationId={selectedOrgId} onReasonsUpdated={() => fetchData(null)} />}
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>

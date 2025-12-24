@@ -147,32 +147,44 @@ export const getAllPromotersPaginated = async (options: {
     filterState?: string; selectedCampaign?: string;
     pageSize: number; lastDoc?: any;
 }): Promise<{ promoters: Promoter[], lastDoc: any }> => {
-    try {
+    const fetchWithQuery = async (useOrderBy: boolean) => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         
-        // Filtros básicos que funcionam bem com índices compostos simples
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
         
-        // Ordenação obrigatória para paginação consistente
-        q = q.orderBy("createdAt", "desc");
+        if (useOrderBy) {
+            q = q.orderBy("createdAt", "desc");
+        }
 
         if (options.lastDoc) {
             q = q.startAfter(options.lastDoc);
         }
         
         q = q.limit(options.pageSize);
-        
         const snap = await q.get();
+        return snap;
+    };
+
+    try {
+        // Tenta primeiro com ordenação (exige índice composto no Firebase)
+        let snap;
+        try {
+            snap = await fetchWithQuery(true);
+        } catch (indexError) {
+            console.warn("Falha na consulta ordenada. Provavelmente falta um índice composto no Firestore. Executando fallback sem ordenação.");
+            snap = await fetchWithQuery(false);
+        }
+        
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
         
         return { promoters, lastDoc: lastVisible };
     } catch (error) { 
         console.error("Error fetching promoters:", error);
-        throw new Error("Falha ao buscar divulgadoras."); 
+        throw new Error("Falha técnica ao buscar no banco de dados."); 
     }
 };
 
