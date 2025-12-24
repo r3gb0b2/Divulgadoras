@@ -61,6 +61,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
     const [filterStatus, setFilterStatus] = useState<PromoterStatus | 'all'>('pending');
+    const [filterGroup, setFilterGroup] = useState<'all' | 'in' | 'out'>('all');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [minAge, setMinAge] = useState('');
@@ -271,9 +272,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
 
-            return matchesSearch && matchesMinAge && matchesMaxAge;
+            const matchesGroup = filterGroup === 'all' || 
+                                (filterGroup === 'in' && p.hasJoinedGroup === true) || 
+                                (filterGroup === 'out' && p.hasJoinedGroup !== true);
+
+            return matchesSearch && matchesMinAge && matchesMaxAge && matchesGroup;
         });
-    }, [promoters, searchQuery, minAge, maxAge]);
+    }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -367,6 +372,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
 
+                    <select value={filterGroup} onChange={e => setFilterGroup(e.target.value as any)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
+                        <option value="all">👥 Grupo (Todos)</option>
+                        <option value="in">✅ No Grupo</option>
+                        <option value="out">❌ Fora do Grupo</option>
+                    </select>
+
                     <select value={filterState} onChange={e => setFilterState(e.target.value)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todos Estados da Produtora</option>
                         {statesToShow.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
@@ -458,8 +469,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {/* BOTÃO APROVADA - AVISO DE APROVAÇÃO MANUAL */}
-                                                    {p.status === 'approved' && (
+                                                    {/* BOTÃO APROVADA - AVISO DE APROVAÇÃO MANUAL - APENAS SE FORA DO GRUPO */}
+                                                    {p.status === 'approved' && !p.hasJoinedGroup && (
                                                         <button onClick={() => handleSendApprovalManual(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Aviso de Aprovação"><WhatsAppIcon className="w-4 h-4" /></button>
                                                     )}
                                                     
@@ -529,7 +540,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <CheckCircleIcon className="w-4 h-4" /> Aprovar
                                             </button>
                                         )}
-                                        {p.status === 'approved' && (
+                                        {p.status === 'approved' && !p.hasJoinedGroup && (
                                             <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">
                                                 <WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação
                                             </button>
