@@ -16,7 +16,8 @@ import {
 import { 
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
-  PencilIcon, RefreshIcon, FilterIcon 
+  PencilIcon, RefreshIcon, FilterIcon,
+  MegaphoneIcon
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -173,7 +174,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            // Fix: Cast id to string to resolve unknown type error when mapping over Set elements
             await Promise.all(idsArray.map(id => updatePromoter(id as string, { status: 'approved' })));
             setSelectedIds(new Set());
             fetchData(null);
@@ -191,7 +191,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            // Fix: Cast id to string to resolve unknown type error when mapping over Set elements
             await Promise.all(idsArray.map(id => updatePromoter(id as string, { 
                 status: 'rejected',
                 rejectionReason: reason 
@@ -242,6 +241,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } catch (err: any) {
             fetchData(null);
         }
+    };
+
+    // FUNÇÃO PARA ENVIAR LEMBRETE MANUAL DE GRUPO
+    const handleSendGroupReminder = (p: Promoter) => {
+        const firstName = p.name.split(' ')[0];
+        const campaign = p.campaignName || "Equipe Geral";
+        const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
+        
+        const message = `Olá *${firstName}*! Vi que seu perfil foi aprovado para a equipe do evento *${campaign}*, mas você ainda não entrou no grupo oficial de divulgadoras.\n\n🚀 *Acesse seu portal para ler as regras e pegar o link do grupo:* ${portalLink}\n\nQualquer dúvida, estou à disposição!`;
+        
+        const cleanPhone = p.whatsapp.replace(/\D/g, "");
+        const waUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
+        
+        window.open(waUrl, '_blank');
     };
 
     const filteredPromoters = useMemo(() => {
@@ -401,7 +414,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5 text-center">Idade</th>
                                         <th className="px-6 py-5">Redes Sociais</th>
-                                        <th className="px-6 py-5">Grupo?</th>
+                                        <th className="px-6 py-5 text-center">Grupo?</th>
                                         <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
@@ -432,17 +445,24 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5">
-                                                {p.status === 'approved' && (
-                                                    <div className={`p-2 rounded-xl border w-fit ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`} title={p.hasJoinedGroup ? 'Já entrou no grupo' : 'Ainda não entrou no grupo'}>
-                                                        <WhatsAppIcon className="w-4 h-4" />
-                                                    </div>
-                                                )}
+                                                <div className="flex justify-center">
+                                                    {p.status === 'approved' && (
+                                                        <div className={`p-2 rounded-xl border w-fit ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`} title={p.hasJoinedGroup ? 'Já entrou no grupo' : 'Ainda não entrou no grupo'}>
+                                                            <WhatsAppIcon className="w-4 h-4" />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
+                                                    {(p.status === 'approved' && !p.hasJoinedGroup) && (
+                                                        <button onClick={() => handleSendGroupReminder(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Lembrete de Grupo"><WhatsAppIcon className="w-4 h-4" /></button>
+                                                    )}
+                                                    {p.status === 'pending' && (
+                                                        <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
+                                                    )}
                                                     <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
                                                     <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                 </div>
@@ -503,6 +523,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         {p.status === 'pending' && (
                                             <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all">
                                                 <CheckCircleIcon className="w-4 h-4" /> Aprovar
+                                            </button>
+                                        )}
+                                        {(p.status === 'approved' && !p.hasJoinedGroup) && (
+                                            <button onClick={() => handleSendGroupReminder(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">
+                                                <WhatsAppIcon className="w-4 h-4" /> Lembrete Grupo
                                             </button>
                                         )}
                                         <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all">
