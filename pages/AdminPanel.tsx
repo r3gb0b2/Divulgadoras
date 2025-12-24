@@ -243,13 +243,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // FUNÇÃO PARA ENVIAR LEMBRETE MANUAL DE GRUPO
-    const handleSendGroupReminder = (p: Promoter) => {
+    // MENSAGEM PADRÃO DE APROVAÇÃO (IGUAL AO Z-API)
+    const handleSendApprovalManual = (p: Promoter) => {
         const firstName = p.name.split(' ')[0];
         const campaign = p.campaignName || "Equipe Geral";
+        // Link direto para o status com o e-mail preenchido
         const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
         
-        const message = `Olá *${firstName}*! Vi que seu perfil foi aprovado para a equipe do evento *${campaign}*, mas você ainda não entrou no grupo oficial de divulgadoras.\n\n🚀 *Acesse seu portal para ler as regras e pegar o link do grupo:* ${portalLink}\n\nQualquer dúvida, estou à disposição!`;
+        const message = `✅ *Olá ${firstName}!* Seu perfil foi aprovado para a equipe do evento: *${campaign}*.\n\n🚀 *Acesse seu portal para ver suas tarefas e o link do grupo:* ${portalLink}`;
         
         const cleanPhone = p.whatsapp.replace(/\D/g, "");
         const waUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
@@ -457,12 +458,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {(p.status === 'approved' && !p.hasJoinedGroup) && (
-                                                        <button onClick={() => handleSendGroupReminder(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Lembrete de Grupo"><WhatsAppIcon className="w-4 h-4" /></button>
+                                                    {/* BOTÃO APROVADA - AVISO DE APROVAÇÃO MANUAL */}
+                                                    {p.status === 'approved' && (
+                                                        <button onClick={() => handleSendApprovalManual(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Aviso de Aprovação"><WhatsAppIcon className="w-4 h-4" /></button>
                                                     )}
+                                                    
                                                     {p.status === 'pending' && (
                                                         <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
                                                     )}
+                                                    
                                                     <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
                                                     <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                 </div>
@@ -525,9 +529,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <CheckCircleIcon className="w-4 h-4" /> Aprovar
                                             </button>
                                         )}
-                                        {(p.status === 'approved' && !p.hasJoinedGroup) && (
-                                            <button onClick={() => handleSendGroupReminder(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">
-                                                <WhatsAppIcon className="w-4 h-4" /> Lembrete Grupo
+                                        {p.status === 'approved' && (
+                                            <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">
+                                                <WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação
                                             </button>
                                         )}
                                         <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all">
