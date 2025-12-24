@@ -54,7 +54,7 @@ const getDaysSince = (timestamp: any): string => {
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId } = useAdminAuth();
-    const isInitialMount = useRef(true);
+    const isFetching = useRef(false);
     
     // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -96,8 +96,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    // ESTABILIZADO: Usando apenas valores primitivos nas dependências para evitar loop infinito no mobile
+    // ESTABILIZAÇÃO CRÍTICA: Strings para evitar loop infinito com referências de objetos do contexto
+    const assignedStatesKey = adminData.assignedStates?.join(',') || '';
+    const assignedCampaignsKey = JSON.stringify(adminData.assignedCampaigns || {});
+
     const fetchData = useCallback(async () => {
+        // Bloqueia se já estiver buscando para evitar race conditions e loops
+        if (isFetching.current) return;
+        
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) {
             setError("Nenhuma organização selecionada.");
@@ -105,8 +111,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             return;
         }
 
+        isFetching.current = true;
         setIsLoading(true);
         setError('');
+        
         try {
             const options = {
                 organizationId: orgId,
@@ -139,8 +147,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setError(err.message || 'Falha ao carregar dados.');
         } finally {
             setIsLoading(false);
+            isFetching.current = false;
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, adminData.assignedStates, adminData.assignedCampaigns]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, assignedStatesKey, assignedCampaignsKey]);
 
     useEffect(() => {
         fetchData();
@@ -157,7 +166,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         const idsToProcess = selectedPromoter ? [selectedPromoter.id] : (Array.from(selectedIds) as string[]);
-        
         if (idsToProcess.length === 0) return;
 
         setIsBulkProcessing(true);
@@ -171,7 +179,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setIsRejectionModalOpen(false);
             fetchData();
         } catch (err: any) { 
-            alert("Erro ao processar um ou mais registros: " + err.message); 
+            alert("Erro ao processar registros: " + err.message); 
         } finally {
             setIsBulkProcessing(false);
             setSelectedPromoter(null);
@@ -207,7 +215,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } catch (err) { alert("Erro na busca."); } finally { setIsLookingUp(false); }
     };
 
-    // Filtro Local Unificado
     const filteredPromoters = useMemo(() => {
         let list = promoters;
         if (searchQuery) {
@@ -244,7 +251,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             removed: { label: "Removida", style: "bg-gray-800 text-gray-500 border-gray-700" }
         };
         const c = config[status] || config.pending;
-        return <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${c.style}`}>{c.label}</span>;
+        return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border whitespace-nowrap ${c.style}`}>{c.label}</span>;
     };
 
     const toggleSelect = (id: string) => {
@@ -263,24 +270,24 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     return (
-        <div className="space-y-6 pb-32">
+        <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             {/* Header com Stats */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-                <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Divulgadoras</h1>
+                <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Divulgadoras</h1>
                 <div className="flex flex-wrap gap-2">
-                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[80px]">
-                        <p className="text-[9px] font-black text-gray-500 uppercase">Total</p>
-                        <p className="text-lg font-black text-white">{stats.total}</p>
+                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[70px]">
+                        <p className="text-[8px] font-black text-gray-500 uppercase">Total</p>
+                        <p className="text-base font-black text-white">{stats.total}</p>
                     </div>
-                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[80px]">
-                        <p className="text-[9px] font-black text-gray-500 uppercase">Pendentes</p>
-                        <p className="text-lg font-black text-blue-400">{stats.pending}</p>
+                    <div className="px-3 py-1.5 bg-secondary border border-gray-700 rounded-xl text-center min-w-[70px]">
+                        <p className="text-[8px] font-black text-gray-500 uppercase">Pendentes</p>
+                        <p className="text-base font-black text-blue-400">{stats.pending}</p>
                     </div>
                 </div>
             </div>
 
             {/* Barra de Filtros e Busca */}
-            <div className="bg-secondary p-4 md:p-6 rounded-[2rem] border border-white/5 shadow-xl space-y-4">
+            <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div className="md:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -329,7 +336,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2">
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-primary">
+                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="pending">⏳ Pendentes</option>
                         <option value="approved">✅ Aprovadas</option>
                         <option value="rejected">❌ Rejeitadas</option>
@@ -337,41 +344,44 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
 
-                    <select value={filterState} onChange={e => setFilterState(e.target.value)} className="bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-primary">
+                    <select value={filterState} onChange={e => setFilterState(e.target.value)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todos Estados</option>
                         {availableStates.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
 
-                    <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-primary max-w-[140px]">
+                    <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todas Campanhas</option>
                         {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
 
-                    <button onClick={() => setIsReasonsModalOpen(true)} className="ml-auto px-4 py-2 text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4">Configurar Motivos</button>
+                    <button onClick={() => setIsReasonsModalOpen(true)} className="ml-auto px-4 py-2 text-[8px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4">Configurar Motivos</button>
                 </div>
             </div>
 
-            {/* BARRA DE AÇÃO EM MASSA */}
+            {/* BARRA DE AÇÃO EM MASSA FLUTUANTE */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 animate-slideUp border border-white/20">
-                    <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">{selectedIds.size} selecionadas</span>
+                <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-5 py-4 rounded-3xl shadow-2xl flex items-center gap-4 animate-slideUp border border-white/20 w-[90%] md:w-auto">
+                    <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{selectedIds.size} selecionadas</span>
                     <div className="h-6 w-[1px] bg-white/20"></div>
-                    <div className="flex gap-2">
-                        <button onClick={handleBulkApprove} disabled={isBulkProcessing} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50"><CheckCircleIcon className="w-6 h-6" /></button>
-                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95 disabled:opacity-50"><XIcon className="w-6 h-6" /></button>
-                        <button onClick={() => setSelectedIds(new Set())} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><RefreshIcon className="w-6 h-6" /></button>
+                    <div className="flex gap-2 flex-grow justify-end">
+                        <button onClick={handleBulkApprove} disabled={isBulkProcessing} className="p-2 bg-green-500 rounded-xl hover:bg-green-400 transition-all active:scale-95 disabled:opacity-50"><CheckCircleIcon className="w-5 h-5" /></button>
+                        <button onClick={() => { setSelectedPromoter(null); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-500 rounded-xl hover:bg-red-400 transition-all active:scale-95 disabled:opacity-50"><XIcon className="w-5 h-5" /></button>
+                        <button onClick={() => setSelectedIds(new Set())} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><RefreshIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
             )}
 
             {/* Lista Principal */}
-            <div className="bg-secondary rounded-[2rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
+            <div className="bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden mx-2 md:mx-0">
                 {isLoading ? (
-                    <div className="py-20 text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div></div>
+                    <div className="py-20 text-center flex flex-col items-center gap-4">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando banco de dados...</p>
+                    </div>
                 ) : filteredPromoters.length === 0 ? (
                     <div className="p-20 text-center text-gray-500 font-bold uppercase tracking-widest flex flex-col items-center gap-4">
                          <SearchIcon className="w-12 h-12 opacity-20" />
-                         <span>Vazio</span>
+                         <span>Nenhum registro encontrado</span>
                     </div>
                 ) : (
                     <>
@@ -405,7 +415,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                             <div className="absolute top-0.5 right-0.5 px-1 py-0.5 bg-black/60 rounded-lg"><span className="text-[8px] font-black text-white">{age}a</span></div>
                                                         </div>
                                                         <div className="overflow-hidden">
-                                                            <p className="text-white font-black text-sm truncate">{p.name}</p>
+                                                            <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
                                                             <p className="text-gray-500 text-[10px] truncate font-mono">{p.email}</p>
                                                         </div>
                                                     </div>
@@ -432,53 +442,53 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* VIEW MOBILE: CARDS RESPONSIVOS */}
-                        <div className="md:hidden divide-y divide-white/5 bg-secondary">
-                            <div className="p-4 bg-dark/20 flex justify-between items-center border-b border-white/5">
+                        {/* VIEW MOBILE: CARDS RESPONSIVOS E SEM TRANSBORDO */}
+                        <div className="md:hidden divide-y divide-white/5">
+                            <div className="p-4 bg-dark/20 flex justify-between items-center">
                                 <label className="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" />
+                                    <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Selecionar Todas</span>
                                 </label>
                             </div>
                             {filteredPromoters.map(p => {
                                 const age = calculateAge(p.dateOfBirth);
                                 return (
-                                    <div key={p.id} className={`p-4 transition-colors ${selectedIds.has(p.id) ? 'bg-primary/10' : ''}`}>
+                                    <div key={p.id} className={`p-4 transition-colors ${selectedIds.has(p.id) ? 'bg-primary/10' : ''} max-w-full overflow-hidden`}>
                                         <div className="flex gap-4">
                                             <div className="flex flex-col gap-3 items-center">
                                                 <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} className="w-6 h-6 rounded border-gray-600 bg-dark text-primary" />
-                                                <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
+                                                <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-gray-700" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
                                                     <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
                                                 </div>
                                             </div>
                                             <div className="flex-grow min-w-0">
                                                 <div className="flex justify-between items-start gap-2">
-                                                    <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
+                                                    <p className="text-white font-black text-sm truncate uppercase tracking-tight leading-tight">{p.name}</p>
                                                     <div className="flex-shrink-0">{statusBadge(p.status)}</div>
                                                 </div>
-                                                <p className="text-gray-500 text-[10px] font-mono mt-0.5 truncate">{p.email}</p>
+                                                <p className="text-gray-500 text-[9px] font-mono mt-0.5 truncate">{p.email}</p>
                                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
                                                     <span className="text-[9px] font-black text-primary uppercase">{p.state} • {age} anos</span>
-                                                    <span className="text-[9px] font-bold text-gray-400 uppercase truncate max-w-[100px]">{p.campaignName || 'Geral'}</span>
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase truncate max-w-[80px]">{p.campaignName || 'Geral'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* AÇÕES MOBILE - AJUSTADAS PARA NÃO TRANSBORDAR */}
-                                        <div className="flex flex-wrap gap-2 mt-4">
-                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center p-3 bg-green-600/20 text-green-500 rounded-2xl border border-green-600/30"><WhatsAppIcon className="w-5 h-5" /></a>
-                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center p-3 bg-pink-600/20 text-pink-500 rounded-2xl border border-pink-600/30"><InstagramIcon className="w-5 h-5" /></a>
+                                        {/* AÇÕES MOBILE - AJUSTADAS PARA NÃO TRANSBORDAR EM TELAS PEQUENAS */}
+                                        <div className="flex gap-2 mt-4 overflow-hidden">
+                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-green-600/20 text-green-500 rounded-2xl border border-green-600/30"><WhatsAppIcon className="w-5 h-5" /></a>
+                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex-1 min-w-0 flex items-center justify-center p-3 bg-pink-600/20 text-pink-500 rounded-2xl border border-pink-600/30"><InstagramIcon className="w-5 h-5" /></a>
                                             
                                             {p.status === 'pending' ? (
                                                 <>
-                                                    <button onClick={() => handleApprove(p)} className="flex-1 flex items-center justify-center p-3 bg-green-600 text-white rounded-2xl shadow-lg shadow-green-900/20"><CheckCircleIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-red-600 text-white rounded-2xl shadow-lg shadow-red-900/20"><XIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => handleApprove(p)} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-green-600 text-white rounded-2xl shadow-lg"><CheckCircleIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-red-600 text-white rounded-2xl shadow-lg"><XIcon className="w-5 h-5" /></button>
                                                 </>
                                             ) : (
-                                                <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-red-600/20 text-red-500 rounded-2xl border border-red-600/30"><TrashIcon className="w-5 h-5" /></button>
+                                                <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-red-600/20 text-red-500 rounded-2xl border border-red-600/30"><TrashIcon className="w-5 h-5" /></button>
                                             )}
                                             
-                                            <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="flex-1 flex items-center justify-center p-3 bg-gray-700 text-gray-300 rounded-2xl"><PencilIcon className="w-5 h-5" /></button>
+                                            <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="flex-1 min-w-0 flex items-center justify-center p-3 bg-gray-700 text-gray-300 rounded-2xl"><PencilIcon className="w-5 h-5" /></button>
                                         </div>
                                     </div>
                                 );
