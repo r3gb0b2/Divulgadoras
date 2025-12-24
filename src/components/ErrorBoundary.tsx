@@ -13,13 +13,14 @@ interface ErrorBoundaryState {
 /**
  * Error boundary component to catch and handle uncaught errors in child components.
  */
-// Fix: Use React.Component to ensure that TypeScript correctly recognizes inherited properties like 'this.props' and 'this.state'.
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Fix: Declare and initialize state as a class property to ensure it is defined on the class type and satisfies TypeScript.
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null,
-  };
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+    };
+  }
 
   /**
    * Static method for error state transformation.
@@ -36,7 +37,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   public render(): ReactNode {
-    // Fix: Access state and props via 'this' which are now correctly inherited and typed from React.Component.
     const { hasError, error } = this.state;
     const { children } = this.props;
 
