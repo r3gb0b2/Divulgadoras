@@ -11,7 +11,7 @@ const getConfig = () => {
     const config = functions.config();
     return {
         brevoKey: config.brevo?.key || null,
-        brevoEmail: config.brevo?.email || "contato@agenciavitrine.com",
+        brevoEmail: config.brevo?.email || "rafael@agenciavitrine.com",
         zApiToken: config.zapi?.token || null,
         zApiInstance: config.zapi?.instance || null,
         zApiClientToken: config.zapi?.client_token || ""
