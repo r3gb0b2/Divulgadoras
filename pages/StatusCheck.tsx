@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, ClipboardDocumentListIcon } from '../components/Icons';
+import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, ClipboardDocumentListIcon, AlertTriangleIcon } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { getOrganizations } from '../services/organizationService';
 
@@ -36,11 +35,10 @@ const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaig
 };
 
 const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampaigns: Campaign[] }> = ({ promoter, orgName, allCampaigns }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(promoter.status === 'rejected_editable'); // Auto-expand if correction needed
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
-    // Ajuste na busca da campanha para ser mais tolerante com espaços
     const campaign = useMemo(() => 
         allCampaigns.find(c => 
             c.name.trim().toLowerCase() === promoter.campaignName?.trim().toLowerCase() && 
@@ -60,7 +58,7 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
         pending: "Em Análise",
         approved: "Aprovada",
         rejected: "Recusada",
-        rejected_editable: "Corrigir",
+        rejected_editable: "Ajuste Necessário",
         removed: "Removida"
     };
 
@@ -73,12 +71,12 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
     };
 
     return (
-        <div className="bg-gray-800/40 rounded-2xl border border-white/5 overflow-hidden transition-all hover:border-white/10">
+        <div className={`bg-gray-800/40 rounded-2xl border ${promoter.status === 'rejected_editable' ? 'border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'border-white/5'} overflow-hidden transition-all hover:border-white/10`}>
             <div 
                 className="p-4 flex items-center justify-between cursor-pointer active:bg-white/5"
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <div className="flex-grow overflow-hidden">
+                <div className="flex-grow overflow-hidden text-left">
                     <p className="text-white font-bold text-sm truncate uppercase tracking-tight">{promoter.campaignName || 'Geral'}</p>
                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-0.5">{promoter.state} • {orgName}</p>
                 </div>
@@ -94,7 +92,25 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
 
             {isExpanded && (
                 <div className="px-4 pb-5 pt-2 border-t border-white/5 animate-slideDown">
-                    {promoter.rejectionReason && (
+                    {promoter.status === 'rejected_editable' && (
+                        <div className="mb-6 p-4 bg-orange-900/20 rounded-2xl border border-orange-500/30">
+                            <div className="flex items-center gap-3 mb-2">
+                                <AlertTriangleIcon className="w-5 h-5 text-orange-400" />
+                                <h4 className="text-sm font-black text-orange-400 uppercase">Seu cadastro precisa de ajustes!</h4>
+                            </div>
+                            <p className="text-xs text-gray-300 mb-4 leading-relaxed font-medium italic">
+                                "{promoter.rejectionReason || 'Clique no botão abaixo para revisar seus dados.'}"
+                            </p>
+                            <Link 
+                                to={`/${promoter.organizationId}/register/${promoter.state}/${encodeURIComponent(promoter.campaignName || '')}?edit_id=${promoter.id}`} 
+                                className="flex items-center justify-center gap-2 w-full py-4 bg-orange-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/40 transform active:scale-95"
+                            >
+                                <PencilIcon className="w-4 h-4" /> CORRIGIR MEU CADASTRO AGORA
+                            </Link>
+                        </div>
+                    )}
+
+                    {promoter.rejectionReason && promoter.status === 'rejected' && (
                         <div className="mb-4 bg-red-900/20 p-3 rounded-xl border border-red-900/30">
                             <p className="text-[10px] text-red-300 leading-relaxed font-medium italic">Motivo: {promoter.rejectionReason}</p>
                         </div>
@@ -102,10 +118,9 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
 
                     {campaign && (
                         <div className="space-y-4 mt-2 bg-dark/30 p-4 rounded-2xl border border-white/5">
-                            {/* Bloco de Regras: Visível para Pendentes e Aprovadas */}
                             <div className="flex items-start gap-3">
                                 <div className="w-5 h-5 bg-primary/20 rounded-full flex items-center justify-center text-[10px] font-black text-primary border border-primary/20 flex-shrink-0">1</div>
-                                <div className="flex-grow">
+                                <div className="flex-grow text-left">
                                     <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Leia as Regras</p>
                                     <div className="flex flex-col sm:flex-row gap-3 mt-2">
                                         <button onClick={() => setIsRulesModalOpen(true)} className="px-3 py-1.5 bg-gray-700 text-white text-[9px] font-black rounded-lg border border-gray-600 uppercase tracking-widest hover:bg-gray-600 transition-colors">VER REGRAS DO EVENTO</button>
@@ -120,11 +135,10 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
                                 </div>
                             </div>
                             
-                            {/* Bloco de WhatsApp: Apenas para Aprovadas */}
                             {promoter.status === 'approved' && (
                                 <div className="flex items-start gap-3 border-t border-white/5 pt-4">
                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black border transition-colors flex-shrink-0 ${hasAcceptedRules ? 'bg-green-600 text-white border-green-500' : 'bg-gray-800 text-gray-600 border-gray-700'}`}>2</div>
-                                    <div className="flex-grow">
+                                    <div className="flex-grow text-left">
                                         <p className="text-[10px] font-bold text-gray-200 uppercase tracking-widest">Grupo do Evento</p>
                                         <a 
                                             href={hasAcceptedRules ? campaign.whatsappLink : undefined} 
@@ -141,18 +155,12 @@ const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampa
 
                             {promoter.status === 'pending' && (
                                 <div className="mt-2 p-2 bg-blue-900/10 rounded-lg border border-blue-900/20">
-                                    <p className="text-[9px] text-blue-300 uppercase font-black leading-tight">
+                                    <p className="text-[9px] text-blue-300 uppercase font-black leading-tight text-left">
                                         Seu perfil está sendo analisado. O link do grupo será liberado assim que você for aprovada.
                                     </p>
                                 </div>
                             )}
                         </div>
-                    )}
-
-                    {promoter.status === 'rejected_editable' && (
-                        <Link to={`/${promoter.organizationId}/register/${promoter.state}/${encodeURIComponent(promoter.campaignName || '')}?edit_id=${promoter.id}`} className="block w-full text-center py-3 bg-orange-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest mt-2 hover:bg-orange-500 transition-colors">
-                            CORRIGIR MEUS DADOS
-                        </Link>
                     )}
                 </div>
             )}
@@ -179,7 +187,7 @@ const StatusCheck: React.FC = () => {
             const [result, orgs, campaigns] = await Promise.all([
                 checkPromoterStatus(searchEmail),
                 getOrganizations(),
-                getAllCampaigns() // Busca global de campanhas para o status
+                getAllCampaigns()
             ]);
             
             setPromoters(result);
@@ -260,7 +268,7 @@ const StatusCheck: React.FC = () => {
                                         <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg">
                                             <CheckCircleIcon className="w-6 h-6" />
                                         </div>
-                                        <div>
+                                        <div className="text-left">
                                             <h2 className="text-xl font-black text-white uppercase tracking-tight leading-none">{orgMap[orgId] || 'Produtora'}</h2>
                                             <p className="text-[8px] text-primary font-black uppercase tracking-[0.2em] mt-1.5">Equipe Certificada</p>
                                         </div>
@@ -272,7 +280,6 @@ const StatusCheck: React.FC = () => {
                                         ))}
                                     </div>
 
-                                    {/* Botão de Portal por Produtora */}
                                     {registrations.some(r => r.status === 'approved') && (
                                         <div className="mt-6 pt-4 px-2">
                                             <Link to={`/posts?email=${encodeURIComponent(email)}`} className="flex items-center justify-center gap-3 w-full py-4 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] transition-all hover:bg-primary-dark shadow-xl shadow-primary/20">

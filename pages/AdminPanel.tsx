@@ -23,7 +23,6 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 // Modais
 import RejectionModal from '../components/RejectionModal';
-import ManageReasonsModal from '../components/ManageReasonsModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
@@ -85,8 +84,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const isSuperAdmin = adminData.role === 'superadmin';
 
-    // Fix: Explicitly typed cursor as any to resolve potential unknown argument issues.
-    const fetchData = useCallback(async (cursor: any = null) => {
+    // Fix: Updated signature to use optional parameter to avoid unknown to string/any issues
+    const fetchData = useCallback(async (cursor?: any) => {
         const orgId = isSuperAdmin ? undefined : selectedOrgId;
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
@@ -104,7 +103,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
                 pageSize: PAGE_SIZE,
-                lastDoc: cursor
+                lastDoc: cursor || null
             };
 
             const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
@@ -137,10 +136,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setPrevCursors([]);
         setLastDoc(null);
         setSelectedIds(new Set());
-        fetchData(null);
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign]);
+        fetchData();
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData]);
 
-    // Ações em massa
     const toggleSelectAll = () => {
         if (selectedIds.size === filteredPromoters.length) {
             setSelectedIds(new Set());
@@ -162,17 +160,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setIsLoading(true);
         try {
             await Promise.all(idsArray.map(id => updatePromoter(id, { status: 'approved' })));
-            setSelectedIds(new Set());
-            fetchData(null);
-        } catch (e) {
+            setSelectedIds(new Set<string>());
+            fetchData();
+        } catch (e: any) {
             alert("Erro ao aprovar em massa.");
             setIsLoading(false);
         }
     };
 
-    // HANDLER DE APROVAÇÃO DIRETA (Sem Confirm)
     const handleApprove = async (p: Promoter) => {
-        // Atualização Otimista
         setPromoters(prev => prev.filter(item => item.id !== p.id));
         setStats(prev => ({ 
             ...prev, 
@@ -183,7 +179,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(p.id, { status: 'approved' });
         } catch (err: any) {
-            fetchData(null); 
+            fetchData(); 
         }
     };
 
@@ -191,7 +187,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
-        // Fix: Explicitly cast selectedPromoter.id to string to fix potential unknown argument error.
         const pId = selectedPromoter.id as string;
         
         setPromoters(prev => prev.filter(p => p.id !== pId));
@@ -205,7 +200,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
         } catch (err: any) {
-            fetchData(null);
+            fetchData();
         }
     };
 
@@ -307,7 +302,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         </button>
                     </form>
 
-                    <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
+                    <button onClick={() => fetchData()} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
                         <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -317,7 +312,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="pending">⏳ Pendentes</option>
                         <option value="approved">✅ Aprovadas</option>
                         <option value="rejected">❌ Rejeitadas</option>
-                        <option value="rejected_editable">⚠️ Corrigir</option>
+                        <option value="rejected_editable">⚠️ Ajuste Necessário</option>
                         <option value="removed">🗑️ Removidas</option>
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
@@ -345,7 +340,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             )}
 
-            {/* Lista Principal - Responsiva */}
+            {/* Lista Principal */}
             <div className="mx-2 md:mx-0">
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
@@ -359,7 +354,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </div>
                 ) : (
                     <>
-                        {/* Desktop: Table View */}
+                        {/* Desktop View */}
                         <div className="hidden md:block bg-secondary rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -403,9 +398,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>}
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                                    {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all" title="Aprovar"><CheckCircleIcon className="w-4 h-4" /></button>}
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all" title="Rejeitar / Ajuste"><XIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all" title="Editar"><PencilIcon className="w-4 h-4" /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -414,7 +409,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* Mobile: Card View */}
+                        {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
                             {filteredPromoters.map(p => (
                                 <div key={p.id} className={`bg-secondary p-4 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-4`}>
@@ -440,23 +435,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </button>
                                         )}
                                         <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-3 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2">
-                                            <XIcon className="w-4 h-4" /> Rejeitar
+                                            <XIcon className="w-4 h-4" /> Rejeitar/Ajuste
                                         </button>
-                                    </div>
-
-                                    <div className="flex justify-around pt-2 border-t border-white/5">
-                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1">
-                                            <InstagramIcon className="w-6 h-6 text-pink-500" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase">Insta</span>
-                                        </a>
-                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex flex-col items-center gap-1">
-                                            <WhatsAppIcon className="w-6 h-6 text-green-500" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase">Whats</span>
-                                        </a>
-                                        <div className="flex flex-col items-center gap-1">
-                                            <span className="text-[10px] font-black text-primary uppercase">{p.campaignName || 'Geral'}</span>
-                                            <span className="text-[8px] font-black text-gray-500 uppercase">Evento</span>
-                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -498,7 +478,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(null); }} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id, data) => { await updatePromoter(id, data); fetchData(); }} />
             <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
         </div>
     );

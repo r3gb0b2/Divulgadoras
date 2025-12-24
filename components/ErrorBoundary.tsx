@@ -15,7 +15,7 @@ interface ErrorBoundaryState {
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Use property initializer for state
-  public override state: ErrorBoundaryState = {
+  public state: ErrorBoundaryState = {
     hasError: false,
     error: null,
   };
@@ -30,11 +30,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   /**
    * Standard lifecycle method for side-effects when an error is caught.
    */
-  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
-  public override render(): ReactNode {
+  public render(): ReactNode {
     // Access state and props from 'this' which are inherited from Component
     const { hasError, error } = this.state;
     const { children } = this.props;

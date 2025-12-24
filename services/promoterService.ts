@@ -42,9 +42,14 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       
     if (!existing.empty) {
       const p = existing.docs[0].data() as Promoter;
+      // Se já existir e o status for rejected_editable, vamos sobrescrever o cadastro antigo (atualizar)
       if (p.status !== 'rejected' && p.status !== 'rejected_editable') {
         throw new Error("Você já possui um cadastro em análise para este evento.");
       }
+      
+      // Se for rejected_editable, removemos o antigo para criar o novo limpo ou atualizamos.
+      // Aqui, por simplicidade do fluxo de fotos, deletamos o ID antigo e criamos um novo se for re-submissão manual,
+      // mas o ideal é que o formulário carregue os dados via useQuery.
     }
 
     const photoUrls = await Promise.all(
@@ -70,7 +75,14 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       status: 'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       state: data.state, campaignName: campaign, organizationId: data.organizationId, allCampaigns: [campaign]
     };
-    await firestore.collection('promoters').add(newPromoter);
+    
+    // Se passamos um ID de edição (vido do formulário), atualizamos o doc existente
+    const editId = (data as any).id;
+    if (editId) {
+        await firestore.collection('promoters').doc(editId).update(newPromoter);
+    } else {
+        await firestore.collection('promoters').add(newPromoter);
+    }
   } catch (error: any) {
     throw new Error(error.message || "Falha ao processar cadastro. Tente novamente.");
   }
@@ -169,12 +181,11 @@ export const getAllPromotersPaginated = async (options: {
     };
 
     try {
-        // Tenta primeiro com ordenação (exige índice composto no Firebase)
         let snap;
         try {
             snap = await fetchWithQuery(true);
         } catch (indexError) {
-            console.warn("Falha na consulta ordenada. Provavelmente falta um índice composto no Firestore. Executando fallback sem ordenação.");
+            console.warn("Fallback query.");
             snap = await fetchWithQuery(false);
         }
         
@@ -188,9 +199,6 @@ export const getAllPromotersPaginated = async (options: {
     }
 };
 
-/**
- * Legado mantido para compatibilidade onde paginação não é desejada
- */
 export const getAllPromoters = async (options: {
     organizationId?: string; statesForScope?: string[] | null; status?: PromoterStatus | 'all';
     assignedCampaignsForScope?: { [state: string]: string[] }; selectedCampaign?: string;
@@ -244,11 +252,14 @@ export const getPromoterStats = async (options: {
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
-    if (data.status === 'approved') {
+    // Agora enviamos para o servidor tanto aprovações quanto solicitações de correção para disparar WhatsApp/Email
+    if (data.status === 'approved' || data.status === 'rejected_editable') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
         const cleanedData = cleanForCallable(data);
         await updateFunc({ promoterId: id, data: cleanedData });
-    } else { await firestore.collection('promoters').doc(id).update(data); }
+    } else { 
+        await firestore.collection('promoters').doc(id).update(data); 
+    }
   } catch (error) { throw new Error("Falha ao atualizar divulgadora."); }
 };
 

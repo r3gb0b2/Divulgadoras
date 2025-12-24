@@ -122,7 +122,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
         if (!postDoc.exists) return { success: false, message: "Post não encontrado." };
         const postData = postDoc.data();
 
-        // 1. Buscar todas as IDs de divulgadoras vinculadas a este post
         const assignmentsSnap = await db.collection("postAssignments").where("postId", "==", postId).get();
         if (assignmentsSnap.empty) return { success: false, message: "Nenhuma divulgadora vinculada." };
 
@@ -131,7 +130,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
         const tokens = [];
         const emails = [];
 
-        // 2. Buscar dados das divulgadoras em LOTES de 30 (limite do Firestore 'in')
         for (let i = 0; i < promoterIds.length; i += 30) {
             const chunk = promoterIds.slice(i, i + 30);
             const promotersSnap = await db.collection("promoters")
@@ -145,9 +143,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
             });
         }
 
-        console.log(`Notificando post: ${tokens.length} aparelhos e ${emails.length} emails encontrados.`);
-
-        // 3. Enviar Push via FCM (Multicast)
         let pushSuccessCount = 0;
         if (tokens.length > 0) {
             const pushMsg = {
@@ -155,17 +150,13 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
                     title: "🚀 Nova Tarefa Disponível!",
                     body: `Novo post para: ${postData.campaignName}. Acesse seu portal para baixar as artes.`
                 },
-                data: { 
-                    url: "/#/posts", 
-                    postId: postId 
-                },
+                data: { url: "/#/posts", postId: postId },
                 tokens: tokens
             };
             const pushResponse = await admin.messaging().sendEachForMulticast(pushMsg);
             pushSuccessCount = pushResponse.successCount;
         }
 
-        // 4. Enviar E-mail via Brevo (se configurado)
         const brevo = setupBrevo(config.brevoKey);
         if (brevo && emails.length > 0) {
             try {
@@ -173,25 +164,18 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
                     sender: { email: config.brevoEmail, name: "Equipe Certa" },
                     to: emails,
                     subject: "📢 Nova Publicação Disponível",
-                    htmlContent: `<p>Olá, uma nova tarefa foi postada para o evento <b>${postData.campaignName}</b>.</p><p>Acesse seu portal agora para realizar a postagem e garantir sua presença.</p><br><a href="https://divulgadoras.vercel.app/#/posts" style="background:#7e39d5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Acessar Meu Portal</a>`
+                    htmlContent: `<p>Olá, uma nova tarefa foi postada para o evento <b>${postData.campaignName}</b>.</p><p>Acesse seu portal agora para realizar a postagem.</p><br><a href="https://divulgadoras.vercel.app/#/posts" style="background:#7e39d5; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Acessar Meu Portal</a>`
                 });
-            } catch (e) { 
-                console.error("Erro ao enviar e-mail em massa:", e.message); 
-            }
+            } catch (e) { console.error("Erro email massa:", e.message); }
         }
 
-        return { 
-            success: true, 
-            message: `Notificações disparadas: ${pushSuccessCount} Pushes enviados com sucesso.` 
-        };
-
+        return { success: true, message: `Notificações disparadas: ${pushSuccessCount} Pushes enviados.` };
     } catch (error) {
-        console.error("Push Notification Error:", error);
         return { success: false, error: error.message };
     }
 });
 
-// --- FUNÇÃO CORE DE APROVAÇÃO ---
+// --- FUNÇÃO CORE DE ATUALIZAÇÃO E NOTIFICAÇÃO ---
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, data: updateData } = data;
     const promoterRef = db.collection("promoters").doc(promoterId);
@@ -201,21 +185,22 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     const oldData = snap.data();
     const config = getConfig();
     const isApproving = updateData.status === 'approved' && oldData.status !== 'approved';
+    const needsCorrection = updateData.status === 'rejected_editable' && oldData.status !== 'rejected_editable';
 
-    // Primeiro salvamos no banco
     await promoterRef.update({
         ...updateData,
         statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
         actionTakenByEmail: context.auth?.token?.email || "sistema"
     });
 
-    // Se for aprovação, dispara notificações e ATRIBUIÇÃO AUTOMÁTICA
+    const statusUrl = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
+
+    // 1. CASO: APROVAÇÃO
     if (isApproving) {
         const campaignName = updateData.campaignName || oldData.campaignName || "Geral";
         const orgId = oldData.organizationId;
 
-        // --- LÓGICA DE ATRIBUIÇÃO AUTOMÁTICA ---
-        // Busca todos os posts ativos com marcação de auto-atribuição para este evento
+        // Auto-atribuição de posts
         try {
             const postsToAssignSnap = await db.collection("posts")
                 .where("organizationId", "==", orgId)
@@ -225,9 +210,7 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                 .get();
 
             if (!postsToAssignSnap.empty) {
-                console.log(`Atribuindo automaticamente ${postsToAssignSnap.size} posts para ${oldData.email}`);
                 const batch = db.batch();
-                
                 postsToAssignSnap.docs.forEach(postDoc => {
                     const postData = postDoc.data();
                     const assignmentRef = db.collection("postAssignments").doc();
@@ -243,32 +226,23 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                         completionRate: 0 
                     });
                 });
-                
                 await batch.commit();
             }
-        } catch (e) {
-            console.error("Erro na auto-atribuição:", e.message);
-        }
+        } catch (e) { console.error("Erro auto-atribuição:", e.message); }
 
-        const statusUrl = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}`;
-
-        // WHATSAPP
+        // WhatsApp Aprovação
         if (config.zApiToken && config.zApiInstance) {
             try {
                 const waMsg = `Olá *${oldData.name.split(' ')[0]}*! 🎉\n\nSeu perfil foi *APROVADO* para o evento: *${campaignName}*.\n\n🔗 *Veja o status e entre no grupo:* ${statusUrl}`;
                 await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
-                    body: JSON.stringify({ 
-                        phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, 
-                        message: waMsg 
-                    })
+                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, message: waMsg })
                 });
-                console.log("WhatsApp de aprovação enviado.");
             } catch (e) { console.error("Erro WA Aprov:", e.message); }
         }
 
-        // E-MAIL
+        // Email Aprovação
         const brevo = setupBrevo(config.brevoKey);
         if (brevo) {
             try {
@@ -276,22 +250,39 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
                     sender: { email: config.brevoEmail, name: "Equipe Certa" },
                     to: [{ email: oldData.email, name: oldData.name }],
                     subject: `✅ Aprovada para: ${campaignName}`,
-                    htmlContent: `
-                        <div style="font-family: sans-serif; color: #333;">
-                            <h2>Boas-vindas à equipe, ${oldData.name}!</h2>
-                            <p>Seu perfil foi analisado e <b>APROVADO</b> para o evento <b>${campaignName}</b>.</p>
-                            <p>Agora você já pode entrar no grupo oficial e acessar suas tarefas.</p>
-                            <br>
-                            <a href="${statusUrl}" style="background: #7e39d5; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MEU STATUS E REGRAS</a>
-                            <br><br>
-                            <p>Sucesso em suas postagens!</p>
-                        </div>
-                    `
+                    htmlContent: `<h2>Boas-vindas, ${oldData.name}!</h2><p>Seu perfil foi <b>APROVADO</b> para o evento <b>${campaignName}</b>.</p><br><a href="${statusUrl}">VER MEU STATUS E REGRAS</a>`
                 });
-                console.log("E-mail de aprovação enviado com sucesso para:", oldData.email);
-            } catch (e) { 
-                console.error("Erro ao enviar e-mail de aprovação:", e.response ? e.response.body : e.message); 
-            }
+            } catch (e) { console.error("Erro email aprov:", e.message); }
+        }
+    }
+    
+    // 2. CASO: NECESSITA AJUSTE (REJECTED_EDITABLE)
+    if (needsCorrection) {
+        const reason = updateData.rejectionReason || "Informações incompletas ou fotos inadequadas.";
+        
+        // WhatsApp Ajuste
+        if (config.zApiToken && config.zApiInstance) {
+            try {
+                const waMsg = `Olá *${oldData.name.split(' ')[0]}*!\n\nSeu cadastro precisa de um pequeno ajuste para ser aprovado.\n\n⚠️ *Motivo:* ${reason}\n\n🔗 *Clique aqui para corrigir agora:* ${statusUrl}`;
+                await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
+                    body: JSON.stringify({ phone: `55${oldData.whatsapp.replace(/\D/g, '')}`, message: waMsg })
+                });
+            } catch (e) { console.error("Erro WA Ajuste:", e.message); }
+        }
+
+        // Email Ajuste
+        const brevo = setupBrevo(config.brevoKey);
+        if (brevo) {
+            try {
+                await brevo.sendTransacEmail({
+                    sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                    to: [{ email: oldData.email, name: oldData.name }],
+                    subject: `⚠️ Ajuste necessário no seu cadastro`,
+                    htmlContent: `<h2>Olá ${oldData.name},</h2><p>Identificamos que seu cadastro precisa de correções: <b>${reason}</b></p><p>Por favor, acesse o link abaixo para atualizar seus dados e enviar novamente para análise.</p><br><a href="${statusUrl}">CORRIGIR MEU CADASTRO</a>`
+                });
+            } catch (e) { console.error("Erro email ajuste:", e.message); }
         }
     }
     
@@ -302,9 +293,7 @@ exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(a
     try {
         const doc = await db.collection("settings").doc("emailTemplate").get();
         return { htmlContent: doc.exists ? doc.data().htmlContent : "<h1>Padrão</h1>" };
-    } catch (e) {
-        return { htmlContent: "<h1>Padrão</h1>" };
-    }
+    } catch (e) { return { htmlContent: "<h1>Padrão</h1>" }; }
 });
 
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {

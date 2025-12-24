@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById } from '../services/promoterService';
 import { getCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
@@ -14,6 +13,11 @@ import { Campaign } from '../types';
 const RegistrationForm: React.FC = () => {
   const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Captura o ID de edição da query string (?edit_id=...)
+  const queryParams = new URLSearchParams(location.search);
+  const editId = queryParams.get('edit_id');
   
   const [formData, setFormData] = useState({
     email: '',
@@ -27,6 +31,7 @@ const RegistrationForm: React.FC = () => {
   
   const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+  const [isLoadingEditData, setIsLoadingEditData] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,18 +40,38 @@ const RegistrationForm: React.FC = () => {
   const [dataFound, setDataFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Busca as campanhas disponíveis para o estado e organização
+  // Carregar dados de edição se houver um ID
+  useEffect(() => {
+    if (editId) {
+        setIsLoadingEditData(true);
+        getPromoterById(editId).then(p => {
+            if (p) {
+                setFormData({
+                    email: p.email,
+                    name: p.name,
+                    whatsapp: p.whatsapp,
+                    instagram: p.instagram,
+                    tiktok: p.tiktok || '',
+                    dateOfBirth: p.dateOfBirth,
+                    campaignName: p.campaignName || '',
+                });
+                // Nota: Por segurança do Firebase, não baixamos arquivos para o input de File.
+                // A divulgadora deve enviar fotos novas se for correção de fotos.
+                if (p.photoUrls) setPreviews(p.photoUrls);
+            }
+        }).finally(() => setIsLoadingEditData(false));
+    }
+  }, [editId]);
+
   useEffect(() => {
     if (organizationId && state) {
       setIsLoadingCampaigns(true);
       getCampaigns(state, organizationId)
         .then(camps => {
-          // Filtra apenas campanhas ativas
           const actives = camps.filter(c => c.status === 'active');
           setAvailableCampaigns(actives);
           
-          // Lógica de pré-seleção
-          if (!campaignNameFromUrl) {
+          if (!campaignNameFromUrl && !editId) {
             if (actives.length === 1) {
               setFormData(prev => ({ ...prev, campaignName: actives[0].name }));
             } else if (actives.length === 0) {
@@ -57,21 +82,20 @@ const RegistrationForm: React.FC = () => {
         .catch(err => console.error("Erro ao carregar eventos:", err))
         .finally(() => setIsLoadingCampaigns(false));
     }
-  }, [organizationId, state, campaignNameFromUrl]);
+  }, [organizationId, state, campaignNameFromUrl, editId]);
 
-  // Função para limpar links de redes sociais
   const sanitizeHandle = (input: string) => {
     return input
       .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
       .replace(/https?:\/\/(www\.)?tiktok\.com\/@?/i, '')
       .replace(/@/g, '')
-      .split('/')[0] // remove parâmetros após a barra
-      .split('?')[0] // remove query strings
+      .split('/')[0]
+      .split('?')[0]
       .trim();
   };
 
-  // Auto-preenchimento inteligente baseado em cadastros anteriores
   const handleBlurEmail = async () => {
+    if (editId) return; // Não auto-preenche se estiver editando por ID
     const email = formData.email.trim().toLowerCase();
     if (!email || !email.includes('@')) return;
     
@@ -89,11 +113,10 @@ const RegistrationForm: React.FC = () => {
           dateOfBirth: profile.dateOfBirth || prev.dateOfBirth
         }));
         setDataFound(true);
-        // Feedback visual rápido de que os dados foram recuperados
         setTimeout(() => setDataFound(false), 3000);
       }
     } catch (e) {
-      console.warn("Sem histórico para este e-mail.");
+      console.warn("Sem histórico.");
     } finally {
       setIsCheckingEmail(false);
     }
@@ -102,7 +125,7 @@ const RegistrationForm: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
-      const totalPhotos = [...photos, ...filesArray].slice(0, 8); // Limite de 8
+      const totalPhotos = [...photos, ...filesArray].slice(0, 8);
       setPhotos(totalPhotos);
       setPreviews(totalPhotos.map(file => URL.createObjectURL(file as Blob)));
       setError(null);
@@ -119,23 +142,17 @@ const RegistrationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organizationId || !state) {
-      setError("Erro de configuração da página. O ID da organização ou Estado está ausente.");
+      setError("Erro de configuração.");
       return;
     }
 
     if (!formData.campaignName || formData.campaignName.trim() === '') {
-      setError("Por favor, selecione para qual evento você deseja se candidatar.");
+      setError("Selecione o evento.");
       return;
     }
 
-    if (formData.name.trim().split(/\s+/).length < 2) {
-      setError("Por favor, insira seu nome completo (Nome e Sobrenome).");
-      return;
-    }
-
-    if (photos.length < 1) {
-      setError("Por favor, envie pelo menos 1 foto nítida.");
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (photos.length < 1 && previews.length === 0) {
+      setError("Envie ao menos 1 foto.");
       return;
     }
 
@@ -143,9 +160,9 @@ const RegistrationForm: React.FC = () => {
     setError(null);
 
     try {
-      // Sanitização final das redes sociais antes de enviar
       const finalData = {
         ...formData,
+        id: editId || undefined, // Passa o ID se for edição
         email: formData.email.toLowerCase().trim(),
         instagram: sanitizeHandle(formData.instagram),
         tiktok: sanitizeHandle(formData.tiktok),
@@ -154,20 +171,26 @@ const RegistrationForm: React.FC = () => {
         organizationId 
       };
 
-      await addPromoter(finalData);
+      await addPromoter(finalData as any);
       
       localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
       setIsSuccess(true);
-      
-      setTimeout(() => {
-        navigate('/status');
-      }, 3500);
+      setTimeout(() => { navigate('/status'); }, 3500);
 
     } catch (err: any) {
-      setError(err.message || "Erro ao salvar seu cadastro.");
+      setError(err.message || "Erro ao salvar.");
       setIsSubmitting(false);
     }
   };
+
+  if (isLoadingEditData) {
+      return (
+        <div className="py-20 text-center flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Recuperando seu cadastro...</p>
+        </div>
+      );
+  }
 
   if (isSuccess) {
     return (
@@ -176,13 +199,12 @@ const RegistrationForm: React.FC = () => {
           <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
             <CheckCircleIcon className="w-14 h-14 text-green-500" />
           </div>
-          <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">Cadastro Recebido!</h1>
-          <p className="text-gray-300 text-lg mb-8 leading-relaxed">Sua inscrição foi enviada com sucesso para análise. Em breve você receberá um retorno no seu e-mail.</p>
+          <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-4">Cadastro {editId ? 'Atualizado' : 'Recebido'}!</h1>
+          <p className="text-gray-300 text-lg mb-8 leading-relaxed">Sua inscrição foi enviada para análise. Em breve você receberá um retorno.</p>
           <div className="flex flex-col items-center gap-2">
             <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                 <div className="h-full bg-primary animate-progress"></div>
             </div>
-            <span className="text-primary font-bold text-[10px] tracking-widest uppercase mt-2">Redirecionando para Status...</span>
           </div>
         </div>
       </div>
@@ -191,23 +213,15 @@ const RegistrationForm: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
-      <button 
-        onClick={() => navigate(-1)} 
-        className="group flex items-center gap-2 text-gray-500 hover:text-white transition-all mb-8 font-black text-xs uppercase tracking-widest"
-      >
+      <button onClick={() => navigate(-1)} className="group flex items-center gap-2 text-gray-500 hover:text-white transition-all mb-8 font-black text-xs uppercase tracking-widest">
         <ArrowLeftIcon className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> 
         <span>Voltar</span>
       </button>
 
       <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[3rem] overflow-hidden border border-white/5">
         <div className="bg-gradient-to-br from-primary/30 to-transparent p-10 text-center border-b border-white/5 relative overflow-hidden">
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-primary/20 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-purple-600/20 rounded-full blur-3xl"></div>
-          
-          <SparklesIcon className="w-12 h-12 text-primary/40 absolute top-8 right-12 animate-pulse" />
-          
           <h1 className="text-5xl font-black text-white uppercase tracking-tighter relative z-10">
-            Seja <span className="text-primary">Divulgadora</span>
+            {editId ? 'Corrigir' : 'Seja'} <span className="text-primary">Divulgadora</span>
           </h1>
           <div className="inline-block mt-4 px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
             <p className="text-primary font-black uppercase tracking-[0.2em] text-[10px] relative z-10">
@@ -219,42 +233,11 @@ const RegistrationForm: React.FC = () => {
         <form onSubmit={handleSubmit} className="p-8 md:p-14 space-y-12">
           {error && (
             <div className="bg-red-900/40 border border-red-500/50 text-red-200 p-5 rounded-2xl text-sm font-bold text-center animate-shake flex items-center justify-center gap-3">
-              <XIcon className="w-5 h-5 text-red-500" />
-              {error}
+              <XIcon className="w-5 h-5 text-red-500" /> {error}
             </div>
           )}
 
-          {/* Seção 0: Seleção de Evento */}
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">00</div>
-              <h2 className="text-xl font-black text-white uppercase tracking-tight">Evento / Grupo</h2>
-            </div>
-            
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Para qual evento deseja se candidatar?</label>
-                <div className="relative group">
-                  <MegaphoneIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
-                  <select 
-                    name="campaignName"
-                    value={formData.campaignName}
-                    onChange={e => setFormData({...formData, campaignName: e.target.value})}
-                    disabled={!!campaignNameFromUrl}
-                    className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all appearance-none font-bold disabled:opacity-70 disabled:cursor-not-allowed"
-                    required
-                  >
-                    <option value="" className="bg-gray-900">Selecione o Evento...</option>
-                    {availableCampaigns.map(c => (
-                        <option key={c.id} value={c.name} className="bg-gray-900">{c.name}</option>
-                    ))}
-                    <option value="Geral" className="bg-gray-900">Banco de Talentos (Geral)</option>
-                  </select>
-                  {isLoadingCampaigns && <div className="absolute right-10 top-1/2 -translate-y-1/2"><div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div></div>}
-                </div>
-            </div>
-          </div>
-
-          {/* Seção 1: Identidade */}
+          {/* Dados Pessoais */}
           <div className="space-y-8">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">01</div>
@@ -264,8 +247,7 @@ const RegistrationForm: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex justify-between">
-                  <span>E-mail para contato</span>
-                  {dataFound && <span className="text-green-400 animate-pulse">Dados recuperados!</span>}
+                  <span>E-mail</span>
                 </label>
                 <div className="relative group">
                   <MailIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
@@ -276,9 +258,9 @@ const RegistrationForm: React.FC = () => {
                     value={formData.email}
                     onChange={e => setFormData({...formData, email: e.target.value})}
                     onBlur={handleBlurEmail}
+                    disabled={!!editId} // Não permite mudar o email se estiver em correção específica
                     required
                   />
-                  {isCheckingEmail && <div className="absolute right-5 top-1/2 -translate-y-1/2"><div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div></div>}
                 </div>
               </div>
 
@@ -299,7 +281,7 @@ const RegistrationForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Seção 2: Contato e Redes */}
+          {/* Contato e Redes */}
           <div className="space-y-8">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">02</div>
@@ -308,7 +290,7 @@ const RegistrationForm: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp (DDD)</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
                 <div className="relative group">
                   <PhoneIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                   <input 
@@ -323,22 +305,7 @@ const RegistrationForm: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Data de Nascimento</label>
-                <div className="relative group">
-                  <CalendarIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
-                  <input 
-                    type="date" 
-                    className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all font-medium"
-                    value={formData.dateOfBirth}
-                    onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
-                    required
-                    style={{ colorScheme: 'dark' }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram (apenas o usuário)</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram (@)</label>
                 <div className="relative group">
                   <InstagramIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                   <input 
@@ -354,63 +321,55 @@ const RegistrationForm: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">TikTok (apenas o usuário)</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nascimento</label>
                 <div className="relative group">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors flex items-center justify-center font-black text-[10px]">TT</div>
+                  <CalendarIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-primary transition-colors" />
                   <input 
-                    type="text" 
-                    placeholder="usuario_tiktok" 
+                    type="date" 
                     className="w-full pl-14 pr-5 py-5 bg-white/5 border border-white/10 rounded-3xl text-white focus:ring-2 focus:ring-primary focus:bg-white/10 outline-none transition-all font-medium"
-                    value={formData.tiktok}
-                    onChange={e => setFormData({...formData, tiktok: e.target.value})}
-                    onBlur={e => setFormData({...formData, tiktok: sanitizeHandle(e.target.value)})}
+                    value={formData.dateOfBirth}
+                    onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
+                    required
+                    style={{ colorScheme: 'dark' }}
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Seção 3: Fotos */}
+          {/* Fotos */}
           <div className="space-y-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-xs font-black text-white shadow-lg shadow-primary/30">03</div>
-                <h2 className="text-xl font-black text-white uppercase tracking-tight">Perfil Visual</h2>
+                <h2 className="text-xl font-black text-white uppercase tracking-tight">Fotos</h2>
               </div>
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{photos.length}/8 Fotos</span>
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{photos.length + (previews.length - photos.length)}/8</span>
             </div>
             
             <p className="text-xs text-gray-500 leading-relaxed max-w-lg">
-                Envie fotos nítidas e com boa iluminação. <strong className="text-primary">Indispensável:</strong> uma foto de rosto bem visível e uma de corpo inteiro.
+                {editId ? 'Substitua suas fotos se o organizador solicitou melhoria na qualidade.' : 'Envie fotos nítidas. Uma de rosto e uma de corpo.'}
             </p>
             
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
               {previews.map((url, i) => (
                 <div key={i} className="relative aspect-[3/4] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl group animate-popIn">
-                  <img src={url} alt={`Preview ${i+1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <img src={url} alt="" className="w-full h-full object-cover" />
                   <button 
                     type="button"
                     onClick={() => removePhoto(i)}
-                    className="absolute top-3 right-3 bg-red-600 text-white w-8 h-8 rounded-2xl flex items-center justify-center transition-all shadow-lg font-bold hover:scale-110 active:scale-90 z-20"
+                    className="absolute top-3 right-3 bg-red-600 text-white w-8 h-8 rounded-2xl flex items-center justify-center transition-all z-20"
                   >
                     <XIcon className="w-4 h-4" />
                   </button>
                 </div>
               ))}
               
-              {photos.length < 8 && (
-                <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-[2rem] bg-white/5 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <CameraIcon className="w-10 h-10 text-gray-600 group-hover:text-primary mb-3 transition-colors transform group-hover:-translate-y-1" />
-                  <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest group-hover:text-primary">Adicionar Foto</span>
-                  <input 
-                    type="file" 
-                    multiple 
-                    accept="image/*" 
-                    className="hidden" 
-                    onChange={handleFileChange} 
-                  />
+              {(photos.length + (previews.length - photos.length)) < 8 && (
+                <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-[2rem] bg-white/5 hover:border-primary transition-all cursor-pointer group">
+                  <CameraIcon className="w-10 h-10 text-gray-600 group-hover:text-primary mb-3" />
+                  <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest group-hover:text-primary">Adicionar</span>
+                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
                 </label>
               )}
             </div>
@@ -420,23 +379,10 @@ const RegistrationForm: React.FC = () => {
             <button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-4 group"
+                className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-4"
             >
-                {isSubmitting ? (
-                <>
-                    <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-white"></div>
-                    PROCESSANDO...
-                </>
-                ) : (
-                <>
-                    FINALIZAR INSCRIÇÃO
-                    <ArrowLeftIcon className="w-6 h-6 rotate-180 group-hover:translate-x-2 transition-transform" />
-                </>
-                )}
+                {isSubmitting ? 'PROCESSANDO...' : 'ATUALIZAR MEU CADASTRO'}
             </button>
-            <p className="text-center text-gray-600 text-[10px] uppercase font-bold tracking-[0.3em] mt-8">
-                Sistema de Gestão Equipe Certa • Proteção de Dados Ativa
-            </p>
           </div>
         </form>
       </div>
