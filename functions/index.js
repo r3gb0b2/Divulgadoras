@@ -25,6 +25,41 @@ const setupBrevo = (apiKey) => {
     return apiInstance;
 };
 
+// --- PERSISTÊNCIA DE TOKEN PUSH ---
+
+exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { promoterId, token, metadata } = data;
+    if (!promoterId || !token) {
+        return { success: false, message: "ID da divulgadora ou Token ausente." };
+    }
+
+    try {
+        const promoterRef = db.collection("promoters").doc(promoterId);
+        const doc = await promoterRef.get();
+        
+        if (!doc.exists) {
+            return { success: false, message: "Divulgadora não encontrada." };
+        }
+
+        await promoterRef.update({
+            fcmToken: token,
+            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
+            pushDiagnostics: {
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                platform: metadata?.platform || "unknown",
+                tokenLength: token.length,
+                pluginStatus: "active"
+            }
+        });
+
+        console.log(`Token Push salvo para promoter: ${promoterId}`);
+        return { success: true };
+    } catch (error) {
+        console.error("Erro ao salvar token push:", error);
+        return { success: false, message: error.message };
+    }
+});
+
 // --- TESTES DE INTEGRAÇÃO ---
 
 exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {

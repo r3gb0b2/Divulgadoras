@@ -7,72 +7,61 @@ import { firestore, functions } from '../firebase/config';
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
 
 /**
- * Persiste o token e metadados no servidor para diagnóstico.
+ * Persiste o token no banco através de Cloud Function (Região southamerica-east1).
  */
 const persistTokenOnServer = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
     try {
+        console.log("Chamando savePromoterToken para:", promoterId);
         const saveFunc = functions.httpsCallable('savePromoterToken');
         const result = await saveFunc({ 
             promoterId, 
             token, 
             metadata: {
                 ...metadata,
-                pluginVersion: 'Capacitor 6',
-                lastAttempt: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent
             }
         });
-        return (result.data as any).success;
+        const data = result.data as any;
+        if (!data.success) {
+            console.error("Erro retornado pela função:", data.message);
+        }
+        return data.success;
     } catch (error) {
-        console.error("PushService Persist Error:", error);
+        console.error("Erro crítico ao chamar savePromoterToken:", error);
         return false;
     }
 };
 
 /**
- * Remove o vínculo do token.
- */
-export const deletePushToken = async (promoterId: string): Promise<void> => {
-    try {
-        await firestore.collection('promoters').doc(promoterId).update({
-            fcmToken: firebase.firestore.FieldValue.delete(),
-            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-    } catch (error) {
-        throw new Error("Falha ao remover vínculo.");
-    }
-};
-
-/**
- * Sincroniza o token FCM (token de nuvem do Firebase).
+ * Sincroniza o token FCM real com o servidor.
  */
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
         const platform = Capacitor.getPlatform();
         const { FCM } = await import('@capacitor-community/fcm');
         
-        // No Android/iOS, garante que o autoInit está ligado
+        // Ativa o auto-init do FCM para garantir que o token seja renovado
         try { await FCM.setAutoInit({ enabled: true }); } catch (e) {}
 
-        // Obtém o token FCM real (essencial para o Admin SDK enviar as notificações)
+        // Obtém o token específico do Firebase (essencial para Android)
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
         if (fcmToken) {
-            const saved = await persistTokenOnServer(promoterId, fcmToken, { 
-                platform,
-                tokenType: 'FCM'
-            });
+            const saved = await persistTokenOnServer(promoterId, fcmToken, { platform });
             if (saved) return { success: true };
+            return { success: false, error: "Servidor não conseguiu salvar o token." };
         }
-        return { success: false, error: "Token gerado, mas não salvo no banco." };
+        return { success: false, error: "O plugin FCM não retornou um token válido." };
     } catch (error: any) {
-        console.error("FCM Token Error:", error);
-        return { success: false, error: error.message || "Erro ao obter token FCM." };
+        console.error("Falha no syncTokenWithServer:", error);
+        return { success: false, error: error.message || "Erro desconhecido no plugin FCM." };
     }
 };
 
 /**
- * Inicialização com suporte aprimorado para Android 13+.
+ * Inicialização com fluxo reforçado para Android.
  */
 export const initPushNotifications = async (
     promoterId: string, 
@@ -84,7 +73,7 @@ export const initPushNotifications = async (
     }
 
     try {
-        // 1. Verificar/Solicitar Permissões
+        // 1. Permissões
         onStatusChange?.('requesting');
         let permStatus = await PushNotifications.checkPermissions();
         
@@ -93,38 +82,40 @@ export const initPushNotifications = async (
         }
 
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão de notificação negada pelo usuário.");
+            onStatusChange?.('denied', "Permissão negada. Ative as notificações nas configurações do celular.");
             return 'denied';
         }
 
         onStatusChange?.('granted');
 
-        // 2. IMPORTANTE: Configurar Listeners ANTES de registrar (Melhora Android)
+        // 2. Listeners
         await PushNotifications.removeAllListeners();
 
-        // Listener de sucesso no registro nativo
+        // No Android, o registro nativo dispara o registration
         PushNotifications.addListener('registration', async (token) => {
-            console.log("Native registration success. Device Token:", token.value);
+            console.log("Device registrado nativamente. Token base:", token.value.substring(0, 10) + "...");
             onStatusChange?.('syncing');
             const r = await syncTokenWithServer(promoterId);
             onStatusChange?.(r.success ? 'success' : 'error', r.error);
         });
 
-        // Listener de erro no registro nativo (Captura falhas do Google Play Services)
         PushNotifications.addListener('registrationError', (err) => {
-            console.error("Native registration error:", err.error);
-            onStatusChange?.('error', `Erro nativo: ${err.error}`);
+            console.error("Erro no registro nativo Push:", err.error);
+            onStatusChange?.('error', `Falha no sistema Android: ${err.error}`);
         });
 
-        // 3. Chamar registro nativo
+        // 3. Efetuar Registro
         await PushNotifications.register();
 
-        // 4. Forçar uma sincronização manual caso o listener de registration não dispare de imediato
-        // (comum quando o app já está registrado no SO)
+        // 4. Fallback: Se após 2 segundos nada aconteceu, tentamos forçar via plugin FCM
+        // Muito comum em Androids que já abriram o app antes.
         setTimeout(async () => {
+            console.log("Verificação de redundância de token...");
             const r = await syncTokenWithServer(promoterId);
-            if (r.success) onStatusChange?.('success');
-        }, 1500);
+            if (r.success) {
+                onStatusChange?.('success');
+            }
+        }, 2500);
 
         return 'granted';
     } catch (error: any) {
@@ -138,5 +129,19 @@ export const clearPushListeners = async () => {
         try {
             await PushNotifications.removeAllListeners();
         } catch (e) {}
+    }
+};
+
+// FIX: Added deletePushToken to fix the missing export error in AdminPushCampaignPage.tsx
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            pushDiagnostics: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error: any) {
+        console.error("Error deleting push token:", error);
+        throw new Error("Não foi possível remover o vínculo do dispositivo.");
     }
 };
