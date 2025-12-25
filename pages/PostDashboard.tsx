@@ -234,10 +234,11 @@ const PostDashboard: React.FC = () => {
         });
 
         // Sorting
-        const config = sortConfig || { key: 'name', direction: 'asc' };
+        const config = sortConfig;
         finalStats.sort((a, b) => {
-            const valA = (a as any)[config.key] ?? 0;
-            const valB = (b as any)[config.key] ?? 0;
+            const key = config.key;
+            const valA = (a as any)[key] ?? 0;
+            const valB = (b as any)[key] ?? 0;
 
             if (valA < valB) {
                 return config.direction === 'asc' ? -1 : 1;
