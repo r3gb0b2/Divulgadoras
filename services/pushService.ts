@@ -1,28 +1,26 @@
 // @ts-nocheck
-import { PushNotifications, Token } from '@capacitor/push-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import firebase from 'firebase/compat/app';
 import { firestore, functions } from '../firebase/config';
 
-// Definição local do status para o serviço de push
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
 
 /**
- * Salva o token diretamente no Firestore (Implementação local para evitar imports problemáticos)
+ * Persiste o token no banco (Implementação local para evitar imports circulares)
  */
-export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
+const internalSaveToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
     try {
         const saveFunc = functions.httpsCallable('savePromoterToken');
         const result = await saveFunc({ promoterId, token, metadata });
         return (result.data as any).success;
     } catch (error) {
-        console.error("PushService: Erro ao salvar token:", error);
         return false;
     }
 };
 
 /**
- * Remove o vínculo do token FCM da divulgadora
+ * Remove o token do banco
  */
 export const deletePushToken = async (promoterId: string): Promise<void> => {
     try {
@@ -31,52 +29,35 @@ export const deletePushToken = async (promoterId: string): Promise<void> => {
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
-        console.error("PushService: Erro ao deletar token:", error);
-        throw new Error("Falha ao remover vínculo do dispositivo.");
+        throw new Error("Falha ao remover vínculo.");
     }
 };
 
 /**
- * Sincroniza o token com o servidor
+ * Sincroniza o token FCM
  */
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
         const platform = Capacitor.getPlatform();
-        
-        // Importação dinâmica do FCM para evitar erros em plataformas não suportadas
         const { FCM } = await import('@capacitor-community/fcm');
         
         if (platform === 'ios') {
-            try {
-                await FCM.setAutoInit({ enabled: true });
-            } catch (e) {}
+            try { await FCM.setAutoInit({ enabled: true }); } catch (e) {}
         }
 
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
-        if (fcmToken && fcmToken.length > 32) {
-            const metadata = {
-                platform: platform,
-                updatedAt: new Date().toISOString(),
-                tokenLength: fcmToken.length
-            };
-
-            const saved = await savePushToken(promoterId, fcmToken, metadata);
+        if (fcmToken) {
+            const saved = await internalSaveToken(promoterId, fcmToken, { platform, updatedAt: new Date().toISOString() });
             if (saved) return { success: true };
-            return { success: false, error: "Erro ao persistir token." };
         }
-        
-        return { success: false, error: "Token FCM inválido." };
-
+        return { success: false, error: "Falha na persistência." };
     } catch (error: any) {
-        return { success: false, error: error.message || "Erro na sincronização FCM." };
+        return { success: false, error: error.message };
     }
 };
 
-/**
- * Inicializa as notificações push
- */
 export const initPushNotifications = async (
     promoterId: string, 
     onStatusChange?: (status: PushStatus, errorMessage?: string) => void
@@ -88,45 +69,26 @@ export const initPushNotifications = async (
 
     try {
         onStatusChange?.('requesting');
-        
         let permStatus = await PushNotifications.checkPermissions();
-        
-        if (permStatus.receive === 'prompt') {
-            permStatus = await PushNotifications.requestPermissions();
-        }
-
+        if (permStatus.receive === 'prompt') permStatus = await PushNotifications.requestPermissions();
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão negada.");
+            onStatusChange?.('denied');
             return 'denied';
         }
 
         onStatusChange?.('granted');
         onStatusChange?.('syncing');
         
-        const immediateResult = await syncTokenWithServer(promoterId);
-        
-        if (immediateResult.success) {
-            onStatusChange?.('success');
-        }
+        const res = await syncTokenWithServer(promoterId);
+        if (res.success) onStatusChange?.('success');
 
         await PushNotifications.removeAllListeners();
-
-        PushNotifications.addListener('registration', async (token: Token) => {
-            onStatusChange?.('syncing');
-            const result = await syncTokenWithServer(promoterId);
-            if (result.success) {
-                onStatusChange?.('success');
-            } else {
-                onStatusChange?.('error', result.error);
-            }
-        });
-
-        PushNotifications.addListener('registrationError', (error: any) => {
-            onStatusChange?.('error', error.error || error.message);
+        PushNotifications.addListener('registration', async () => {
+            const r = await syncTokenWithServer(promoterId);
+            onStatusChange?.(r.success ? 'success' : 'error');
         });
 
         await PushNotifications.register();
-        
         return 'granted';
     } catch (error: any) {
         onStatusChange?.('error', error.message);
@@ -136,8 +98,6 @@ export const initPushNotifications = async (
 
 export const clearPushListeners = async () => {
     if (Capacitor.isNativePlatform()) {
-        try {
-            await PushNotifications.removeAllListeners();
-        } catch (e) {}
+        try { await PushNotifications.removeAllListeners(); } catch (e) {}
     }
 };
