@@ -5,7 +5,8 @@ import {
   getPromoterStats, 
   updatePromoter, 
   getRejectionReasons, 
-  findPromotersByEmail 
+  findPromotersByEmail,
+  notifyApprovalBulk // Importado do serviço
 } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -17,7 +18,7 @@ import {
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
   PencilIcon, RefreshIcon, FilterIcon,
-  MegaphoneIcon
+  MegaphoneIcon, MailIcon // Adicionado MailIcon
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -58,6 +59,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
+    const [isProcessingBulk, setIsProcessingBulk] = useState(false); // Adicionado para loading de massa
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
     const [filterStatus, setFilterStatus] = useState<PromoterStatus | 'all'>('pending');
@@ -204,6 +206,33 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
+    // NOVA FUNÇÃO: NOTIFICAR APROVAÇÃO EM MASSA (E-MAIL)
+    const handleBulkNotifyApproval = async () => {
+        const selectedPromoters = promoters.filter(p => selectedIds.has(p.id));
+        const eligibleIds = selectedPromoters
+            .filter(p => p.status === 'approved' && !p.hasJoinedGroup)
+            .map(p => p.id);
+
+        if (eligibleIds.length === 0) {
+            alert("Nenhuma das divulgadoras selecionadas atende aos critérios (Estar Aprovada e Fora do Grupo).");
+            return;
+        }
+
+        if (!window.confirm(`Deseja enviar um e-mail de aviso de aprovação para as ${eligibleIds.length} divulgadoras qualificadas?`)) return;
+
+        setIsProcessingBulk(true);
+        try {
+            await notifyApprovalBulk(eligibleIds);
+            alert("E-mails enviados com sucesso!");
+            setSelectedIds(new Set());
+            fetchData(null);
+        } catch (err: any) {
+            alert("Erro ao enviar e-mails: " + err.message);
+        } finally {
+            setIsProcessingBulk(false);
+        }
+    };
+
     // APROVAÇÃO DIRETA
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
@@ -291,6 +320,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const c = config[status] || config.pending;
         return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border whitespace-nowrap ${c.style}`}>{c.label}</span>;
     };
+
+    // Quantidade de selecionadas que estão aprovadas mas fora do grupo
+    const notifyApprovalCount = useMemo(() => {
+        return promoters.filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup).length;
+    }, [promoters, selectedIds]);
 
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
@@ -392,11 +426,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             {/* Seleção em Massa */}
             {selectedIds.size > 0 && (
-                <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn">
+                <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30">
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
-                    <div className="flex gap-2">
-                        <button onClick={handleBulkApprove} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-all">Aprovar Selecionadas</button>
-                        <button onClick={handleBulkReject} className="px-4 py-2 bg-red-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-red-500 transition-all">Rejeitar Selecionadas</button>
+                    <div className="flex flex-wrap gap-2">
+                        {notifyApprovalCount > 0 && (
+                            <button 
+                                onClick={handleBulkNotifyApproval} 
+                                disabled={isProcessingBulk}
+                                className="px-4 py-2 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-2"
+                            >
+                                <MailIcon className="w-3.5 h-3.5" /> Avisar Aprovação ({notifyApprovalCount})
+                            </button>
+                        )}
+                        <button onClick={handleBulkApprove} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-all">Aprovar</button>
+                        <button onClick={handleBulkReject} className="px-4 py-2 bg-red-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-red-500 transition-all">Rejeitar</button>
                         <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl hover:bg-black/30">Cancelar</button>
                     </div>
                 </div>
@@ -421,7 +464,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
                                         <th className="px-6 py-5 text-center">Idade</th>

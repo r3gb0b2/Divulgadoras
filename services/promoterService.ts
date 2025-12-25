@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -25,6 +26,15 @@ export const changePromoterEmail = async (promoterId: string, oldEmail: string, 
         await updateFunc({ promoterId, oldEmail, newEmail: newEmail.toLowerCase().trim() });
     } catch (error: any) {
         throw new Error(error.message || "Falha ao alterar e-mail.");
+    }
+};
+
+export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> => {
+    try {
+        const notifyFunc = functions.httpsCallable('notifyApprovalBulk');
+        await notifyFunc({ promoterIds });
+    } catch (error: any) {
+        throw new Error(error.message || "Falha ao enviar notificações.");
     }
 };
 
