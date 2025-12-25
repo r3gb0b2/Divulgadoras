@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -7,7 +6,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // Definimos módulos que são carregados via CDN/Import Map como externos
       external: [
         '@capacitor/core',
         '@capacitor/push-notifications',
@@ -21,8 +19,9 @@ export default defineConfig({
     },
   },
   resolve: {
+    // Mantemos sem aliases complexos para evitar erros de resolução de diretório no Vercel/Vite
     alias: {
       '@': '.',
-    },
-  },
+    }
+  }
 });
