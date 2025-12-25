@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { functions } from '../firebase/config';
@@ -13,7 +12,9 @@ import {
     RefreshIcon,
     AlertTriangleIcon,
     ClockIcon,
-    TrashIcon
+    TrashIcon,
+    DownloadIcon,
+    CogIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -49,6 +50,51 @@ const SuperAdminDashboard: React.FC = () => {
         } finally {
             setIsTestingEmail(false);
         }
+    };
+
+    const downloadConfigFile = (filename: string, content: string) => {
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleDownloadRC = () => {
+        const content = JSON.stringify({
+            "projects": {
+                "default": "stingressos-e0a5f"
+            }
+        }, null, 2);
+        downloadConfigFile('.firebaserc', content);
+    };
+
+    const handleDownloadJSON = () => {
+        const content = JSON.stringify({
+            "functions": {
+                "source": "functions",
+                "predeploy": "npm --prefix \"$RESOURCE_DIR\" install"
+            },
+            "hosting": {
+                "public": ".",
+                "ignore": [
+                    "firebase.json",
+                    "**/.*",
+                    "**/node_modules/**"
+                ],
+                "rewrites": [
+                    {
+                        "source": "**",
+                        "destination": "/index.html"
+                    }
+                ]
+            }
+        }, null, 2);
+        downloadConfigFile('firebase.json', content);
     };
 
     return (
@@ -98,6 +144,35 @@ const SuperAdminDashboard: React.FC = () => {
                             <p className="font-bold">{emailResult.message}</p>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* CONFIG FILES CARD */}
+            <div className="bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] p-6">
+                <h2 className="text-xl font-black text-white uppercase tracking-tight mb-4 flex items-center gap-2">
+                    <CogIcon className="w-6 h-6 text-gray-400" /> Arquivos de Deploy (CLI)
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button 
+                        onClick={handleDownloadRC}
+                        className="flex items-center justify-between p-4 bg-dark/40 rounded-2xl border border-white/5 hover:bg-white/5 transition-all group"
+                    >
+                        <div className="text-left">
+                            <p className="text-white font-bold text-sm">.firebaserc</p>
+                            <p className="text-gray-500 text-[10px] uppercase">ID do Projeto e Aliases</p>
+                        </div>
+                        <DownloadIcon className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors" />
+                    </button>
+                    <button 
+                        onClick={handleDownloadJSON}
+                        className="flex items-center justify-between p-4 bg-dark/40 rounded-2xl border border-white/5 hover:bg-white/5 transition-all group"
+                    >
+                        <div className="text-left">
+                            <p className="text-white font-bold text-sm">firebase.json</p>
+                            <p className="text-gray-500 text-[10px] uppercase">Configuração de Hosting/Functions</p>
+                        </div>
+                        <DownloadIcon className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors" />
+                    </button>
                 </div>
             </div>
 
