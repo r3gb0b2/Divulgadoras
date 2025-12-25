@@ -234,7 +234,7 @@ const PostDashboard: React.FC = () => {
         });
 
         // Sorting
-        const config = sortConfig;
+        const config = sortConfig || { key: 'name', direction: 'asc' };
         finalStats.sort((a, b) => {
             const key = config.key;
             const valA = (a as any)[key] ?? 0;

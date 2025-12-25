@@ -145,9 +145,13 @@ const AdminPosts: React.FC = () => {
     };
 
     const handleAcceptAll = async () => {
-        const postId = selectedPostForJustifications?.id;
-        if (!postId) return;
+        // Narrowing explícito com variável local para evitar erro TS2531
+        const targetPost = selectedPostForJustifications;
+        if (!targetPost) return;
         
+        const postId = targetPost.id;
+        if (!postId) return;
+
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
         setIsAcceptingAll(true);
         try {
