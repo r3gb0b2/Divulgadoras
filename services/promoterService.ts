@@ -2,6 +2,9 @@ import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
 
+/**
+ * Remove recursivamente objetos não serializáveis antes de enviar para Callable Functions.
+ */
 const cleanForCallable = (obj: any): any => {
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof firebase.firestore.FieldValue) return undefined; 
@@ -39,9 +42,14 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       
     if (!existing.empty) {
       const p = existing.docs[0].data() as Promoter;
+      // Se já existir e o status for rejected_editable, vamos sobrescrever o cadastro antigo (atualizar)
       if (p.status !== 'rejected' && p.status !== 'rejected_editable') {
         throw new Error("Você já possui um cadastro em análise para este evento.");
       }
+      
+      // Se for rejected_editable, removemos o antigo para criar o novo limpo ou atualizamos.
+      // Aqui, por simplicidade do fluxo de fotos, deletamos o ID antigo e criamos um novo se for re-submissão manual,
+      // mas o ideal é que o formulário carregue os dados via useQuery.
     }
 
     const photoUrls = await Promise.all(
@@ -68,6 +76,7 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       state: data.state, campaignName: campaign, organizationId: data.organizationId, allCampaigns: [campaign]
     };
     
+    // Se passamos um ID de edição (vido do formulário), atualizamos o doc existente
     const editId = (data as any).id;
     if (editId) {
         await firestore.collection('promoters').doc(editId).update(newPromoter);
@@ -75,7 +84,7 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
         await firestore.collection('promoters').add(newPromoter);
     }
   } catch (error: any) {
-    throw new Error(error.message || "Falha ao processar cadastro.");
+    throw new Error(error.message || "Falha ao processar cadastro. Tente novamente.");
   }
 };
 
@@ -112,6 +121,7 @@ export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
         
         await batch.commit();
     } catch (error) {
+        console.error("Erro ao sincronizar aceite de regras:", error);
         await firestore.collection('promoters').doc(id).update({ hasJoinedGroup: true });
     }
 };
@@ -151,23 +161,42 @@ export const getAllPromotersPaginated = async (options: {
 }): Promise<{ promoters: Promoter[], lastDoc: any }> => {
     const fetchWithQuery = async (useOrderBy: boolean) => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
+        
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
-        if (useOrderBy) q = q.orderBy("createdAt", "desc");
-        if (options.lastDoc) q = q.startAfter(options.lastDoc);
+        
+        if (useOrderBy) {
+            q = q.orderBy("createdAt", "desc");
+        }
+
+        if (options.lastDoc) {
+            q = q.startAfter(options.lastDoc);
+        }
+        
         q = q.limit(options.pageSize);
-        return await q.get();
+        const snap = await q.get();
+        return snap;
     };
 
     try {
         let snap;
-        try { snap = await fetchWithQuery(true); } catch (e) { snap = await fetchWithQuery(false); }
+        try {
+            snap = await fetchWithQuery(true);
+        } catch (indexError) {
+            console.warn("Fallback query.");
+            snap = await fetchWithQuery(false);
+        }
+        
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
+        
         return { promoters, lastDoc: lastVisible };
-    } catch (error) { throw new Error("Erro ao buscar no banco."); }
+    } catch (error) { 
+        console.error("Error fetching promoters:", error);
+        throw new Error("Falha técnica ao buscar no banco de dados."); 
+    }
 };
 
 export const getAllPromoters = async (options: {
@@ -179,15 +208,20 @@ export const getAllPromoters = async (options: {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         else if (options.filterOrgId && options.filterOrgId !== 'all') q = q.where("organizationId", "==", options.filterOrgId);
+        
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
         if (options.limitCount) q = q.limit(options.limitCount);
+        
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        
         if (options.statesForScope && options.statesForScope.length > 0 && !options.filterState) {
             results = results.filter(p => options.statesForScope!.includes(p.state));
         }
+        
         return results;
     } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
 };
@@ -200,8 +234,10 @@ export const getPromoterStats = async (options: {
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
         const snap = await q.get();
         const all = snap.docs.map(doc => doc.data() as Promoter);
+        
         return {
             total: all.length,
             pending: all.filter(p => p.status === 'pending').length,
@@ -209,22 +245,26 @@ export const getPromoterStats = async (options: {
             rejected: all.filter(p => p.status === 'rejected' || p.status === 'rejected_editable').length,
             removed: all.filter(p => p.status === 'removed').length,
         };
-    } catch (error) { return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 }; }
+    } catch (error) {
+        return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 };
+    }
 };
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
+    // Agora enviamos para o servidor tanto aprovações quanto solicitações de correção para disparar WhatsApp/Email
     if (data.status === 'approved' || data.status === 'rejected_editable') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
-        await updateFunc({ promoterId: id, data: cleanForCallable(data) });
+        const cleanedData = cleanForCallable(data);
+        await updateFunc({ promoterId: id, data: cleanedData });
     } else { 
         await firestore.collection('promoters').doc(id).update(data); 
     }
-  } catch (error) { throw new Error("Falha ao atualizar."); }
+  } catch (error) { throw new Error("Falha ao atualizar divulgadora."); }
 };
 
 export const deletePromoter = async (id: string): Promise<void> => {
-    try { await firestore.collection('promoters').doc(id).delete(); } catch (error) { throw new Error("Falha ao excluir."); }
+    try { await firestore.collection('promoters').doc(id).delete(); } catch (error) { throw new Error("Falha ao excluir inscrição."); }
 };
 
 export const getRejectionReasons = async (organizationId: string): Promise<RejectionReason[]> => {
@@ -277,4 +317,21 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
 
 export const updateGroupRemovalRequest = async (id: string, data: Partial<GroupRemovalRequest>): Promise<void> => {
     try { await firestore.collection('groupRemovalRequests').doc(id).update(data); } catch (error) { throw new Error("Falha ao atualizar solicitação."); }
-}
+};
+
+export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
+    try {
+        const saveFunc = functions.httpsCallable('savePromoterToken');
+        const result = await saveFunc({ promoterId, token, metadata });
+        return (result.data as any).success;
+    } catch (error) { return false; }
+};
+
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) { throw new Error("Falha ao remover token."); }
+};
