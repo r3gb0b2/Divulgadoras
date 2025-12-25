@@ -1,11 +1,35 @@
+
 import { PushNotifications, Token } from '@capacitor/push-notifications';
 // @ts-ignore
 import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
-// @ts-ignore
-import { savePushToken } from './promoterService';
+import firebase from 'firebase/compat/app';
+import { firestore, functions } from '../firebase/config';
 
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
+
+/**
+ * Salva o token no Firestore via cloud function.
+ */
+export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
+    try {
+        const saveFunc = functions.httpsCallable('savePromoterToken');
+        const result = await saveFunc({ promoterId, token, metadata });
+        return (result.data as any).success;
+    } catch (error) { return false; }
+};
+
+/**
+ * Remove o token do perfil da divulgadora.
+ */
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) { throw new Error("Falha ao remover token."); }
+};
 
 /**
  * Função interna para capturar o token FCM e enviar ao banco.
@@ -15,7 +39,6 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
         const platform = Capacitor.getPlatform();
         console.log('Push: Iniciando sincronização FCM para plataforma:', platform);
 
-        // 1. Verifica disponibilidade do Plugin
         if (!Capacitor.isPluginAvailable('FCM')) {
             return { 
                 success: false, 
@@ -31,7 +54,6 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
             }
         }
 
-        // 2. Tenta obter o Token FCM real diretamente do Google
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
@@ -85,8 +107,6 @@ export const initPushNotifications = async (
 
         onStatusChange?.('granted');
         
-        // No Android, muitas vezes o token já existe. 
-        // Tentamos sincronizar imediatamente sem esperar o evento de registro.
         console.log('Push: Permissão garantida. Tentando sync imediato...');
         onStatusChange?.('syncing');
         const immediateResult = await syncTokenWithServer(promoterId);
@@ -95,13 +115,10 @@ export const initPushNotifications = async (
             onStatusChange?.('success');
         } else {
             console.warn('Push: Sync imediato falhou, configurando listeners...', immediateResult.error);
-            // Se falhar o imediato (ex: rede lenta), configuramos o listener para quando o sistema registrar
         }
 
-        // Removemos ouvintes antigos para evitar duplicidade
         await PushNotifications.removeAllListeners();
 
-        // Este evento dispara quando o token é criado ou renovado
         PushNotifications.addListener('registration', async (token: Token) => {
             console.log('Push: Evento registration disparado pelo sistema.');
             onStatusChange?.('syncing');
@@ -118,7 +135,6 @@ export const initPushNotifications = async (
             onStatusChange?.('error', error.error || error.message);
         });
 
-        // Solicita o registro ao sistema operacional
         await PushNotifications.register();
         
         return 'granted';

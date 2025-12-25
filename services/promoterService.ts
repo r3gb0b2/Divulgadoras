@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -42,14 +43,9 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       
     if (!existing.empty) {
       const p = existing.docs[0].data() as Promoter;
-      // Se já existir e o status for rejected_editable, vamos sobrescrever o cadastro antigo (atualizar)
       if (p.status !== 'rejected' && p.status !== 'rejected_editable') {
         throw new Error("Você já possui um cadastro em análise para este evento.");
       }
-      
-      // Se for rejected_editable, removemos o antigo para criar o novo limpo ou atualizamos.
-      // Aqui, por simplicidade do fluxo de fotos, deletamos o ID antigo e criamos um novo se for re-submissão manual,
-      // mas o ideal é que o formulário carregue os dados via useQuery.
     }
 
     const photoUrls = await Promise.all(
@@ -76,7 +72,6 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       state: data.state, campaignName: campaign, organizationId: data.organizationId, allCampaigns: [campaign]
     };
     
-    // Se passamos um ID de edição (vido do formulário), atualizamos o doc existente
     const editId = (data as any).id;
     if (editId) {
         await firestore.collection('promoters').doc(editId).update(newPromoter);
@@ -252,7 +247,6 @@ export const getPromoterStats = async (options: {
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
-    // Agora enviamos para o servidor tanto aprovações quanto solicitações de correção para disparar WhatsApp/Email
     if (data.status === 'approved' || data.status === 'rejected_editable') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
         const cleanedData = cleanForCallable(data);
@@ -317,21 +311,4 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
 
 export const updateGroupRemovalRequest = async (id: string, data: Partial<GroupRemovalRequest>): Promise<void> => {
     try { await firestore.collection('groupRemovalRequests').doc(id).update(data); } catch (error) { throw new Error("Falha ao atualizar solicitação."); }
-};
-
-export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
-    try {
-        const saveFunc = functions.httpsCallable('savePromoterToken');
-        const result = await saveFunc({ promoterId, token, metadata });
-        return (result.data as any).success;
-    } catch (error) { return false; }
-};
-
-export const deletePushToken = async (promoterId: string): Promise<void> => {
-    try {
-        await firestore.collection('promoters').doc(promoterId).update({
-            fcmToken: firebase.firestore.FieldValue.delete(),
-            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-    } catch (error) { throw new Error("Falha ao remover token."); }
 };
