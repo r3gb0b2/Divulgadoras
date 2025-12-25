@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -236,10 +235,14 @@ const PostDashboard: React.FC = () => {
 
         // Sorting
         finalStats.sort((a, b) => {
-            if (a[sortConfig.key] < b[sortConfig.key]) {
+            // Using type assertions to allow dynamic property access
+            const valA = (a as any)[sortConfig.key] ?? 0;
+            const valB = (b as any)[sortConfig.key] ?? 0;
+
+            if (valA < valB) {
                 return sortConfig.direction === 'asc' ? -1 : 1;
             }
-            if (a[sortConfig.key] > b[sortConfig.key]) {
+            if (valA > valB) {
                 return sortConfig.direction === 'asc' ? 1 : -1;
             }
             return 0;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
@@ -138,7 +137,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            const campaignData = await getCampaigns(stateAbbr, orgIdForOps);
+            // Fix: explicit check to ensure organizationId is string | undefined, never null
+            const finalOrgId = orgIdForOps === null ? undefined : orgIdForOps;
+            const campaignData = await getCampaigns(stateAbbr, finalOrgId);
             setCampaigns(campaignData);
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
