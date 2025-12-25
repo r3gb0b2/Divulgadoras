@@ -35,7 +35,7 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const orgIdForFetch = isSuperAdmin ? undefined : selectedOrgId;
+            const orgIdForFetch = isSuperAdmin ? undefined : (selectedOrgId ?? undefined);
             const adminDataPromise = getAllAdmins(orgIdForFetch);
             const campaignDataPromise = getAllCampaigns(orgIdForFetch);
             const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);

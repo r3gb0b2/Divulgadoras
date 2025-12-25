@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
@@ -58,7 +57,7 @@ const AdminPosts: React.FC = () => {
         if (!adminData) return;
         if (showLoader) setIsLoading(true);
         setError(null);
-        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+        const orgId = isSuperAdmin ? undefined : (selectedOrgId ?? undefined);
         if (!isSuperAdmin && !orgId) {
             setError("Organização não encontrada.");
             setIsLoading(false); return;
@@ -175,7 +174,7 @@ const AdminPosts: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-4 mb-8">
                     <div className="flex space-x-1 p-1 bg-dark/50 rounded-xl w-fit border border-white/5">
                         {(['active', 'inactive', 'all'] as const).map(f => (
-                            <button key={f} onClick={() => setStatusFilter(f)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${statusFilter === f ? 'bg-primary text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>
+                            <button key={f} onClick={() => setStatusFilter(f)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${statusFilter === f ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-300'}`}>
                                 {{'active':'Ativos','inactive':'Inativos','all':'Todos'}[f]}
                             </button>
                         ))}

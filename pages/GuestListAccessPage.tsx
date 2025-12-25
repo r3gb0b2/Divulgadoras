@@ -46,7 +46,7 @@ const GuestListAccessPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const orgId = adminData.role === 'superadmin' ? undefined : selectedOrgId;
+            const orgId = adminData.role === 'superadmin' ? undefined : (selectedOrgId ?? undefined);
             if (!orgId && adminData.role !== 'superadmin') {
                 throw new Error("Organização não encontrada.");
             }

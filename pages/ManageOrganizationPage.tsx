@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOrganization, updateOrganization, deleteOrganization } from '../services/organizationService';
@@ -83,7 +82,7 @@ const ManageOrganizationPage: React.FC = () => {
     }, [allAdmins, organization]);
 
     const handleAssociateAdmin = async (adminUid: string) => {
-        if (!orgId || !adminUid) return;
+        if (!orgId || !adminUid || !organization) return;
         setIsProcessingAdmin(adminUid);
         try {
             const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
@@ -100,6 +99,7 @@ const ManageOrganizationPage: React.FC = () => {
     };
 
     const handleDisassociateAdmin = async (adminUid: string) => {
+        if (!orgId || !organization) return;
         setIsProcessingAdmin(adminUid);
         try {
             const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
@@ -224,7 +224,7 @@ const ManageOrganizationPage: React.FC = () => {
                            <option value="active">Ativo</option>
                            <option value="hidden">Oculto</option>
                            <option value="deactivated">Desativado</option>
-                           {organization?.status === 'trial' && <option value="trial">Em Teste</option>}
+                           {organization.status === 'trial' && <option value="trial">Em Teste</option>}
                         </select>
                     </div>
                     <div>
@@ -346,9 +346,9 @@ const ManageOrganizationPage: React.FC = () => {
                                         <li key={admin.uid} className="flex items-center justify-between p-2 bg-gray-700/50 rounded-md">
                                             <div>
                                                 <p className="text-gray-200">{admin.email}</p>
-                                                <p className="text-xs text-gray-400">{admin.uid === organization?.ownerUid ? 'Proprietário' : `Nível: ${admin.role}`}</p>
+                                                <p className="text-xs text-gray-400">{admin.uid === organization.ownerUid ? 'Proprietário' : `Nível: ${admin.role}`}</p>
                                             </div>
-                                            {admin.uid !== organization?.ownerUid && (
+                                            {admin.uid !== organization.ownerUid && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDisassociateAdmin(admin.uid)}
