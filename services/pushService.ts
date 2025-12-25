@@ -1,4 +1,3 @@
-
 import { PushNotifications, Token } from '@capacitor/push-notifications';
 // @ts-ignore
 import { FCM } from '@capacitor-community/fcm';
