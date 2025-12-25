@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
-import { deletePushToken } from '../services/promoterService';
+import { deletePushToken } from '../services/pushService';
 import { sendPushCampaign } from '../services/messageService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Organization, Promoter, Campaign } from '../types';
@@ -35,7 +34,6 @@ const AdminPushCampaignPage: React.FC = () => {
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
-    // 1. Carregar Organizações e Campanhas
     useEffect(() => {
         const loadInitial = async () => {
             if (isSuperAdmin) {
@@ -57,7 +55,6 @@ const AdminPushCampaignPage: React.FC = () => {
         }
     }, [targetOrgId, selectedOrgId, isSuperAdmin]);
 
-    // 2. Buscar Promotoras filtradas
     const fetchPromoters = useCallback(async () => {
         const orgId = isSuperAdmin ? targetOrgId : selectedOrgId;
         if (!orgId) return;
@@ -68,14 +65,11 @@ const AdminPushCampaignPage: React.FC = () => {
                 organizationId: orgId,
                 filterOrgId: orgId,
                 filterState: 'all',
-                selectedCampaign: targetCampaignName, // Filtro por campanha injetado aqui
+                selectedCampaign: targetCampaignName,
                 status: 'approved',
             });
-            // Filtra apenas quem tem token
             const withToken = fetched.filter(p => !!p.fcmToken);
             setPromoters(withToken);
-            
-            // Auto-selecionar todos os filtrados por padrão ao trocar de campanha
             setSelectedPromoterIds(new Set(withToken.map(p => p.id))); 
         } catch (err) {
             setError("Erro ao buscar dispositivos.");
@@ -153,7 +147,6 @@ const AdminPushCampaignPage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Filtros e Lista */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700">
                         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -247,7 +240,6 @@ const AdminPushCampaignPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Composição da Mensagem */}
                 <div className="lg:col-span-1">
                     <div className="bg-secondary p-6 rounded-xl shadow-lg border border-gray-700 sticky top-24">
                         <h2 className="text-xl font-bold text-white mb-4">Nova Notificação</h2>

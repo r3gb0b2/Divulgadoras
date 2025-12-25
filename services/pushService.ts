@@ -1,41 +1,65 @@
+// @ts-nocheck
 import { PushNotifications, Token } from '@capacitor/push-notifications';
-// @ts-ignore
 import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
-import { savePushToken } from './promoterService';
+import firebase from 'firebase/compat/app';
+import { firestore, functions } from '../firebase/config';
 
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
+
+/**
+ * Salva o token no Firestore via cloud function (Implementação local).
+ */
+export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
+    try {
+        const saveFunc = functions.httpsCallable('savePromoterToken');
+        const result = await saveFunc({ promoterId, token, metadata });
+        return (result.data as any).success;
+    } catch (error) {
+        console.error("Erro ao salvar token push:", error);
+        return false;
+    }
+};
+
+/**
+ * Remove o token do perfil da divulgadora (Implementação local).
+ */
+export const deletePushToken = async (promoterId: string): Promise<void> => {
+    try {
+        await firestore.collection('promoters').doc(promoterId).update({
+            fcmToken: firebase.firestore.FieldValue.delete(),
+            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (error) {
+        console.error("Erro ao deletar token push:", error);
+        throw new Error("Falha ao remover vínculo do dispositivo.");
+    }
+};
 
 /**
  * Função interna para capturar o token FCM e enviar ao banco.
  */
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
-        const platform = Capacitor.getPlatform(); // 'ios', 'android' or 'web'
-        console.log('Push: Iniciando sincronização FCM para plataforma:', platform);
-
-        // 1. Verifica disponibilidade do Plugin
+        const platform = Capacitor.getPlatform();
+        
         if (!Capacitor.isPluginAvailable('FCM')) {
             return { 
                 success: false, 
-                error: "BRIDGE_ERROR: O plugin '@capacitor-community/fcm' não foi encontrado." 
+                error: "Plugin FCM não disponível." 
             };
         }
         
         if (platform === 'ios') {
             try {
                 await FCM.setAutoInit({ enabled: true });
-            } catch (e) {
-                console.warn("FCM: Falha ao setar AutoInit (não crítico)");
-            }
+            } catch (e) {}
         }
 
-        // 2. Tenta obter o Token FCM real
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
         if (fcmToken && fcmToken.length > 32) {
-            // Enviamos metadados para que o Admin saiba em qual aba mostrar o usuário
             const metadata = {
                 platform: platform,
                 updatedAt: new Date().toISOString(),
@@ -44,15 +68,13 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
 
             const saved = await savePushToken(promoterId, fcmToken, metadata);
             if (saved) return { success: true };
-            return { success: false, error: "Token capturado, mas erro ao salvar no banco." };
+            return { success: false, error: "Erro ao persistir token no banco." };
         }
         
-        return { success: false, error: "FCM retornou um token vazio ou inválido." };
+        return { success: false, error: "Token FCM inválido retornado." };
 
     } catch (error: any) {
-        const msg = error.message || "";
-        console.error('Push Sync Error:', msg);
-        return { success: false, error: msg || "Erro na sincronização FCM." };
+        return { success: false, error: error.message || "Erro na sincronização FCM." };
     }
 };
 
@@ -78,24 +100,29 @@ export const initPushNotifications = async (
         }
 
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão negada pelo usuário.");
+            onStatusChange?.('denied', "Permissão negada.");
             return 'denied';
         }
 
         onStatusChange?.('granted');
+        onStatusChange?.('syncing');
+        
+        const immediateResult = await syncTokenWithServer(promoterId);
+        
+        if (immediateResult.success) {
+            onStatusChange?.('success');
+        }
+
         await PushNotifications.removeAllListeners();
 
         PushNotifications.addListener('registration', async (token: Token) => {
             onStatusChange?.('syncing');
-            
-            setTimeout(async () => {
-                const result = await syncTokenWithServer(promoterId);
-                if (result.success) {
-                    onStatusChange?.('success');
-                } else {
-                    onStatusChange?.('error', result.error);
-                }
-            }, 2000);
+            const result = await syncTokenWithServer(promoterId);
+            if (result.success) {
+                onStatusChange?.('success');
+            } else {
+                onStatusChange?.('error', result.error);
+            }
         });
 
         PushNotifications.addListener('registrationError', (error: any) => {
@@ -103,6 +130,7 @@ export const initPushNotifications = async (
         });
 
         await PushNotifications.register();
+        
         return 'granted';
     } catch (error: any) {
         onStatusChange?.('error', error.message);
