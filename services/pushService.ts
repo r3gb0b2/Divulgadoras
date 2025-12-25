@@ -1,3 +1,4 @@
+
 import { PushNotifications, Token } from '@capacitor/push-notifications';
 // @ts-ignore
 import { FCM } from '@capacitor-community/fcm';
@@ -11,7 +12,7 @@ export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing
  */
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
-        const platform = Capacitor.getPlatform(); // 'ios', 'android' or 'web'
+        const platform = Capacitor.getPlatform();
         console.log('Push: Iniciando sincronização FCM para plataforma:', platform);
 
         // 1. Verifica disponibilidade do Plugin
@@ -30,12 +31,12 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
             }
         }
 
-        // 2. Tenta obter o Token FCM real
+        // 2. Tenta obter o Token FCM real diretamente do Google
         const result = await FCM.getToken();
         const fcmToken = result.token;
 
         if (fcmToken && fcmToken.length > 32) {
-            // Enviamos metadados para que o Admin saiba em qual aba mostrar o usuário
+            console.log('Push: Token FCM obtido com sucesso. Enviando para Firestore...');
             const metadata = {
                 platform: platform,
                 updatedAt: new Date().toISOString(),
@@ -83,28 +84,46 @@ export const initPushNotifications = async (
         }
 
         onStatusChange?.('granted');
+        
+        // No Android, muitas vezes o token já existe. 
+        // Tentamos sincronizar imediatamente sem esperar o evento de registro.
+        console.log('Push: Permissão garantida. Tentando sync imediato...');
+        onStatusChange?.('syncing');
+        const immediateResult = await syncTokenWithServer(promoterId);
+        
+        if (immediateResult.success) {
+            onStatusChange?.('success');
+        } else {
+            console.warn('Push: Sync imediato falhou, configurando listeners...', immediateResult.error);
+            // Se falhar o imediato (ex: rede lenta), configuramos o listener para quando o sistema registrar
+        }
+
+        // Removemos ouvintes antigos para evitar duplicidade
         await PushNotifications.removeAllListeners();
 
+        // Este evento dispara quando o token é criado ou renovado
         PushNotifications.addListener('registration', async (token: Token) => {
+            console.log('Push: Evento registration disparado pelo sistema.');
             onStatusChange?.('syncing');
-            
-            setTimeout(async () => {
-                const result = await syncTokenWithServer(promoterId);
-                if (result.success) {
-                    onStatusChange?.('success');
-                } else {
-                    onStatusChange?.('error', result.error);
-                }
-            }, 2000);
+            const result = await syncTokenWithServer(promoterId);
+            if (result.success) {
+                onStatusChange?.('success');
+            } else {
+                onStatusChange?.('error', result.error);
+            }
         });
 
         PushNotifications.addListener('registrationError', (error: any) => {
+            console.error('Push: Erro de registro no sistema:', error);
             onStatusChange?.('error', error.error || error.message);
         });
 
+        // Solicita o registro ao sistema operacional
         await PushNotifications.register();
+        
         return 'granted';
     } catch (error: any) {
+        console.error('Push: Erro fatal na inicialização:', error);
         onStatusChange?.('error', error.message);
         return 'error';
     }
