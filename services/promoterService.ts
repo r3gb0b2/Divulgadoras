@@ -2,6 +2,9 @@ import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
 
+/**
+ * Limpa objetos para envio seguro via Cloud Functions.
+ */
 const cleanForCallable = (obj: any): any => {
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof firebase.firestore.FieldValue) return undefined; 
