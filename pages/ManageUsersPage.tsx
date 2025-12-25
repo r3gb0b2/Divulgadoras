@@ -161,7 +161,9 @@ const ManageUsersPage: React.FC = () => {
                 targetUid = editingTarget.uid;
             } else {
                 // FIX: Use compat createUserWithEmailAndPassword method.
-                const { user } = await auth.createUserWithEmailAndPassword(email, password);
+                const result = await auth.createUserWithEmailAndPassword(email, password);
+                const user = result.user;
+                if (!user) throw new Error("Falha ao criar usuário.");
                 targetUid = user.uid;
                 alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
             }

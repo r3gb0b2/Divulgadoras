@@ -188,7 +188,7 @@ const ManageOrganizationPage: React.FC = () => {
     }
 
     if (isLoading) return <div className="text-center py-10">Carregando organização...</div>;
-    if (error && !organization) return <p className="text-red-400 text-center">{error}</p>;
+    if (!organization) return <div className="text-center py-10 text-red-400">{error || "Organização não encontrada."}</div>;
     if (!isAuthorized) return <div className="bg-secondary shadow-lg rounded-lg p-6 text-center"><h2 className="text-2xl font-bold text-red-400">Acesso Negado</h2><button onClick={() => navigate(-1)} className="mt-6 px-4 py-2 bg-primary text-white rounded-md">Voltar</button></div>;
 
     return (
@@ -224,7 +224,7 @@ const ManageOrganizationPage: React.FC = () => {
                            <option value="active">Ativo</option>
                            <option value="hidden">Oculto</option>
                            <option value="deactivated">Desativado</option>
-                           {organization.status === 'trial' && <option value="trial">Em Teste</option>}
+                           {organization?.status === 'trial' && <option value="trial">Em Teste</option>}
                         </select>
                     </div>
                     <div>
@@ -263,7 +263,7 @@ const ManageOrganizationPage: React.FC = () => {
                            ))}
                         </div>
                     </div>
-                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
+                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization?.createdAt as Timestamp)}</div>
                     <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
@@ -346,9 +346,9 @@ const ManageOrganizationPage: React.FC = () => {
                                         <li key={admin.uid} className="flex items-center justify-between p-2 bg-gray-700/50 rounded-md">
                                             <div>
                                                 <p className="text-gray-200">{admin.email}</p>
-                                                <p className="text-xs text-gray-400">{admin.uid === organization.ownerUid ? 'Proprietário' : `Nível: ${admin.role}`}</p>
+                                                <p className="text-xs text-gray-400">{admin.uid === organization?.ownerUid ? 'Proprietário' : `Nível: ${admin.role}`}</p>
                                             </div>
-                                            {admin.uid !== organization.ownerUid && (
+                                            {admin.uid !== organization?.ownerUid && (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDisassociateAdmin(admin.uid)}
