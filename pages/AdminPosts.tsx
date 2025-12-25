@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
@@ -58,7 +57,7 @@ const AdminPosts: React.FC = () => {
         if (!adminData) return;
         if (showLoader) setIsLoading(true);
         setError(null);
-        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+        const orgId = isSuperAdmin ? undefined : (selectedOrgId ?? undefined);
         if (!isSuperAdmin && !orgId) {
             setError("Organização não encontrada.");
             setIsLoading(false); return;
@@ -146,11 +145,13 @@ const AdminPosts: React.FC = () => {
     };
 
     const handleAcceptAll = async () => {
-        if (!selectedPostForJustifications) return;
+        const targetPostId = selectedPostForJustifications?.id;
+        if (!targetPostId) return;
+
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
         setIsAcceptingAll(true);
         try {
-            await acceptAllJustifications(selectedPostForJustifications.id);
+            await acceptAllJustifications(targetPostId);
             alert("Todas as justificativas foram aceitas!");
             setIsJustificationModalOpen(false);
             fetchPosts(false);
@@ -302,14 +303,16 @@ const AdminPosts: React.FC = () => {
                 )}
             </div>
 
-            <JustificationReviewModal 
-                isOpen={isJustificationModalOpen} 
-                onClose={() => setIsJustificationModalOpen(false)} 
-                post={selectedPostForJustifications} 
-                assignments={pendingJustificationsMap.get(selectedPostForJustifications?.id || '') || []} 
-                onAcceptAll={handleAcceptAll} 
-                isProcessing={isAcceptingAll} 
-            />
+            {selectedPostForJustifications && (
+                <JustificationReviewModal 
+                    isOpen={isJustificationModalOpen} 
+                    onClose={() => setIsJustificationModalOpen(false)} 
+                    post={selectedPostForJustifications} 
+                    assignments={pendingJustificationsMap.get(selectedPostForJustifications.id) || []} 
+                    onAcceptAll={handleAcceptAll} 
+                    isProcessing={isAcceptingAll} 
+                />
+            )}
         </div>
     );
 };

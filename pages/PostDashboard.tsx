@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -234,13 +233,18 @@ const PostDashboard: React.FC = () => {
             return true;
         });
 
-        // Sorting
+        // Sorting - TS Safe Access
+        const currentSort = sortConfig || { key: 'name', direction: 'asc' };
         finalStats.sort((a, b) => {
-            if (a[sortConfig.key] < b[sortConfig.key]) {
-                return sortConfig.direction === 'asc' ? -1 : 1;
+            const key = currentSort.key;
+            const valA = (a as any)[key] ?? 0;
+            const valB = (b as any)[key] ?? 0;
+
+            if (valA < valB) {
+                return currentSort.direction === 'asc' ? -1 : 1;
             }
-            if (a[sortConfig.key] > b[sortConfig.key]) {
-                return sortConfig.direction === 'asc' ? 1 : -1;
+            if (valA > valB) {
+                return currentSort.direction === 'asc' ? 1 : -1;
             }
             return 0;
         });
