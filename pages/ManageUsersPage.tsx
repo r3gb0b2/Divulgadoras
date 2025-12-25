@@ -35,7 +35,7 @@ const ManageUsersPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            const orgIdForFetch = isSuperAdmin ? undefined : (selectedOrgId ?? undefined);
+            const orgIdForFetch = isSuperAdmin ? undefined : selectedOrgId;
             const adminDataPromise = getAllAdmins(orgIdForFetch);
             const campaignDataPromise = getAllCampaigns(orgIdForFetch);
             const orgDataPromise = isSuperAdmin ? getOrganizations() : Promise.resolve([]);
@@ -161,9 +161,7 @@ const ManageUsersPage: React.FC = () => {
                 targetUid = editingTarget.uid;
             } else {
                 // FIX: Use compat createUserWithEmailAndPassword method.
-                const result = await auth.createUserWithEmailAndPassword(email, password);
-                const user = result.user;
-                if (!user) throw new Error("Falha ao criar usuário.");
+                const { user } = await auth.createUserWithEmailAndPassword(email, password);
                 targetUid = user.uid;
                 alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
             }

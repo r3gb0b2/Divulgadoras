@@ -13,7 +13,7 @@ const AdminCheckinDashboard: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
-        const orgId = adminData?.role === 'superadmin' ? undefined : (selectedOrgId ?? undefined);
+        const orgId = adminData?.role === 'superadmin' ? undefined : selectedOrgId;
 
         if (!orgId && adminData?.role !== 'superadmin') {
             setError("Nenhuma organização selecionada.");

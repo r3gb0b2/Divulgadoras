@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -234,17 +235,12 @@ const PostDashboard: React.FC = () => {
         });
 
         // Sorting
-        const config = sortConfig || { key: 'name', direction: 'asc' };
         finalStats.sort((a, b) => {
-            const key = config.key;
-            const valA = (a as any)[key] ?? 0;
-            const valB = (b as any)[key] ?? 0;
-
-            if (valA < valB) {
-                return config.direction === 'asc' ? -1 : 1;
+            if (a[sortConfig.key] < b[sortConfig.key]) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
             }
-            if (valA > valB) {
-                return config.direction === 'asc' ? 1 : -1;
+            if (a[sortConfig.key] > b[sortConfig.key]) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
             }
             return 0;
         });

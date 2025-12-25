@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getOrganization, updateOrganization, deleteOrganization } from '../services/organizationService';
@@ -82,7 +83,7 @@ const ManageOrganizationPage: React.FC = () => {
     }, [allAdmins, organization]);
 
     const handleAssociateAdmin = async (adminUid: string) => {
-        if (!orgId || !adminUid || !organization) return;
+        if (!orgId || !adminUid) return;
         setIsProcessingAdmin(adminUid);
         try {
             const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
@@ -99,7 +100,6 @@ const ManageOrganizationPage: React.FC = () => {
     };
 
     const handleDisassociateAdmin = async (adminUid: string) => {
-        if (!orgId || !organization) return;
         setIsProcessingAdmin(adminUid);
         try {
             const adminToUpdate = allAdmins.find(admin => admin.uid === adminUid);
@@ -188,7 +188,7 @@ const ManageOrganizationPage: React.FC = () => {
     }
 
     if (isLoading) return <div className="text-center py-10">Carregando organização...</div>;
-    if (!organization) return <div className="text-center py-10 text-red-400">{error || "Organização não encontrada."}</div>;
+    if (error && !organization) return <p className="text-red-400 text-center">{error}</p>;
     if (!isAuthorized) return <div className="bg-secondary shadow-lg rounded-lg p-6 text-center"><h2 className="text-2xl font-bold text-red-400">Acesso Negado</h2><button onClick={() => navigate(-1)} className="mt-6 px-4 py-2 bg-primary text-white rounded-md">Voltar</button></div>;
 
     return (
@@ -263,7 +263,7 @@ const ManageOrganizationPage: React.FC = () => {
                            ))}
                         </div>
                     </div>
-                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization?.createdAt as Timestamp)}</div>
+                    <div className="text-sm text-gray-400">Criada em: {formatDate(organization.createdAt as Timestamp)}</div>
                     <div className="text-sm text-gray-400">Plano expira em: {formatDate(formData.planExpiresAt as Timestamp)}</div>
                 </div>
 
