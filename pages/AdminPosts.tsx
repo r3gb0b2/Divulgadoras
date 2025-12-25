@@ -147,10 +147,12 @@ const AdminPosts: React.FC = () => {
     const handleAcceptAll = async () => {
         const targetPost = selectedPostForJustifications;
         if (!targetPost || !targetPost.id) return;
+        
+        const postId = targetPost.id;
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
         setIsAcceptingAll(true);
         try {
-            await acceptAllJustifications(targetPost.id);
+            await acceptAllJustifications(postId);
             alert("Todas as justificativas foram aceitas!");
             setIsJustificationModalOpen(false);
             fetchPosts(false);
