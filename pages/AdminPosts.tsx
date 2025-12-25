@@ -115,7 +115,6 @@ const AdminPosts: React.FC = () => {
 
     const handleQuickUpdate = async (postId: string, data: Partial<Post>) => {
         try {
-            // Update local state for immediate feedback
             setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...data } : p));
             await updatePost(postId, data);
         } catch (e: any) {
@@ -145,13 +144,17 @@ const AdminPosts: React.FC = () => {
     };
 
     const handleAcceptAll = async () => {
-        const targetPostId = selectedPostForJustifications?.id;
-        if (!targetPostId) return;
-
+        const activePost = selectedPostForJustifications;
+        if (!activePost || !activePost.id) {
+            alert("Post não selecionado.");
+            return;
+        }
+        
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
+        
         setIsAcceptingAll(true);
         try {
-            await acceptAllJustifications(targetPostId);
+            await acceptAllJustifications(activePost.id);
             alert("Todas as justificativas foram aceitas!");
             setIsJustificationModalOpen(false);
             fetchPosts(false);
@@ -230,7 +233,6 @@ const AdminPosts: React.FC = () => {
                                             </button>
                                         </div>
 
-                                        {/* QUICK CHECKS */}
                                         <div className="grid grid-cols-1 gap-2 my-4 py-4 border-y border-white/5">
                                             <label className="flex items-center gap-3 cursor-pointer group/item">
                                                 <input 
@@ -270,7 +272,6 @@ const AdminPosts: React.FC = () => {
                                             </label>
                                         </div>
 
-                                        {/* JUSTIFICATIONS BUTTON */}
                                         <button 
                                             onClick={() => handleOpenJustifications(post)}
                                             className={`w-full py-2.5 rounded-xl mb-4 border transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest ${pendingJustifications.length > 0 ? 'bg-orange-900/30 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-gray-800/30 text-gray-500 border-gray-700/50 hover:text-white'}`}

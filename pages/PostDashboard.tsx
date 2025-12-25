@@ -16,39 +16,25 @@ type SortDirection = 'asc' | 'desc';
 const getPerformanceColor = (rate: number): string => {
     if (rate === 100) return 'text-green-400';
     if (rate >= 60) return 'text-blue-400';
-    if (rate >= 31) return 'text-yellow-400'; // Laranja
+    if (rate >= 31) return 'text-yellow-400';
     return 'text-red-400';
 };
 
-// Helper to safely convert various date formats to a Date object
 const toDateSafe = (timestamp: any): Date | null => {
-    if (!timestamp) {
-        return null;
-    }
-    // Firestore Timestamp
-    if (typeof timestamp.toDate === 'function') {
-        return timestamp.toDate();
-    }
-    // Serialized Timestamp object
-    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) {
-        return new Date(timestamp.seconds * 1000);
-    }
-    // ISO string or number (milliseconds)
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
     const date = new Date(timestamp);
-    if (!isNaN(date.getTime())) {
-        return date;
-    }
+    if (!isNaN(date.getTime())) return date;
     return null;
 };
 
 const calculateTimeInGroup = (createdAt: any): string => {
     const date = toDateSafe(createdAt);
     if (!date) return '';
-    
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
     if (diffDays === 0) return 'Entrou hoje';
     if (diffDays === 1) return 'há 1 dia no grupo';
     return `há ${diffDays} dias no grupo`;
@@ -71,7 +57,6 @@ const PostDashboard: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState<string | null>(null);
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
-    // Filtering and sorting state
     const [filterCampaign, setFilterCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'name', direction: 'asc' });
@@ -80,7 +65,6 @@ const PostDashboard: React.FC = () => {
     const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
     const [showFilters, setShowFilters] = useState(false);
 
-    // Numeric Filters State
     const [numFilters, setNumFilters] = useState<{
         assigned: NumericFilter;
         completed: NumericFilter;
@@ -123,7 +107,6 @@ const PostDashboard: React.FC = () => {
         fetchData();
     }, [fetchData]);
     
-    // Clear selection when filters change
     useEffect(() => {
         setSelectedPromoterIds(new Set());
     }, [filterCampaign, searchQuery, colorFilter, groupFilterStatus, numFilters]);
@@ -162,7 +145,6 @@ const PostDashboard: React.FC = () => {
                     stat.missed++;
                 } else if (a.justificationStatus === 'pending' || a.justification) {
                     stat.justifications++;
-                    // Pending decision, doesn't count as missed yet
                 } else {
                     let isMissed = false;
                     const postExpiresAt = toDateSafe(a.post.expiresAt);
@@ -189,22 +171,19 @@ const PostDashboard: React.FC = () => {
                stat.completionRate = 0;
            }
             return stat;
-        }).filter(stat => stat.assigned > 0); // Only show promoters with at least one assignment
+        }).filter(stat => stat.assigned > 0);
 
-        // "In Group" / "Not in Group" filter
         if (groupFilterStatus === 'inGroup') {
             finalStats = finalStats.filter(s => s.hasJoinedGroup === true);
         } else if (groupFilterStatus === 'notInGroup') {
             finalStats = finalStats.filter(s => s.hasJoinedGroup !== true);
         }
 
-        // Search Filter
         const lowercasedQuery = searchQuery.toLowerCase().trim();
         if (lowercasedQuery) {
             finalStats = finalStats.filter(s => s.name.toLowerCase().includes(lowercasedQuery) || s.email.toLowerCase().includes(lowercasedQuery));
         }
 
-        // Color Filter
         if (colorFilter !== 'all') {
             finalStats = finalStats.filter(s => {
                 const rate = s.completionRate;
@@ -217,7 +196,6 @@ const PostDashboard: React.FC = () => {
             });
         }
 
-        // Numeric Filters
         const checkRange = (val: number, minStr: string, maxStr: string) => {
             const min = minStr !== '' ? parseInt(minStr, 10) : -Infinity;
             const max = maxStr !== '' ? parseInt(maxStr, 10) : Infinity;
@@ -233,7 +211,6 @@ const PostDashboard: React.FC = () => {
             return true;
         });
 
-        // Sorting - TS Safe Access
         const currentSort = sortConfig || { key: 'name', direction: 'asc' };
         finalStats.sort((a, b) => {
             const key = currentSort.key;
@@ -309,14 +286,14 @@ const PostDashboard: React.FC = () => {
     };
 
      const handleRemovePromoter = async (promoter: Promoter) => {
-        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas. Ela precisará fazer um novo cadastro para participar futuramente.`)) {
+        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas.`)) {
             setIsProcessing(promoter.id);
             setError('');
             try {
                 const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
                 await setPromoterStatusToRemoved({ promoterId: promoter.id });
                 alert(`${promoter.name} foi removida com sucesso.`);
-                await fetchData(); // Refresh all data
+                await fetchData();
             } catch (err: any) {
                 const message = err.message || 'Falha ao remover divulgadora.';
                 setError(message);
@@ -337,7 +314,6 @@ const PostDashboard: React.FC = () => {
                 </button>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                 {/* Main Toolbar */}
                  <div className="flex flex-col gap-4 mb-6">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         <div className="flex flex-col sm:flex-row gap-4 w-full">
@@ -366,7 +342,6 @@ const PostDashboard: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Checkbox Group Filter */}
                     <div className="flex items-center gap-4 flex-wrap">
                         <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer">
                             <input
@@ -388,10 +363,9 @@ const PostDashboard: React.FC = () => {
                         </label>
                     </div>
 
-                    {/* Numeric Filters (Collapsible) */}
                     {showFilters && (
                         <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 grid grid-cols-2 md:grid-cols-5 gap-4 animate-fadeIn">
-                            <div>
+                             <div>
                                 <label className="block text-xs text-gray-400 mb-1">Designadas</label>
                                 <div className="flex gap-1">
                                     <input type="number" placeholder="Min" value={numFilters.assigned.min} onChange={e => handleNumFilterChange('assigned', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
@@ -430,7 +404,6 @@ const PostDashboard: React.FC = () => {
                     )}
                  </div>
 
-                 {/* Bulk Action Bar */}
                  {selectedPromoterIds.size > 0 && (
                     <div className="sticky top-2 z-20 bg-blue-900/90 backdrop-blur-sm border-l-4 border-blue-500 text-white p-3 rounded-md shadow-lg flex items-center justify-between gap-4 mb-4">
                         <div className="font-semibold">{selectedPromoterIds.size} selecionadas</div>
@@ -442,28 +415,6 @@ const PostDashboard: React.FC = () => {
                         </div>
                     </div>
                  )}
-
-                 {/* Stats Legend */}
-                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs text-gray-400 mb-4">
-                    <div className="flex items-center gap-x-4">
-                        <span className="font-semibold text-gray-300">Legenda de Aproveitamento:</span>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>100%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div><span>60-99%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31-59%</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0-30%</span></div>
-                    </div>
-                    <div className="flex items-center gap-x-2">
-                        <span className="font-semibold text-gray-300">Filtrar por Cor:</span>
-                        <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
-                            {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
-                                <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-300 hover:bg-gray-700'}`}>
-                                    {f !== 'all' && <div className={`w-2.5 h-2.5 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
-                                    <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
 
                  {error && <p className="text-red-400 mb-4">{error}</p>}
                  {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (

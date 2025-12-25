@@ -1,4 +1,3 @@
-
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 const SibApiV3Sdk = require("@getbrevo/brevo");
@@ -12,7 +11,7 @@ const getConfig = () => {
     const config = functions.config();
     return {
         brevoKey: config.brevo?.key || null,
-        brevoEmail: config.brevo?.email || "rafael@agenciavitrine.com",
+        brevoEmail: config.brevo?.email || "r3gb0b@gmail.com",
         zApiToken: config.zapi?.token || null,
         zApiInstance: config.zapi?.instance || null,
         zApiClientToken: config.zapi?.client_token || ""
@@ -124,16 +123,17 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
             return { email: p.email, name: p.name };
         });
 
-        await brevo.sendTransacEmail({
-            sender: { email: config.brevoEmail, name: "Equipe Certa" },
+        const res = await brevo.sendTransacEmail({
+            sender: { email: config.brevoEmail, name: "D&E" },
             to: emails,
             subject: subject,
             htmlContent: body
         });
-
+        
+        console.log("Newsletter Sent successfully.");
         return { success: true, message: `Newsletter enviada para ${emails.length} divulgadoras.` };
     } catch (error) {
-        console.error("Newsletter Error:", error);
+        console.error("Newsletter Error Detail:", JSON.stringify(error));
         return { success: false, message: error.message };
     }
 });
@@ -176,7 +176,7 @@ exports.removePromoterFromAllAssignments = functions.region("southamerica-east1"
     return { success: true };
 });
 
-// --- CORE SYNC (ATUALIZADO PARA WHATSAPP) ---
+// --- CORE SYNC ---
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, data: updateData } = data;
@@ -198,23 +198,32 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
         const brevo = setupBrevo(config.brevoKey);
         if (brevo) {
             try {
-                await brevo.sendTransacEmail({
-                    sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                const mailData = {
+                    sender: { email: config.brevoEmail, name: "D&E" },
                     to: [{ email: oldData.email, name: oldData.name }],
                     subject: "✅ Cadastro Aprovado!",
                     htmlContent: `
-                        <div style="font-family: sans-serif; color: #333;">
-                            <h2>Olá ${oldData.name}, seu perfil foi aprovado!</h2>
+                        <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto;">
+                            <h2 style="color: #7e39d5;">Olá ${oldData.name}, seu perfil foi aprovado!</h2>
                             <p>Parabéns! Agora você faz parte oficialmente da equipe para o evento: <strong>${oldData.campaignName || "Equipe Geral"}</strong>.</p>
                             <p>Acesse seu portal agora para ver suas tarefas e entrar no grupo do WhatsApp:</p>
-                            <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}" 
-                               style="display: inline-block; padding: 12px 24px; background: #7e39d5; color: white; border-radius: 8px; text-decoration: none; font-weight: bold;">
-                               ACESSAR MEU PORTAL
-                            </a>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(oldData.email)}" 
+                                   style="display: inline-block; padding: 16px 32px; background: #7e39d5; color: white; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(126,57,213,0.3);">
+                                   ACESSAR MEU PORTAL
+                                </a>
+                            </div>
+                            <p style="font-size: 12px; color: #666; border-top: 1px solid #eee; pt: 20px;">Este é um e-mail automático. Não responda diretamente.</p>
                         </div>
                     `
-                });
-            } catch (e) { console.error("Brevo Sync Error:", e); }
+                };
+                const res = await brevo.sendTransacEmail(mailData);
+                console.log(`Email Approval Sent to ${oldData.email}. Brevo ID:`, res.messageId);
+            } catch (e) { 
+                console.error("Critical Brevo Rejection:", JSON.stringify(e)); 
+            }
+        } else {
+            console.warn("Brevo API Key is missing in Cloud Functions config.");
         }
 
         // 2. Envio de WhatsApp (Z-API)

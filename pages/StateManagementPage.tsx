@@ -127,7 +127,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
     const fetchData = useCallback(async () => {
         if (!stateAbbr) return;
 
-        // Guard against calling API without orgId for non-superadmins
         if (!isSuperAdmin && !selectedOrgId) {
             setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
             setIsLoading(false);
@@ -137,7 +136,6 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            // Explicit check to convert null to undefined for getCampaigns signature
             const finalOrgId = orgIdForOps || undefined;
             const campaignData = await getCampaigns(stateAbbr, finalOrgId);
             setCampaigns(campaignData);
@@ -193,9 +191,8 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
                     organizationId: orgIdForOps,
                 });
 
-                // Auto-assign the new campaign to the creating admin if they have restrictions for this state.
                 const adminRestrictions = adminData.assignedCampaigns?.[stateAbbr];
-                if (adminRestrictions !== undefined) { // `undefined` means all access, an array (even empty) means restricted access
+                if (adminRestrictions !== undefined) {
                     const newAssignedCampaigns = { ...(adminData.assignedCampaigns || {}) };
                     const updatedCampaignsForState = [...(newAssignedCampaigns[stateAbbr] || []), newCampaignName];
                     newAssignedCampaigns[stateAbbr] = updatedCampaignsForState;
