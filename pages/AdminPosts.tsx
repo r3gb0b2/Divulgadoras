@@ -146,9 +146,11 @@ const AdminPosts: React.FC = () => {
 
     const handleAcceptAll = async () => {
         const targetPost = selectedPostForJustifications;
-        if (!targetPost || !targetPost.id) return;
+        if (!targetPost) return;
         
         const postId = targetPost.id;
+        if (!postId) return;
+
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
         setIsAcceptingAll(true);
         try {
@@ -304,14 +306,16 @@ const AdminPosts: React.FC = () => {
                 )}
             </div>
 
-            <JustificationReviewModal 
-                isOpen={isJustificationModalOpen} 
-                onClose={() => setIsJustificationModalOpen(false)} 
-                post={selectedPostForJustifications} 
-                assignments={pendingJustificationsMap.get(selectedPostForJustifications?.id || '') || []} 
-                onAcceptAll={handleAcceptAll} 
-                isProcessing={isAcceptingAll} 
-            />
+            {selectedPostForJustifications && (
+                <JustificationReviewModal 
+                    isOpen={isJustificationModalOpen} 
+                    onClose={() => setIsJustificationModalOpen(false)} 
+                    post={selectedPostForJustifications} 
+                    assignments={pendingJustificationsMap.get(selectedPostForJustifications.id) || []} 
+                    onAcceptAll={handleAcceptAll} 
+                    isProcessing={isAcceptingAll} 
+                />
+            )}
         </div>
     );
 };
