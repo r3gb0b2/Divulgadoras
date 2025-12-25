@@ -1,14 +1,14 @@
 // @ts-nocheck
 import { PushNotifications, Token } from '@capacitor/push-notifications';
-import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
 import firebase from 'firebase/compat/app';
 import { firestore, functions } from '../firebase/config';
 
+// Definição local do status para o serviço de push
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
 
 /**
- * Salva o token no Firestore via cloud function (Implementação local).
+ * Salva o token diretamente no Firestore (Implementação local para evitar imports problemáticos)
  */
 export const savePushToken = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
     try {
@@ -16,13 +16,13 @@ export const savePushToken = async (promoterId: string, token: string, metadata?
         const result = await saveFunc({ promoterId, token, metadata });
         return (result.data as any).success;
     } catch (error) {
-        console.error("Erro ao salvar token push:", error);
+        console.error("PushService: Erro ao salvar token:", error);
         return false;
     }
 };
 
 /**
- * Remove o token do perfil da divulgadora (Implementação local).
+ * Remove o vínculo do token FCM da divulgadora
  */
 export const deletePushToken = async (promoterId: string): Promise<void> => {
     try {
@@ -31,24 +31,20 @@ export const deletePushToken = async (promoterId: string): Promise<void> => {
             lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp(),
         });
     } catch (error) {
-        console.error("Erro ao deletar token push:", error);
+        console.error("PushService: Erro ao deletar token:", error);
         throw new Error("Falha ao remover vínculo do dispositivo.");
     }
 };
 
 /**
- * Função interna para capturar o token FCM e enviar ao banco.
+ * Sincroniza o token com o servidor
  */
 const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
         const platform = Capacitor.getPlatform();
         
-        if (!Capacitor.isPluginAvailable('FCM')) {
-            return { 
-                success: false, 
-                error: "Plugin FCM não disponível." 
-            };
-        }
+        // Importação dinâmica do FCM para evitar erros em plataformas não suportadas
+        const { FCM } = await import('@capacitor-community/fcm');
         
         if (platform === 'ios') {
             try {
@@ -68,10 +64,10 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
 
             const saved = await savePushToken(promoterId, fcmToken, metadata);
             if (saved) return { success: true };
-            return { success: false, error: "Erro ao persistir token no banco." };
+            return { success: false, error: "Erro ao persistir token." };
         }
         
-        return { success: false, error: "Token FCM inválido retornado." };
+        return { success: false, error: "Token FCM inválido." };
 
     } catch (error: any) {
         return { success: false, error: error.message || "Erro na sincronização FCM." };
@@ -79,7 +75,7 @@ const syncTokenWithServer = async (promoterId: string): Promise<{ success: boole
 };
 
 /**
- * Inicializa as notificações push e reporta status/erros detalhados.
+ * Inicializa as notificações push
  */
 export const initPushNotifications = async (
     promoterId: string, 
