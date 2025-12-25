@@ -137,7 +137,7 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            // Fix: explicit check to ensure organizationId is string | undefined, never null
+            // Fix: explicit ternary to ensure organizationId is string | undefined, never null
             const finalOrgId = (orgIdForOps === null ? undefined : orgIdForOps);
             const campaignData = await getCampaigns(stateAbbr, finalOrgId);
             setCampaigns(campaignData);
