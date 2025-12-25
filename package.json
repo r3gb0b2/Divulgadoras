@@ -2,7 +2,7 @@
 {
   "name": "equipe-certa",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
