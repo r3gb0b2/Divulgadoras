@@ -137,8 +137,9 @@ const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) 
         setIsLoading(true);
         setError('');
         try {
-            // FIX: Ensure organizationId is string | undefined, never null.
-            const campaignData = await getCampaigns(stateAbbr, orgIdForOps || undefined);
+            // Fix: ensure organizationId is string | undefined, never null
+            const finalOrgId = orgIdForOps || undefined;
+            const campaignData = await getCampaigns(stateAbbr, finalOrgId);
             setCampaigns(campaignData);
             if (isSuperAdmin) {
                 const config = await getStatesConfig();
