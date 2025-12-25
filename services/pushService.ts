@@ -3,7 +3,7 @@ import { PushNotifications, Token } from '@capacitor/push-notifications';
 // @ts-ignore
 import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
-import { savePushToken } from './promoterService';
+import { savePushToken } from '@/services/promoterService';
 
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
 
