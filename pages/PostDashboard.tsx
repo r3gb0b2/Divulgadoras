@@ -235,7 +235,6 @@ const PostDashboard: React.FC = () => {
 
         // Sorting
         finalStats.sort((a, b) => {
-            // Using type assertions to allow dynamic property access
             const valA = (a as any)[sortConfig.key] ?? 0;
             const valB = (b as any)[sortConfig.key] ?? 0;
 
