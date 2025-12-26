@@ -5,7 +5,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Post, Organization, PostAssignment, AdminUserData, Campaign } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon, PencilIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon, PencilIcon, EnvelopeIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -45,6 +45,7 @@ const AdminPosts: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
     const [filterCampaign, setFilterCampaign] = useState<string>('all');
     const [notifyingPostId, setNotifyingPostId] = useState<string | null>(null);
+    const [notifyingEmailId, setNotifyingEmailId] = useState<string | null>(null);
 
     // Controle de Justificativas
     const [isJustificationModalOpen, setIsJustificationModalOpen] = useState(false);
@@ -138,6 +139,21 @@ const AdminPosts: React.FC = () => {
         }
     };
 
+    const handleNotifyEmail = async (postId: string) => {
+        if (!window.confirm("Deseja enviar um aviso via E-MAIL para todas as divulgadoras pendentes desta postagem?")) return;
+        setNotifyingEmailId(postId);
+        try {
+            const notifyPostEmail = httpsCallable(functions, 'notifyPostEmail');
+            const result = await notifyPostEmail({ postId });
+            const data = result.data as { success: boolean, message: string };
+            alert(data.message);
+        } catch (e: any) {
+            alert("Erro ao notificar via e-mail: " + e.message);
+        } finally {
+            setNotifyingEmailId(null);
+        }
+    };
+
     const handleOpenJustifications = (post: Post) => {
         setSelectedPostForJustifications(post);
         setIsJustificationModalOpen(true);
@@ -223,14 +239,24 @@ const AdminPosts: React.FC = () => {
                                                     {post.createdByEmail.split('@')[0]} em {toDateSafe(post.createdAt)?.toLocaleDateString('pt-BR')} ({getRelativeTime(post.createdAt)})
                                                 </p>
                                             </div>
-                                            <button 
-                                                onClick={() => handleNotifyPush(post.id)} 
-                                                disabled={notifyingPostId === post.id || !post.isActive}
-                                                className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-900/40 disabled:opacity-30 transition-all"
-                                                title="Notificar pendentes via PUSH"
-                                            >
-                                                {notifyingPostId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <FaceIdIcon className="w-4 h-4" />}
-                                            </button>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => handleNotifyPush(post.id)} 
+                                                    disabled={notifyingPostId === post.id || !post.isActive}
+                                                    className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-900/40 disabled:opacity-30 transition-all"
+                                                    title="Notificar pendentes via PUSH"
+                                                >
+                                                    {notifyingPostId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <FaceIdIcon className="w-4 h-4" />}
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleNotifyEmail(post.id)} 
+                                                    disabled={notifyingEmailId === post.id || !post.isActive}
+                                                    className="p-2 bg-blue-900/20 text-blue-400 rounded-xl hover:bg-blue-900/40 disabled:opacity-30 transition-all"
+                                                    title="Notificar pendentes via E-MAIL"
+                                                >
+                                                    {notifyingEmailId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <EnvelopeIcon className="w-4 h-4" />}
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div className="grid grid-cols-1 gap-2 my-4 py-4 border-y border-white/5">

@@ -11,6 +11,7 @@ const getConfig = () => {
     const config = functions.config();
     return {
         brevoKey: config.brevo?.key || null,
+        // Forçamos o uso do e-mail r3gb0b@gmail.com se não houver um e-mail específico configurado no ambiente
         brevoEmail: config.brevo?.email || "r3gb0b@gmail.com",
         zApiToken: config.zapi?.token || null,
         zApiInstance: config.zapi?.instance || null,
@@ -221,5 +222,104 @@ exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.o
         return { success: response.ok };
     } catch (error) {
         return { success: false };
+    }
+});
+
+exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { postId, onlyPending } = data;
+    
+    const postSnap = await db.collection("posts").doc(postId).get();
+    if (!postSnap.exists) return { success: false, message: "Post não encontrado." };
+    const post = postSnap.data();
+
+    const assignmentsSnap = await db.collection("postAssignments")
+        .where("postId", "==", postId)
+        .get();
+
+    const tokens = [];
+    const assignments = assignmentsSnap.docs.map(doc => doc.data());
+    
+    const targetPromoterIds = assignments
+        .filter(a => !onlyPending || (!a.proofSubmittedAt && !a.justification))
+        .map(a => a.promoterId);
+
+    if (targetPromoterIds.length === 0) return { success: true, message: "Nenhuma divulgadora alvo encontrada." };
+
+    for (let i = 0; i < targetPromoterIds.length; i += 30) {
+        const chunk = targetPromoterIds.slice(i, i + 30);
+        const pSnap = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+        pSnap.docs.forEach(doc => {
+            const p = doc.data();
+            if (p.fcmToken) tokens.push(p.fcmToken);
+        });
+    }
+
+    if (tokens.length === 0) return { success: true, message: "Nenhum dispositivo móvel vinculado encontrado." };
+
+    const message = {
+        notification: {
+            title: `📢 Nova Postagem: ${post.campaignName}`,
+            body: `Uma nova tarefa foi atribuída a você. Clique para ver as instruções.`
+        },
+        data: { url: "/#/posts" },
+        tokens: tokens
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    return { success: true, message: `Notificação enviada para ${response.successCount} dispositivos.` };
+});
+
+exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { postId } = data;
+    const config = getConfig();
+    const brevo = setupBrevo(config.brevoKey);
+    if (!brevo) throw new functions.https.HttpsError("failed-precondition", "Brevo não configurado.");
+
+    const postSnap = await db.collection("posts").doc(postId).get();
+    if (!postSnap.exists) return { success: false, message: "Post não encontrado." };
+    const post = postSnap.data();
+
+    const assignmentsSnap = await db.collection("postAssignments")
+        .where("postId", "==", postId)
+        .get();
+
+    const pendingPromoters = [];
+    assignmentsSnap.docs.forEach(doc => {
+        const a = doc.data();
+        if (!a.proofSubmittedAt && !a.justification) {
+            pendingPromoters.push({ email: a.promoterEmail, name: a.promoterName });
+        }
+    });
+
+    if (pendingPromoters.length === 0) return { success: true, message: "Nenhuma divulgadora pendente encontrada." };
+
+    try {
+        await brevo.sendTransacEmail({
+            sender: { email: config.brevoEmail, name: "Equipe Certa" },
+            to: pendingPromoters,
+            subject: `📢 Nova Postagem: ${post.campaignName}`,
+            htmlContent: `
+                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 15px;">
+                    <h2 style="color: #7e39d5;">Olá! Temos uma nova tarefa para você.</h2>
+                    <p>Uma nova postagem para o evento <strong>${post.campaignName}</strong> foi solicitada e aguarda sua confirmação no portal.</p>
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #666;"><strong>Instruções do Organizador:</strong></p>
+                        <p style="margin: 10px 0 0 0; font-style: italic;">"${post.instructions}"</p>
+                    </div>
+                    <p>Acesse seu portal agora para baixar o material e realizar a postagem:</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="https://divulgadoras.vercel.app/#/status" 
+                           style="display: inline-block; padding: 15px 35px; background: #7e39d5; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(126, 57, 213, 0.3);">
+                           ACESSAR MEU PORTAL
+                        </a>
+                    </div>
+                    <p style="font-size: 12px; color: #999; margin-top: 40px; text-align: center;">Este é um e-mail automático do sistema Equipe Certa.</p>
+                </div>
+            `
+        });
+        return { success: true, message: `E-mails enviados para ${pendingPromoters.length} divulgadoras.` };
+    } catch (err) {
+        console.error("Brevo Post Notification Error:", err);
+        return { success: false, message: err.message };
     }
 });
