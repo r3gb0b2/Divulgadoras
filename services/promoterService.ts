@@ -4,6 +4,17 @@ import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
 
 /**
+ * Auxiliar para obter timestamp unix de forma segura para ordenação em memória.
+ */
+const getUnixTime = (ts: any): number => {
+    if (!ts) return Date.now() / 1000; // Se nulo (recém criado), assume "agora"
+    if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
+    if (ts.seconds !== undefined) return ts.seconds;
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
+};
+
+/**
  * Limpa objetos para envio seguro via Cloud Functions.
  */
 const cleanForCallable = (obj: any): any => {
@@ -107,11 +118,7 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         if (snap.empty) return null;
         
         const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        docs.sort((a, b) => {
-            const timeA = (a.createdAt as any)?.seconds || 0;
-            const timeB = (b.createdAt as any)?.seconds || 0;
-            return timeB - timeA;
-        });
+        docs.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
         
         return docs[0];
     } catch (error) { return null; }
@@ -148,6 +155,7 @@ export const getPromotersByIds = async (ids: string[]): Promise<Promoter[]> => {
             const snap = await q.get();
             snap.forEach(doc => results.push({ id: doc.id, ...doc.data() } as Promoter));
         }
+        results.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
         return results;
     } catch (error) { return []; }
 };
@@ -157,7 +165,8 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
         const snap = await firestore.collection("promoters").where("email", "==", email.toLowerCase().trim()).get();
         return snap.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as Promoter))
-            .filter(p => p && p.email && p.name); 
+            .filter(p => p && p.email && p.name)
+            .sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
     } catch (error) { return []; }
 };
 
@@ -165,46 +174,21 @@ export const getAllPromotersPaginated = async (options: {
     organizationId?: string; status?: PromoterStatus | 'all';
     filterState?: string; selectedCampaign?: string;
     pageSize: number; lastDoc?: any;
-    searchQuery?: string; // NOVO: Campo de busca para filtro no servidor
+    searchQuery?: string;
 }): Promise<{ promoters: Promoter[], lastDoc: any, hasMore: boolean }> => {
     
     const buildBaseQuery = () => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
-        
-        // Se houver organização, filtra por ela
-        if (options.organizationId) {
-            q = q.where("organizationId", "==", options.organizationId);
-        }
-        
-        // Filtro por status
-        if (options.status && options.status !== 'all') {
-            q = q.where("status", "==", options.status);
-        }
-        
-        // Filtro por estado
-        if (options.filterState && options.filterState !== 'all') {
-            q = q.where("state", "==", options.filterState);
-        }
-        
-        // Filtro por campanha
+        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
+        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
+        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
-
-        // NOVO: Busca por e-mail ou nome diretamente no banco
         if (options.searchQuery && options.searchQuery.trim() !== '') {
             const query = options.searchQuery.toLowerCase().trim();
-            if (query.includes('@')) {
-                // Se parecer um e-mail, faz busca exata
-                q = q.where("email", "==", query);
-            } else {
-                // Se for nome, faz busca por prefixo (Case sensitive no Firestore, mas salvamos em uppercase/trim se necessário)
-                // Nota: O ideal é salvar um campo 'searchName' em lowercase no momento do cadastro.
-                // Como não temos isso agora, vamos focar no e-mail que é o identificador principal.
-                // Se quiser busca por nome, o Firestore exige orderBy no próprio campo da busca.
-            }
+            if (query.includes('@')) q = q.where("email", "==", query);
         }
-        
         return q;
     };
 
@@ -212,26 +196,20 @@ export const getAllPromotersPaginated = async (options: {
         let finalPromoters: Promoter[] = [];
         let lastVisible = null;
         let mainSnapSize = 0;
-
-        // Se estivermos buscando um termo específico, removemos a ordenação por data 
-        // para evitar erros de índice ausente ou conflito de filtros.
         const isSearching = !!(options.searchQuery && options.searchQuery.trim() !== '');
 
-        // SE FOR A PRIMEIRA PÁGINA e NÃO ESTIVER BUSCANDO: Buscamos primeiro os nulos (novíssimos)
+        // 1. PRIMEIRA PÁGINA: Busca nulos (recém-cadastrados pendentes de serverTimestamp)
         if (!options.lastDoc && !isSearching) {
             const nullQuery = buildBaseQuery().where("createdAt", "==", null).limit(10);
             const nullSnap = await nullQuery.get();
             nullSnap.forEach(doc => finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter));
         }
 
-        // Consulta Principal
+        // 2. BUSCA PRINCIPAL
         let mainQuery = buildBaseQuery();
-        
-        // Só ordena por data se não estiver buscando um termo específico (evita complexidade de índices)
         if (!isSearching) {
             mainQuery = mainQuery.orderBy("createdAt", "desc");
         }
-
         if (options.lastDoc) mainQuery = mainQuery.startAfter(options.lastDoc);
         mainQuery = mainQuery.limit(options.pageSize);
 
@@ -245,8 +223,7 @@ export const getAllPromotersPaginated = async (options: {
             });
             lastVisible = mainSnap.docs[mainSnap.docs.length - 1];
         } catch (innerError) {
-            // Se der erro de índice (comum ao usar filtros complexos + orderBy), busca sem ordem
-            console.warn("Erro na ordenação ou filtro, executando busca bruta:", innerError);
+            console.warn("Erro na ordenação Firestore, usando busca bruta e sort manual:", innerError);
             let fallbackQuery = buildBaseQuery();
             if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
             fallbackQuery = fallbackQuery.limit(options.pageSize);
@@ -258,6 +235,11 @@ export const getAllPromotersPaginated = async (options: {
                 }
             });
             lastVisible = fallbackSnap.docs[fallbackSnap.docs.length - 1];
+        }
+
+        // 3. ORDENAÇÃO MANUAL FINAL (Garante critério mesmo no fallback ou mistura de nulos)
+        if (!isSearching) {
+            finalPromoters.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
         }
         
         return { 
@@ -288,11 +270,17 @@ export const getAllPromoters = async (options: {
         }
         
         if (options.limitCount) q = q.limit(options.limitCount);
+        
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        
         if (options.statesForScope && options.statesForScope.length > 0 && !options.filterState) {
             results = results.filter(p => options.statesForScope!.includes(p.state));
         }
+
+        // Garante ordenação descendente
+        results.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
+        
         return results;
     } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
 };
@@ -361,7 +349,9 @@ export const getApprovedPromoters = async (organizationId: string, state: string
         const q = firestore.collection("promoters").where("organizationId", "==", organizationId).where("state", "==", state).where("status", "==", "approved");
         const snap = await q.get();
         const allApproved = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        return allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
+        const filtered = allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
+        filtered.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
+        return filtered;
     } catch (error) { return []; }
 };
 
@@ -380,7 +370,9 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
     try {
         const q = firestore.collection('groupRemovalRequests').where('organizationId', '==', organizationId).where('status', '==', 'pending');
         const snap = await q.get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+        const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
+        results.sort((a, b) => getUnixTime(b.requestedAt) - getUnixTime(a.requestedAt));
+        return results;
     } catch (error) { return []; }
 };
 
