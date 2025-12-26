@@ -49,6 +49,11 @@ export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> =
     }
 };
 
+// Nova função para notificação individual simplificada
+export const notifyPromoterEmail = async (promoterId: string): Promise<void> => {
+    await notifyApprovalBulk([promoterId]);
+};
+
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
   const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Inscrição Direta";
@@ -172,7 +177,6 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
     } catch (error) { return []; }
 };
 
-// FIX: Added getAllPromoters export to fix missing member errors in multiple pages.
 /**
  * Função unificada para carregar divulgadoras para o Admin com múltiplos filtros.
  */

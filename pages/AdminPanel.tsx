@@ -6,7 +6,8 @@ import {
   updatePromoter, 
   getRejectionReasons, 
   findPromotersByEmail,
-  deletePromoter
+  deletePromoter,
+  notifyPromoterEmail
 } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -94,8 +95,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [filterGroup, setFilterGroup] = useState<'all' | 'in' | 'out'>('all');
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [minAge, setMinAge] = useState('');
-    const [maxAge, setMaxAge] = useState('');
     
     // Seleção em Massa
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -244,6 +243,26 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
+    const handleNotifyEmailManual = async (p: Promoter) => {
+        if (!window.confirm(`Enviar e-mail de boas-vindas para ${p.name}?`)) return;
+        setIsBulkProcessing(true);
+        try {
+            await notifyPromoterEmail(p.id);
+            alert("E-mail enviado com sucesso!");
+        } catch (e: any) {
+            alert("Erro ao enviar: " + e.message);
+        } finally {
+            setIsBulkProcessing(false);
+        }
+    };
+
+    const handleWhatsAppManual = (p: Promoter) => {
+        const firstName = p.name.split(' ')[0];
+        const msg = `Olá ${firstName}! Seu perfil foi aprovado para a equipe do evento ${p.campaignName || 'de produção'}. Para começar, acesse seu portal agora para ler as regras e entrar no grupo: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
+        const url = `https://wa.me/55${p.whatsapp}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+    };
+
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         if (!selectedPromoter) return;
         setIsRejectionModalOpen(false);
@@ -267,38 +286,25 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     // --- FILTRAGEM LOCAL TOTAL ---
-    // Removemos a paginação para garantir que a busca e filtros funcionem em 100% dos dados carregados.
     const filteredPromoters = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
         let results = promoters.filter(p => {
             if (!p) return false;
             
-            // 1. Filtro de Status
             if (filterStatus !== 'all' && p.status !== filterStatus) return false;
-
-            // 2. Filtro de Estado
             if (filterState !== 'all' && p.state !== filterState) return false;
 
-            // 3. FILTRO DE EVENTO / CAMPANHA
             if (selectedCampaign !== 'all') {
                 const inMain = p.campaignName === selectedCampaign;
                 const inAssociated = p.associatedCampaigns?.includes(selectedCampaign);
                 if (!inMain && !inAssociated) return false;
             }
 
-            // 4. Busca por Texto (Nome, Email, Instagram)
             const nameMatch = (p.name || '').toLowerCase().includes(query);
             const emailMatch = (p.email || '').toLowerCase().includes(query);
             const instaMatch = (p.instagram || '').toLowerCase().includes(query);
             if (query && !nameMatch && !emailMatch && !instaMatch) return false;
 
-            // 5. Filtro de Idade
-            const age = calculateAge(p.dateOfBirth);
-            const matchesMinAge = !minAge || age >= parseInt(minAge);
-            const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
-            if (!matchesMinAge || !matchesMaxAge) return false;
-
-            // 6. Filtro de Grupo (WhatsApp)
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
@@ -307,7 +313,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             return true;
         });
 
-        // Ordenação Local: Novos primeiro
         results.sort((a, b) => {
             const timeA = (a.status === 'approved' || a.status === 'rejected' || (a.status as string) === 'rejected_editable') 
                 ? getUnixTime(a.statusChangedAt || a.createdAt)
@@ -319,7 +324,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         });
 
         return results;
-    }, [promoters, filterStatus, filterState, selectedCampaign, searchQuery, minAge, maxAge, filterGroup]);
+    }, [promoters, filterStatus, filterState, selectedCampaign, searchQuery, filterGroup]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -440,8 +445,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
-                                        <th className="px-6 py-5 text-center">Idade</th>
-                                        <th className="px-6 py-5">Status</th>
+                                        <th className="px-6 py-5">Status / Admin</th>
+                                        <th className="px-6 py-5 text-center">Grupo</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
                                 </thead>
@@ -460,14 +465,34 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
-                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap mt-0.5">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                            <div className="flex items-center gap-3 mt-1">
+                                                                <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest">{calculateAge(p.dateOfBirth)}a • {p.state}</p>
+                                                                <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5 text-center font-bold text-gray-300">{calculateAge(p.dateOfBirth)}a</td>
-                                                <td className="px-6 py-5">{statusBadge(p.status)}</td>
+                                                <td className="px-6 py-5">
+                                                    <div>{statusBadge(p.status)}</div>
+                                                    {p.actionTakenByEmail && (
+                                                        <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">Por: {p.actionTakenByEmail.split('@')[0]}</p>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-5 text-center">
+                                                    {p.hasJoinedGroup ? (
+                                                        <span className="px-2 py-0.5 rounded-lg bg-green-900/20 text-green-400 border border-green-800/30 text-[8px] font-black uppercase tracking-widest">No Grupo</span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-lg bg-gray-800 text-gray-600 border border-gray-700 text-[8px] font-black uppercase tracking-widest">Fora</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                        {p.status === 'approved' && (
+                                                            <>
+                                                                <button onClick={() => handleWhatsAppManual(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all" title="Aviso via WhatsApp"><WhatsAppIcon className="w-4 h-4" /></button>
+                                                                <button onClick={() => handleNotifyEmailManual(p)} className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-all" title="Aviso via E-mail"><MailIcon className="w-4 h-4" /></button>
+                                                            </>
+                                                        )}
                                                         {p.status === 'pending' && (
                                                             <button onClick={() => handleApprove(p)} disabled={isBulkProcessing} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
                                                         )}
@@ -493,14 +518,23 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700 bg-gray-800 flex items-center justify-center" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls || [], index: 0 })}>
                                                 {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-gray-600" />}
                                             </div>
-                                            <div className="overflow-hidden">
+                                            <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
-                                                <div className="flex items-center gap-2 mt-1">{statusBadge(p.status)}</div>
-                                                <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {statusBadge(p.status)}
+                                                    {p.hasJoinedGroup && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                                                </div>
+                                                <p className="text-gray-600 text-[8px] font-black uppercase tracking-widest mt-1">Por: {p.actionTakenByEmail?.split('@')[0] || '-'}</p>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                                             {p.status === 'pending' && <button onClick={() => handleApprove(p)} disabled={isBulkProcessing} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
+                                            {p.status === 'approved' && (
+                                                <>
+                                                    <button onClick={() => handleWhatsAppManual(p)} className="p-4 bg-green-600 text-white rounded-2xl hover:bg-green-500 transition-all flex-1 flex justify-center"><WhatsAppIcon className="w-5 h-5" /></button>
+                                                    <button onClick={() => handleNotifyEmailManual(p)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-all flex-1 flex justify-center"><MailIcon className="w-5 h-5" /></button>
+                                                </>
+                                            )}
                                             <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
                                         </div>
                                     </div>
