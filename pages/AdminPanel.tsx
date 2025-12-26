@@ -6,7 +6,6 @@ import {
   updatePromoter, 
   getRejectionReasons, 
   findPromotersByEmail,
-  notifyApprovalBulk,
   deletePromoter
 } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
@@ -68,12 +67,12 @@ const calculateAge = (dob: string): number => {
     return age;
 };
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 40;
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId, organizationsForAdmin, loading: authLoading } = useAdminAuth();
     
-    // Dados Principais e Paginação
+    // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
     const [lastDoc, setLastDoc] = useState<any>(null);
@@ -145,12 +144,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setError('');
         
         try {
+            // Se estiver buscando algo, aumentamos o limite para 500 para ter um cache local eficiente
+            const isSearching = searchQuery.trim().length > 0;
             const options = {
                 organizationId: orgId as string | undefined,
                 status: filterStatus,
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
-                pageSize: PAGE_SIZE,
+                pageSize: isSearching ? 500 : PAGE_SIZE,
                 lastDoc: cursor,
                 searchQuery: searchQuery 
             };
@@ -181,16 +182,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, searchQuery]);
 
-    // Efeito para busca e reset de filtros com Debounce para busca no servidor
     useEffect(() => {
         if (!authLoading) {
-            const timeout = setTimeout(() => {
+            const timer = setTimeout(() => {
                 setPrevCursors([]);
                 setLastDoc(null);
                 setSelectedIds(new Set());
                 fetchData(null);
-            }, searchQuery ? 600 : 0);
-            return () => clearTimeout(timeout);
+            }, searchQuery.trim() !== '' ? 400 : 0);
+            return () => clearTimeout(timer);
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, searchQuery, fetchData, authLoading]);
 
@@ -246,13 +246,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         
         setIsBulkProcessing(true);
         try {
+            // Otimização: remove da lista local imediatamente para feedback visual instantâneo
+            setPromoters(prev => prev.filter(item => item.id !== pId));
+            
             await updatePromoter(pId, { 
                 status: 'approved',
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
             setSelectedIds(new Set());
-            // Voltamos para a primeira página para garantir que o item apareça no topo das aprovadas
+            // Recarrega estatísticas e lista para garantir sincronia
             fetchData(null);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
@@ -270,6 +273,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         
         setIsBulkProcessing(true);
         try {
+            setPromoters(prev => prev.filter(item => item.id !== pId));
             await updatePromoter(pId, { 
                 status: statusToSet, 
                 rejectionReason: reason,
@@ -284,20 +288,30 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    const displayedPromoters = useMemo(() => {
-        // Agora o servidor já filtra a maioria das coisas, 
-        // mantemos apenas filtros de UI aqui.
+    // --- FILTRO LOCAL INTELIGENTE ---
+    // Resolve o problema de busca do Firestore sendo case-sensitive e limitada ao início do texto
+    const filteredPromoters = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
         return promoters.filter(p => {
             if (!p) return false;
+            
+            // Busca local em nome, email e instagram
+            const nameMatch = (p.name || '').toLowerCase().includes(query);
+            const emailMatch = (p.email || '').toLowerCase().includes(query);
+            const instaMatch = (p.instagram || '').toLowerCase().includes(query);
+            
+            if (query && !nameMatch && !emailMatch && !instaMatch) return false;
+
             const age = calculateAge(p.dateOfBirth);
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
+            
             return matchesMinAge && matchesMaxAge && matchesGroup;
         });
-    }, [promoters, minAge, maxAge, filterGroup]);
+    }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -341,7 +355,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Buscar nome em toda a base..." 
+                            placeholder="Buscar nome, e-mail ou @..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -352,7 +366,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <input type="number" placeholder="Máx" value={maxAge} onChange={e => setMaxAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                     </div>
                     <form onSubmit={handleLookup} className="flex gap-2 md:col-span-4">
-                         <input type="email" placeholder="Busca global (E-mail)..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                         <input type="email" placeholder="Busca global por e-mail..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                         <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors"><SearchIcon className="w-4 h-4" /></button>
                     </form>
                     <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700">
@@ -379,6 +393,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         {statesToShow.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
                 </div>
+                {searchQuery.trim().length > 0 && promoters.length >= 500 && (
+                    <p className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest text-center mt-2 animate-pulse">Exibindo os primeiros 500 resultados da busca</p>
+                )}
             </div>
 
             {selectedIds.size > 0 && (
@@ -397,7 +414,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando equipe...</p>
                     </div>
-                ) : displayedPromoters.length === 0 ? (
+                ) : filteredPromoters.length === 0 ? (
                     <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">Nenhum registro encontrado</div>
                 ) : (
                     <>
@@ -406,9 +423,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={selectedIds.size === displayedPromoters.length && displayedPromoters.length > 0} onChange={() => {
-                                                if (selectedIds.size === displayedPromoters.length) setSelectedIds(new Set());
-                                                else setSelectedIds(new Set(displayedPromoters.map(p => p.id)));
+                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={() => {
+                                                if (selectedIds.size === filteredPromoters.length) setSelectedIds(new Set());
+                                                else setSelectedIds(new Set(filteredPromoters.map(p => p.id)));
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
@@ -418,7 +435,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {displayedPromoters.map(p => {
+                                    {filteredPromoters.map(p => {
                                         const photo = getPhotoUrl(p);
                                         return (
                                             <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
@@ -432,7 +449,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
-                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap mt-0.5">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap mt-0.5">
+                                                                Inscrita {getRelativeTime(p.createdAt)}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -456,7 +475,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
                         {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
-                            {displayedPromoters.map(p => {
+                            {filteredPromoters.map(p => {
                                 const photo = getPhotoUrl(p);
                                 return (
                                     <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
@@ -480,23 +499,25 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             })}
                         </div>
 
-                        {/* Paginação */}
-                        <div className="mt-6 p-6 bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 flex justify-between items-center">
-                            <button onClick={() => {
-                                if (prevCursors.length === 0 || isLoading) return;
-                                const newCursors = [...prevCursors];
-                                const currentCursor = newCursors.pop();
-                                const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
-                                setPrevCursors(newCursors);
-                                fetchData(prevCursor);
-                            }} disabled={prevCursors.length === 0 || isLoading} className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30">Anterior</button>
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
-                            <button onClick={() => {
-                                if (!hasMore || isLoading || !lastDoc) return;
-                                setPrevCursors(prev => [...prev, lastDoc]);
-                                fetchData(lastDoc);
-                            }} disabled={!hasMore || isLoading} className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30">Próxima</button>
-                        </div>
+                        {/* Paginação (Oculta se estiver buscando para evitar confusão com o cache de 500) */}
+                        {searchQuery.trim().length === 0 && (
+                            <div className="mt-6 p-6 bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 flex justify-between items-center">
+                                <button onClick={() => {
+                                    if (prevCursors.length === 0 || isLoading) return;
+                                    const newCursors = [...prevCursors];
+                                    newCursors.pop();
+                                    const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
+                                    setPrevCursors(newCursors);
+                                    fetchData(prevCursor);
+                                }} disabled={prevCursors.length === 0 || isLoading} className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30">Anterior</button>
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
+                                <button onClick={() => {
+                                    if (!hasMore || isLoading || !lastDoc) return;
+                                    setPrevCursors(prev => [...prev, lastDoc]);
+                                    fetchData(lastDoc);
+                                }} disabled={!hasMore || isLoading} className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30">Próxima</button>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -509,7 +530,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
               onGoToPromoter={(p) => { 
                   setIsLookupModalOpen(false); 
                   setSearchQuery(p.email); 
-                  // Forçamos o reset para a primeira página com a busca ativa
                   setFilterStatus('all');
                   fetchData(null);
               }}
