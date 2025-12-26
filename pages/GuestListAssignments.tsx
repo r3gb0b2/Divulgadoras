@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -6,7 +5,7 @@ import { GuestList, Promoter, PostAssignment, Timestamp, FieldValue } from '../t
 import { getGuestListById, updateGuestList } from '../services/guestListService';
 import { getApprovedPromoters } from '../services/promoterService';
 import { getAssignmentsForOrganization } from '../services/postService';
-import { ArrowLeftIcon, SearchIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, FilterIcon } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -84,7 +83,6 @@ const GuestListAssignments: React.FC = () => {
             setPromoters(approvedPromoters);
             setPostAssignments(orgAssignments);
             
-            // Garantindo compatibilidade de tipo na inicialização do estado local
             setAssignments(listData.assignments as any || {});
             setBulkAllowance(listData.guestAllowance || 0);
 
@@ -109,6 +107,7 @@ const GuestListAssignments: React.FC = () => {
             statsMap.set(p.id, { assigned: 0, completed: 0, acceptedJustifications: 0, missed: 0, pending: 0 });
         });
     
+        const now = new Date();
         postAssignments.forEach(a => {
             if (!a.post) return;
             const stat = statsMap.get(a.promoterId);
@@ -117,6 +116,20 @@ const GuestListAssignments: React.FC = () => {
             if (a.proofSubmittedAt) stat.completed++;
             else if (a.justification && a.justificationStatus === 'accepted') stat.acceptedJustifications++;
             else if (a.justification && a.justificationStatus === 'rejected') stat.missed++;
+            else {
+                let isMissed = false;
+                if (!a.post.allowLateSubmissions) {
+                    const confirmedAt = toDateSafe(a.confirmedAt);
+                    if (confirmedAt) {
+                        const deadline = new Date(confirmedAt.getTime() + 24 * 60 * 60 * 1000);
+                        if (now > deadline) isMissed = true;
+                    } else {
+                        const expiresAt = toDateSafe(a.post.expiresAt);
+                        if (expiresAt && now > expiresAt) isMissed = true;
+                    }
+                }
+                if (isMissed) stat.missed++;
+            }
         });
     
         return promoters.map(p => {
@@ -254,78 +267,115 @@ const GuestListAssignments: React.FC = () => {
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
                 <div>
-                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark"><ArrowLeftIcon className="w-5 h-5" /><span>Voltar</span></button>
+                    <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors"><ArrowLeftIcon className="w-5 h-5" /><span>Voltar</span></button>
                     <h1 className="text-3xl font-bold mt-1">Atribuir Divulgadoras</h1>
                     <p className="text-primary font-semibold">{list?.name || 'Carregando...'} para {list?.campaignName}</p>
                 </div>
             </div>
             <div className="bg-secondary shadow-lg rounded-lg p-6">
-                 <div className="space-y-4">
+                 <div className="space-y-6">
+                    {/* LEGENDA E FILTROS DE COR */}
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
-                        <div className="relative flex-grow w-full">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
-                            <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800"/>
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400">
+                            <span className="font-bold text-gray-300">Legenda de Aproveitamento:</span>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-400"></div><span>100%</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div><span>60-99%</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div><span>31-59%</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>0-30%</span></div>
                         </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg">
-                         <div className="flex flex-wrap justify-between items-center gap-4">
-                            <label className="flex items-center space-x-2 font-semibold cursor-pointer">
-                                <input type="checkbox" onChange={handleToggleAll} checked={filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
-                                <span>Marcar/Desmarcar Visíveis ({Object.keys(assignments).length} total)</span>
-                            </label>
-                        </div>
-                        <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
-                            <div className="flex items-center gap-2">
-                                <input type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" />
-                                <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Qtde em Massa</button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" placeholder="Info..."/>
-                                <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Info em Massa</button>
-                            </div>
-                             <div className="flex items-center gap-2">
-                                <input type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-800" style={{colorScheme: 'dark'}} />
-                                <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1 bg-primary text-white text-xs font-bold rounded">Data em Massa</button>
+                        <div className="flex items-center gap-x-2">
+                            <span className="font-bold text-gray-300 text-xs">Filtrar por Cor:</span>
+                            <div className="flex space-x-1 p-1 bg-dark/70 rounded-lg">
+                                {(['all', 'green', 'blue', 'yellow', 'red'] as const).map(f => (
+                                    <button key={f} onClick={() => setColorFilter(f)} className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all flex items-center gap-1.5 ${colorFilter === f ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'}`}>
+                                        {f !== 'all' && <div className={`w-2 h-2 rounded-full ${f === 'green' ? 'bg-green-400' : f === 'blue' ? 'bg-blue-400' : f === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'}`}></div>}
+                                        <span>{{'all': 'Todos', 'green': 'Verde', 'blue': 'Azul', 'yellow': 'Laranja', 'red': 'Vermelho'}[f]}</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 border border-gray-700 rounded-lg">
+                        <div className="relative flex-grow w-full">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-gray-400" /></span>
+                            <input type="text" placeholder="Buscar por nome ou @instagram..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-200 focus:ring-1 focus:ring-primary outline-none" />
+                        </div>
+                        <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer flex-shrink-0">
+                            <input type="checkbox" checked={filterInGroup} onChange={e => setFilterInGroup(e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary" />
+                            <span>Apenas no grupo</span>
+                        </label>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4 p-4 border border-gray-700 rounded-lg bg-dark/20">
+                         <div className="flex flex-wrap justify-between items-center gap-4">
+                            <label className="flex items-center space-x-2 font-bold text-sm cursor-pointer">
+                                <input type="checkbox" onChange={handleToggleAll} checked={filteredPromoters.length > 0 && filteredPromoters.every(p => !!assignments[p.id])} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                                <span>Marcar/Desmarcar Visíveis ({Object.keys(assignments).length} total selecionado)</span>
+                            </label>
+                        </div>
+                        <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <input type="number" min="0" value={bulkAllowance} onChange={e => setBulkAllowance(parseInt(e.target.value, 10) || 0)} className="w-20 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white font-bold" />
+                                <button type="button" onClick={handleApplyBulkAllowance} className="px-3 py-1.5 bg-primary text-white text-[10px] font-black uppercase rounded hover:bg-primary-dark transition-all">Qtde em Massa</button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="text" value={bulkInfo} onChange={e => setBulkInfo(e.target.value)} className="w-40 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white text-sm" placeholder="Informativo..."/>
+                                <button type="button" onClick={handleApplyBulkInfo} className="px-3 py-1.5 bg-primary text-white text-[10px] font-black uppercase rounded hover:bg-primary-dark transition-all">Info em Massa</button>
+                            </div>
+                             <div className="flex items-center gap-2">
+                                <input type="datetime-local" value={bulkClosesAt} onChange={e => setBulkClosesAt(e.target.value)} className="w-48 px-2 py-1 border border-gray-600 rounded-md bg-gray-700 text-white text-[10px]" style={{colorScheme: 'dark'}} />
+                                <button type="button" onClick={handleApplyBulkDate} className="px-3 py-1.5 bg-primary text-white text-[10px] font-black uppercase rounded hover:bg-primary-dark transition-all">Data em Massa</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-gray-700">
                         <table className="min-w-full">
                             <thead className="bg-gray-700/50">
                                 <tr>
                                     <th className="p-3 text-left w-12"></th>
-                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Divulgadora</th>
-                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Aproveitamento</th>
-                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Qtde</th>
-                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Informativo</th>
-                                    <th className="p-3 text-left text-xs font-medium text-gray-300 uppercase">Limite</th>
+                                    <th className="p-3 text-left text-xs font-bold text-gray-300 uppercase tracking-widest">Divulgadora</th>
+                                    <th className="p-3 text-center text-xs font-bold text-gray-300 uppercase tracking-widest">Perf.</th>
+                                    <th className="p-3 text-left text-xs font-bold text-gray-300 uppercase tracking-widest">Convidados</th>
+                                    <th className="p-3 text-left text-xs font-bold text-gray-300 uppercase tracking-widest">Informativo Extra</th>
+                                    <th className="p-3 text-left text-xs font-bold text-gray-300 uppercase tracking-widest">Prazo Limite</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-700">
                                 {filteredPromoters.map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-700/40">
+                                    <tr key={p.id} className={`hover:bg-gray-700/40 transition-colors ${assignments[p.id] ? 'bg-primary/5' : ''}`}>
                                         <td className="p-3"><input type="checkbox" checked={!!assignments[p.id]} onChange={() => handleToggle(p.id)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/></td>
-                                        <td className="p-3 whitespace-nowrap"><span className={`font-medium ${p.hasJoinedGroup ? 'text-green-400' : 'text-white'}`}>{p.instagram || p.name}</span></td>
-                                        <td className="p-3 whitespace-nowrap"><span className={`font-bold ${getPerformanceColor(p.completionRate)}`}>{p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}</span></td>
-                                        <td className="p-3">
-                                            <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-16 px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30"/>
+                                        <td className="p-3 whitespace-nowrap">
+                                            <div className={`font-bold text-sm ${p.hasJoinedGroup ? 'text-green-400' : 'text-white'}`}>{p.instagram || p.name}</div>
+                                            <div className="text-[10px] text-gray-500">{p.name}</div>
+                                        </td>
+                                        <td className="p-3 whitespace-nowrap text-center">
+                                            <span className={`font-black text-xs ${getPerformanceColor(p.completionRate)}`}>
+                                                {p.completionRate >= 0 ? `${p.completionRate}%` : 'N/A'}
+                                            </span>
                                         </td>
                                         <td className="p-3">
-                                            <input type="text" value={assignments[p.id]?.info ?? ''} onChange={e => handleInfoChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-full px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30"/>
+                                            <input type="number" min="0" value={assignments[p.id]?.guestAllowance ?? ''} onChange={e => handleAllowanceChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-16 px-2 py-1 border border-gray-600 rounded bg-gray-800 text-white font-bold disabled:opacity-30"/>
                                         </td>
                                         <td className="p-3">
-                                            <input type="datetime-local" value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} onChange={e => handleDateChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="px-1 py-0.5 border border-gray-600 rounded bg-gray-800 disabled:opacity-30 text-xs" style={{colorScheme: 'dark'}}/>
+                                            <input type="text" value={assignments[p.id]?.info ?? ''} onChange={e => handleInfoChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="w-full px-2 py-1 border border-gray-600 rounded bg-gray-800 text-white text-xs disabled:opacity-30" placeholder="Ex: Entrada até 23h"/>
+                                        </td>
+                                        <td className="p-3">
+                                            <input type="datetime-local" value={assignments[p.id] ? timestampToDateTimeLocal(assignments[p.id]?.closesAt) : ''} onChange={e => handleDateChange(p.id, e.target.value)} disabled={!assignments[p.id]} className="px-2 py-1 border border-gray-600 rounded bg-gray-800 text-white disabled:opacity-30 text-[10px]" style={{colorScheme: 'dark'}}/>
                                         </td>
                                     </tr>
                                 ))}
+                                {filteredPromoters.length === 0 && (
+                                    <tr><td colSpan={6} className="text-center py-20 text-gray-500 font-bold uppercase tracking-widest">Nenhuma divulgadora encontrada</td></tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end">
-                    <button onClick={handleSave} disabled={isSaving || isLoading} className="px-6 py-2 bg-primary text-white font-semibold rounded-md hover:bg-primary-dark disabled:opacity-50">
+                <div className="mt-6 border-t border-gray-700 pt-6 flex justify-end gap-4">
+                    <button onClick={() => navigate('/admin/lists')} className="px-6 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-all font-semibold">Cancelar</button>
+                    <button onClick={handleSave} disabled={isSaving || isLoading} className="px-8 py-2 bg-primary text-white font-black uppercase text-xs tracking-widest rounded-md hover:bg-primary-dark transition-all disabled:opacity-50 shadow-lg shadow-primary/20">
                         {isSaving ? 'Salvando...' : 'Salvar Atribuições'}
                     </button>
                 </div>
