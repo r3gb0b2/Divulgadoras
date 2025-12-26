@@ -11,8 +11,8 @@ const getConfig = () => {
     const config = functions.config();
     return {
         brevoKey: config.brevo?.key || null,
-        // Remetente atualizado conforme solicitado para evitar erros na Brevo
-        brevoEmail: config.brevo?.email || "r3gb0b@gmail.com",
+        // Remetente corrigido para evitar erro de autorização
+        brevoEmail: "r3gb0b@gmail.com",
         zApiToken: config.zapi?.token || null,
         zApiInstance: config.zapi?.instance || null,
         zApiClientToken: config.zapi?.client_token || ""
@@ -24,6 +24,15 @@ const setupBrevo = (apiKey) => {
     const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
     apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
     return apiInstance;
+};
+
+// Função auxiliar para dividir array em pedaços (batches)
+const chunkArray = (array, size) => {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
 };
 
 // --- FUNÇÃO PARA GERAR RODAPÉ DE REMOÇÃO ---
@@ -68,8 +77,6 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="${portalLink}" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">ACESSAR MEU PORTAL AGORA</a>
                     </div>
-                    <p>Caso o botão não funcione, copie o link abaixo:<br>${portalLink}</p>
-                    <p>Seja bem-vinda à equipe!</p>
                     ${footer}
                 </div>
             `;
@@ -90,7 +97,7 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
     }
 });
 
-// --- NOTIFICAÇÃO DE POSTAGEM POR E-MAIL (PENDENTES) ---
+// --- NOTIFICAÇÃO DE POSTAGEM POR E-MAIL (PENDENTES COM BATCHING) ---
 
 exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { postId } = data;
@@ -98,7 +105,7 @@ exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(as
 
     const config = getConfig();
     const brevo = setupBrevo(config.brevoKey);
-    if (!brevo) return { success: false, message: "Brevo não configurado no servidor." };
+    if (!brevo) return { success: false, message: "Brevo não configurado." };
 
     try {
         const postSnap = await db.collection("posts").doc(postId).get();
@@ -109,7 +116,6 @@ exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(as
             .where("postId", "==", postId)
             .get();
 
-        // Filtra apenas quem NÃO enviou print e NÃO justificou
         const pendingPromoters = [];
         assignmentsSnap.docs.forEach(doc => {
             const a = doc.data();
@@ -119,36 +125,80 @@ exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(as
         });
 
         if (pendingPromoters.length === 0) {
-            return { success: true, message: "Nenhuma divulgadora pendente para este post." };
+            return { success: true, message: "Nenhuma divulgadora pendente." };
         }
 
-        // Brevo permite múltiplos destinatários em uma chamada, mas limitamos para evitar o erro HTTP
-        // Se a lista for gigantesca (>100), idealmente seria em batches, mas aqui fazemos direto
-        await brevo.sendTransacEmail({
-            sender: { email: config.brevoEmail, name: "Equipe Certa" },
-            to: pendingPromoters,
-            subject: `📢 Nova Tarefa: ${post.campaignName}`,
-            htmlContent: `
-                <div style="font-family: sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: auto;">
-                    <h2 style="color: #7e39d5;">Olá! Temos uma nova tarefa para você.</h2>
-                    <p>Uma nova postagem foi solicitada para o evento <strong>${post.campaignName}</strong>.</p>
-                    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #7e39d5;">
-                        <strong>Instruções:</strong><br>
-                        <em>${post.instructions.substring(0, 200)}${post.instructions.length > 200 ? '...' : ''}</em>
-                    </div>
-                    <p>Acesse seu portal agora para baixar o material e realizar a postagem:</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://divulgadoras.vercel.app/#/posts" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">VER MINHAS TAREFAS</a>
-                    </div>
-                    <p style="font-size: 11px; color: #999;">Este é um e-mail automático do sistema Equipe Certa.</p>
-                </div>
-            `
-        });
+        // Dividir em lotes de 50 para evitar erro HTTP request failed
+        const batches = chunkArray(pendingPromoters, 50);
+        let sentCount = 0;
 
-        return { success: true, message: `E-mails enviados para ${pendingPromoters.length} divulgadoras pendentes.` };
+        for (const batch of batches) {
+            await brevo.sendTransacEmail({
+                sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                to: batch,
+                subject: `📢 Nova Tarefa: ${post.campaignName}`,
+                htmlContent: `
+                    <div style="font-family: sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: auto;">
+                        <h2 style="color: #7e39d5;">Olá! Temos uma nova tarefa para você.</h2>
+                        <p>Uma nova postagem foi solicitada para o evento <strong>${post.campaignName}</strong>.</p>
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #7e39d5;">
+                            <strong>Instruções:</strong><br>
+                            <em>${post.instructions.substring(0, 300)}...</em>
+                        </div>
+                        <p>Acesse seu portal agora para realizar a postagem:</p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="https://divulgadoras.vercel.app/#/posts" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">VER MINHAS TAREFAS</a>
+                        </div>
+                    </div>
+                `
+            });
+            sentCount += batch.length;
+        }
+
+        return { success: true, message: `E-mails enviados para ${sentCount} divulgadoras em ${batches.length} lotes.` };
 
     } catch (error) {
         console.error("Erro no notifyPostEmail:", error);
+        return { success: false, message: error.message };
+    }
+});
+
+// --- NEWSLETTER (COM BATCHING) ---
+
+exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { audience, subject, body } = data;
+    const config = getConfig();
+    const brevo = setupBrevo(config.brevoKey);
+
+    if (!brevo) throw new functions.https.HttpsError("failed-precondition", "Brevo não configurado.");
+
+    try {
+        let query = db.collection("promoters").where("status", "==", "approved");
+        
+        if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
+        if (audience.type === 'campaign') query = query.where("campaignId", "==", audience.campaignId);
+
+        const snap = await query.get();
+        if (snap.empty) return { success: false, message: "Nenhum destinatário." };
+
+        const allEmails = snap.docs.map(doc => ({
+            email: doc.data().email,
+            name: doc.data().name
+        }));
+
+        // Batching Newsletter
+        const batches = chunkArray(allEmails, 50);
+        for (const batch of batches) {
+            await brevo.sendTransacEmail({
+                sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                to: batch,
+                subject: subject,
+                htmlContent: body
+            });
+        }
+
+        return { success: true, message: `Newsletter enviada para ${allEmails.length} pessoas.` };
+    } catch (error) {
         return { success: false, message: error.message };
     }
 });
@@ -207,70 +257,6 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
     }
 });
 
-exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId, token, metadata } = data;
-    if (!promoterId || !token) return { success: false, message: "Dados incompletos." };
-
-    try {
-        const promoterRef = db.collection("promoters").doc(promoterId);
-        await promoterRef.update({
-            fcmToken: token,
-            lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
-            pushDiagnostics: {
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                platform: metadata?.platform || "unknown",
-                tokenPrefix: token.substring(0, 10),
-                syncMethod: metadata?.method || "standard"
-            }
-        });
-        return { success: true };
-    } catch (error) {
-        return { success: false, message: error.message };
-    }
-});
-
-exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { audience, subject, body } = data;
-    const config = getConfig();
-    const brevo = setupBrevo(config.brevoKey);
-
-    if (!brevo) throw new functions.https.HttpsError("failed-precondition", "Brevo não configurado.");
-
-    try {
-        let query = db.collection("promoters").where("status", "==", "approved");
-        const snap = await query.get();
-        if (snap.empty) return { success: false, message: "Nenhum destinatário." };
-
-        const emailPromises = snap.docs.map(doc => {
-            const p = doc.data();
-            const personalFooter = getEmailFooter(doc.id, p.organizationId, p.campaignName);
-            const personalizedBody = body.replace(/{{promoterName}}/g, p.name) + personalFooter;
-
-            return brevo.sendTransacEmail({
-                sender: { email: config.brevoEmail, name: "Equipe Certa" },
-                to: [{ email: p.email, name: p.name }],
-                subject: subject,
-                htmlContent: personalizedBody
-            });
-        });
-
-        await Promise.all(emailPromises);
-        return { success: true, message: `E-mails enviados.` };
-    } catch (error) {
-        return { success: false, message: error.message };
-    }
-});
-
-exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async () => {
-    const doc = await db.collection("settings").doc("emailTemplate").get();
-    return { htmlContent: doc.exists ? doc.data().htmlContent : "<h1>Padrão</h1>" };
-});
-
-exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    await db.collection("settings").doc("emailTemplate").set({ htmlContent: data.htmlContent });
-    return { success: true };
-});
-
 exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const config = getConfig();
     if (!config.zApiToken || !config.zApiInstance) return { success: false, message: "Configuração ausente." };
@@ -300,7 +286,6 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
     const tokens = [];
     const assignments = assignmentsSnap.docs.map(doc => doc.data());
     
-    // Filtro aprimorado: apenas quem ainda não enviou print (e não justificou se onlyPending for true)
     const targetPromoterIds = assignments
         .filter(a => !onlyPending || (!a.proofSubmittedAt && !a.justification))
         .map(a => a.promoterId);
