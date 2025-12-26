@@ -7,14 +7,13 @@ import { getAllCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon, ShieldCheckIcon,
-  MegaphoneIcon
+  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { Campaign } from '../types';
 
 const RegistrationForm: React.FC = () => {
-  const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
+  const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -30,7 +29,6 @@ const RegistrationForm: React.FC = () => {
     campaignName: campaignNameFromUrl ? decodeURIComponent(campaignNameFromUrl) : '',
   });
   
-  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,7 +51,7 @@ const RegistrationForm: React.FC = () => {
 
   useEffect(() => {
     const loadInitialData = async () => {
-        if (!organizationId || organizationId === 'register' || organizationId === 'undefined') {
+        if (!organizationId || !state) {
             setIsValidOrg(false);
             setIsLoadingData(false);
             return;
@@ -63,17 +61,6 @@ const RegistrationForm: React.FC = () => {
             const org = await getOrganization(organizationId);
             if (org && org.status !== 'deactivated') {
                 setIsValidOrg(true);
-                
-                const allCampaigns = await getAllCampaigns(organizationId);
-                const activeInState = allCampaigns.filter(c => 
-                    c.stateAbbr === state && 
-                    c.status === 'active'
-                );
-                setAvailableCampaigns(activeInState);
-
-                if (!formData.campaignName && activeInState.length === 1) {
-                    setFormData(prev => ({ ...prev, campaignName: activeInState[0].name }));
-                }
             } else {
                 setIsValidOrg(false);
             }
@@ -122,10 +109,9 @@ const RegistrationForm: React.FC = () => {
                 tiktok: prev.tiktok || latestProfile.tiktok || '',
                 dateOfBirth: prev.dateOfBirth || latestProfile.dateOfBirth
             }));
-            // Se já tem foto de rosto, poderíamos mostrar um preview informativo aqui se quiséssemos
         }
     } catch (e) {
-        console.warn("Erro ao buscar perfil para auto-preenchimento");
+        console.warn("Erro no auto-preenchimento");
     } finally {
         setIsAutoFilling(false);
     }
@@ -143,13 +129,8 @@ const RegistrationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.campaignName) {
-        setError("Por favor, selecione o evento para o qual deseja se candidatar.");
-        return;
-    }
-
-    if (!organizationId || organizationId === 'register' || isValidOrg === false) {
-      setError("Link de cadastro inválido ou expirado. Por favor, solicite o link oficial à sua produtora.");
+    if (!organizationId || isValidOrg === false) {
+      setError("Link de cadastro inválido.");
       return;
     }
     
@@ -183,11 +164,7 @@ const RegistrationForm: React.FC = () => {
   };
 
   if (isLoadingData) {
-      return (
-          <div className="flex justify-center items-center py-40">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          </div>
-      );
+      return <div className="flex justify-center items-center py-40"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   if (isValidOrg === false) {
@@ -195,9 +172,8 @@ const RegistrationForm: React.FC = () => {
           <div className="max-w-2xl mx-auto py-20 px-4 text-center">
               <div className="bg-red-900/20 border border-red-500/50 p-10 rounded-[3rem]">
                   <XIcon className="w-20 h-20 text-red-500 mx-auto mb-6" />
-                  <h1 className="text-3xl font-black text-white uppercase mb-4">Link Inválido</h1>
-                  <p className="text-gray-400">Esta organização não foi identificada ou o link de cadastro está quebrado.</p>
-                  <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-primary text-white font-bold rounded-full">Voltar ao Início</button>
+                  <h1 className="text-3xl font-black text-white uppercase mb-4">Acesso Indisponível</h1>
+                  <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-primary text-white font-bold rounded-full">Sair</button>
               </div>
           </div>
       );
@@ -209,25 +185,25 @@ const RegistrationForm: React.FC = () => {
         <div className="bg-secondary/60 backdrop-blur-xl p-10 rounded-[3rem] border border-green-500/30">
           <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6" />
           <h1 className="text-4xl font-black text-white uppercase mb-4">Inscrição Enviada!</h1>
-          <p className="text-gray-300 text-lg">Seu perfil entrou na fila de aprovação. Em breve você receberá um retorno.</p>
+          <p className="text-gray-300 text-lg">Aguarde a nossa análise.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
+    <div className="max-w-3xl mx-auto py-8 px-4 pb-24">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-white mb-8 font-black text-xs uppercase">
         <ArrowLeftIcon className="w-4 h-4" /> Voltar
       </button>
 
       <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[3rem] overflow-hidden border border-white/5">
         <div className="bg-gradient-to-br from-primary/30 to-transparent p-10 text-center">
-          <h1 className="text-5xl font-black text-white uppercase tracking-tighter">
-            {editId ? 'Corrigir' : 'Cadastro'} <span className="text-primary">Divulgadora</span>
+          <h1 className="text-5xl font-black text-white uppercase tracking-tighter leading-tight">
+            Inscrição <span className="text-primary">Divulgadora</span>
           </h1>
           <p className="text-gray-400 mt-2 font-bold uppercase text-xs tracking-widest">
-            {stateMap[state || ''] || state} • Inscrição Oficial
+            {stateMap[state || ''] || state} • {decodeURIComponent(campaignNameFromUrl || '')}
           </p>
         </div>
 
@@ -240,11 +216,12 @@ const RegistrationForm: React.FC = () => {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
               {/* E-MAIL EM PRIMEIRO LUGAR */}
               <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
                   <span>E-mail</span>
-                  {isAutoFilling && <span className="text-primary animate-pulse normal-case">Buscando dados anteriores...</span>}
+                  {isAutoFilling && <span className="text-primary animate-pulse normal-case">Puxando seus dados...</span>}
                 </label>
                 <div className="relative">
                   <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -252,7 +229,7 @@ const RegistrationForm: React.FC = () => {
                     type="email" required value={formData.email}
                     onChange={e => setFormData({...formData, email: e.target.value})}
                     onBlur={handleEmailBlur}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold transition-all"
                     placeholder="Seu melhor e-mail"
                   />
                 </div>
@@ -301,10 +278,10 @@ const RegistrationForm: React.FC = () => {
 
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-              <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais e Evento
+              <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram</label>
                 <div className="relative">
                   <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -315,32 +292,6 @@ const RegistrationForm: React.FC = () => {
                     placeholder="@seuusuario"
                   />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Selecione o Evento</label>
-                {campaignNameFromUrl ? (
-                    <div className="w-full px-6 py-5 bg-white/5 border border-primary/30 rounded-3xl text-primary font-black uppercase tracking-tight flex items-center justify-between">
-                        <span>{decodeURIComponent(campaignNameFromUrl)}</span>
-                        <CheckCircleIcon className="w-5 h-5" />
-                    </div>
-                ) : (
-                    <select 
-                        required
-                        value={formData.campaignName}
-                        onChange={e => setFormData({ ...formData, campaignName: e.target.value })}
-                        className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer"
-                    >
-                        <option value="" className="bg-dark">Selecione o evento...</option>
-                        {availableCampaigns.length > 0 ? (
-                            availableCampaigns.map(c => (
-                                <option key={c.id} value={c.name} className="bg-dark">{c.name}</option>
-                            ))
-                        ) : (
-                            <option value="" disabled className="bg-dark text-gray-500">Nenhum evento ativo</option>
-                        )}
-                    </select>
-                )}
               </div>
             </div>
           </div>
@@ -355,13 +306,13 @@ const RegistrationForm: React.FC = () => {
                   <img src={url} alt="" className="w-full h-full object-cover" />
                 </div>
               ))}
-              {previews.length < 4 && (
+              {previews.length < 8 && (
                 <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-3xl bg-white/5 cursor-pointer hover:border-primary transition-all">
                   <CameraIcon className="w-10 h-10 text-gray-600 mb-2" />
-                  <span className="text-[10px] font-black text-gray-600 uppercase">Adicionar</span>
+                  <span className="text-[10px] font-black text-gray-600 uppercase">Anexar</span>
                   <input type="file" multiple accept="image/*" className="hidden" onChange={e => {
                     if (e.target.files) {
-                      const files = Array.from(e.target.files);
+                      const files = Array.from(e.target.files) as File[];
                       setPhotos(files);
                       setPreviews(files.map(f => URL.createObjectURL(f as Blob)));
                     }
@@ -369,14 +320,18 @@ const RegistrationForm: React.FC = () => {
                 </label>
               )}
             </div>
+            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest text-center">Envie fotos atuais de rosto e corpo.</p>
           </div>
 
-          <button 
-            type="submit" disabled={isSubmitting || (availableCampaigns.length === 0 && !campaignNameFromUrl)}
-            className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
-          >
-            {isSubmitting ? 'ENVIANDO...' : 'FINALIZAR INSCRIÇÃO'}
-          </button>
+          <div className="pt-8 border-t border-white/5">
+             <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] text-center mb-8">Passo 3 de 3 • Finalização</p>
+             <button 
+                type="submit" disabled={isSubmitting}
+                className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? 'ENVIANDO...' : 'CONCLUIR CADASTRO'}
+              </button>
+          </div>
         </form>
       </div>
     </div>

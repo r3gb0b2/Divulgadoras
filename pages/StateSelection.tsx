@@ -32,18 +32,16 @@ const StateSelection: React.FC = () => {
                 }
 
                 if (orgData.status === 'deactivated') {
-                    throw new Error("Esta organização está desativada e não pode receber novos cadastros. O link está desativado.");
+                    throw new Error("Esta organização está desativada.");
                 }
 
                 setOrganization(orgData);
 
-                // If org has assigned states, use them. Otherwise, show all.
                 const statesToDisplay = orgData.assignedStates && orgData.assignedStates.length > 0
                     ? states.filter(s => orgData.assignedStates.includes(s.abbr))
-                    : states; // Fallback to all states if none are assigned
+                    : states;
                 
                 const available = statesToDisplay.sort((a, b) => a.name.localeCompare(b.name));
-                
                 setActiveStates(available);
 
             } catch (err: any) {
@@ -85,15 +83,15 @@ const StateSelection: React.FC = () => {
             <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[3rem] p-8 md:p-14 border border-white/5 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-purple-600"></div>
                 
-                <div className="mb-10">
+                <div className="mb-10 text-left md:text-center">
                     <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto mb-6 text-primary">
                         <MapPinIcon className="w-8 h-8" />
                     </div>
                     <h1 className="text-4xl md:text-5xl font-black text-white mb-4 uppercase tracking-tighter">
-                        {organization?.name || 'Selecione a Região'}
+                        {organization?.name}
                     </h1>
                     <p className="text-gray-400 font-medium text-lg">
-                        Escolha o seu estado para ver as vagas e eventos disponíveis.
+                        Selecione seu <span className="text-white">Estado</span>:
                     </p>
                 </div>
 
@@ -102,7 +100,7 @@ const StateSelection: React.FC = () => {
                         {activeStates.map(state => (
                             <Link
                                 key={state.abbr}
-                                to={`/${organizationId}/register/${state.abbr}`}
+                                to={`/${organizationId}/${state.abbr}`}
                                 className="group block p-6 bg-white/5 rounded-3xl text-center font-black text-gray-100 border border-white/10 hover:bg-primary hover:border-transparent transition-all duration-300 transform hover:scale-[1.03] uppercase tracking-widest text-sm shadow-xl"
                             >
                                 {state.name}
@@ -111,12 +109,12 @@ const StateSelection: React.FC = () => {
                     </div>
                 ) : (
                     <div className="py-10 bg-dark/50 rounded-3xl border border-dashed border-gray-700">
-                        <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Nenhuma região ativa para cadastro nesta organização.</p>
+                        <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Nenhuma região ativa.</p>
                     </div>
                 )}
 
                 <div className="mt-14 pt-8 border-t border-white/5 text-center">
-                    <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em]">Passo 1 de 2 • Seleção de Região</p>
+                    <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em]">Passo 1 de 3 • Seleção de Região</p>
                 </div>
             </div>
         </div>
