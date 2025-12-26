@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
@@ -6,7 +5,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Post, Organization, PostAssignment, AdminUserData, Campaign } from '../types';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon, PencilIcon, EnvelopeIcon } from '../components/Icons';
+import { ArrowLeftIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, ClockIcon, CheckCircleIcon, LockClosedIcon, UserPlusIcon, PencilIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
 import { auth, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -46,7 +45,6 @@ const AdminPosts: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
     const [filterCampaign, setFilterCampaign] = useState<string>('all');
     const [notifyingPostId, setNotifyingPostId] = useState<string | null>(null);
-    const [notifyingEmailId, setNotifyingEmailId] = useState<string | null>(null);
 
     // Controle de Justificativas
     const [isJustificationModalOpen, setIsJustificationModalOpen] = useState(false);
@@ -59,7 +57,7 @@ const AdminPosts: React.FC = () => {
         if (!adminData) return;
         if (showLoader) setIsLoading(true);
         setError(null);
-        const orgId = isSuperAdmin ? undefined : selectedOrgId;
+        const orgId = isSuperAdmin ? undefined : (selectedOrgId ?? undefined);
         if (!isSuperAdmin && !orgId) {
             setError("Organização não encontrada.");
             setIsLoading(false); return;
@@ -117,7 +115,6 @@ const AdminPosts: React.FC = () => {
 
     const handleQuickUpdate = async (postId: string, data: Partial<Post>) => {
         try {
-            // Update local state for immediate feedback
             setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...data } : p));
             await updatePost(postId, data);
         } catch (e: any) {
@@ -141,32 +138,23 @@ const AdminPosts: React.FC = () => {
         }
     };
 
-    const handleNotifyEmail = async (postId: string) => {
-        if (!window.confirm("Deseja enviar um aviso via E-MAIL para todas as divulgadoras pendentes desta postagem?")) return;
-        setNotifyingEmailId(postId);
-        try {
-            const notifyPostEmail = httpsCallable(functions, 'notifyPostEmail');
-            const result = await notifyPostEmail({ postId });
-            const data = result.data as { success: boolean, message: string };
-            alert(data.message);
-        } catch (e: any) {
-            alert("Erro ao notificar via e-mail: " + e.message);
-        } finally {
-            setNotifyingEmailId(null);
-        }
-    };
-
     const handleOpenJustifications = (post: Post) => {
         setSelectedPostForJustifications(post);
         setIsJustificationModalOpen(true);
     };
 
     const handleAcceptAll = async () => {
-        if (!selectedPostForJustifications) return;
+        const activePost = selectedPostForJustifications;
+        if (!activePost || !activePost.id) {
+            alert("Post não selecionado.");
+            return;
+        }
+        
         if (!window.confirm(`Deseja aceitar TODAS as justificativas pendentes para este post?`)) return;
+        
         setIsAcceptingAll(true);
         try {
-            await acceptAllJustifications(selectedPostForJustifications.id);
+            await acceptAllJustifications(activePost.id);
             alert("Todas as justificativas foram aceitas!");
             setIsJustificationModalOpen(false);
             fetchPosts(false);
@@ -235,27 +223,16 @@ const AdminPosts: React.FC = () => {
                                                     {post.createdByEmail.split('@')[0]} em {toDateSafe(post.createdAt)?.toLocaleDateString('pt-BR')} ({getRelativeTime(post.createdAt)})
                                                 </p>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    onClick={() => handleNotifyPush(post.id)} 
-                                                    disabled={notifyingPostId === post.id || !post.isActive}
-                                                    className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-900/40 disabled:opacity-30 transition-all"
-                                                    title="Notificar pendentes via PUSH"
-                                                >
-                                                    {notifyingPostId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <FaceIdIcon className="w-4 h-4" />}
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleNotifyEmail(post.id)} 
-                                                    disabled={notifyingEmailId === post.id || !post.isActive}
-                                                    className="p-2 bg-blue-900/20 text-blue-400 rounded-xl hover:bg-blue-900/40 disabled:opacity-30 transition-all"
-                                                    title="Notificar pendentes via E-MAIL"
-                                                >
-                                                    {notifyingEmailId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <EnvelopeIcon className="w-4 h-4" />}
-                                                </button>
-                                            </div>
+                                            <button 
+                                                onClick={() => handleNotifyPush(post.id)} 
+                                                disabled={notifyingPostId === post.id || !post.isActive}
+                                                className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-900/40 disabled:opacity-30 transition-all"
+                                                title="Notificar pendentes via PUSH"
+                                            >
+                                                {notifyingPostId === post.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <FaceIdIcon className="w-4 h-4" />}
+                                            </button>
                                         </div>
 
-                                        {/* QUICK CHECKS */}
                                         <div className="grid grid-cols-1 gap-2 my-4 py-4 border-y border-white/5">
                                             <label className="flex items-center gap-3 cursor-pointer group/item">
                                                 <input 
@@ -295,7 +272,6 @@ const AdminPosts: React.FC = () => {
                                             </label>
                                         </div>
 
-                                        {/* JUSTIFICATIONS BUTTON */}
                                         <button 
                                             onClick={() => handleOpenJustifications(post)}
                                             className={`w-full py-2.5 rounded-xl mb-4 border transition-all flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest ${pendingJustifications.length > 0 ? 'bg-orange-900/30 text-orange-400 border-orange-500/50 animate-pulse' : 'bg-gray-800/30 text-gray-500 border-gray-700/50 hover:text-white'}`}
@@ -328,14 +304,16 @@ const AdminPosts: React.FC = () => {
                 )}
             </div>
 
-            <JustificationReviewModal 
-                isOpen={isJustificationModalOpen} 
-                onClose={() => setIsJustificationModalOpen(false)} 
-                post={selectedPostForJustifications} 
-                assignments={pendingJustificationsMap.get(selectedPostForJustifications?.id || '') || []} 
-                onAcceptAll={handleAcceptAll} 
-                isProcessing={isAcceptingAll} 
-            />
+            {selectedPostForJustifications && (
+                <JustificationReviewModal 
+                    isOpen={isJustificationModalOpen} 
+                    onClose={() => setIsJustificationModalOpen(false)} 
+                    post={selectedPostForJustifications} 
+                    assignments={pendingJustificationsMap.get(selectedPostForJustifications.id) || []} 
+                    onAcceptAll={handleAcceptAll} 
+                    isProcessing={isAcceptingAll} 
+                />
+            )}
         </div>
     );
 };
