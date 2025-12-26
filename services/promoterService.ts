@@ -7,7 +7,7 @@ import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, Gro
  * Auxiliar para obter timestamp unix de forma segura para ordenação em memória.
  */
 const getUnixTime = (ts: any): number => {
-    if (!ts) return Date.now() / 1000; 
+    if (!ts) return 0; 
     if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
     if (ts.seconds !== undefined) return ts.seconds;
     const d = new Date(ts);
@@ -88,8 +88,13 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       instagram: data.instagram.replace('@', '').trim(),
       tiktok: data.tiktok?.replace('@', '').trim() || '',
       dateOfBirth: data.dateOfBirth, photoUrls, facePhotoUrl: photoUrls[0],
-      status: 'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      state: data.state, campaignName: campaign, organizationId: data.organizationId, allCampaigns: [campaign]
+      status: 'pending', 
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      statusChangedAt: firebase.firestore.FieldValue.serverTimestamp(), // Inicializa para evitar sumiço em filtros
+      state: data.state, 
+      campaignName: campaign, 
+      organizationId: data.organizationId, 
+      allCampaigns: [campaign]
     };
     
     const editId = (data as any).id;
@@ -174,39 +179,45 @@ export const getAllPromotersPaginated = async (options: {
     searchQuery?: string;
 }): Promise<{ promoters: Promoter[], lastDoc: any, hasMore: boolean }> => {
     
-    const buildBaseQuery = () => {
-        let q: firebase.firestore.Query = firestore.collection("promoters");
-        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
-        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
-            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
+    let q: firebase.firestore.Query = firestore.collection("promoters");
+
+    // 1. Filtros de igualdade
+    if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
+    if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
+    if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+    if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+        q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
+    }
+
+    // 2. Lógica de Busca no Servidor
+    const query = options.searchQuery?.trim();
+    if (query) {
+        if (query.includes('@')) {
+            q = q.where("email", "==", query.toLowerCase());
+        } else {
+            // Busca por prefixo de nome (requer que o nome comece com a string)
+            // Nota: Para busca realmente eficiente em qualquer parte do nome, seria necessário Algolia/ElasticSearch,
+            // mas o prefixo resolve a maioria dos casos de busca direta por nome.
+            const searchName = query.charAt(0).toUpperCase() + query.slice(1);
+            q = q.where("name", ">=", searchName).where("name", "<=", searchName + '\uf8ff');
         }
-        if (options.searchQuery && options.searchQuery.trim() !== '') {
-            const query = options.searchQuery.toLowerCase().trim();
-            if (query.includes('@')) q = q.where("email", "==", query);
-        }
-        return q;
-    };
+    }
 
     try {
-        let mainQuery = buildBaseQuery();
-        const isSearching = !!(options.searchQuery && options.searchQuery.trim() !== '');
-
-        // Define o campo de ordenação: 
-        // Se for Aprovada/Rejeitada, ordena pela data da ação. Se for Pendente, pela criação.
-        const sortField = (options.status === 'approved' || options.status === 'rejected' || options.status === 'rejected_editable') 
-            ? "statusChangedAt" 
-            : "createdAt";
-
-        if (!isSearching) {
-            mainQuery = mainQuery.orderBy(sortField, "desc");
+        // 3. Ordenação
+        // Se não estiver buscando, aplicamos a ordenação temporal
+        if (!query) {
+            const sortField = (options.status === 'approved' || options.status === 'rejected' || options.status === 'rejected_editable') 
+                ? "statusChangedAt" 
+                : "createdAt";
+            q = q.orderBy(sortField, "desc");
         }
 
-        if (options.lastDoc) mainQuery = mainQuery.startAfter(options.lastDoc);
-        mainQuery = mainQuery.limit(options.pageSize);
+        // 4. Paginação
+        if (options.lastDoc) q = q.startAfter(options.lastDoc);
+        q = q.limit(options.pageSize);
 
-        const snap = await mainQuery.get();
+        const snap = await q.get();
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
 
@@ -216,14 +227,15 @@ export const getAllPromotersPaginated = async (options: {
             hasMore: snap.docs.length >= options.pageSize 
         };
     } catch (error: any) { 
-        console.error("Erro na busca paginada. Se for falta de índice, use o link no erro do console:", error);
+        console.warn("Erro na consulta paginada, tentando fallback:", error.message);
         
-        // Fallback de emergência (sem ordenação se o índice falhar)
-        let fallbackQuery = buildBaseQuery();
-        if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
-        fallbackQuery = fallbackQuery.limit(options.pageSize);
+        // Fallback simples se os índices compostos falharem
+        let fallbackQ = firestore.collection("promoters");
+        if (options.organizationId) fallbackQ = fallbackQ.where("organizationId", "==", options.organizationId);
+        if (options.status && options.status !== 'all') fallbackQ = fallbackQ.where("status", "==", options.status);
+        if (options.lastDoc) fallbackQ = fallbackQ.startAfter(options.lastDoc);
         
-        const fallbackSnap = await fallbackQuery.get();
+        const fallbackSnap = await fallbackQ.limit(options.pageSize).get();
         const promoters = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         
         return { 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -119,12 +120,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return () => { isMounted.current = false; };
     }, []);
 
-    // Obtém a organização atual para filtrar os estados
     const currentOrg = useMemo(() => {
         return organizationsForAdmin.find(o => o.id === selectedOrgId);
     }, [organizationsForAdmin, selectedOrgId]);
 
-    // Filtra a lista global de estados para mostrar apenas os da produtora
     const statesToShow = useMemo(() => {
         if (isSuperAdmin && !selectedOrgId) return states;
         if (currentOrg?.assignedStates && currentOrg.assignedStates.length > 0) {
@@ -182,20 +181,19 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, searchQuery]);
 
-    // Efeito para busca e reset de filtros
+    // Efeito para busca e reset de filtros com Debounce para busca no servidor
     useEffect(() => {
         if (!authLoading) {
-            const timer = setTimeout(() => {
+            const timeout = setTimeout(() => {
                 setPrevCursors([]);
                 setLastDoc(null);
                 setSelectedIds(new Set());
                 fetchData(null);
-            }, searchQuery.trim() !== '' ? 600 : 0);
-            return () => clearTimeout(timer);
+            }, searchQuery ? 600 : 0);
+            return () => clearTimeout(timeout);
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, searchQuery, fetchData, authLoading]);
 
-    // Função de Busca Global (Lookup)
     const handleLookup = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!lookupEmail.trim()) return;
@@ -224,13 +222,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         if (!window.confirm(`Deseja aprovar ${selectedIds.size} perfis selecionados?`)) return;
         setIsLoading(true);
         try {
-            await Promise.all(Array.from(selectedIds).map(async id => {
+            await Promise.all(Array.from(selectedIds).map(async (id: string) => {
                 const p = promoters.find(item => item.id === id);
                 if (!p) return;
-                const allCampaigns = [p.campaignName, ...(p.associatedCampaigns || [])].filter((c, i, s) => c && s.indexOf(c) === i);
+                const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
                 await updatePromoter(id, { 
                     status: 'approved',
-                    allCampaigns: allCampaigns as string[],
+                    allCampaigns: allCampaigns,
                     actionTakenByEmail: adminData.email
                 });
             }));
@@ -244,16 +242,17 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
-        const allCampaigns = [p.campaignName, ...(p.associatedCampaigns || [])].filter((c, i, s) => c && s.indexOf(c) === i);
+        const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
         
         setIsBulkProcessing(true);
         try {
             await updatePromoter(pId, { 
                 status: 'approved',
-                allCampaigns: allCampaigns as string[],
+                allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
             setSelectedIds(new Set());
+            // Voltamos para a primeira página para garantir que o item apareça no topo das aprovadas
             fetchData(null);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
@@ -285,24 +284,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    const filteredPromoters = useMemo(() => {
+    const displayedPromoters = useMemo(() => {
+        // Agora o servidor já filtra a maioria das coisas, 
+        // mantemos apenas filtros de UI aqui.
         return promoters.filter(p => {
             if (!p) return false;
             const age = calculateAge(p.dateOfBirth);
-            const q = searchQuery.toLowerCase().trim();
-            const name = (p.name || '').toLowerCase();
-            const insta = (p.instagram || '').toLowerCase();
-            const email = (p.email || '').toLowerCase();
-
-            const matchesSearch = !q || name.includes(q) || insta.includes(q) || email.includes(q);
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
-            return matchesSearch && matchesMinAge && matchesMaxAge && matchesGroup;
+            return matchesMinAge && matchesMaxAge && matchesGroup;
         });
-    }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
+    }, [promoters, minAge, maxAge, filterGroup]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -346,7 +341,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Buscar nesta página..." 
+                            placeholder="Buscar nome em toda a base..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -402,7 +397,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando equipe...</p>
                     </div>
-                ) : filteredPromoters.length === 0 ? (
+                ) : displayedPromoters.length === 0 ? (
                     <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">Nenhum registro encontrado</div>
                 ) : (
                     <>
@@ -411,9 +406,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={() => {
-                                                if (selectedIds.size === filteredPromoters.length) setSelectedIds(new Set());
-                                                else setSelectedIds(new Set(filteredPromoters.map(p => p.id)));
+                                            <input type="checkbox" checked={selectedIds.size === displayedPromoters.length && displayedPromoters.length > 0} onChange={() => {
+                                                if (selectedIds.size === displayedPromoters.length) setSelectedIds(new Set());
+                                                else setSelectedIds(new Set(displayedPromoters.map(p => p.id)));
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
@@ -423,7 +418,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {filteredPromoters.map(p => {
+                                    {displayedPromoters.map(p => {
                                         const photo = getPhotoUrl(p);
                                         return (
                                             <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
@@ -461,7 +456,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
                         {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
-                            {filteredPromoters.map(p => {
+                            {displayedPromoters.map(p => {
                                 const photo = getPhotoUrl(p);
                                 return (
                                     <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
@@ -511,18 +506,22 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal 
               isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} 
-              onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); fetchData(null); }}
+              onGoToPromoter={(p) => { 
+                  setIsLookupModalOpen(false); 
+                  setSearchQuery(p.email); 
+                  // Forçamos o reset para a primeira página com a busca ativa
+                  setFilterStatus('all');
+                  fetchData(null);
+              }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
-              onDelete={async (p) => { 
+              onDelete={async (p: Promoter) => { 
                 if(window.confirm(`Excluir PERMANENTEMENTE ${p.name}?`)) {
                     setIsLoading(true);
                     try {
-                        // FIX: Explicitly handle the promise returned by deletePromoter and use catch block correctly for TypeScript.
                         await deletePromoter(p.id);
                         setIsLookupModalOpen(false);
                         fetchData(null);
                     } catch(err: any) { 
-                        // FIX: Cast error to any to avoid "unknown" type errors when accessing .message.
                         alert(err?.message || "Ocorreu um erro ao excluir."); 
                     } finally { 
                         setIsLoading(false); 
