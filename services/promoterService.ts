@@ -7,7 +7,7 @@ import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, Gro
  * Auxiliar para obter timestamp unix de forma segura para ordenação em memória.
  */
 const getUnixTime = (ts: any): number => {
-    if (!ts) return Date.now() / 1000; // Se nulo (recém criado), assume "agora"
+    if (!ts) return Date.now() / 1000; 
     if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
     if (ts.seconds !== undefined) return ts.seconds;
     const d = new Date(ts);
@@ -40,9 +40,6 @@ export const changePromoterEmail = async (promoterId: string, oldEmail: string, 
     }
 };
 
-/**
- * Dispara e-mail de aviso de aprovação em massa via servidor.
- */
 export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> => {
     try {
         const notifyFunc = functions.httpsCallable('notifyApprovalBulk');
@@ -193,63 +190,47 @@ export const getAllPromotersPaginated = async (options: {
     };
 
     try {
-        let finalPromoters: Promoter[] = [];
-        let lastVisible = null;
-        let mainSnapSize = 0;
+        let mainQuery = buildBaseQuery();
         const isSearching = !!(options.searchQuery && options.searchQuery.trim() !== '');
 
-        // 1. PRIMEIRA PÁGINA: Busca nulos (recém-cadastrados pendentes de serverTimestamp)
-        if (!options.lastDoc && !isSearching) {
-            const nullQuery = buildBaseQuery().where("createdAt", "==", null).limit(10);
-            const nullSnap = await nullQuery.get();
-            nullSnap.forEach(doc => finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter));
+        // Define o campo de ordenação: 
+        // Se for Aprovada/Rejeitada, ordena pela data da ação. Se for Pendente, pela criação.
+        const sortField = (options.status === 'approved' || options.status === 'rejected' || options.status === 'rejected_editable') 
+            ? "statusChangedAt" 
+            : "createdAt";
+
+        if (!isSearching) {
+            mainQuery = mainQuery.orderBy(sortField, "desc");
         }
 
-        // 2. BUSCA PRINCIPAL
-        let mainQuery = buildBaseQuery();
-        if (!isSearching) {
-            mainQuery = mainQuery.orderBy("createdAt", "desc");
-        }
         if (options.lastDoc) mainQuery = mainQuery.startAfter(options.lastDoc);
         mainQuery = mainQuery.limit(options.pageSize);
 
-        try {
-            const mainSnap = await mainQuery.get();
-            mainSnapSize = mainSnap.docs.length;
-            mainSnap.forEach(doc => {
-                if (!finalPromoters.find(p => p.id === doc.id)) {
-                    finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
-                }
-            });
-            lastVisible = mainSnap.docs[mainSnap.docs.length - 1];
-        } catch (innerError) {
-            console.warn("Erro na ordenação Firestore, usando busca bruta e sort manual:", innerError);
-            let fallbackQuery = buildBaseQuery();
-            if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
-            fallbackQuery = fallbackQuery.limit(options.pageSize);
-            const fallbackSnap = await fallbackQuery.get();
-            mainSnapSize = fallbackSnap.docs.length;
-            fallbackSnap.forEach(doc => {
-                if (!finalPromoters.find(p => p.id === doc.id)) {
-                    finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
-                }
-            });
-            lastVisible = fallbackSnap.docs[fallbackSnap.docs.length - 1];
-        }
+        const snap = await mainQuery.get();
+        const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        const lastVisible = snap.docs[snap.docs.length - 1];
 
-        // 3. ORDENAÇÃO MANUAL FINAL (Garante critério mesmo no fallback ou mistura de nulos)
-        if (!isSearching) {
-            finalPromoters.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
-        }
+        return { 
+            promoters, 
+            lastDoc: lastVisible,
+            hasMore: snap.docs.length >= options.pageSize 
+        };
+    } catch (error: any) { 
+        console.error("Erro na busca paginada. Se for falta de índice, use o link no erro do console:", error);
+        
+        // Fallback de emergência (sem ordenação se o índice falhar)
+        let fallbackQuery = buildBaseQuery();
+        if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
+        fallbackQuery = fallbackQuery.limit(options.pageSize);
+        
+        const fallbackSnap = await fallbackQuery.get();
+        const promoters = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         
         return { 
-            promoters: finalPromoters, 
-            lastDoc: lastVisible,
-            hasMore: mainSnapSize >= options.pageSize 
+            promoters, 
+            lastDoc: fallbackSnap.docs[fallbackSnap.docs.length - 1],
+            hasMore: fallbackSnap.docs.length >= options.pageSize 
         };
-    } catch (error) { 
-        console.error("Erro fatal na busca paginada:", error);
-        throw new Error("Erro ao buscar no banco de dados."); 
     }
 };
 
@@ -270,17 +251,9 @@ export const getAllPromoters = async (options: {
         }
         
         if (options.limitCount) q = q.limit(options.limitCount);
-        
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        
-        if (options.statesForScope && options.statesForScope.length > 0 && !options.filterState) {
-            results = results.filter(p => options.statesForScope!.includes(p.state));
-        }
-
-        // Garante ordenação descendente
         results.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
-        
         return results;
     } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
 };
@@ -311,11 +284,16 @@ export const getPromoterStats = async (options: {
 
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
+    const finalData = {
+        ...data,
+        statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
     if (data.status === 'approved' || data.status === 'rejected_editable') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
-        await updateFunc({ promoterId: id, data: cleanForCallable(data) });
+        await updateFunc({ promoterId: id, data: cleanForCallable(finalData) });
     } else { 
-        await firestore.collection('promoters').doc(id).update(data); 
+        await firestore.collection('promoters').doc(id).update(finalData); 
     }
   } catch (error) { throw new Error("Falha ao atualizar."); }
 };
@@ -349,9 +327,9 @@ export const getApprovedPromoters = async (organizationId: string, state: string
         const q = firestore.collection("promoters").where("organizationId", "==", organizationId).where("state", "==", state).where("status", "==", "approved");
         const snap = await q.get();
         const allApproved = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        const filtered = allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
-        filtered.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
-        return filtered;
+        const results = allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
+        results.sort((a, b) => getUnixTime(b.statusChangedAt) - getUnixTime(a.statusChangedAt));
+        return results;
     } catch (error) { return []; }
 };
 
