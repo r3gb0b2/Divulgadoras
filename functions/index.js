@@ -89,7 +89,61 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
     }
 });
 
-// --- PERSISTÊNCIA DE TOKEN PUSH ---
+// --- PERSISTÊNCIA E SINCRONIZAÇÃO (Inclui aviso de correção) ---
+
+exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { promoterId, data: updateData } = data;
+    const config = getConfig();
+    const brevo = setupBrevo(config.brevoKey);
+    
+    try {
+        const promoterRef = db.collection("promoters").doc(promoterId);
+        const oldDoc = await promoterRef.get();
+        if (!oldDoc.exists) return { success: false, message: "Divulgadora não encontrada." };
+        const p = oldDoc.data();
+
+        await promoterRef.update({ 
+            ...updateData, 
+            statusChangedAt: admin.firestore.FieldValue.serverTimestamp() 
+        });
+
+        // Enviar e-mail de "Ajuste Necessário" se o status for rejected_editable
+        if (updateData.status === 'rejected_editable' && brevo) {
+            const firstName = p.name.split(' ')[0];
+            const campaign = p.campaignName || "Equipe Geral";
+            const reason = updateData.rejectionReason || "Informações inconsistentes ou fotos inadequadas.";
+            const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
+            
+            const htmlContent = `
+                <div style="font-family: sans-serif; color: #333; line-height: 1.6;">
+                    <h2 style="color: #e67e22;">Olá, ${firstName}! Precisamos de um ajuste no seu cadastro. ⚠️</h2>
+                    <p>Analisamos seu perfil para o evento <strong>${campaign}</strong> e notamos que alguns dados precisam ser corrigidos para seguirmos com a aprovação.</p>
+                    <div style="background-color: #fef5e7; border-left: 4px solid #e67e22; padding: 15px; margin: 20px 0;">
+                        <strong>Motivo informado pela coordenação:</strong><br>
+                        <em style="color: #666;">"${reason}"</em>
+                    </div>
+                    <p>Por favor, acesse seu portal para editar seus dados e reenviar para análise:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${portalLink}" style="background-color: #e67e22; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">CORRIGIR MEU CADASTRO</a>
+                    </div>
+                    <p>Aguardamos seu reenvio!</p>
+                </div>
+            `;
+
+            await brevo.sendTransacEmail({
+                sender: { email: config.brevoEmail, name: "Equipe Certa" },
+                to: [{ email: p.email, name: p.name }],
+                subject: `⚠️ Ajuste necessário no seu cadastro: ${campaign}`,
+                htmlContent: htmlContent
+            });
+        }
+
+        return { success: true };
+    } catch (error) {
+        console.error("Erro no updatePromoterAndSync:", error);
+        return { success: false, message: error.message };
+    }
+});
 
 exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, token, metadata } = data;
@@ -127,7 +181,6 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
 
         const emailPromises = snap.docs.map(doc => {
             const p = doc.data();
-            // Injeta o rodapé dinamicamente para cada divulgadora
             const personalFooter = getEmailFooter(doc.id, p.organizationId, p.campaignName);
             const personalizedBody = body.replace(/{{promoterName}}/g, p.name) + personalFooter;
 
@@ -144,13 +197,6 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
     } catch (error) {
         return { success: false, message: error.message };
     }
-});
-
-exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId, data: updateData } = data;
-    const promoterRef = db.collection("promoters").doc(promoterId);
-    await promoterRef.update({ ...updateData, statusChangedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { success: true };
 });
 
 exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(async () => {
