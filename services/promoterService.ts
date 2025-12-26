@@ -42,9 +42,9 @@ export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> =
 
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
-  const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Geral";
+  const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Inscrição Direta";
   
-  // Validação Crítica: Impedir cadastro sem organização válida ou com rota errada
+  // Validação Crítica de Segurança: Impedir organização 'register' ou 'undefined'
   if (!data.organizationId || data.organizationId === 'register' || data.organizationId === 'undefined') {
       throw new Error("Erro de identificação da produtora. Por favor, utilize o link oficial enviado pela sua organização.");
   }

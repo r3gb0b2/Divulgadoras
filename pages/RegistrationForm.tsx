@@ -35,10 +35,14 @@ const RegistrationForm: React.FC = () => {
   const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Validar se a organização existe antes de permitir o cadastro
-    if (organizationId) {
+    // Validação Crítica: Impede que URLs malformadas ou IDs inexistentes gerem cadastros
+    if (organizationId && organizationId !== 'register' && organizationId !== 'undefined') {
         getOrganization(organizationId).then(org => {
-            setIsValidOrg(!!org && org.status !== 'deactivated');
+            if (org && org.status !== 'deactivated') {
+                setIsValidOrg(true);
+            } else {
+                setIsValidOrg(false);
+            }
         }).catch(() => setIsValidOrg(false));
     } else {
         setIsValidOrg(false);
@@ -76,8 +80,10 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organizationId || !state || isValidOrg === false) {
-      setError("Link de cadastro inválido. Por favor, solicite um novo link oficial.");
+    
+    // Segunda camada de segurança contra cadastros órfãos
+    if (!organizationId || organizationId === 'register' || isValidOrg === false) {
+      setError("Link de cadastro inválido ou expirado. Por favor, solicite o link oficial à sua produtora.");
       return;
     }
     
@@ -95,7 +101,7 @@ const RegistrationForm: React.FC = () => {
         id: editId || undefined,
         instagram: sanitizeHandle(formData.instagram),
         photos,
-        state,
+        state: state || 'CE',
         organizationId 
       } as any);
       
@@ -114,7 +120,7 @@ const RegistrationForm: React.FC = () => {
               <div className="bg-red-900/20 border border-red-500/50 p-10 rounded-[3rem]">
                   <XIcon className="w-20 h-20 text-red-500 mx-auto mb-6" />
                   <h1 className="text-3xl font-black text-white uppercase mb-4">Link Inválido</h1>
-                  <p className="text-gray-400">Esta organização não existe ou o link de cadastro está quebrado.</p>
+                  <p className="text-gray-400">Esta organização não foi identificada ou o link de cadastro está quebrado.</p>
                   <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-primary text-white font-bold rounded-full">Voltar ao Início</button>
               </div>
           </div>

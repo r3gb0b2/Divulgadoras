@@ -58,7 +58,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
-    const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
     const [filterStatus, setFilterStatus] = useState<PromoterStatus | 'all'>('pending');
@@ -126,7 +126,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 getPromoterStats({ organizationId: orgId, filterState, selectedCampaign }),
                 getAllCampaigns(orgId),
                 orgId ? getRejectionReasons(orgId) : Promise.resolve([]),
-                getOrganizations() // Pegar sempre para o mapeamento de nomes para SuperAdmin
+                getOrganizations() // Para SuperAdmin mapear nomes
             ]);
 
             setPromoters(result.promoters);
@@ -204,6 +204,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
+    // NOVA AÇÃO EM MASSA: DISPARAR E-MAIL DE APROVAÇÃO
     const handleBulkNotifyApproval = async () => {
         const eligibleIds = promoters
             .filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup)
@@ -216,7 +217,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
         if (!window.confirm(`Deseja enviar um e-mail de aviso de aprovação para as ${eligibleIds.length} divulgadoras qualificadas?`)) return;
 
-        setIsProcessingBulk(true);
+        setIsBulkProcessing(true);
         try {
             await notifyApprovalBulk(eligibleIds);
             alert("E-mails enviados com sucesso!");
@@ -225,7 +226,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } catch (err: any) {
             alert("Erro ao enviar e-mails: " + err.message);
         } finally {
-            setIsProcessingBulk(false);
+            setIsBulkProcessing(false);
         }
     };
 
@@ -389,7 +390,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
                     <div className="flex flex-wrap gap-2">
                         {notifyApprovalCount > 0 && (
-                            <button onClick={handleBulkNotifyApproval} disabled={isProcessingBulk} className="px-4 py-2 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-2">
+                            <button onClick={handleBulkNotifyApproval} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-2">
                                 <MailIcon className="w-3.5 h-3.5" /> Avisar Aprovação ({notifyApprovalCount})
                             </button>
                         )}
