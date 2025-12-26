@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -177,6 +176,11 @@ export const getAllPromotersPaginated = async (options: {
         let snap;
         try { 
             snap = await fetchWithQuery(true); 
+            // Se o filtro for 'all' e voltarem menos resultados que o esperado, ou for a primeira página,
+            // podemos tentar a consulta sem orderby para pegar registros "quebrados" (sem createdAt).
+            if (snap.empty && !options.lastDoc) {
+                snap = await fetchWithQuery(false);
+            }
         } catch (e) { 
             console.warn("Retrying query without orderBy to catch records with missing fields");
             snap = await fetchWithQuery(false); 

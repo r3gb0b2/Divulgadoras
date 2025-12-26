@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getPromoterById } from '../services/promoterService';
@@ -39,6 +38,17 @@ const RegistrationForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
 
+  const formatPhone = (value: string) => {
+    if (!value) return value;
+    const phoneNumber = value.replace(/\D/g, '');
+    const phoneNumberLength = phoneNumber.length;
+    if (phoneNumberLength <= 2) return phoneNumber;
+    if (phoneNumberLength <= 7) {
+      return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+    }
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
+  };
+
   useEffect(() => {
     const loadInitialData = async () => {
         if (!organizationId || organizationId === 'register' || organizationId === 'undefined') {
@@ -76,7 +86,7 @@ const RegistrationForm: React.FC = () => {
                     setFormData({
                         email: p.email,
                         name: p.name,
-                        whatsapp: formatWhatsApp(p.whatsapp),
+                        whatsapp: formatPhone(p.whatsapp),
                         instagram: p.instagram,
                         tiktok: p.tiktok || '',
                         dateOfBirth: p.dateOfBirth,
@@ -94,17 +104,9 @@ const RegistrationForm: React.FC = () => {
     loadInitialData();
   }, [editId, organizationId, state]);
 
-  const formatWhatsApp = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    const limited = digits.slice(0, 11);
-    
-    if (limited.length <= 2) return limited;
-    if (limited.length <= 7) return `(${limited.slice(0, 2)})${limited.slice(2)}`;
-    return `(${limited.slice(0, 2)})${limited.slice(2, 7)}-${limited.slice(7)}`;
-  };
-
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, whatsapp: formatWhatsApp(e.target.value) });
+    const formatted = formatPhone(e.target.value);
+    setFormData({ ...formData, whatsapp: formatted });
   };
 
   const sanitizeHandle = (input: string) => {
@@ -133,9 +135,10 @@ const RegistrationForm: React.FC = () => {
     setError(null);
 
     try {
+      const cleanWhatsapp = formData.whatsapp.replace(/\D/g, '');
       await addPromoter({
         ...formData,
-        whatsapp: formData.whatsapp.replace(/\D/g, ''),
+        whatsapp: cleanWhatsapp,
         id: editId || undefined,
         instagram: sanitizeHandle(formData.instagram),
         photos,
@@ -268,7 +271,7 @@ const RegistrationForm: React.FC = () => {
                   type="tel" required value={formData.whatsapp}
                   onChange={handleWhatsAppChange}
                   className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="(00)00000-0000"
+                  placeholder="(00) 00000-0000"
                 />
               </div>
             </div>
