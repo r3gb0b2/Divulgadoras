@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -42,6 +43,8 @@ export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> =
 
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
+  
+  // CORREÇÃO: Pega o nome da campanha do formData (seja da URL ou do Dropdown)
   const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Inscrição Direta";
   
   // Validação Crítica de Segurança: Impedir organização 'register' ou 'undefined'

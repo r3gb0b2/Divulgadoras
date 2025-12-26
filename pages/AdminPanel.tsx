@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -94,14 +95,19 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     // Filtra a lista global de estados para mostrar apenas os da produtora
     const statesToShow = useMemo(() => {
-        if (isSuperAdmin || !currentOrg?.assignedStates || currentOrg.assignedStates.length === 0) {
+        if (isSuperAdmin && !selectedOrgId) {
             return states;
         }
-        return states.filter(s => currentOrg.assignedStates.includes(s.abbr));
-    }, [currentOrg, isSuperAdmin]);
+        if (currentOrg?.assignedStates && currentOrg.assignedStates.length > 0) {
+            return states.filter(s => currentOrg.assignedStates.includes(s.abbr));
+        }
+        return states;
+    }, [currentOrg, isSuperAdmin, selectedOrgId]);
 
     const fetchData = useCallback(async (cursor: any = null) => {
-        const orgId = isSuperAdmin ? undefined : (selectedOrgId as string | undefined);
+        // PRIORIDADE: Se tiver org selecionada no switcher, usa ela. Senão (SuperAdmin), busca tudo.
+        const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
+        
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
             setPromoters([]);
@@ -113,7 +119,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         
         try {
             const options = {
-                organizationId: orgId,
+                organizationId: orgId as string | undefined,
                 status: filterStatus,
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
@@ -123,9 +129,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
                 getAllPromotersPaginated(options),
-                getPromoterStats({ organizationId: orgId, filterState, selectedCampaign }),
-                getAllCampaigns(orgId),
-                orgId ? getRejectionReasons(orgId) : Promise.resolve([]),
+                getPromoterStats({ organizationId: orgId as string | undefined, filterState, selectedCampaign }),
+                getAllCampaigns(orgId as string | undefined),
+                orgId ? getRejectionReasons(orgId as string) : Promise.resolve([]),
                 getOrganizations() // Para SuperAdmin mapear nomes
             ]);
 
@@ -204,7 +210,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // NOVA AÇÃO EM MASSA: DISPARAR E-MAIL DE APROVAÇÃO
     const handleBulkNotifyApproval = async () => {
         const eligibleIds = promoters
             .filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup)

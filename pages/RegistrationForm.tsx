@@ -1,13 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { addPromoter, getPromoterById } from '../services/promoterService';
 import { getOrganization } from '../services/organizationService';
+import { getAllCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon, ShieldCheckIcon
+  ArrowLeftIcon, CheckCircleIcon, XIcon, ShieldCheckIcon,
+  MegaphoneIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { Campaign } from '../types';
 
 const RegistrationForm: React.FC = () => {
   const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
@@ -27,45 +31,72 @@ const RegistrationForm: React.FC = () => {
     campaignName: campaignNameFromUrl ? decodeURIComponent(campaignNameFromUrl) : '',
   });
   
+  const [availableCampaigns, setAvailableCampaigns] = useState<Campaign[]>([]);
   const [photos, setPhotos] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Validação Crítica: Impede que URLs malformadas ou IDs inexistentes gerem cadastros
-    if (organizationId && organizationId !== 'register' && organizationId !== 'undefined') {
-        getOrganization(organizationId).then(org => {
+    const loadInitialData = async () => {
+        if (!organizationId || organizationId === 'register' || organizationId === 'undefined') {
+            setIsValidOrg(false);
+            setIsLoadingData(false);
+            return;
+        }
+
+        try {
+            const org = await getOrganization(organizationId);
             if (org && org.status !== 'deactivated') {
                 setIsValidOrg(true);
+                
+                // Buscar campanhas disponíveis para este estado e organização
+                const allCampaigns = await getAllCampaigns(organizationId);
+                const activeInState = allCampaigns.filter(c => 
+                    c.stateAbbr === state && 
+                    c.status === 'active'
+                );
+                setAvailableCampaigns(activeInState);
+
+                // Se houver apenas uma campanha e nenhuma na URL, seleciona automaticamente
+                if (!formData.campaignName && activeInState.length === 1) {
+                    setFormData(prev => ({ ...prev, campaignName: activeInState[0].name }));
+                }
             } else {
                 setIsValidOrg(false);
             }
-        }).catch(() => setIsValidOrg(false));
-    } else {
-        setIsValidOrg(false);
-    }
+        } catch (err) {
+            setIsValidOrg(false);
+        }
 
-    if (editId) {
-        getPromoterById(editId).then(p => {
-            if (p) {
-                setFormData({
-                    email: p.email,
-                    name: p.name,
-                    whatsapp: p.whatsapp,
-                    instagram: p.instagram,
-                    tiktok: p.tiktok || '',
-                    dateOfBirth: p.dateOfBirth,
-                    cpf: (p as any).cpf || '',
-                    campaignName: p.campaignName || '',
-                });
-                if (p.photoUrls) setPreviews(p.photoUrls);
+        if (editId) {
+            try {
+                const p = await getPromoterById(editId);
+                if (p) {
+                    setFormData({
+                        email: p.email,
+                        name: p.name,
+                        whatsapp: p.whatsapp,
+                        instagram: p.instagram,
+                        tiktok: p.tiktok || '',
+                        dateOfBirth: p.dateOfBirth,
+                        cpf: (p as any).cpf || '',
+                        campaignName: p.campaignName || '',
+                    });
+                    if (p.photoUrls) setPreviews(p.photoUrls);
+                }
+            } catch (e) {
+                console.error("Erro ao carregar dados de edição");
             }
-        });
-    }
-  }, [editId, organizationId]);
+        }
+        setIsLoadingData(false);
+    };
+
+    loadInitialData();
+  }, [editId, organizationId, state]);
 
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
@@ -81,7 +112,11 @@ const RegistrationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Segunda camada de segurança contra cadastros órfãos
+    if (!formData.campaignName) {
+        setError("Por favor, selecione o evento para o qual deseja se candidatar.");
+        return;
+    }
+
     if (!organizationId || organizationId === 'register' || isValidOrg === false) {
       setError("Link de cadastro inválido ou expirado. Por favor, solicite o link oficial à sua produtora.");
       return;
@@ -113,6 +148,14 @@ const RegistrationForm: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoadingData) {
+      return (
+          <div className="flex justify-center items-center py-40">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </div>
+      );
+  }
 
   if (isValidOrg === false) {
       return (
@@ -151,12 +194,45 @@ const RegistrationForm: React.FC = () => {
             {editId ? 'Corrigir' : 'Cadastro'} <span className="text-primary">Divulgadora</span>
           </h1>
           <p className="text-gray-400 mt-2 font-bold uppercase text-xs tracking-widest">
-            {formData.campaignName || 'Inscrição Oficial'} • {stateMap[state || ''] || state}
+            {stateMap[state || ''] || state} • Inscrição Oficial
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 md:p-14 space-y-12">
           {error && <div className="bg-red-900/40 border border-red-500/50 text-red-200 p-5 rounded-2xl text-sm font-bold text-center">{error}</div>}
+
+          {/* Seleção de Evento */}
+          <div className="space-y-8">
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <MegaphoneIcon className="w-6 h-6 text-primary" /> Escolha o Evento
+            </h2>
+            
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Selecione para qual evento deseja trabalhar</label>
+                {campaignNameFromUrl ? (
+                    <div className="w-full px-6 py-5 bg-white/5 border border-primary/30 rounded-3xl text-primary font-black uppercase tracking-tight flex items-center justify-between">
+                        <span>{decodeURIComponent(campaignNameFromUrl)}</span>
+                        <CheckCircleIcon className="w-5 h-5" />
+                    </div>
+                ) : (
+                    <select 
+                        required
+                        value={formData.campaignName}
+                        onChange={e => setFormData({ ...formData, campaignName: e.target.value })}
+                        className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer"
+                    >
+                        <option value="" className="bg-dark">Clique para selecionar o evento...</option>
+                        {availableCampaigns.length > 0 ? (
+                            availableCampaigns.map(c => (
+                                <option key={c.id} value={c.name} className="bg-dark">{c.name}</option>
+                            ))
+                        ) : (
+                            <option value="" disabled className="bg-dark text-gray-500">Nenhum evento ativo neste estado no momento</option>
+                        )}
+                    </select>
+                )}
+            </div>
+          </div>
 
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
@@ -259,7 +335,7 @@ const RegistrationForm: React.FC = () => {
           </div>
 
           <button 
-            type="submit" disabled={isSubmitting}
+            type="submit" disabled={isSubmitting || (availableCampaigns.length === 0 && !campaignNameFromUrl)}
             className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
           >
             {isSubmitting ? 'ENVIANDO...' : 'FINALIZAR INSCRIÇÃO'}
