@@ -224,10 +224,22 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            await Promise.all(idsArray.map(id => updatePromoter(id as string, { 
-                status: 'approved',
-                actionTakenByEmail: adminData.email
-            })));
+            // No bulk approval, we must be careful with allCampaigns too
+            await Promise.all(idsArray.map(async id => {
+                const p = promoters.find(item => item.id === id);
+                if (!p) return;
+                
+                const allCampaigns = [
+                    p.campaignName,
+                    ...(p.associatedCampaigns || [])
+                ].filter((c, index, self) => c && self.indexOf(c) === index);
+
+                await updatePromoter(id as string, { 
+                    status: 'approved',
+                    allCampaigns: allCampaigns as string[],
+                    actionTakenByEmail: adminData.email
+                });
+            }));
             setSelectedIds(new Set());
             fetchData(null);
         } catch (e) {
@@ -284,6 +296,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
+        
+        // Garantir que allCampaigns seja populado para evitar "sumiço" após aprovação
+        const allCampaigns = [
+            p.campaignName,
+            ...(p.associatedCampaigns || [])
+        ].filter((c, index, self) => c && self.indexOf(c) === index);
+
         setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
         setStats((prev: typeof stats) => ({ 
             ...prev, 
@@ -294,9 +313,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await updatePromoter(pId, { 
                 status: 'approved',
+                allCampaigns: allCampaigns as string[],
                 actionTakenByEmail: adminData.email
             });
         } catch (err: any) {
+            console.error("Falha ao aprovar:", err);
             fetchData(null); 
         }
     };
@@ -655,7 +676,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                   setIsLookupModalOpen(false); 
                   setSearchQuery(p.email); 
                   setFilterStatus('all'); 
-                  // RESET DE FILTROS CRÍTICO: Garantir que a pessoa apareça mesmo mudando de evento/estado
                   setFilterState('all');
                   setSelectedCampaign('all');
                   setFilterGroup('all');

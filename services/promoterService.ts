@@ -155,7 +155,6 @@ export const getPromotersByIds = async (ids: string[]): Promise<Promoter[]> => {
 export const findPromotersByEmail = async (email: string): Promise<Promoter[]> => {
     try {
         const snap = await firestore.collection("promoters").where("email", "==", email.toLowerCase().trim()).get();
-        // Filtragem defensiva para ignorar registros corrompidos ou apagados indevidamente
         return snap.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as Promoter))
             .filter(p => p && p.email && p.name); 
@@ -173,7 +172,6 @@ export const getAllPromotersPaginated = async (options: {
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         
-        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para capturar campanhas associadas
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
@@ -191,11 +189,12 @@ export const getAllPromotersPaginated = async (options: {
         let snap;
         try { 
             snap = await fetchWithQuery(true); 
-            if (snap.empty && !options.lastDoc && options.status === 'all') {
+            // Fallback imediato se não houver resultados na primeira página (pode ser índice ou timestamp pendente)
+            if (snap.empty && !options.lastDoc) {
                 snap = await fetchWithQuery(false);
             }
         } catch (e) { 
-            console.warn("Retrying query without orderBy to catch records with missing fields");
+            console.warn("Retrying query without orderBy to catch records with missing fields or missing index");
             snap = await fetchWithQuery(false); 
         }
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
@@ -216,7 +215,6 @@ export const getAllPromoters = async (options: {
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         
-        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para capturar campanhas associadas
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
@@ -239,7 +237,6 @@ export const getPromoterStats = async (options: {
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         
-        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para estatísticas
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
