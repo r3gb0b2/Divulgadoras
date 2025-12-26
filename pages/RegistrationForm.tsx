@@ -7,7 +7,7 @@ import { getAllCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon
+  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon, AlertTriangleIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { Campaign } from '../types';
@@ -236,6 +236,14 @@ const RegistrationForm: React.FC = () => {
                   <span>E-mail</span>
                   {isAutoFilling && <span className="text-primary animate-pulse normal-case font-black">Buscando dados anteriores...</span>}
                 </label>
+                
+                <div className="bg-blue-900/10 border border-blue-500/20 px-4 py-3 rounded-2xl flex items-center gap-3 mb-2">
+                   <AlertTriangleIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                   <p className="text-[10px] text-blue-200 font-bold uppercase tracking-tight leading-tight">
+                      Use um e-mail que você acessa sempre, pois seu convite e aprovação chegarão por ele.
+                   </p>
+                </div>
+
                 <div className="relative">
                   <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input 

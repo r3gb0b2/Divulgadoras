@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addPromoter } from '../services/promoterService';
-import { UserIcon, MailIcon, PhoneIcon, InstagramIcon, CalendarIcon, CameraIcon, ArrowLeftIcon, CheckCircleIcon } from '../components/Icons';
+import { UserIcon, MailIcon, PhoneIcon, InstagramIcon, CalendarIcon, CameraIcon, ArrowLeftIcon, CheckCircleIcon, AlertTriangleIcon } from '../components/Icons';
 import { states } from '../constants/states';
 
 const RegisterF1: React.FC = () => {
@@ -117,7 +117,11 @@ const RegisterF1: React.FC = () => {
                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">E-mail</label>
                             <div className="relative">
                                 <MailIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                                <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none" placeholder="exemplo@gmail.com" />
+                                <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-white focus:ring-2 focus:ring-primary outline-none font-black" placeholder="exemplo@gmail.com" />
+                            </div>
+                            <div className="flex items-start gap-2 mt-1 px-1">
+                                <AlertTriangleIcon className="w-3.5 h-3.5 text-blue-400 mt-0.5" />
+                                <p className="text-[10px] text-blue-300 font-bold uppercase tracking-tight">O convite oficial será enviado para este e-mail.</p>
                             </div>
                         </div>
 
