@@ -166,8 +166,11 @@ export const getAllPromotersPaginated = async (options: {
     filterState?: string; selectedCampaign?: string;
     pageSize: number; lastDoc?: any;
 }): Promise<{ promoters: Promoter[], lastDoc: any }> => {
-    const fetchWithQuery = async (useOrderBy: boolean) => {
+    
+    // Função auxiliar interna para construir e executar a query
+    const executeQuery = async (useOrderBy: boolean) => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
+        
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
@@ -176,32 +179,42 @@ export const getAllPromotersPaginated = async (options: {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
         
-        // ORDENAÇÃO: Se houver timestamp nulo (recém criado), orderBy oculta o documento.
         if (useOrderBy) {
             q = q.orderBy("createdAt", "desc");
         }
         
         if (options.lastDoc) q = q.startAfter(options.lastDoc);
         q = q.limit(options.pageSize);
+        
         return await q.get();
     };
 
     try {
-        let snap = await fetchWithQuery(true);
+        let snap;
         
-        // FALLBACK CRÍTICO: Se a primeira página está vazia, tentamos sem ordenação.
-        // Isso resolve o problema de registros sumindo por causa do serverTimestamp() pendente.
-        if (snap.empty && !options.lastDoc) {
-            console.log("Nenhum registro ordenado encontrado. Tentando busca bruta (fallback)...");
-            snap = await fetchWithQuery(false);
+        // TENTATIVA 1: Com ordenação (Pode falhar se faltar índice ou se o timestamp for nulo/pendente)
+        try {
+            snap = await executeQuery(true);
+            
+            // Se estiver vazio na primeira página, pode ser que os registros estejam com timestamp pendente (nulo)
+            // O Firestore exclui campos nulos de consultas ordenadas.
+            if (snap.empty && !options.lastDoc) {
+                console.log("Busca ordenada vazia. Tentando fallback não ordenado...");
+                snap = await executeQuery(false);
+            }
+        } catch (innerError) {
+            // TENTATIVA 2: Fallback imediato se der erro de índice ausente ou outro erro de query
+            console.warn("Erro na query ordenada. Executando fallback não ordenado:", innerError);
+            snap = await executeQuery(false);
         }
-        
+
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
+        
         return { promoters, lastDoc: lastVisible };
     } catch (error) { 
-        console.error("Erro na busca paginada:", error);
-        throw new Error("Erro ao buscar no banco."); 
+        console.error("Falha crítica no getAllPromotersPaginated:", error);
+        throw new Error("Erro de comunicação com o banco de dados."); 
     }
 };
 

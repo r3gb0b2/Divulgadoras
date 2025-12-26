@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -23,11 +22,10 @@ import {
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-
-// Modais
+// FIX: Added missing imports for modal components used in AdminPanel
+import PhotoViewerModal from '../components/PhotoViewerModal';
 import RejectionModal from '../components/RejectionModal';
 import EditPromoterModal from '../components/EditPromoterModal';
-import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
 
 const toDateSafe = (timestamp: any): Date | null => {
@@ -71,7 +69,7 @@ const calculateAge = (dob: string): number => {
 const PAGE_SIZE = 30;
 
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
-    const { selectedOrgId, organizationsForAdmin } = useAdminAuth();
+    const { selectedOrgId, organizationsForAdmin, loading: authLoading } = useAdminAuth();
     
     // Dados Principais e Paginação
     const [promoters, setPromoters] = useState<Promoter[]>([]);
@@ -134,6 +132,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const fetchData = useCallback(async (cursor: any = null) => {
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
         
+        // AGUARDA O CONTEXTO: Se não for superadmin e ainda não tivermos orgId, paramos aqui.
         if (!isSuperAdmin && !orgId) {
             setIsLoading(false);
             setPromoters([]);
@@ -172,18 +171,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setOrgsMap(map);
             
         } catch (err: any) {
-            setError(err.message || 'Falha ao carregar dados.');
+            setError(err.message || 'Falha ao carregar dados do servidor.');
         } finally {
             setIsLoading(false);
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin]);
 
     useEffect(() => {
-        setPrevCursors([]);
-        setLastDoc(null);
-        setSelectedIds(new Set());
-        fetchData(null);
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData]);
+        if (!authLoading) {
+            setPrevCursors([]);
+            setLastDoc(null);
+            setSelectedIds(new Set());
+            fetchData(null);
+        }
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData, authLoading]);
 
     // Função de Busca Global (Lookup)
     const handleLookup = async (e: React.FormEvent) => {
@@ -296,13 +297,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
         
-        // Garantir que allCampaigns seja populado para evitar "sumiço" após aprovação
         const allCampaigns = [
             p.campaignName,
             ...(p.associatedCampaigns || [])
         ].filter((c, index, self) => c && self.indexOf(c) === index);
 
-        // Otimismo: Remove da lista atual imediatamente
         setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
         setStats((prev: typeof stats) => ({ 
             ...prev, 
@@ -316,7 +315,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 allCampaigns: allCampaigns as string[],
                 actionTakenByEmail: adminData.email
             });
-            // Recarrega silenciosamente após 1.5s para dar tempo do timestamp estabilizar no banco
             setTimeout(() => fetchData(null), 1500);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
@@ -369,7 +367,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             const age = calculateAge(p.dateOfBirth);
             const q = searchQuery.toLowerCase().trim();
             
-            // Busca tolerante a campos nulos
             const name = (p.name || '').toLowerCase();
             const insta = (p.instagram || '').toLowerCase();
             const email = (p.email || '').toLowerCase();
@@ -417,7 +414,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
-                <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
+                <div className="flex wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
                     {[
                         { label: 'Total', val: stats.total, color: 'text-white' },
                         { label: 'Pendentes', val: stats.pending, color: 'text-blue-400' },
@@ -506,7 +503,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando...</p>
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando equipe...</p>
                     </div>
                 ) : filteredPromoters.length === 0 ? (
                     <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">Nenhum registro encontrado</div>
