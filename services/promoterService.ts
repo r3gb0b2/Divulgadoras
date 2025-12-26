@@ -43,11 +43,8 @@ export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> =
 
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
   const emailLower = data.email.toLowerCase().trim();
-  
-  // CORREÇÃO: Pega o nome da campanha do formData (seja da URL ou do Dropdown)
   const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Inscrição Direta";
   
-  // Validação Crítica de Segurança: Impedir organização 'register' ou 'undefined'
   if (!data.organizationId || data.organizationId === 'register' || data.organizationId === 'undefined') {
       throw new Error("Erro de identificação da produtora. Por favor, utilize o link oficial enviado pela sua organização.");
   }
@@ -165,7 +162,12 @@ export const getAllPromotersPaginated = async (options: {
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
-        if (useOrderBy) q = q.orderBy("createdAt", "desc");
+        
+        // CORREÇÃO: Fallback se não houver createdAt para evitar registros desaparecendo na filtragem composta
+        if (useOrderBy) {
+            q = q.orderBy("createdAt", "desc");
+        }
+        
         if (options.lastDoc) q = q.startAfter(options.lastDoc);
         q = q.limit(options.pageSize);
         return await q.get();
@@ -173,7 +175,12 @@ export const getAllPromotersPaginated = async (options: {
 
     try {
         let snap;
-        try { snap = await fetchWithQuery(true); } catch (e) { snap = await fetchWithQuery(false); }
+        try { 
+            snap = await fetchWithQuery(true); 
+        } catch (e) { 
+            console.warn("Retrying query without orderBy to catch records with missing fields");
+            snap = await fetchWithQuery(false); 
+        }
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
         return { promoters, lastDoc: lastVisible };

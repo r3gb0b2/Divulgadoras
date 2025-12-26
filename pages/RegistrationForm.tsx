@@ -27,7 +27,6 @@ const RegistrationForm: React.FC = () => {
     instagram: '',
     tiktok: '',
     dateOfBirth: '',
-    cpf: '',
     campaignName: campaignNameFromUrl ? decodeURIComponent(campaignNameFromUrl) : '',
   });
   
@@ -53,7 +52,6 @@ const RegistrationForm: React.FC = () => {
             if (org && org.status !== 'deactivated') {
                 setIsValidOrg(true);
                 
-                // Buscar campanhas disponíveis para este estado e organização
                 const allCampaigns = await getAllCampaigns(organizationId);
                 const activeInState = allCampaigns.filter(c => 
                     c.stateAbbr === state && 
@@ -61,7 +59,6 @@ const RegistrationForm: React.FC = () => {
                 );
                 setAvailableCampaigns(activeInState);
 
-                // Se houver apenas uma campanha e nenhuma na URL, seleciona automaticamente
                 if (!formData.campaignName && activeInState.length === 1) {
                     setFormData(prev => ({ ...prev, campaignName: activeInState[0].name }));
                 }
@@ -79,11 +76,10 @@ const RegistrationForm: React.FC = () => {
                     setFormData({
                         email: p.email,
                         name: p.name,
-                        whatsapp: p.whatsapp,
+                        whatsapp: formatWhatsApp(p.whatsapp),
                         instagram: p.instagram,
                         tiktok: p.tiktok || '',
                         dateOfBirth: p.dateOfBirth,
-                        cpf: (p as any).cpf || '',
                         campaignName: p.campaignName || '',
                     });
                     if (p.photoUrls) setPreviews(p.photoUrls);
@@ -98,11 +94,17 @@ const RegistrationForm: React.FC = () => {
     loadInitialData();
   }, [editId, organizationId, state]);
 
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length > 11) value = value.slice(0, 11);
-    value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-    setFormData({ ...formData, cpf: value });
+  const formatWhatsApp = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    const limited = digits.slice(0, 11);
+    
+    if (limited.length <= 2) return limited;
+    if (limited.length <= 7) return `(${limited.slice(0, 2)})${limited.slice(2)}`;
+    return `(${limited.slice(0, 2)})${limited.slice(2, 7)}-${limited.slice(7)}`;
+  };
+
+  const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, whatsapp: formatWhatsApp(e.target.value) });
   };
 
   const sanitizeHandle = (input: string) => {
@@ -133,6 +135,7 @@ const RegistrationForm: React.FC = () => {
     try {
       await addPromoter({
         ...formData,
+        whatsapp: formData.whatsapp.replace(/\D/g, ''),
         id: editId || undefined,
         instagram: sanitizeHandle(formData.instagram),
         photos,
@@ -201,7 +204,6 @@ const RegistrationForm: React.FC = () => {
         <form onSubmit={handleSubmit} className="p-8 md:p-14 space-y-12">
           {error && <div className="bg-red-900/40 border border-red-500/50 text-red-200 p-5 rounded-2xl text-sm font-bold text-center">{error}</div>}
 
-          {/* Seleção de Evento */}
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <MegaphoneIcon className="w-6 h-6 text-primary" /> Escolha o Evento
@@ -240,23 +242,13 @@ const RegistrationForm: React.FC = () => {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo</label>
                 <input 
                   type="text" required value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Seu nome"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">CPF</label>
-                <input 
-                  type="text" required value={formData.cpf}
-                  onChange={handleCpfChange}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="000.000.000-00"
+                  placeholder="Seu nome completo"
                 />
               </div>
 
@@ -274,9 +266,9 @@ const RegistrationForm: React.FC = () => {
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
                 <input 
                   type="tel" required value={formData.whatsapp}
-                  onChange={e => setFormData({...formData, whatsapp: e.target.value})}
+                  onChange={handleWhatsAppChange}
                   className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="(00) 00000-0000"
+                  placeholder="(00)00000-0000"
                 />
               </div>
             </div>

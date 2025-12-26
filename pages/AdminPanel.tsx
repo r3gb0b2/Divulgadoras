@@ -105,7 +105,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     }, [currentOrg, isSuperAdmin, selectedOrgId]);
 
     const fetchData = useCallback(async (cursor: any = null) => {
-        // PRIORIDADE: Se tiver org selecionada no switcher, usa ela. Senão (SuperAdmin), busca tudo.
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
         
         if (!isSuperAdmin && !orgId) {
@@ -132,7 +131,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 getPromoterStats({ organizationId: orgId as string | undefined, filterState, selectedCampaign }),
                 getAllCampaigns(orgId as string | undefined),
                 orgId ? getRejectionReasons(orgId as string) : Promise.resolve([]),
-                getOrganizations() // Para SuperAdmin mapear nomes
+                getOrganizations()
             ]);
 
             setPromoters(result.promoters);
@@ -285,18 +284,25 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     const filteredPromoters = useMemo(() => {
+        // CORREÇÃO: Resiliência contra campos nulos
         return promoters.filter(p => {
+            if (!p) return false;
+            
             const age = calculateAge(p.dateOfBirth);
-            const q = searchQuery.toLowerCase();
-            const matchesSearch = !searchQuery || 
-                p.name.toLowerCase().includes(q) || 
-                p.instagram.toLowerCase().includes(q) || 
-                p.email.toLowerCase().includes(q);
+            const q = searchQuery.toLowerCase().trim();
+            
+            const matchesSearch = !q || 
+                (p.name && p.name.toLowerCase().includes(q)) || 
+                (p.instagram && p.instagram.toLowerCase().includes(q)) || 
+                (p.email && p.email.toLowerCase().includes(q));
+                
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
+            
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
+                                
             return matchesSearch && matchesMinAge && matchesMaxAge && matchesGroup;
         });
     }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
@@ -314,7 +320,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     const notifyApprovalCount = useMemo(() => {
-        return promoters.filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup).length;
+        return promoters.filter(p => p && selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup).length;
     }, [promoters, selectedIds]);
 
     return (
