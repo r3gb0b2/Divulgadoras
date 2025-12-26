@@ -49,6 +49,15 @@ const RegistrationForm: React.FC = () => {
     return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
   };
 
+  const sanitizeInstagram = (input: string) => {
+    return input
+      .replace(/https?:\/\/(www\.)?instagram\.com\//i, '') // Remove links
+      .replace(/@/g, '') // Remove o @
+      .split('/')[0] // Pega apenas a primeira parte se houver mais barras
+      .split('?')[0] // Remove query strings
+      .trim();
+  };
+
   useEffect(() => {
     const loadInitialData = async () => {
         if (!organizationId || !state) {
@@ -95,6 +104,7 @@ const RegistrationForm: React.FC = () => {
 
   const handleEmailBlur = async () => {
     const email = formData.email.trim().toLowerCase();
+    // Só tenta preencher se o e-mail parecer válido e não estivermos no modo edição
     if (!email || !email.includes('@') || editId) return;
 
     setIsAutoFilling(true);
@@ -117,13 +127,16 @@ const RegistrationForm: React.FC = () => {
     }
   };
 
+  const handleInstagramChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Limpa enquanto digita, impedindo @ e links
+      const val = e.target.value;
+      const sanitized = sanitizeInstagram(val);
+      setFormData({ ...formData, instagram: sanitized });
+  };
+
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhone(e.target.value);
     setFormData({ ...formData, whatsapp: formatted });
-  };
-
-  const sanitizeHandle = (input: string) => {
-    return input.replace(/https?:\/\/(www\.)?instagram\.com\//i, '').replace(/@/g, '').split('/')[0].trim();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,7 +161,7 @@ const RegistrationForm: React.FC = () => {
         ...formData,
         whatsapp: cleanWhatsapp,
         id: editId || undefined,
-        instagram: sanitizeHandle(formData.instagram),
+        instagram: sanitizeInstagram(formData.instagram),
         photos,
         state: state || 'CE',
         organizationId 
@@ -221,7 +234,7 @@ const RegistrationForm: React.FC = () => {
               <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
                   <span>E-mail</span>
-                  {isAutoFilling && <span className="text-primary animate-pulse normal-case">Puxando seus dados...</span>}
+                  {isAutoFilling && <span className="text-primary animate-pulse normal-case font-black">Buscando dados anteriores...</span>}
                 </label>
                 <div className="relative">
                   <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -242,7 +255,7 @@ const RegistrationForm: React.FC = () => {
                   <input 
                     type="text" required value={formData.name}
                     onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
                     placeholder="Seu nome completo"
                   />
                 </div>
@@ -255,7 +268,7 @@ const RegistrationForm: React.FC = () => {
                   <input 
                     type="tel" required value={formData.whatsapp}
                     onChange={handleWhatsAppChange}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
                     placeholder="(00) 00000-0000"
                   />
                 </div>
@@ -268,7 +281,7 @@ const RegistrationForm: React.FC = () => {
                   <input 
                     type="date" required value={formData.dateOfBirth}
                     onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
                     style={{ colorScheme: 'dark' }}
                   />
                 </div>
@@ -282,14 +295,17 @@ const RegistrationForm: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
+                    <span>Instagram (Apenas o nome de usuário)</span>
+                    <span className="text-[8px] text-yellow-500 opacity-70">Sem @ e sem links</span>
+                </label>
                 <div className="relative">
                   <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input 
                     type="text" required value={formData.instagram}
-                    onChange={e => setFormData({...formData, instagram: e.target.value})}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="@seuusuario"
+                    onChange={handleInstagramChange}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                    placeholder="usuario"
                   />
                 </div>
               </div>

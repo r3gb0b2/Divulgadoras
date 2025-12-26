@@ -102,10 +102,20 @@ export const checkPromoterStatus = async (email: string): Promise<Promoter[]> =>
 
 export const getLatestPromoterProfileByEmail = async (email: string): Promise<Promoter | null> => {
     try {
-        const q = firestore.collection("promoters").where("email", "==", email.toLowerCase().trim()).orderBy("createdAt", "desc").limit(1);
+        // Removido o orderBy para evitar necessidade de índices compostos globais
+        const q = firestore.collection("promoters").where("email", "==", email.toLowerCase().trim());
         const snap = await q.get();
         if (snap.empty) return null;
-        return { id: snap.docs[0].id, ...snap.docs[0].data() } as Promoter;
+        
+        // Ordena manualmente no cliente para pegar o mais recente
+        const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
+        docs.sort((a, b) => {
+            const timeA = (a.createdAt as any)?.seconds || 0;
+            const timeB = (b.createdAt as any)?.seconds || 0;
+            return timeB - timeA;
+        });
+        
+        return docs[0];
     } catch (error) { return null; }
 };
 
