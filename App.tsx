@@ -25,6 +25,7 @@ import SupportPage from './pages/SupportPage';
 import AppleTestRegistration from './pages/AppleTestRegistration';
 import AppleInstallTutorial from './pages/AppleInstallTutorial';
 import RegisterF1 from './pages/RegisterF1';
+import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -158,6 +159,7 @@ const App: React.FC = () => {
                 <Route path="/listas/:campaignId" element={<GuestListCheck />} />
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
+                <Route path="/global-list/:listId" element={<GlobalGuestListCheck />} />
 
                 {/* FLUXO DE CADASTRO EM PASSOS */}
                 <Route path="/:organizationId" element={<StateSelection />} />

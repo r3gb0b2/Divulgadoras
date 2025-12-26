@@ -45,6 +45,20 @@ export interface Promoter {
   };
 }
 
+export interface GlobalList {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Timestamp | FieldValue;
+  items: {
+    organizationId: string;
+    campaignId: string;
+    campaignName: string;
+    orgName: string;
+  }[];
+}
+
 export interface Post {
   id: string;
   organizationId: string;

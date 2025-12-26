@@ -13,7 +13,8 @@ import {
     RefreshIcon,
     AlertTriangleIcon,
     ClockIcon,
-    TrashIcon
+    TrashIcon,
+    ClipboardDocumentListIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -110,6 +111,16 @@ const SuperAdminDashboard: React.FC = () => {
                         <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Organizações</h2>
                     </div>
                     <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100">Gerencie produtoras, planos e assinaturas ativas.</p>
+                </Link>
+
+                <Link to="/admin/global-lists" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-purple-600 transition-all">
+                    <div className="flex items-center">
+                        <div className="p-3 rounded-2xl bg-purple-500/20 text-purple-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                            <ClipboardDocumentListIcon className="w-8 h-8" />
+                        </div>
+                        <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Links Globais</h2>
+                    </div>
+                    <p className="mt-4 text-gray-400 text-sm group-hover:text-white">Crie um único link para vários eventos de várias produtoras.</p>
                 </Link>
 
                 <Link to="/admin/newsletter" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-blue-600 transition-all">

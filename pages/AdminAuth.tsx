@@ -42,6 +42,7 @@ import QrCodeScannerPage from './QrCodeScannerPage';
 import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
 import AdminAppleTestReview from './AdminAppleTestReview';
+import AdminGlobalLists from './AdminGlobalLists';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -69,6 +70,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="edit-privacy" element={<ProtectedRoute><EditPrivacyPolicyPage /></ProtectedRoute>} />
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
                     <Route path="push-queue" element={<ProtectedRoute><AdminPushQueuePage /></ProtectedRoute>} />
+                    <Route path="global-lists" element={<ProtectedRoute><AdminGlobalLists /></ProtectedRoute>} />
                 </>
             )}
 
