@@ -172,7 +172,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setOrgsMap(map);
             
         } catch (err: any) {
-            setError(err.message || 'Falha técnica ao carregar dados.');
+            setError(err.message || 'Falha ao carregar dados.');
         } finally {
             setIsLoading(false);
         }
@@ -377,6 +377,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return promoters.filter(p => p && selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup).length;
     }, [promoters, selectedIds]);
 
+    const getPhotoUrl = (p: Promoter) => {
+        if (p.facePhotoUrl) return p.facePhotoUrl;
+        if (p.photoUrls && p.photoUrls.length > 0) return p.photoUrls[0];
+        return null;
+    };
+
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
@@ -493,110 +499,124 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {filteredPromoters.map(p => (
-                                        <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
-                                            <td className="px-6 py-5">
-                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="relative w-12 h-12 rounded-xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
-                                                        <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
-                                                    </div>
-                                                    <div className="overflow-hidden">
-                                                        <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
-                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                            <p className="text-gray-500 text-[9px] truncate font-mono">{p.campaignName || 'Geral'}</p>
-                                                            <span className="text-gray-700">•</span>
-                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Inscrita {getRelativeTime(p.createdAt)}</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            {isSuperAdmin && (
+                                    {filteredPromoters.map(p => {
+                                        const photo = getPhotoUrl(p);
+                                        return (
+                                            <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${selectedIds.has(p.id) ? 'bg-primary/5' : ''}`}>
                                                 <td className="px-6 py-5">
-                                                    <p className="text-[10px] font-black text-primary uppercase truncate max-w-[120px]">{orgsMap[p.organizationId] || p.organizationId}</p>
+                                                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                                 </td>
-                                            )}
-                                            <td className="px-6 py-5 text-center font-bold text-gray-300">{calculateAge(p.dateOfBirth)}a</td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-2">
-                                                    <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all"><InstagramIcon className="w-4 h-4" /></a>
-                                                    <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex justify-center">
-                                                    {p.status === 'approved' && (
-                                                        <div className={`p-2 rounded-xl border w-fit ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`} title={p.hasJoinedGroup ? 'Já entrou no grupo' : 'Ainda não entrou no grupo'}>
-                                                            <WhatsAppIcon className="w-4 h-4" />
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-5">
+                                                        <div className="relative w-12 h-12 rounded-xl overflow-hidden cursor-pointer border-2 border-gray-700 group-hover:border-primary transition-all flex-shrink-0 bg-gray-800 flex items-center justify-center" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls || [], index: 0 })}>
+                                                            {photo ? (
+                                                                <img src={photo} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <UserIcon className="w-6 h-6 text-gray-600" />
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-col gap-1">
-                                                    {statusBadge(p.status)}
-                                                    {p.actionTakenByEmail && p.status !== 'pending' && (
-                                                        <p className="text-[7px] text-gray-500 font-black uppercase tracking-widest truncate max-w-[100px]" title={p.actionTakenByEmail}>
-                                                            {p.status === 'approved' ? 'Aprov.' : 'Recus.'} por {p.actionTakenByEmail.split('@')[0]}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {p.status === 'approved' && !p.hasJoinedGroup && (
-                                                        <button onClick={() => handleSendApprovalManual(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Aviso de Aprovação"><WhatsAppIcon className="w-4 h-4" /></button>
-                                                    )}
-                                                    {p.status === 'pending' && (
-                                                        <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
-                                                    )}
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
-                                                    <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                        <div className="overflow-hidden">
+                                                            <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <p className="text-gray-500 text-[9px] truncate font-mono">{p.campaignName || 'Geral'}</p>
+                                                                <span className="text-gray-700">•</span>
+                                                                <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                {isSuperAdmin && (
+                                                    <td className="px-6 py-5">
+                                                        <p className="text-[10px] font-black text-primary uppercase truncate max-w-[120px]">{orgsMap[p.organizationId] || p.organizationId}</p>
+                                                    </td>
+                                                )}
+                                                <td className="px-6 py-5 text-center font-bold text-gray-300">{calculateAge(p.dateOfBirth)}a</td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-2">
+                                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-500/10 text-pink-500 rounded-xl hover:bg-pink-500 hover:text-white transition-all"><InstagramIcon className="w-4 h-4" /></a>
+                                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /></a>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex justify-center">
+                                                        {p.status === 'approved' && (
+                                                            <div className={`p-2 rounded-xl border w-fit ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`} title={p.hasJoinedGroup ? 'Já entrou no grupo' : 'Ainda não entrou no grupo'}>
+                                                                <WhatsAppIcon className="w-4 h-4" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col gap-1">
+                                                        {statusBadge(p.status)}
+                                                        {p.actionTakenByEmail && p.status !== 'pending' && (
+                                                            <p className="text-[7px] text-gray-500 font-black uppercase tracking-widest truncate max-w-[100px]" title={p.actionTakenByEmail}>
+                                                                {p.status === 'approved' ? 'Aprov.' : 'Recus.'} por {p.actionTakenByEmail.split('@')[0]}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                        {p.status === 'approved' && !p.hasJoinedGroup && (
+                                                            <button onClick={() => handleSendApprovalManual(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Aviso de Aprovação"><WhatsAppIcon className="w-4 h-4" /></button>
+                                                        )}
+                                                        {p.status === 'pending' && (
+                                                            <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
+                                                        )}
+                                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
 
                         {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
-                            {filteredPromoters.map(p => (
-                                <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-4">
-                                            <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-5 h-5 rounded-lg border-gray-700 bg-dark text-primary" />
-                                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
-                                                <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
-                                            </div>
-                                            <div className="overflow-hidden text-left">
-                                                <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name}</p>
-                                                <p className="text-gray-500 text-[10px] font-bold mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
-                                                <div className="flex items-center gap-2">
-                                                    {statusBadge(p.status)}
-                                                    {isSuperAdmin && <span className="text-[8px] font-black text-primary uppercase">{orgsMap[p.organizationId] || 'Produtora'}</span>}
+                            {filteredPromoters.map(p => {
+                                const photo = getPhotoUrl(p);
+                                return (
+                                    <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-4">
+                                                <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelectOne(p.id)} className="w-5 h-5 rounded-lg border-gray-700 bg-dark text-primary" />
+                                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner bg-gray-800 flex items-center justify-center" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls || [], index: 0 })}>
+                                                    {photo ? (
+                                                        <img src={photo} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <UserIcon className="w-8 h-8 text-gray-600" />
+                                                    )}
                                                 </div>
-                                                <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1 leading-none">Inscrita {getRelativeTime(p.createdAt)}</p>
-                                                {p.actionTakenByEmail && p.status !== 'pending' && (
-                                                    <p className="text-[7px] text-gray-600 font-black uppercase mt-1 leading-none">Por: {p.actionTakenByEmail.split('@')[0]}</p>
-                                                )}
+                                                <div className="overflow-hidden text-left">
+                                                    <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
+                                                    <p className="text-gray-500 text-[10px] font-bold mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        {statusBadge(p.status)}
+                                                        {isSuperAdmin && <span className="text-[8px] font-black text-primary uppercase">{orgsMap[p.organizationId] || 'Produtora'}</span>}
+                                                    </div>
+                                                    <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1 leading-none">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                    {p.actionTakenByEmail && p.status !== 'pending' && (
+                                                        <p className="text-[7px] text-gray-600 font-black uppercase mt-1 leading-none">Por: {p.actionTakenByEmail.split('@')[0]}</p>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
+                                        <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/5">
+                                            <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-pink-500/10 text-pink-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-pink-500/20 active:bg-pink-500 active:text-white transition-all"><InstagramIcon className="w-4 h-4" /> Instagram</a>
+                                            <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-green-500/10 text-green-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-green-500/20 active:bg-green-500 active:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /> WhatsApp</a>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
+                                            {p.status === 'approved' && !p.hasJoinedGroup && <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all"><WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação</button>}
+                                            <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all"><XIcon className="w-4 h-4" /> Rejeitar</button>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/5">
-                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-pink-500/10 text-pink-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-pink-500/20 active:bg-pink-500 active:text-white transition-all"><InstagramIcon className="w-4 h-4" /> Instagram</a>
-                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-green-500/10 text-green-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-green-500/20 active:bg-green-500 active:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /> WhatsApp</a>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
-                                        {p.status === 'approved' && !p.hasJoinedGroup && <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all"><WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação</button>}
-                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all"><XIcon className="w-4 h-4" /> Rejeitar</button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Paginação */}

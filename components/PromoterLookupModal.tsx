@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Promoter, PromoterStatus, Timestamp } from '../types';
-import { PencilIcon, TrashIcon } from './Icons';
+import { PencilIcon, TrashIcon, UserIcon } from './Icons';
 
 interface PromoterLookupModalProps {
   isOpen: boolean;
@@ -53,6 +53,12 @@ const PromoterLookupModal: React.FC<PromoterLookupModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const getPhotoUrl = (p: Promoter) => {
+    if (p.facePhotoUrl) return p.facePhotoUrl;
+    if (p.photoUrls && p.photoUrls.length > 0) return p.photoUrls[0];
+    return null;
+  };
+
   const renderContent = () => {
     if (isLoading) return <div className="flex justify-center items-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div></div>;
     if (error) return <p className="text-red-400 text-center py-10 font-bold uppercase tracking-widest">{error}</p>;
@@ -60,52 +66,59 @@ const PromoterLookupModal: React.FC<PromoterLookupModalProps> = ({
 
     return (
         <div className="space-y-4">
-            {results.map(promoter => (
-                <div key={promoter.id} className="bg-dark/50 border border-white/5 p-5 rounded-3xl hover:bg-white/[0.02] transition-colors group">
-                    <div className="flex justify-between items-start gap-4">
-                        <div className="flex items-center gap-4 min-w-0">
-                            <div className="w-12 h-12 rounded-xl overflow-hidden border border-gray-700 flex-shrink-0">
-                                <img src={promoter.facePhotoUrl || promoter.photoUrls[0]} alt="" className="w-full h-full object-cover" />
+            {results.map(promoter => {
+                const photo = getPhotoUrl(promoter);
+                return (
+                    <div key={promoter.id} className="bg-dark/50 border border-white/5 p-5 rounded-3xl hover:bg-white/[0.02] transition-colors group">
+                        <div className="flex justify-between items-start gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                                <div className="w-12 h-12 rounded-xl overflow-hidden border border-gray-700 flex-shrink-0 bg-gray-800 flex items-center justify-center">
+                                    {photo ? (
+                                        <img src={photo} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <UserIcon className="w-6 h-6 text-gray-600" />
+                                    )}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="font-black text-white uppercase tracking-tight truncate">{promoter.name || 'Sem Nome'}</p>
+                                    <p className="text-[10px] text-primary font-black uppercase tracking-widest truncate">{organizationsMap[promoter.organizationId] || 'Produtora'}</p>
+                                    <p className="text-[9px] text-gray-500 font-mono truncate">{promoter.campaignName || 'Geral'}</p>
+                                </div>
                             </div>
-                            <div className="min-w-0">
-                                <p className="font-black text-white uppercase tracking-tight truncate">{promoter.name}</p>
-                                <p className="text-[10px] text-primary font-black uppercase tracking-widest truncate">{organizationsMap[promoter.organizationId] || 'Produtora'}</p>
-                                <p className="text-[9px] text-gray-500 font-mono truncate">{promoter.campaignName || 'Geral'}</p>
+                            <div className="flex flex-col items-end gap-2">
+                                {getStatusBadge(promoter.status)}
+                                <p className="text-[8px] text-gray-600 font-bold uppercase">{formatDate(promoter.createdAt as Timestamp)}</p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                            {getStatusBadge(promoter.status)}
-                            <p className="text-[8px] text-gray-600 font-bold uppercase">{formatDate(promoter.createdAt as Timestamp)}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-5 flex items-center justify-between gap-2 border-t border-white/5 pt-4">
-                        <button 
-                            onClick={() => onGoToPromoter(promoter)}
-                            className="text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors"
-                        >
-                            Ver na Lista &rarr;
-                        </button>
                         
-                        <div className="flex gap-2">
+                        <div className="mt-5 flex items-center justify-between gap-2 border-t border-white/5 pt-4">
                             <button 
-                                onClick={() => onEdit(promoter)}
-                                className="p-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-primary hover:text-white transition-all"
-                                title="Editar Cadastro"
+                                onClick={() => onGoToPromoter(promoter)}
+                                className="text-[9px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors"
                             >
-                                <PencilIcon className="w-4 h-4" />
+                                Ver na Lista &rarr;
                             </button>
-                            <button 
-                                onClick={() => onDelete(promoter)}
-                                className="p-2 bg-red-900/20 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all"
-                                title="Excluir Permanentemente"
-                            >
-                                <TrashIcon className="w-4 h-4" />
-                            </button>
+                            
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => onEdit(promoter)}
+                                    className="p-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-primary hover:text-white transition-all"
+                                    title="Editar Cadastro"
+                                >
+                                    <PencilIcon className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => onDelete(promoter)}
+                                    className="p-2 bg-red-900/20 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                                    title="Excluir Permanentemente"
+                                >
+                                    <TrashIcon className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
   };
