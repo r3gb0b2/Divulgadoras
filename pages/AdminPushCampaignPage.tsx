@@ -6,7 +6,7 @@ import { deletePushToken } from '../services/pushService';
 import { sendPushCampaign } from '../services/messageService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Organization, Promoter, Campaign } from '../types';
-import { ArrowLeftIcon, FaceIdIcon, TrashIcon, CheckCircleIcon, SearchIcon, MegaphoneIcon } from '../components/Icons';
+import { ArrowLeftIcon, FaceIdIcon, TrashIcon, CheckCircleIcon, SearchIcon, MegaphoneIcon, LinkIcon, ClipboardDocumentListIcon } from '../components/Icons';
 
 const AdminPushCampaignPage: React.FC = () => {
     const navigate = useNavigate();
@@ -33,6 +33,12 @@ const AdminPushCampaignPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
+
+    // Encontra o ID da campanha selecionada para gerar o link VIP correto
+    const selectedCampaignId = useMemo(() => {
+        if (targetCampaignName === 'all') return '';
+        return campaigns.find(c => c.name === targetCampaignName)?.id || '';
+    }, [targetCampaignName, campaigns]);
 
     useEffect(() => {
         const loadInitial = async () => {
@@ -253,8 +259,37 @@ const AdminPushCampaignPage: React.FC = () => {
                                 <textarea placeholder="Clique para ver os detalhes da nova tarefa..." value={body} onChange={e => setBody(e.target.value)} className="w-full h-32 bg-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-1 focus:ring-primary outline-none" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Link de Destino</label>
-                                <input type="text" placeholder="/#/posts" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1 mb-2 block">Links Rápidos de Destino</label>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTargetUrl('/#/posts')} 
+                                        className="px-2 py-1 bg-gray-700 hover:bg-primary hover:text-white rounded text-[9px] font-black uppercase tracking-widest text-gray-300 transition-all border border-gray-600 flex items-center gap-1"
+                                    >
+                                        <MegaphoneIcon className="w-3 h-3" /> Minhas Tarefas
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setTargetUrl('/#/status')} 
+                                        className="px-2 py-1 bg-gray-700 hover:bg-primary hover:text-white rounded text-[9px] font-black uppercase tracking-widest text-gray-300 transition-all border border-gray-600 flex items-center gap-1"
+                                    >
+                                        <SearchIcon className="w-3 h-3" /> Meu Status
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        disabled={!selectedCampaignId}
+                                        onClick={() => setTargetUrl(`/#/listas/${selectedCampaignId}`)} 
+                                        className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1 ${selectedCampaignId ? 'bg-gray-700 hover:bg-primary hover:text-white text-gray-300 border-gray-600' : 'bg-gray-800 text-gray-600 border-gray-700 cursor-not-allowed'}`}
+                                        title={!selectedCampaignId ? "Selecione um evento à esquerda para habilitar este link" : "Direciona para a lista VIP do evento"}
+                                    >
+                                        <ClipboardDocumentListIcon className="w-3 h-3" /> Lista VIP
+                                    </button>
+                                </div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">URL Personalizada</label>
+                                <div className="relative">
+                                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                    <input type="text" placeholder="/#/posts" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-lg pl-10 pr-3 py-2 text-white text-xs font-mono focus:ring-1 focus:ring-primary outline-none" />
+                                </div>
                             </div>
                         </div>
 
