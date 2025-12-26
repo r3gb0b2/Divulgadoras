@@ -48,8 +48,8 @@ const getRelativeTime = (ts: any): string => {
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
 
-    if (diffInSeconds < 60) return 'agora mesmo';
-    if (diffInMinutes < 60) return `há ${diffInMinutes} min`;
+    if (diffInSeconds < 60) return 'agora';
+    if (diffInMinutes < 60) return `há ${diffInMinutes}min`;
     if (diffInHours < 24) return `há ${diffInHours}h`;
     if (diffInDays === 1) return 'ontem';
     return `há ${diffInDays} dias`;
@@ -183,6 +183,23 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setSelectedIds(new Set());
         fetchData(null);
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData]);
+
+    // Função de Busca Global (Lookup)
+    const handleLookup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!lookupEmail.trim()) return;
+
+        setIsLookingUp(true);
+        setIsLookupModalOpen(true);
+        try {
+            const results = await findPromotersByEmail(lookupEmail.toLowerCase().trim());
+            setLookupResults(results);
+        } catch (err) {
+            console.error("Erro na busca global:", err);
+        } finally {
+            setIsLookingUp(false);
+        }
+    };
 
     // Ações em massa
     const toggleSelectAll = () => {
@@ -385,7 +402,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Nome, @instagram ou e-mail..." 
+                            placeholder="Buscar nesta lista..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -397,9 +414,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <input type="number" placeholder="Idade Máx" value={maxAge} onChange={e => setMaxAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                     </div>
 
-                    <form onSubmit={(e) => { e.preventDefault(); if(lookupEmail) setIsLookupModalOpen(true); }} className="flex gap-2 md:col-span-4">
-                         <input type="email" placeholder="Buscar e-mail global..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"/>
-                        <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors"><SearchIcon className="w-4 h-4" /></button>
+                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-4">
+                         <input type="email" placeholder="Busca global (E-mail)..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                        <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors" title="Buscar em todas as organizações"><SearchIcon className="w-4 h-4" /></button>
                     </form>
 
                     <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
@@ -561,9 +578,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     {statusBadge(p.status)}
                                                     {isSuperAdmin && <span className="text-[8px] font-black text-primary uppercase">{orgsMap[p.organizationId] || 'Produtora'}</span>}
                                                 </div>
-                                                <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1 leading-none">Inscrita {getRelativeTime(p.createdAt)}</p>
                                                 {p.actionTakenByEmail && p.status !== 'pending' && (
-                                                    <p className="text-[7px] text-gray-600 font-bold uppercase mt-0.5">Ação por: {p.actionTakenByEmail}</p>
+                                                    <p className="text-[7px] text-gray-600 font-black uppercase mt-1 leading-none">Por: {p.actionTakenByEmail.split('@')[0]}</p>
                                                 )}
                                             </div>
                                         </div>
