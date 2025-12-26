@@ -172,7 +172,11 @@ export const getAllPromotersPaginated = async (options: {
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para capturar campanhas associadas
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
+        }
         
         if (useOrderBy) {
             q = q.orderBy("createdAt", "desc");
@@ -211,7 +215,12 @@ export const getAllPromoters = async (options: {
         else if (options.filterOrgId && options.filterOrgId !== 'all') q = q.where("organizationId", "==", options.filterOrgId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para capturar campanhas associadas
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
+        }
+        
         if (options.limitCount) q = q.limit(options.limitCount);
         const snap = await q.get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
@@ -229,7 +238,12 @@ export const getPromoterStats = async (options: {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
+        
+        // CORREÇÃO: Usar 'allCampaigns' com 'array-contains' para estatísticas
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
+        }
+        
         const snap = await q.get();
         const all = snap.docs.map(doc => doc.data() as Promoter);
         return {
