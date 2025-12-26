@@ -16,6 +16,7 @@ import CreatePost from './CreatePost';
 import PostDetails from './PostDetails';
 import AdminLists from './AdminLists';
 import GuestListAssignments from './GuestListAssignments';
+import GuestListPage from './GuestListPage'; // Importação adicionada
 import GuestListCheckinPage from './GuestListCheckinPage';
 import GuestListAccessPage from './GuestListAccessPage';
 import PostDashboard from './PostDashboard';
@@ -84,7 +85,7 @@ const AdminAuth: React.FC = () => {
             <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
             
             <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
-            <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
+            <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} /> {/* Corrigido de GuestListAssignments para GuestListPage */}
             <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
             <Route path="checkin-dashboard" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
             <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
