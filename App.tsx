@@ -5,7 +5,6 @@ import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
 import StateSelection from './pages/StateSelection';
-import CampaignSelection from './pages/CampaignSelection';
 import PublicHome from './pages/PublicHome';
 import HowToUsePage from './pages/HowToUsePage';
 import PricingPage from './pages/PricingPage';
@@ -136,10 +135,10 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* Rotas de Admin */}
+                {/* Rotas de Admin com prioridade */}
                 <Route path="/admin/*" element={<AdminAuth />} />
 
-                {/* Rotas Públicas */}
+                {/* Rotas Públicas Estáticas */}
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
@@ -159,10 +158,9 @@ const App: React.FC = () => {
                 <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
                 <Route path="/leave-group" element={<LeaveGroupPage />} />
 
-                {/* FLUXO DE CADASTRO EM PASSOS */}
+                {/* Rotas de Organização (Captura apenas se não for admin) */}
+                <Route path="/:organizationId/register/:state/:campaignName?" element={<RegistrationForm />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
-                <Route path="/:organizationId/:state" element={<CampaignSelection />} />
-                <Route path="/:organizationId/:state/:campaignName/register" element={<RegistrationForm />} />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />

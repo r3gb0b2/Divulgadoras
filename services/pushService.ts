@@ -1,51 +1,63 @@
-// @ts-nocheck
-import { PushNotifications } from '@capacitor/push-notifications';
+
+import { PushNotifications, Token } from '@capacitor/push-notifications';
+import { FCM } from '@capacitor-community/fcm';
 import { Capacitor } from '@capacitor/core';
-import firebase from 'firebase/compat/app';
-import { firestore, functions } from '../firebase/config';
+import { savePushToken } from './promoterService';
 
 export type PushStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'syncing' | 'success' | 'error';
 
 /**
- * Persiste o token no servidor via Cloud Function.
+ * Função interna para capturar o token FCM e enviar ao banco.
  */
-const persistTokenOnServer = async (promoterId: string, token: string, metadata?: any): Promise<boolean> => {
+const syncTokenWithServer = async (promoterId: string): Promise<{ success: boolean, error?: string }> => {
     try {
-        console.log(`[Push] Sincronizando token para promoter ${promoterId}...`);
-        const saveFunc = functions.httpsCallable('savePromoterToken');
-        const result = await saveFunc({ 
-            promoterId, 
-            token, 
-            metadata: {
-                ...metadata,
-                timestamp: new Date().toISOString(),
-                platform: Capacitor.getPlatform()
+        const platform = Capacitor.getPlatform(); // 'ios', 'android' or 'web'
+        console.log('Push: Iniciando sincronização FCM para plataforma:', platform);
+
+        // 1. Verifica disponibilidade do Plugin
+        if (!Capacitor.isPluginAvailable('FCM')) {
+            return { 
+                success: false, 
+                error: "BRIDGE_ERROR: O plugin '@capacitor-community/fcm' não foi encontrado." 
+            };
+        }
+        
+        if (platform === 'ios') {
+            try {
+                await FCM.setAutoInit({ enabled: true });
+            } catch (e) {
+                console.warn("FCM: Falha ao setar AutoInit (não crítico)");
             }
-        });
-        const data = result.data as any;
-        return !!data.success;
-    } catch (error) {
-        console.error("[Push] Erro ao persistir no servidor:", error);
-        return false;
-    }
-};
+        }
 
-/**
- * Obtém o token FCM real. Essencial para Android.
- */
-const fetchFCMTokenManual = async (): Promise<string | null> => {
-    try {
-        const { FCM } = await import('@capacitor-community/fcm');
+        // 2. Tenta obter o Token FCM real
         const result = await FCM.getToken();
-        return result.token || null;
-    } catch (e) {
-        console.error("[Push] Falha ao importar/usar plugin FCM:", e);
-        return null;
+        const fcmToken = result.token;
+
+        if (fcmToken && fcmToken.length > 32) {
+            // Enviamos metadados para que o Admin saiba em qual aba mostrar o usuário
+            const metadata = {
+                platform: platform,
+                updatedAt: new Date().toISOString(),
+                tokenLength: fcmToken.length
+            };
+
+            const saved = await savePushToken(promoterId, fcmToken, metadata);
+            if (saved) return { success: true };
+            return { success: false, error: "Token capturado, mas erro ao salvar no banco." };
+        }
+        
+        return { success: false, error: "FCM retornou um token vazio ou inválido." };
+
+    } catch (error: any) {
+        const msg = error.message || "";
+        console.error('Push Sync Error:', msg);
+        return { success: false, error: msg || "Erro na sincronização FCM." };
     }
 };
 
 /**
- * Inicialização robusta.
+ * Inicializa as notificações push e reporta status/erros detalhados.
  */
 export const initPushNotifications = async (
     promoterId: string, 
@@ -58,58 +70,39 @@ export const initPushNotifications = async (
 
     try {
         onStatusChange?.('requesting');
-        const permStatus = await PushNotifications.requestPermissions();
         
+        let permStatus = await PushNotifications.checkPermissions();
+        
+        if (permStatus.receive === 'prompt') {
+            permStatus = await PushNotifications.requestPermissions();
+        }
+
         if (permStatus.receive !== 'granted') {
-            onStatusChange?.('denied', "Permissão negada. Ative as notificações para receber suas tarefas.");
+            onStatusChange?.('denied', "Permissão negada pelo usuário.");
             return 'denied';
         }
 
         onStatusChange?.('granted');
-
-        // Limpa listeners antigos para evitar duplicidade
         await PushNotifications.removeAllListeners();
 
-        // 1. Ouvir registro nativo (Funciona bem no iOS)
-        PushNotifications.addListener('registration', async (token) => {
-            console.log("[Push] Registro nativo bem sucedido.");
+        PushNotifications.addListener('registration', async (token: Token) => {
             onStatusChange?.('syncing');
             
-            // No Android, preferimos o token do plugin FCM para garantir compatibilidade
-            let finalToken = token.value;
-            if (Capacitor.getPlatform() === 'android') {
-                const fcmToken = await fetchFCMTokenManual();
-                if (fcmToken) finalToken = fcmToken;
-            }
-
-            const saved = await persistTokenOnServer(promoterId, finalToken);
-            onStatusChange?.(saved ? 'success' : 'error', saved ? undefined : "Erro ao salvar token.");
-        });
-
-        PushNotifications.addListener('registrationError', (err) => {
-            console.error("[Push] Erro nativo:", err.error);
-            onStatusChange?.('error', `Falha no sistema: ${err.error}`);
-        });
-
-        // 2. Registrar
-        await PushNotifications.register();
-
-        // 3. FALLBACK ANDROID (CRÍTICO)
-        // No Android, se após 4 segundos o listener de 'registration' não disparou, 
-        // forçamos a busca do token manualmente.
-        if (Capacitor.getPlatform() === 'android') {
             setTimeout(async () => {
-                console.log("[Push] Verificação de redundância (Android)...");
-                const manualToken = await fetchFCMTokenManual();
-                if (manualToken) {
-                    console.log("[Push] Token capturado via fallback.");
-                    onStatusChange?.('syncing');
-                    const saved = await persistTokenOnServer(promoterId, manualToken);
-                    if (saved) onStatusChange?.('success');
+                const result = await syncTokenWithServer(promoterId);
+                if (result.success) {
+                    onStatusChange?.('success');
+                } else {
+                    onStatusChange?.('error', result.error);
                 }
-            }, 4000);
-        }
+            }, 2000);
+        });
 
+        PushNotifications.addListener('registrationError', (error: any) => {
+            onStatusChange?.('error', error.error || error.message);
+        });
+
+        await PushNotifications.register();
         return 'granted';
     } catch (error: any) {
         onStatusChange?.('error', error.message);
@@ -119,18 +112,8 @@ export const initPushNotifications = async (
 
 export const clearPushListeners = async () => {
     if (Capacitor.isNativePlatform()) {
-        try { await PushNotifications.removeAllListeners(); } catch (e) {}
-    }
-};
-
-export const deletePushToken = async (promoterId: string): Promise<void> => {
-    try {
-        await firestore.collection('promoters').doc(promoterId).update({
-            fcmToken: firebase.firestore.FieldValue.delete(),
-            pushDiagnostics: firebase.firestore.FieldValue.delete(),
-            lastTokenUpdate: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    } catch (error: any) {
-        console.error("Error deleting push token:", error);
+        try {
+            await PushNotifications.removeAllListeners();
+        } catch (e) {}
     }
 };

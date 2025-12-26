@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -6,12 +7,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // Definimos módulos que são carregados via CDN/Import Map como externos
-      external: [
-        '@capacitor/core',
-        '@capacitor/push-notifications',
-        '@capacitor-community/fcm'
-      ],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom', 'firebase/app', 'firebase/auth', 'firebase/firestore'],
@@ -20,9 +15,8 @@ export default defineConfig({
     },
   },
   resolve: {
-    // Como o projeto não usa uma pasta /src estruturada (arquivos na raiz), removemos o alias complexo
     alias: {
-      '@': '.',
+      '@': '/src',
     },
   },
 });

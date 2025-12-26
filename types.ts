@@ -211,6 +211,7 @@ export interface LinkTemplate {
   createdAt: Timestamp | FieldValue;
 }
 
+// Added missing types based on application errors
 export interface PromoterApplicationData {
   name: string;
   email: string;
