@@ -54,8 +54,9 @@ const PromoterLookupModal: React.FC<PromoterLookupModalProps> = ({
   if (!isOpen) return null;
 
   const getPhotoUrl = (p: Promoter) => {
+    if (!p) return null;
     if (p.facePhotoUrl) return p.facePhotoUrl;
-    if (p.photoUrls && p.photoUrls.length > 0) return p.photoUrls[0];
+    if (p.photoUrls && Array.isArray(p.photoUrls) && p.photoUrls.length > 0) return p.photoUrls[0];
     return null;
   };
 
@@ -67,6 +68,7 @@ const PromoterLookupModal: React.FC<PromoterLookupModalProps> = ({
     return (
         <div className="space-y-4">
             {results.map(promoter => {
+                if (!promoter) return null;
                 const photo = getPhotoUrl(promoter);
                 return (
                     <div key={promoter.id} className="bg-dark/50 border border-white/5 p-5 rounded-3xl hover:bg-white/[0.02] transition-colors group">

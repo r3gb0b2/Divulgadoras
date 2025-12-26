@@ -378,8 +378,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     }, [promoters, selectedIds]);
 
     const getPhotoUrl = (p: Promoter) => {
+        if (!p) return null;
         if (p.facePhotoUrl) return p.facePhotoUrl;
-        if (p.photoUrls && p.photoUrls.length > 0) return p.photoUrls[0];
+        if (p.photoUrls && Array.isArray(p.photoUrls) && p.photoUrls.length > 0) return p.photoUrls[0];
         return null;
     };
 
@@ -650,7 +651,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
               results={lookupResults} 
               error={null} 
               organizationsMap={orgsMap} 
-              onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }}
+              onGoToPromoter={(p) => { 
+                  setIsLookupModalOpen(false); 
+                  setSearchQuery(p.email); 
+                  setFilterStatus('all'); 
+                  // RESET DE FILTROS CRÍTICO: Garantir que a pessoa apareça mesmo mudando de evento/estado
+                  setFilterState('all');
+                  setSelectedCampaign('all');
+                  setFilterGroup('all');
+              }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
               onDelete={async (p) => { 
                 if(window.confirm(`Excluir PERMANENTEMENTE ${p.name}?`)) {
