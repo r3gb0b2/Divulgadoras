@@ -176,6 +176,7 @@ export const getAllPromotersPaginated = async (options: {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
         
+        // ORDENAÇÃO: Se houver timestamp nulo (recém criado), orderBy oculta o documento.
         if (useOrderBy) {
             q = q.orderBy("createdAt", "desc");
         }
@@ -186,21 +187,22 @@ export const getAllPromotersPaginated = async (options: {
     };
 
     try {
-        let snap;
-        try { 
-            snap = await fetchWithQuery(true); 
-            // Fallback imediato se não houver resultados na primeira página (pode ser índice ou timestamp pendente)
-            if (snap.empty && !options.lastDoc) {
-                snap = await fetchWithQuery(false);
-            }
-        } catch (e) { 
-            console.warn("Retrying query without orderBy to catch records with missing fields or missing index");
-            snap = await fetchWithQuery(false); 
+        let snap = await fetchWithQuery(true);
+        
+        // FALLBACK CRÍTICO: Se a primeira página está vazia, tentamos sem ordenação.
+        // Isso resolve o problema de registros sumindo por causa do serverTimestamp() pendente.
+        if (snap.empty && !options.lastDoc) {
+            console.log("Nenhum registro ordenado encontrado. Tentando busca bruta (fallback)...");
+            snap = await fetchWithQuery(false);
         }
+        
         const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const lastVisible = snap.docs[snap.docs.length - 1];
         return { promoters, lastDoc: lastVisible };
-    } catch (error) { throw new Error("Erro ao buscar no banco."); }
+    } catch (error) { 
+        console.error("Erro na busca paginada:", error);
+        throw new Error("Erro ao buscar no banco."); 
+    }
 };
 
 export const getAllPromoters = async (options: {

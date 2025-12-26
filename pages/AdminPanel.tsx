@@ -41,7 +41,7 @@ const toDateSafe = (timestamp: any): Date | null => {
 
 const getRelativeTime = (ts: any): string => {
     const date = toDateSafe(ts);
-    if (!date) return '';
+    if (!date) return 'agora';
     const now = new Date();
     const diffInMs = now.getTime() - date.getTime();
     const diffInSeconds = Math.floor(diffInMs / 1000);
@@ -224,7 +224,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            // No bulk approval, we must be careful with allCampaigns too
             await Promise.all(idsArray.map(async id => {
                 const p = promoters.find(item => item.id === id);
                 if (!p) return;
@@ -241,7 +240,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
             }));
             setSelectedIds(new Set());
-            fetchData(null);
+            setTimeout(() => fetchData(null), 1000); 
         } catch (e) {
             alert("Erro ao aprovar em massa.");
             setIsLoading(false);
@@ -262,7 +261,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 actionTakenByEmail: adminData.email
             })));
             setSelectedIds(new Set());
-            fetchData(null);
+            setTimeout(() => fetchData(null), 1000);
         } catch (e) {
             alert("Erro ao recusar em massa.");
             setIsLoading(false);
@@ -303,6 +302,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             ...(p.associatedCampaigns || [])
         ].filter((c, index, self) => c && self.indexOf(c) === index);
 
+        // Otimismo: Remove da lista atual imediatamente
         setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
         setStats((prev: typeof stats) => ({ 
             ...prev, 
@@ -316,6 +316,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 allCampaigns: allCampaigns as string[],
                 actionTakenByEmail: adminData.email
             });
+            // Recarrega silenciosamente após 1.5s para dar tempo do timestamp estabilizar no banco
+            setTimeout(() => fetchData(null), 1500);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
             fetchData(null); 
@@ -344,6 +346,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 rejectionReason: reason,
                 actionTakenByEmail: adminData.email
             });
+            setTimeout(() => fetchData(null), 1500);
         } catch (err: any) {
             fetchData(null);
         }
@@ -366,10 +369,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             const age = calculateAge(p.dateOfBirth);
             const q = searchQuery.toLowerCase().trim();
             
+            // Busca tolerante a campos nulos
+            const name = (p.name || '').toLowerCase();
+            const insta = (p.instagram || '').toLowerCase();
+            const email = (p.email || '').toLowerCase();
+
             const matchesSearch = !q || 
-                (p.name && p.name.toLowerCase().includes(q)) || 
-                (p.instagram && p.instagram.toLowerCase().includes(q)) || 
-                (p.email && p.email.toLowerCase().includes(q));
+                name.includes(q) || 
+                insta.includes(q) || 
+                email.includes(q);
                 
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
