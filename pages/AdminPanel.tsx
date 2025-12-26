@@ -163,7 +163,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             setPromoters(result.promoters);
             setLastDoc(result.lastDoc);
-            setHasMore(result.promoters.length === PAGE_SIZE);
+            setHasMore(result.hasMore);
             setStats(statsData);
             setCampaigns(camps);
             setRejectionReasons(reasons);
@@ -415,7 +415,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
-                <div className="flex wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
+                <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
                     {[
                         { label: 'Total', val: stats.total, color: 'text-white' },
                         { label: 'Pendentes', val: stats.pending, color: 'text-blue-400' },

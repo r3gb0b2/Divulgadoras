@@ -165,7 +165,7 @@ export const getAllPromotersPaginated = async (options: {
     organizationId?: string; status?: PromoterStatus | 'all';
     filterState?: string; selectedCampaign?: string;
     pageSize: number; lastDoc?: any;
-}): Promise<{ promoters: Promoter[], lastDoc: any }> => {
+}): Promise<{ promoters: Promoter[], lastDoc: any, hasMore: boolean }> => {
     
     // Constrói a base da query com os filtros aplicados
     const buildBaseQuery = () => {
@@ -182,6 +182,7 @@ export const getAllPromotersPaginated = async (options: {
     try {
         let finalPromoters: Promoter[] = [];
         let lastVisible = null;
+        let mainSnapSize = 0;
 
         // SE FOR A PRIMEIRA PÁGINA: Buscamos primeiro os nulos (novíssimos)
         if (!options.lastDoc) {
@@ -197,6 +198,7 @@ export const getAllPromotersPaginated = async (options: {
 
         try {
             const mainSnap = await mainQuery.get();
+            mainSnapSize = mainSnap.docs.length;
             mainSnap.forEach(doc => {
                 // Evita duplicatas se um documento nulo acabou de ganhar timestamp
                 if (!finalPromoters.find(p => p.id === doc.id)) {
@@ -211,6 +213,7 @@ export const getAllPromotersPaginated = async (options: {
             if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
             fallbackQuery = fallbackQuery.limit(options.pageSize);
             const fallbackSnap = await fallbackQuery.get();
+            mainSnapSize = fallbackSnap.docs.length;
             fallbackSnap.forEach(doc => {
                 if (!finalPromoters.find(p => p.id === doc.id)) {
                     finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
@@ -219,7 +222,11 @@ export const getAllPromotersPaginated = async (options: {
             lastVisible = fallbackSnap.docs[fallbackSnap.docs.length - 1];
         }
         
-        return { promoters: finalPromoters, lastDoc: lastVisible };
+        return { 
+            promoters: finalPromoters, 
+            lastDoc: lastVisible,
+            hasMore: mainSnapSize >= options.pageSize 
+        };
     } catch (error) { 
         console.error("Erro fatal na busca paginada:", error);
         throw new Error("Erro ao buscar no banco de dados."); 
