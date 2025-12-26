@@ -182,7 +182,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, searchQuery]);
 
-    // Efeito para busca e reset de filtros
+    // Efeito para busca e reset de filtros com Debounce
     useEffect(() => {
         if (!authLoading) {
             const timer = setTimeout(() => {
@@ -224,13 +224,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         if (!window.confirm(`Deseja aprovar ${selectedIds.size} perfis selecionados?`)) return;
         setIsLoading(true);
         try {
-            await Promise.all(Array.from(selectedIds).map(async id => {
+            // FIX: Explicitly type 'id' as string to resolve 'unknown' type error at updatePromoter call.
+            // Also used Set for uniqueness to avoid type inference issues with indexOf on literal arrays.
+            await Promise.all(Array.from(selectedIds).map(async (id: string) => {
                 const p = promoters.find(item => item.id === id);
                 if (!p) return;
-                const allCampaigns = [p.campaignName, ...(p.associatedCampaigns || [])].filter((c, i, s) => c && s.indexOf(c) === i);
+                const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
                 await updatePromoter(id, { 
                     status: 'approved',
-                    allCampaigns: allCampaigns as string[],
+                    allCampaigns: allCampaigns,
                     actionTakenByEmail: adminData.email
                 });
             }));
@@ -244,16 +246,18 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
-        const allCampaigns = [p.campaignName, ...(p.associatedCampaigns || [])].filter((c, i, s) => c && s.indexOf(c) === i);
+        // FIX: Use Set for uniqueness to avoid type inference issues with indexOf on literal arrays.
+        const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
         
         setIsBulkProcessing(true);
         try {
             await updatePromoter(pId, { 
                 status: 'approved',
-                allCampaigns: allCampaigns as string[],
+                allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
             setSelectedIds(new Set());
+            // Resetamos para a primeira página para ver a pessoa no topo dos aprovados
             fetchData(null);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
@@ -294,6 +298,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             const insta = (p.instagram || '').toLowerCase();
             const email = (p.email || '').toLowerCase();
 
+            // Filtro local para refinamento rápido
             const matchesSearch = !q || name.includes(q) || insta.includes(q) || email.includes(q);
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
@@ -346,7 +351,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Buscar nesta página..." 
+                            placeholder="Buscar (dispara no servidor)..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -490,7 +495,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             <button onClick={() => {
                                 if (prevCursors.length === 0 || isLoading) return;
                                 const newCursors = [...prevCursors];
-                                const currentCursor = newCursors.pop();
+                                newCursors.pop();
                                 const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
                                 setPrevCursors(newCursors);
                                 fetchData(prevCursor);
@@ -511,18 +516,22 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
             <PromoterLookupModal 
               isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} 
-              onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); fetchData(null); }}
+              onGoToPromoter={(p) => { 
+                  setIsLookupModalOpen(false); 
+                  setSearchQuery(p.email); 
+                  // Forçamos o reset para a primeira página com a busca ativa
+                  setFilterStatus('all');
+                  fetchData(null);
+              }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
               onDelete={async (p) => { 
                 if(window.confirm(`Excluir PERMANENTEMENTE ${p.name}?`)) {
                     setIsLoading(true);
                     try {
-                        // FIX: Explicitly handle the promise returned by deletePromoter and use catch block correctly for TypeScript.
                         await deletePromoter(p.id);
                         setIsLookupModalOpen(false);
                         fetchData(null);
                     } catch(err: any) { 
-                        // FIX: Cast error to any to avoid "unknown" type errors when accessing .message.
                         alert(err?.message || "Ocorreu um erro ao excluir."); 
                     } finally { 
                         setIsLoading(false); 

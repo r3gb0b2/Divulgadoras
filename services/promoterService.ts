@@ -177,15 +177,31 @@ export const getAllPromotersPaginated = async (options: {
     const buildBaseQuery = () => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
-        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+        
+        if (options.status && options.status !== 'all') {
+            q = q.where("status", "==", options.status);
+        }
+        
+        if (options.filterState && options.filterState !== 'all') {
+            q = q.where("state", "==", options.filterState);
+        }
+        
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
+
+        // BUSCA NO SERVIDOR
         if (options.searchQuery && options.searchQuery.trim() !== '') {
             const query = options.searchQuery.toLowerCase().trim();
-            if (query.includes('@')) q = q.where("email", "==", query);
+            if (query.includes('@')) {
+                q = q.where("email", "==", query);
+            } else {
+                // Para busca por nome, o Firestore exige orderBy no próprio campo do filtro range
+                // Como queremos manter a ordenação por data na maioria dos casos,
+                // vamos priorizar o filtro de e-mail no servidor.
+            }
         }
+        
         return q;
     };
 
@@ -199,6 +215,7 @@ export const getAllPromotersPaginated = async (options: {
             ? "statusChangedAt" 
             : "createdAt";
 
+        // Se estivermos buscando um termo específico, evitamos o orderBy complexo para não quebrar por falta de índice
         if (!isSearching) {
             mainQuery = mainQuery.orderBy(sortField, "desc");
         }
@@ -216,9 +233,8 @@ export const getAllPromotersPaginated = async (options: {
             hasMore: snap.docs.length >= options.pageSize 
         };
     } catch (error: any) { 
-        console.error("Erro na busca paginada. Se for falta de índice, use o link no erro do console:", error);
+        console.warn("Erro na busca paginada, tentando fallback sem ordenação:", error.message);
         
-        // Fallback de emergência (sem ordenação se o índice falhar)
         let fallbackQuery = buildBaseQuery();
         if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
         fallbackQuery = fallbackQuery.limit(options.pageSize);
