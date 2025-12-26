@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
-  getAllPromotersPaginated, 
+  getAllPromotersForAdmin, 
   getPromoterStats, 
   updatePromoter, 
   getRejectionReasons, 
@@ -26,6 +26,14 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import RejectionModal from '../components/RejectionModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
+
+const getUnixTime = (ts: any): number => {
+    if (!ts) return 0; 
+    if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
+    if (ts.seconds !== undefined) return ts.seconds;
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
+};
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -67,18 +75,12 @@ const calculateAge = (dob: string): number => {
     return age;
 };
 
-const PAGE_SIZE = 40;
-
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId, organizationsForAdmin, loading: authLoading } = useAdminAuth();
     
     // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
-    const [lastDoc, setLastDoc] = useState<any>(null);
-    const [prevCursors, setPrevCursors] = useState<any[]>([]);
-    const [hasMore, setHasMore] = useState(true);
-
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
@@ -106,7 +108,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         isOpen: false, urls: [], index: 0 
     });
 
-    // Busca por E-mail
+    // Busca por E-mail (Global)
     const [lookupEmail, setLookupEmail] = useState('');
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
@@ -131,10 +133,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return states;
     }, [currentOrg, isSuperAdmin, selectedOrgId]);
 
-    const fetchData = useCallback(async (cursor: any = null) => {
+    const fetchData = useCallback(async () => {
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
         
-        if (!isSuperAdmin && !orgId) {
+        if (!orgId) {
             setIsLoading(false);
             setPromoters([]);
             return;
@@ -144,30 +146,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setError('');
         
         try {
-            // Se estiver buscando algo, aumentamos o limite para 500 para ter um cache local eficiente
-            const isSearching = searchQuery.trim().length > 0;
-            const options = {
-                organizationId: orgId as string | undefined,
-                status: filterStatus,
-                filterState: filterState,
-                selectedCampaign: selectedCampaign,
-                pageSize: isSearching ? 500 : PAGE_SIZE,
-                lastDoc: cursor,
-                searchQuery: searchQuery 
-            };
-
-            const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
-                getAllPromotersPaginated(options),
-                getPromoterStats({ organizationId: orgId as string | undefined, filterState, selectedCampaign }),
-                getAllCampaigns(orgId as string | undefined),
-                orgId ? getRejectionReasons(orgId as string) : Promise.resolve([]),
+            const [allPromoters, statsData, camps, reasons, allOrgs] = await Promise.all([
+                getAllPromotersForAdmin({ organizationId: orgId, status: 'all' }),
+                getPromoterStats({ organizationId: orgId }),
+                getAllCampaigns(orgId),
+                getRejectionReasons(orgId),
                 getOrganizations()
             ]);
 
             if (isMounted.current) {
-                setPromoters(result.promoters);
-                setLastDoc(result.lastDoc);
-                setHasMore(result.hasMore);
+                setPromoters(allPromoters);
                 setStats(statsData);
                 setCampaigns(camps);
                 setRejectionReasons(reasons);
@@ -176,23 +164,17 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             }
             
         } catch (err: any) {
-            if (isMounted.current) setError(err.message || 'Falha ao carregar dados.');
+            if (isMounted.current) setError(err.message || 'Falha ao carregar dados da equipe.');
         } finally {
             if (isMounted.current) setIsLoading(false);
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, searchQuery]);
+    }, [selectedOrgId, isSuperAdmin]);
 
     useEffect(() => {
         if (!authLoading) {
-            const timer = setTimeout(() => {
-                setPrevCursors([]);
-                setLastDoc(null);
-                setSelectedIds(new Set());
-                fetchData(null);
-            }, searchQuery.trim() !== '' ? 400 : 0);
-            return () => clearTimeout(timer);
+            fetchData();
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, searchQuery, fetchData, authLoading]);
+    }, [selectedOrgId, fetchData, authLoading]);
 
     const handleLookup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -220,7 +202,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleBulkApprove = async () => {
         if (selectedIds.size === 0) return;
         if (!window.confirm(`Deseja aprovar ${selectedIds.size} perfis selecionados?`)) return;
-        setIsLoading(true);
+        setIsBulkProcessing(true);
         try {
             await Promise.all(Array.from(selectedIds).map(async (id: string) => {
                 const p = promoters.find(item => item.id === id);
@@ -233,10 +215,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
             }));
             setSelectedIds(new Set());
-            setTimeout(() => fetchData(null), 1000); 
+            await fetchData();
         } catch (e) {
-            alert("Erro ao aprovar em massa.");
-            setIsLoading(false);
+            alert("Erro ao aprovar perfis em massa.");
+        } finally {
+            setIsBulkProcessing(false);
         }
     };
 
@@ -246,20 +229,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         
         setIsBulkProcessing(true);
         try {
-            // Otimização: remove da lista local imediatamente para feedback visual instantâneo
-            setPromoters(prev => prev.filter(item => item.id !== pId));
-            
             await updatePromoter(pId, { 
                 status: 'approved',
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
             setSelectedIds(new Set());
-            // Recarrega estatísticas e lista para garantir sincronia
-            fetchData(null);
+            await fetchData();
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
-            fetchData(null); 
+            await fetchData(); 
         } finally {
             setIsBulkProcessing(false);
         }
@@ -273,45 +252,74 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         
         setIsBulkProcessing(true);
         try {
-            setPromoters(prev => prev.filter(item => item.id !== pId));
             await updatePromoter(pId, { 
                 status: statusToSet, 
                 rejectionReason: reason,
                 actionTakenByEmail: adminData.email
             });
             setSelectedPromoter(null);
-            fetchData(null);
+            await fetchData();
         } catch (err: any) {
-            fetchData(null);
+            await fetchData();
         } finally {
             setIsBulkProcessing(false);
         }
     };
 
-    // --- FILTRO LOCAL INTELIGENTE ---
-    // Resolve o problema de busca do Firestore sendo case-sensitive e limitada ao início do texto
+    // --- FILTRAGEM LOCAL TOTAL ---
+    // Removemos a paginação para garantir que a busca e filtros funcionem em 100% dos dados carregados.
     const filteredPromoters = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
-        return promoters.filter(p => {
+        let results = promoters.filter(p => {
             if (!p) return false;
             
-            // Busca local em nome, email e instagram
+            // 1. Filtro de Status
+            if (filterStatus !== 'all' && p.status !== filterStatus) return false;
+
+            // 2. Filtro de Estado
+            if (filterState !== 'all' && p.state !== filterState) return false;
+
+            // 3. FILTRO DE EVENTO / CAMPANHA
+            if (selectedCampaign !== 'all') {
+                const inMain = p.campaignName === selectedCampaign;
+                const inAssociated = p.associatedCampaigns?.includes(selectedCampaign);
+                if (!inMain && !inAssociated) return false;
+            }
+
+            // 4. Busca por Texto (Nome, Email, Instagram)
             const nameMatch = (p.name || '').toLowerCase().includes(query);
             const emailMatch = (p.email || '').toLowerCase().includes(query);
             const instaMatch = (p.instagram || '').toLowerCase().includes(query);
-            
             if (query && !nameMatch && !emailMatch && !instaMatch) return false;
 
+            // 5. Filtro de Idade
             const age = calculateAge(p.dateOfBirth);
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
+            if (!matchesMinAge || !matchesMaxAge) return false;
+
+            // 6. Filtro de Grupo (WhatsApp)
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
+            if (!matchesGroup) return false;
             
-            return matchesMinAge && matchesMaxAge && matchesGroup;
+            return true;
         });
-    }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
+
+        // Ordenação Local: Novos primeiro
+        results.sort((a, b) => {
+            const timeA = (a.status === 'approved' || a.status === 'rejected' || (a.status as string) === 'rejected_editable') 
+                ? getUnixTime(a.statusChangedAt || a.createdAt)
+                : getUnixTime(a.createdAt);
+            const timeB = (b.status === 'approved' || b.status === 'rejected' || (b.status as string) === 'rejected_editable') 
+                ? getUnixTime(b.statusChangedAt || b.createdAt)
+                : getUnixTime(b.createdAt);
+            return timeB - timeA;
+        });
+
+        return results;
+    }, [promoters, filterStatus, filterState, selectedCampaign, searchQuery, minAge, maxAge, filterGroup]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -361,15 +369,21 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
                         />
                     </div>
-                    <div className="md:col-span-3 flex gap-2">
-                        <input type="number" placeholder="Mín" value={minAge} onChange={e => setMinAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
-                        <input type="number" placeholder="Máx" value={maxAge} onChange={e => setMaxAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                    <div className="md:col-span-4">
+                        <select 
+                            value={selectedCampaign} 
+                            onChange={e => setSelectedCampaign(e.target.value)}
+                            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-bold"
+                        >
+                            <option value="all">Filtrar por Evento (Todos)</option>
+                            {campaigns.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
+                        </select>
                     </div>
-                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-4">
-                         <input type="email" placeholder="Busca global por e-mail..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-3">
+                         <input type="email" placeholder="Busca global (E-mail)..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                         <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors"><SearchIcon className="w-4 h-4" /></button>
                     </form>
-                    <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700">
+                    <button onClick={() => fetchData()} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700">
                         <RefreshIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
@@ -393,9 +407,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         {statesToShow.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
                 </div>
-                {searchQuery.trim().length > 0 && promoters.length >= 500 && (
-                    <p className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest text-center mt-2 animate-pulse">Exibindo os primeiros 500 resultados da busca</p>
-                )}
             </div>
 
             {selectedIds.size > 0 && (
@@ -409,7 +420,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             )}
 
             <div className="mx-2 md:mx-0">
-                {isLoading && promoters.length === 0 ? (
+                {isLoading ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando equipe...</p>
@@ -449,9 +460,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
-                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap mt-0.5">
-                                                                Inscrita {getRelativeTime(p.createdAt)}
-                                                            </p>
+                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap mt-0.5">Inscrita {getRelativeTime(p.createdAt)}</p>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -498,40 +507,19 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                 );
                             })}
                         </div>
-
-                        {/* Paginação (Oculta se estiver buscando para evitar confusão com o cache de 500) */}
-                        {searchQuery.trim().length === 0 && (
-                            <div className="mt-6 p-6 bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 flex justify-between items-center">
-                                <button onClick={() => {
-                                    if (prevCursors.length === 0 || isLoading) return;
-                                    const newCursors = [...prevCursors];
-                                    newCursors.pop();
-                                    const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
-                                    setPrevCursors(newCursors);
-                                    fetchData(prevCursor);
-                                }} disabled={prevCursors.length === 0 || isLoading} className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30">Anterior</button>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
-                                <button onClick={() => {
-                                    if (!hasMore || isLoading || !lastDoc) return;
-                                    setPrevCursors(prev => [...prev, lastDoc]);
-                                    fetchData(lastDoc);
-                                }} disabled={!hasMore || isLoading} className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30">Próxima</button>
-                            </div>
-                        )}
                     </>
                 )}
             </div>
 
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(); }} />
             <PromoterLookupModal 
               isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} 
               onGoToPromoter={(p) => { 
                   setIsLookupModalOpen(false); 
                   setSearchQuery(p.email); 
                   setFilterStatus('all');
-                  fetchData(null);
               }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
               onDelete={async (p: Promoter) => { 
@@ -540,7 +528,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     try {
                         await deletePromoter(p.id);
                         setIsLookupModalOpen(false);
-                        fetchData(null);
+                        fetchData();
                     } catch(err: any) { 
                         alert(err?.message || "Ocorreu um erro ao excluir."); 
                     } finally { 

@@ -172,91 +172,61 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
     } catch (error) { return []; }
 };
 
-export const getAllPromotersPaginated = async (options: {
-    organizationId?: string; status?: PromoterStatus | 'all';
-    filterState?: string; selectedCampaign?: string;
-    pageSize: number; lastDoc?: any;
-    searchQuery?: string;
-}): Promise<{ promoters: Promoter[], lastDoc: any, hasMore: boolean }> => {
-    
-    // Para resolver o problema de busca, se houver uma searchQuery,
-    // aumentamos o limite para permitir um filtro local mais robusto no frontend.
-    const isSearching = !!(options.searchQuery && options.searchQuery.trim().length > 0);
-    const effectivePageSize = isSearching ? 500 : options.pageSize;
-
-    let q: firebase.firestore.Query = firestore.collection("promoters");
-
-    if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-    if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
-    if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-    if (options.selectedCampaign && options.selectedCampaign !== 'all') {
-        q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
-    }
-
+// FIX: Added getAllPromoters export to fix missing member errors in multiple pages.
+/**
+ * Função unificada para carregar divulgadoras para o Admin com múltiplos filtros.
+ */
+export const getAllPromoters = async (options: {
+    organizationId: string;
+    filterOrgId?: string;
+    filterState?: string;
+    selectedCampaign?: string;
+    status?: PromoterStatus | 'all';
+}): Promise<Promoter[]> => {
     try {
-        // Ordenação: priorizamos a mudança de status para aprovadas/rejeitadas
-        const sortField = (options.status === 'approved' || options.status === 'rejected' || options.status === 'rejected_editable') 
-            ? "statusChangedAt" 
-            : "createdAt";
-
-        // Se for busca por e-mail exato, ignoramos paginação complexa
-        if (isSearching && options.searchQuery?.includes('@')) {
-            q = q.where("email", "==", options.searchQuery.toLowerCase().trim());
-        } else {
-            q = q.orderBy(sortField, "desc");
+        const orgId = options.filterOrgId && options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
+        
+        let q: firebase.firestore.Query = firestore.collection("promoters")
+            .where("organizationId", "==", orgId);
+        
+        if (options.status && options.status !== 'all') {
+            q = q.where("status", "==", options.status);
         }
 
-        if (options.lastDoc && !isSearching) q = q.startAfter(options.lastDoc);
-        
-        q = q.limit(effectivePageSize);
+        if (options.filterState && options.filterState !== 'all') {
+            q = q.where("state", "==", options.filterState);
+        }
 
-        const snap = await q.get();
-        const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        const lastVisible = snap.docs[snap.docs.length - 1];
+        const snap = await q.limit(1000).get();
+        let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
-        return { 
-            promoters, 
-            lastDoc: lastVisible,
-            hasMore: !isSearching && snap.docs.length >= options.pageSize 
-        };
-    } catch (error: any) { 
-        console.warn("Erro na busca, tentando sem ordenação:", error.message);
-        let fallbackQ = firestore.collection("promoters");
-        if (options.organizationId) fallbackQ = fallbackQ.where("organizationId", "==", options.organizationId);
-        if (options.status && options.status !== 'all') fallbackQ = fallbackQ.where("status", "==", options.status);
-        
-        const fallbackSnap = await fallbackQ.limit(effectivePageSize).get();
-        const promoters = fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        
-        return { 
-            promoters, 
-            lastDoc: fallbackSnap.docs[fallbackSnap.docs.length - 1],
-            hasMore: false 
-        };
+        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
+            const campaign = options.selectedCampaign;
+            results = results.filter(p => 
+                p.campaignName === campaign || 
+                (p.associatedCampaigns && p.associatedCampaigns.includes(campaign))
+            );
+        }
+
+        return results;
+    } catch (error: any) {
+        console.error("Erro ao buscar divulgadoras:", error);
+        throw new Error("Não foi possível carregar a lista de equipe.");
     }
 };
 
-export const getAllPromoters = async (options: {
-    organizationId?: string; statesForScope?: string[] | null; status?: PromoterStatus | 'all';
-    assignedCampaignsForScope?: { [state: string]: string[] }; selectedCampaign?: string;
-    filterOrgId?: string; filterState?: string; limitCount?: number;
+/**
+ * Função unificada para carregar TODAS as divulgadoras para o Admin.
+ * Carrega até 1000 registros para permitir filtros locais eficientes.
+ */
+export const getAllPromotersForAdmin = async (options: {
+    organizationId: string;
+    status?: PromoterStatus | 'all';
 }): Promise<Promoter[]> => {
-    try {
-        let q: firebase.firestore.Query = firestore.collection("promoters");
-        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-        else if (options.filterOrgId && options.filterOrgId !== 'all') q = q.where("organizationId", "==", options.filterOrgId);
-        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
-        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
-            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
-        }
-        
-        const snap = await q.limit(options.limitCount || 1000).get();
-        let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        results.sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
-        return results;
-    } catch (error) { throw new Error("Falha ao buscar divulgadoras."); }
+    return getAllPromoters({
+        organizationId: options.organizationId,
+        status: options.status
+    });
 };
 
 export const getPromoterStats = async (options: {
@@ -265,11 +235,6 @@ export const getPromoterStats = async (options: {
     try {
         let q: firebase.firestore.Query = firestore.collection("promoters");
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        
-        if (options.selectedCampaign && options.selectedCampaign !== 'all') {
-            q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
-        }
         
         const snap = await q.get();
         const all = snap.docs.map(doc => doc.data() as Promoter);
@@ -277,7 +242,7 @@ export const getPromoterStats = async (options: {
             total: all.length,
             pending: all.filter(p => p.status === 'pending').length,
             approved: all.filter(p => p.status === 'approved').length,
-            rejected: all.filter(p => p.status === 'rejected' || p.status === 'rejected_editable').length,
+            rejected: all.filter(p => (p.status as string) === 'rejected' || (p.status as string) === 'rejected_editable').length,
             removed: all.filter(p => p.status === 'removed').length,
         };
     } catch (error) { return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 }; }
@@ -290,13 +255,13 @@ export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'i
         statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    if (data.status === 'approved' || data.status === 'rejected_editable') {
+    if (data.status === 'approved' || (data.status as string) === 'rejected_editable') {
         const updateFunc = functions.httpsCallable('updatePromoterAndSync');
         await updateFunc({ promoterId: id, data: cleanForCallable(finalData) });
     } else { 
         await firestore.collection('promoters').doc(id).update(finalData); 
     }
-  } catch (error) { throw new Error("Falha ao atualizar."); }
+  } catch (error) { throw new Error("Falha ao atualizar cadastro."); }
 };
 
 export const deletePromoter = async (id: string): Promise<void> => {
@@ -325,7 +290,11 @@ export const deleteRejectionReason = async (id: string): Promise<void> => {
 
 export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
     try {
-        const q = firestore.collection("promoters").where("organizationId", "==", organizationId).where("state", "==", state).where("status", "==", "approved");
+        const q = firestore.collection("promoters")
+            .where("organizationId", "==", organizationId)
+            .where("state", "==", state)
+            .where("status", "==", "approved");
+            
         const snap = await q.get();
         const allApproved = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const results = allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
@@ -342,7 +311,7 @@ export const requestGroupRemoval = async (promoterId: string, campaignName: stri
             promoterId, promoterName: promoter.name, promoterEmail: promoter.email,
             campaignName, organizationId, status: 'pending', requestedAt: firebase.firestore.Timestamp.now(),
         });
-    } catch (error) { throw new Error("Falha ao registrar."); }
+    } catch (error) { throw new Error("Falha ao registrar solicitação."); }
 };
 
 export const getGroupRemovalRequests = async (organizationId: string): Promise<GroupRemovalRequest[]> => {
@@ -356,5 +325,5 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
 };
 
 export const updateGroupRemovalRequest = async (id: string, data: Partial<GroupRemovalRequest>): Promise<void> => {
-    try { await firestore.collection('groupRemovalRequests').doc(id).update(data); } catch (error) { throw new Error("Falha ao atualizar."); }
+    try { await firestore.collection('groupRemovalRequests').doc(id).update(data); } catch (error) { throw new Error("Falha ao atualizar solicitação."); }
 }
