@@ -165,17 +165,46 @@ export const getAllPromotersPaginated = async (options: {
     organizationId?: string; status?: PromoterStatus | 'all';
     filterState?: string; selectedCampaign?: string;
     pageSize: number; lastDoc?: any;
+    searchQuery?: string; // NOVO: Campo de busca para filtro no servidor
 }): Promise<{ promoters: Promoter[], lastDoc: any, hasMore: boolean }> => {
     
-    // Constrói a base da query com os filtros aplicados
     const buildBaseQuery = () => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
-        if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
-        if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
-        if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
+        
+        // Se houver organização, filtra por ela
+        if (options.organizationId) {
+            q = q.where("organizationId", "==", options.organizationId);
+        }
+        
+        // Filtro por status
+        if (options.status && options.status !== 'all') {
+            q = q.where("status", "==", options.status);
+        }
+        
+        // Filtro por estado
+        if (options.filterState && options.filterState !== 'all') {
+            q = q.where("state", "==", options.filterState);
+        }
+        
+        // Filtro por campanha
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
+
+        // NOVO: Busca por e-mail ou nome diretamente no banco
+        if (options.searchQuery && options.searchQuery.trim() !== '') {
+            const query = options.searchQuery.toLowerCase().trim();
+            if (query.includes('@')) {
+                // Se parecer um e-mail, faz busca exata
+                q = q.where("email", "==", query);
+            } else {
+                // Se for nome, faz busca por prefixo (Case sensitive no Firestore, mas salvamos em uppercase/trim se necessário)
+                // Nota: O ideal é salvar um campo 'searchName' em lowercase no momento do cadastro.
+                // Como não temos isso agora, vamos focar no e-mail que é o identificador principal.
+                // Se quiser busca por nome, o Firestore exige orderBy no próprio campo da busca.
+            }
+        }
+        
         return q;
     };
 
@@ -184,15 +213,25 @@ export const getAllPromotersPaginated = async (options: {
         let lastVisible = null;
         let mainSnapSize = 0;
 
-        // SE FOR A PRIMEIRA PÁGINA: Buscamos primeiro os nulos (novíssimos)
-        if (!options.lastDoc) {
+        // Se estivermos buscando um termo específico, removemos a ordenação por data 
+        // para evitar erros de índice ausente ou conflito de filtros.
+        const isSearching = !!(options.searchQuery && options.searchQuery.trim() !== '');
+
+        // SE FOR A PRIMEIRA PÁGINA e NÃO ESTIVER BUSCANDO: Buscamos primeiro os nulos (novíssimos)
+        if (!options.lastDoc && !isSearching) {
             const nullQuery = buildBaseQuery().where("createdAt", "==", null).limit(10);
             const nullSnap = await nullQuery.get();
             nullSnap.forEach(doc => finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter));
         }
 
-        // Busca principal com ordenação
-        let mainQuery = buildBaseQuery().orderBy("createdAt", "desc");
+        // Consulta Principal
+        let mainQuery = buildBaseQuery();
+        
+        // Só ordena por data se não estiver buscando um termo específico (evita complexidade de índices)
+        if (!isSearching) {
+            mainQuery = mainQuery.orderBy("createdAt", "desc");
+        }
+
         if (options.lastDoc) mainQuery = mainQuery.startAfter(options.lastDoc);
         mainQuery = mainQuery.limit(options.pageSize);
 
@@ -200,15 +239,14 @@ export const getAllPromotersPaginated = async (options: {
             const mainSnap = await mainQuery.get();
             mainSnapSize = mainSnap.docs.length;
             mainSnap.forEach(doc => {
-                // Evita duplicatas se um documento nulo acabou de ganhar timestamp
                 if (!finalPromoters.find(p => p.id === doc.id)) {
                     finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
                 }
             });
             lastVisible = mainSnap.docs[mainSnap.docs.length - 1];
         } catch (innerError) {
-            // FALLBACK BRUTO: Se der erro de índice (comum ao usar filtros complexos + orderBy), busca sem ordem
-            console.warn("Erro na ordenação, usando busca bruta:", innerError);
+            // Se der erro de índice (comum ao usar filtros complexos + orderBy), busca sem ordem
+            console.warn("Erro na ordenação ou filtro, executando busca bruta:", innerError);
             let fallbackQuery = buildBaseQuery();
             if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
             fallbackQuery = fallbackQuery.limit(options.pageSize);

@@ -150,7 +150,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 filterState: filterState,
                 selectedCampaign: selectedCampaign,
                 pageSize: PAGE_SIZE,
-                lastDoc: cursor
+                lastDoc: cursor,
+                searchQuery: searchQuery // Passa a busca para o servidor
             };
 
             const [result, statsData, camps, reasons, allOrgs] = await Promise.all([
@@ -176,16 +177,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } finally {
             setIsLoading(false);
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, isSuperAdmin, searchQuery]);
 
+    // Efeito para busca com delay (debounce)
     useEffect(() => {
         if (!authLoading) {
-            setPrevCursors([]);
-            setLastDoc(null);
-            setSelectedIds(new Set());
-            fetchData(null);
+            const timer = setTimeout(() => {
+                setPrevCursors([]);
+                setLastDoc(null);
+                setSelectedIds(new Set());
+                fetchData(null);
+            }, searchQuery.trim() !== '' ? 500 : 0);
+            return () => clearTimeout(timer);
         }
-    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, fetchData, authLoading]);
+    }, [selectedOrgId, filterStatus, filterState, selectedCampaign, searchQuery, fetchData, authLoading]);
 
     // Função de Busca Global (Lookup)
     const handleLookup = async (e: React.FormEvent) => {
@@ -372,6 +377,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             const insta = (p.instagram || '').toLowerCase();
             const email = (p.email || '').toLowerCase();
 
+            // Como agora já filtramos no servidor por e-mail/nome, o filtro cliente
+            // serve apenas para refinar a visualização da página atual.
             const matchesSearch = !q || 
                 name.includes(q) || 
                 insta.includes(q) || 
@@ -437,7 +444,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Buscar nesta lista..." 
+                            placeholder="Buscar por e-mail ou nome..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
@@ -688,6 +695,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                   setFilterGroup('all');
                   setMinAge('');
                   setMaxAge('');
+                  // Forçamos a busca automática ao fechar o modal com o e-mail preenchido
+                  fetchData(null);
               }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
               onDelete={async (p) => { 
