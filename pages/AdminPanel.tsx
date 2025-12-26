@@ -18,7 +18,7 @@ import {
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
   PencilIcon, RefreshIcon, FilterIcon,
-  MegaphoneIcon, MailIcon 
+  MegaphoneIcon, MailIcon, ClockIcon, UserIcon
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -28,6 +28,32 @@ import RejectionModal from '../components/RejectionModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import { PhotoViewerModal } from '../components/PhotoViewerModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
+
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    return null;
+};
+
+const getRelativeTime = (ts: any): string => {
+    const date = toDateSafe(ts);
+    if (!date) return '';
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInSeconds = Math.floor(diffInMs / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInSeconds < 60) return 'agora mesmo';
+    if (diffInMinutes < 60) return `há ${diffInMinutes} min`;
+    if (diffInHours < 24) return `há ${diffInHours}h`;
+    if (diffInDays === 1) return 'ontem';
+    return `há ${diffInDays} dias`;
+};
 
 const calculateAge = (dob: string): number => {
     if (!dob) return 0;
@@ -180,7 +206,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         const idsArray = Array.from(selectedIds);
         setIsLoading(true);
         try {
-            await Promise.all(idsArray.map(id => updatePromoter(id as string, { status: 'approved' })));
+            await Promise.all(idsArray.map(id => updatePromoter(id as string, { 
+                status: 'approved',
+                actionTakenByEmail: adminData.email
+            })));
             setSelectedIds(new Set());
             fetchData(null);
         } catch (e) {
@@ -199,7 +228,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         try {
             await Promise.all(idsArray.map(id => updatePromoter(id as string, { 
                 status: 'rejected',
-                rejectionReason: reason 
+                rejectionReason: reason,
+                actionTakenByEmail: adminData.email
             })));
             setSelectedIds(new Set());
             fetchData(null);
@@ -244,7 +274,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }));
 
         try {
-            await updatePromoter(pId, { status: 'approved' });
+            await updatePromoter(pId, { 
+                status: 'approved',
+                actionTakenByEmail: adminData.email
+            });
         } catch (err: any) {
             fetchData(null); 
         }
@@ -267,7 +300,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setSelectedPromoter(null);
 
         try {
-            await updatePromoter(pId, { status: statusToSet, rejectionReason: reason });
+            await updatePromoter(pId, { 
+                status: statusToSet, 
+                rejectionReason: reason,
+                actionTakenByEmail: adminData.email
+            });
         } catch (err: any) {
             fetchData(null);
         }
@@ -284,7 +321,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     };
 
     const filteredPromoters = useMemo(() => {
-        // CORREÇÃO: Resiliência contra campos nulos
         return promoters.filter(p => {
             if (!p) return false;
             
@@ -451,7 +487,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     </div>
                                                     <div className="overflow-hidden">
                                                         <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
-                                                        <p className="text-gray-500 text-[10px] truncate font-mono">{p.campaignName || 'Geral'}</p>
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <p className="text-gray-500 text-[9px] truncate font-mono">{p.campaignName || 'Geral'}</p>
+                                                            <span className="text-gray-700">•</span>
+                                                            <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -476,7 +516,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-5">{statusBadge(p.status)}</td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex flex-col gap-1">
+                                                    {statusBadge(p.status)}
+                                                    {p.actionTakenByEmail && p.status !== 'pending' && (
+                                                        <p className="text-[7px] text-gray-500 font-black uppercase tracking-widest truncate max-w-[100px]" title={p.actionTakenByEmail}>
+                                                            {p.status === 'approved' ? 'Aprov.' : 'Recus.'} por {p.actionTakenByEmail.split('@')[0]}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                     {p.status === 'approved' && !p.hasJoinedGroup && (
@@ -512,6 +561,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     {statusBadge(p.status)}
                                                     {isSuperAdmin && <span className="text-[8px] font-black text-primary uppercase">{orgsMap[p.organizationId] || 'Produtora'}</span>}
                                                 </div>
+                                                <p className="text-primary text-[8px] font-black uppercase tracking-widest mt-1">Inscrita {getRelativeTime(p.createdAt)}</p>
+                                                {p.actionTakenByEmail && p.status !== 'pending' && (
+                                                    <p className="text-[7px] text-gray-600 font-bold uppercase mt-0.5">Ação por: {p.actionTakenByEmail}</p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

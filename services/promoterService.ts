@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -162,7 +163,6 @@ export const getAllPromotersPaginated = async (options: {
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
         if (options.selectedCampaign && options.selectedCampaign !== 'all') q = q.where("campaignName", "==", options.selectedCampaign);
         
-        // CORREÇÃO: Fallback se não houver createdAt para evitar registros desaparecendo na filtragem composta
         if (useOrderBy) {
             q = q.orderBy("createdAt", "desc");
         }
@@ -176,9 +176,7 @@ export const getAllPromotersPaginated = async (options: {
         let snap;
         try { 
             snap = await fetchWithQuery(true); 
-            // Se o filtro for 'all' e voltarem menos resultados que o esperado, ou for a primeira página,
-            // podemos tentar a consulta sem orderby para pegar registros "quebrados" (sem createdAt).
-            if (snap.empty && !options.lastDoc) {
+            if (snap.empty && !options.lastDoc && options.status === 'all') {
                 snap = await fetchWithQuery(false);
             }
         } catch (e) { 
