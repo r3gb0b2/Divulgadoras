@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getPromoterById } from '../services/promoterService';
+import { addPromoter, getPromoterById, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { 
@@ -34,6 +35,7 @@ const RegistrationForm: React.FC = () => {
   const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
@@ -103,6 +105,31 @@ const RegistrationForm: React.FC = () => {
 
     loadInitialData();
   }, [editId, organizationId, state]);
+
+  const handleEmailBlur = async () => {
+    const email = formData.email.trim().toLowerCase();
+    if (!email || !email.includes('@') || editId) return;
+
+    setIsAutoFilling(true);
+    try {
+        const latestProfile = await getLatestPromoterProfileByEmail(email);
+        if (latestProfile) {
+            setFormData(prev => ({
+                ...prev,
+                name: prev.name || latestProfile.name,
+                whatsapp: prev.whatsapp || formatPhone(latestProfile.whatsapp),
+                instagram: prev.instagram || latestProfile.instagram,
+                tiktok: prev.tiktok || latestProfile.tiktok || '',
+                dateOfBirth: prev.dateOfBirth || latestProfile.dateOfBirth
+            }));
+            // Se já tem foto de rosto, poderíamos mostrar um preview informativo aqui se quiséssemos
+        }
+    } catch (e) {
+        console.warn("Erro ao buscar perfil para auto-preenchimento");
+    } finally {
+        setIsAutoFilling(false);
+    }
+  };
 
   const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhone(e.target.value);
@@ -209,11 +236,89 @@ const RegistrationForm: React.FC = () => {
 
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-              <MegaphoneIcon className="w-6 h-6 text-primary" /> Escolha o Evento
+              <UserIcon className="w-6 h-6 text-primary" /> Identificação e Dados
             </h2>
             
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Selecione para qual evento deseja trabalhar</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* E-MAIL EM PRIMEIRO LUGAR */}
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
+                  <span>E-mail</span>
+                  {isAutoFilling && <span className="text-primary animate-pulse normal-case">Buscando dados anteriores...</span>}
+                </label>
+                <div className="relative">
+                  <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input 
+                    type="email" required value={formData.email}
+                    onChange={e => setFormData({...formData, email: e.target.value})}
+                    onBlur={handleEmailBlur}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                    placeholder="Seu melhor e-mail"
+                  />
+                </div>
+              </div>
+
+              <div className="md:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input 
+                    type="text" required value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
+                <div className="relative">
+                  <PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input 
+                    type="tel" required value={formData.whatsapp}
+                    onChange={handleWhatsAppChange}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nascimento</label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input 
+                    type="date" required value={formData.dateOfBirth}
+                    onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    style={{ colorScheme: 'dark' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-8">
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais e Evento
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram</label>
+                <div className="relative">
+                  <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input 
+                    type="text" required value={formData.instagram}
+                    onChange={e => setFormData({...formData, instagram: e.target.value})}
+                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="@seuusuario"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Selecione o Evento</label>
                 {campaignNameFromUrl ? (
                     <div className="w-full px-6 py-5 bg-white/5 border border-primary/30 rounded-3xl text-primary font-black uppercase tracking-tight flex items-center justify-between">
                         <span>{decodeURIComponent(campaignNameFromUrl)}</span>
@@ -226,86 +331,23 @@ const RegistrationForm: React.FC = () => {
                         onChange={e => setFormData({ ...formData, campaignName: e.target.value })}
                         className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer"
                     >
-                        <option value="" className="bg-dark">Clique para selecionar o evento...</option>
+                        <option value="" className="bg-dark">Selecione o evento...</option>
                         {availableCampaigns.length > 0 ? (
                             availableCampaigns.map(c => (
                                 <option key={c.id} value={c.name} className="bg-dark">{c.name}</option>
                             ))
                         ) : (
-                            <option value="" disabled className="bg-dark text-gray-500">Nenhum evento ativo neste estado no momento</option>
+                            <option value="" disabled className="bg-dark text-gray-500">Nenhum evento ativo</option>
                         )}
                     </select>
                 )}
-            </div>
-          </div>
-
-          <div className="space-y-8">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-              <UserIcon className="w-6 h-6 text-primary" /> Dados Pessoais
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo</label>
-                <input 
-                  type="text" required value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Seu nome completo"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">E-mail</label>
-                <input 
-                  type="email" required value={formData.email}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
-                <input 
-                  type="tel" required value={formData.whatsapp}
-                  onChange={handleWhatsAppChange}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="(00) 00000-0000"
-                />
               </div>
             </div>
           </div>
 
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-              <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram</label>
-                <input 
-                  type="text" required value={formData.instagram}
-                  onChange={e => setFormData({...formData, instagram: e.target.value})}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="@seuusuario"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nascimento</label>
-                <input 
-                  type="date" required value={formData.dateOfBirth}
-                  onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
-                  className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary"
-                  style={{ colorScheme: 'dark' }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-8">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-              <CameraIcon className="w-6 h-6 text-primary" /> Fotos
+              <CameraIcon className="w-6 h-6 text-primary" /> Fotos (Essencial)
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {previews.map((url, i) => (

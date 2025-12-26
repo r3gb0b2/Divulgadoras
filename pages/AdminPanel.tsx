@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -5,7 +6,8 @@ import {
   updatePromoter, 
   getRejectionReasons, 
   findPromotersByEmail,
-  notifyApprovalBulk 
+  notifyApprovalBulk,
+  deletePromoter
 } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -621,7 +623,27 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />
-            <PromoterLookupModal isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }} />
+            <PromoterLookupModal 
+              isOpen={isLookupModalOpen} 
+              onClose={() => setIsLookupModalOpen(false)} 
+              isLoading={isLookingUp} 
+              results={lookupResults} 
+              error={null} 
+              organizationsMap={orgsMap} 
+              onGoToPromoter={(p) => { setIsLookupModalOpen(false); setSearchQuery(p.email); setFilterStatus('all'); }}
+              onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
+              onDelete={async (p) => { 
+                if(window.confirm(`Excluir PERMANENTEMENTE ${p.name}?`)) {
+                    setIsLoading(true);
+                    try {
+                        await deletePromoter(p.id);
+                        alert("Excluído com sucesso.");
+                        setIsLookupModalOpen(false);
+                        fetchData(null);
+                    } catch(e:any) { alert(e.message); } finally { setIsLoading(false); }
+                }
+              }}
+            />
         </div>
     );
 };
