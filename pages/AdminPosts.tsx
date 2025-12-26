@@ -140,7 +140,7 @@ const AdminPosts: React.FC = () => {
     };
 
     const handleNotifyEmail = async (postId: string) => {
-        if (!window.confirm("Deseja enviar um aviso via E-MAIL para todas as divulgadoras pendentes desta postagem?")) return;
+        if (!window.confirm("Deseja enviar um aviso via E-MAIL para todas as divulgadoras que ainda não enviaram o print desta postagem?")) return;
         setNotifyingEmailId(postId);
         try {
             const notifyPostEmail = httpsCallable(functions, 'notifyPostEmail');
@@ -221,7 +221,7 @@ const AdminPosts: React.FC = () => {
                                         <div className="absolute top-4 left-4 flex gap-2">
                                              <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${post.isActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-red-900/40 text-red-400 border-red-800'}`}>
                                                 {post.isActive ? 'Ativo' : 'Inativo'}
-                                            </span>
+                                             </span>
                                         </div>
                                         <div className="absolute top-4 right-4">
                                             <button onClick={() => navigate(`/admin/posts/${post.id}`)} className="p-2 bg-black/50 backdrop-blur-md text-white rounded-full hover:bg-primary transition-colors">

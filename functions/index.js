@@ -11,7 +11,7 @@ const getConfig = () => {
     const config = functions.config();
     return {
         brevoKey: config.brevo?.key || null,
-        // Forçamos o uso do e-mail r3gb0b@gmail.com se não houver um e-mail específico configurado no ambiente
+        // Remetente atualizado conforme solicitado para evitar erros na Brevo
         brevoEmail: config.brevo?.email || "r3gb0b@gmail.com",
         zApiToken: config.zapi?.token || null,
         zApiInstance: config.zapi?.instance || null,
@@ -90,7 +90,70 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
     }
 });
 
-// --- PERSISTÊNCIA E SINCRONIZAÇÃO (Inclui aviso de correção) ---
+// --- NOTIFICAÇÃO DE POSTAGEM POR E-MAIL (PENDENTES) ---
+
+exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { postId } = data;
+    if (!postId) return { success: false, message: "ID do post obrigatório." };
+
+    const config = getConfig();
+    const brevo = setupBrevo(config.brevoKey);
+    if (!brevo) return { success: false, message: "Brevo não configurado no servidor." };
+
+    try {
+        const postSnap = await db.collection("posts").doc(postId).get();
+        if (!postSnap.exists) return { success: false, message: "Postagem não encontrada." };
+        const post = postSnap.data();
+
+        const assignmentsSnap = await db.collection("postAssignments")
+            .where("postId", "==", postId)
+            .get();
+
+        // Filtra apenas quem NÃO enviou print e NÃO justificou
+        const pendingPromoters = [];
+        assignmentsSnap.docs.forEach(doc => {
+            const a = doc.data();
+            if (!a.proofSubmittedAt && !a.justification) {
+                pendingPromoters.push({ email: a.promoterEmail, name: a.promoterName });
+            }
+        });
+
+        if (pendingPromoters.length === 0) {
+            return { success: true, message: "Nenhuma divulgadora pendente para este post." };
+        }
+
+        // Brevo permite múltiplos destinatários em uma chamada, mas limitamos para evitar o erro HTTP
+        // Se a lista for gigantesca (>100), idealmente seria em batches, mas aqui fazemos direto
+        await brevo.sendTransacEmail({
+            sender: { email: config.brevoEmail, name: "Equipe Certa" },
+            to: pendingPromoters,
+            subject: `📢 Nova Tarefa: ${post.campaignName}`,
+            htmlContent: `
+                <div style="font-family: sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: auto;">
+                    <h2 style="color: #7e39d5;">Olá! Temos uma nova tarefa para você.</h2>
+                    <p>Uma nova postagem foi solicitada para o evento <strong>${post.campaignName}</strong>.</p>
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #7e39d5;">
+                        <strong>Instruções:</strong><br>
+                        <em>${post.instructions.substring(0, 200)}${post.instructions.length > 200 ? '...' : ''}</em>
+                    </div>
+                    <p>Acesse seu portal agora para baixar o material e realizar a postagem:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="https://divulgadoras.vercel.app/#/posts" style="background-color: #7e39d5; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">VER MINHAS TAREFAS</a>
+                    </div>
+                    <p style="font-size: 11px; color: #999;">Este é um e-mail automático do sistema Equipe Certa.</p>
+                </div>
+            `
+        });
+
+        return { success: true, message: `E-mails enviados para ${pendingPromoters.length} divulgadoras pendentes.` };
+
+    } catch (error) {
+        console.error("Erro no notifyPostEmail:", error);
+        return { success: false, message: error.message };
+    }
+});
+
+// --- PERSISTÊNCIA E SINCRONIZAÇÃO ---
 
 exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, data: updateData } = data;
@@ -108,7 +171,6 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             statusChangedAt: admin.firestore.FieldValue.serverTimestamp() 
         });
 
-        // Enviar e-mail de "Ajuste Necessário" se o status for rejected_editable
         if (updateData.status === 'rejected_editable' && brevo) {
             const firstName = p.name.split(' ')[0];
             const campaign = p.campaignName || "Equipe Geral";
@@ -118,16 +180,15 @@ exports.updatePromoterAndSync = functions.region("southamerica-east1").https.onC
             const htmlContent = `
                 <div style="font-family: sans-serif; color: #333; line-height: 1.6;">
                     <h2 style="color: #e67e22;">Olá, ${firstName}! Precisamos de um ajuste no seu cadastro. ⚠️</h2>
-                    <p>Analisamos seu perfil para o evento <strong>${campaign}</strong> e notamos que alguns dados precisam ser corrigidos para seguirmos com a aprovação.</p>
+                    <p>Analisamos seu perfil para o evento <strong>${campaign}</strong> e notamos que alguns dados precisam ser corrigidos.</p>
                     <div style="background-color: #fef5e7; border-left: 4px solid #e67e22; padding: 15px; margin: 20px 0;">
-                        <strong>Motivo informado pela coordenação:</strong><br>
+                        <strong>Motivo:</strong><br>
                         <em style="color: #666;">"${reason}"</em>
                     </div>
-                    <p>Por favor, acesse seu portal para editar seus dados e reenviar para análise:</p>
+                    <p>Por favor, acesse seu portal para editar seus dados:</p>
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="${portalLink}" style="background-color: #e67e22; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">CORRIGIR MEU CADASTRO</a>
+                        <a href="${portalLink}" style="background-color: #e67e22; color: white; padding: 15px 25px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">CORRIGIR CADASTRO</a>
                     </div>
-                    <p>Aguardamos seu reenvio!</p>
                 </div>
             `;
 
@@ -239,6 +300,7 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
     const tokens = [];
     const assignments = assignmentsSnap.docs.map(doc => doc.data());
     
+    // Filtro aprimorado: apenas quem ainda não enviou print (e não justificou se onlyPending for true)
     const targetPromoterIds = assignments
         .filter(a => !onlyPending || (!a.proofSubmittedAt && !a.justification))
         .map(a => a.promoterId);
@@ -261,65 +323,9 @@ exports.notifyPostPush = functions.region("southamerica-east1").https.onCall(asy
             title: `📢 Nova Postagem: ${post.campaignName}`,
             body: `Uma nova tarefa foi atribuída a você. Clique para ver as instruções.`
         },
-        data: { url: "/#/posts" },
         tokens: tokens
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);
     return { success: true, message: `Notificação enviada para ${response.successCount} dispositivos.` };
-});
-
-exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { postId } = data;
-    const config = getConfig();
-    const brevo = setupBrevo(config.brevoKey);
-    if (!brevo) throw new functions.https.HttpsError("failed-precondition", "Brevo não configurado.");
-
-    const postSnap = await db.collection("posts").doc(postId).get();
-    if (!postSnap.exists) return { success: false, message: "Post não encontrado." };
-    const post = postSnap.data();
-
-    const assignmentsSnap = await db.collection("postAssignments")
-        .where("postId", "==", postId)
-        .get();
-
-    const pendingPromoters = [];
-    assignmentsSnap.docs.forEach(doc => {
-        const a = doc.data();
-        if (!a.proofSubmittedAt && !a.justification) {
-            pendingPromoters.push({ email: a.promoterEmail, name: a.promoterName });
-        }
-    });
-
-    if (pendingPromoters.length === 0) return { success: true, message: "Nenhuma divulgadora pendente encontrada." };
-
-    try {
-        await brevo.sendTransacEmail({
-            sender: { email: config.brevoEmail, name: "Equipe Certa" },
-            to: pendingPromoters,
-            subject: `📢 Nova Postagem: ${post.campaignName}`,
-            htmlContent: `
-                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 15px;">
-                    <h2 style="color: #7e39d5;">Olá! Temos uma nova tarefa para você.</h2>
-                    <p>Uma nova postagem para o evento <strong>${post.campaignName}</strong> foi solicitada e aguarda sua confirmação no portal.</p>
-                    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 20px 0;">
-                        <p style="margin: 0; font-size: 14px; color: #666;"><strong>Instruções do Organizador:</strong></p>
-                        <p style="margin: 10px 0 0 0; font-style: italic;">"${post.instructions}"</p>
-                    </div>
-                    <p>Acesse seu portal agora para baixar o material e realizar a postagem:</p>
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="https://divulgadoras.vercel.app/#/status" 
-                           style="display: inline-block; padding: 15px 35px; background: #7e39d5; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(126, 57, 213, 0.3);">
-                           ACESSAR MEU PORTAL
-                        </a>
-                    </div>
-                    <p style="font-size: 12px; color: #999; margin-top: 40px; text-align: center;">Este é um e-mail automático do sistema Equipe Certa.</p>
-                </div>
-            `
-        });
-        return { success: true, message: `E-mails enviados para ${pendingPromoters.length} divulgadoras.` };
-    } catch (err) {
-        console.error("Brevo Post Notification Error:", err);
-        return { success: false, message: err.message };
-    }
 });

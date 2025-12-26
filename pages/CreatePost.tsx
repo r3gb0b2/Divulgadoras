@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -539,15 +538,12 @@ const CreatePost: React.FC = () => {
     
             await Promise.all(creationPromises);
 
-            // GATILHO DE PUSH AUTOMÁTICO - Movido para garantir que ocorra após a persistência total
+            // GATILHO DE PUSH AUTOMÁTICO - Executa imediatamente após a persistência
             if (!isScheduling && postIdsToNotify.length > 0) {
                 const notifyPostPush = httpsCallable(functions, 'notifyPostPush');
-                for (const pid of postIdsToNotify) {
-                    // Notifica apenas pendentes (todos neste momento de criação)
-                    notifyPostPush({ postId: pid, onlyPending: true }).catch(err => {
-                        console.error(`Push falhou para o post ${pid}:`, err);
-                    });
-                }
+                postIdsToNotify.forEach(pid => {
+                    notifyPostPush({ postId: pid, onlyPending: true }).catch(err => console.error("Push falhou:", err));
+                });
             }
     
             if (isScheduling) {
