@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -6,7 +5,7 @@ import {
   updatePromoter, 
   getRejectionReasons, 
   findPromotersByEmail,
-  notifyApprovalBulk // Importado do serviço
+  notifyApprovalBulk 
 } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
@@ -18,7 +17,7 @@ import {
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
   PencilIcon, RefreshIcon, FilterIcon,
-  MegaphoneIcon, MailIcon // Adicionado MailIcon
+  MegaphoneIcon, MailIcon 
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -59,7 +58,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
     // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
-    const [isProcessingBulk, setIsProcessingBulk] = useState(false); // Adicionado para loading de massa
+    const [isProcessingBulk, setIsProcessingBulk] = useState(false);
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
     const [filterStatus, setFilterStatus] = useState<PromoterStatus | 'all'>('pending');
@@ -127,7 +126,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 getPromoterStats({ organizationId: orgId, filterState, selectedCampaign }),
                 getAllCampaigns(orgId),
                 orgId ? getRejectionReasons(orgId) : Promise.resolve([]),
-                isSuperAdmin ? getOrganizations() : Promise.resolve([])
+                getOrganizations() // Pegar sempre para o mapeamento de nomes para SuperAdmin
             ]);
 
             setPromoters(result.promoters);
@@ -137,10 +136,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             setCampaigns(camps);
             setRejectionReasons(reasons);
             
-            if (isSuperAdmin) {
-                const map = (allOrgs as Organization[]).reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
-                setOrgsMap(map);
-            }
+            const map = (allOrgs as Organization[]).reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
+            setOrgsMap(map);
+            
         } catch (err: any) {
             setError(err.message || 'Falha técnica ao carregar dados.');
         } finally {
@@ -206,11 +204,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // NOVA FUNÇÃO: NOTIFICAR APROVAÇÃO EM MASSA (E-MAIL)
     const handleBulkNotifyApproval = async () => {
-        const selectedPromoters = promoters.filter(p => selectedIds.has(p.id));
-        const eligibleIds = selectedPromoters
-            .filter(p => p.status === 'approved' && !p.hasJoinedGroup)
+        const eligibleIds = promoters
+            .filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup)
             .map(p => p.id);
 
         if (eligibleIds.length === 0) {
@@ -233,7 +229,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // APROVAÇÃO DIRETA
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
         setPromoters((prev: Promoter[]) => prev.filter(item => item.id !== pId));
@@ -273,18 +268,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // MENSAGEM PADRÃO DE APROVAÇÃO (IGUAL AO Z-API)
     const handleSendApprovalManual = (p: Promoter) => {
         const firstName = p.name.split(' ')[0];
         const campaign = p.campaignName || "Equipe Geral";
-        // Link direto para o status com o e-mail preenchido
         const portalLink = `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
-        
         const message = `✅ *Olá ${firstName}!* Seu perfil foi aprovado para a equipe do evento: *${campaign}*.\n\n🚀 *Acesse seu portal para ver suas tarefas e o link do grupo:* ${portalLink}`;
-        
         const cleanPhone = p.whatsapp.replace(/\D/g, "");
         const waUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
-        
         window.open(waUrl, '_blank');
     };
 
@@ -292,19 +282,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return promoters.filter(p => {
             const age = calculateAge(p.dateOfBirth);
             const q = searchQuery.toLowerCase();
-            
             const matchesSearch = !searchQuery || 
                 p.name.toLowerCase().includes(q) || 
                 p.instagram.toLowerCase().includes(q) || 
                 p.email.toLowerCase().includes(q);
-            
             const matchesMinAge = !minAge || age >= parseInt(minAge);
             const matchesMaxAge = !maxAge || age <= parseInt(maxAge);
-
             const matchesGroup = filterGroup === 'all' || 
                                 (filterGroup === 'in' && p.hasJoinedGroup === true) || 
                                 (filterGroup === 'out' && p.hasJoinedGroup !== true);
-
             return matchesSearch && matchesMinAge && matchesMaxAge && matchesGroup;
         });
     }, [promoters, searchQuery, minAge, maxAge, filterGroup]);
@@ -321,14 +307,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border whitespace-nowrap ${c.style}`}>{c.label}</span>;
     };
 
-    // Quantidade de selecionadas que estão aprovadas mas fora do grupo
     const notifyApprovalCount = useMemo(() => {
         return promoters.filter(p => selectedIds.has(p.id) && p.status === 'approved' && !p.hasJoinedGroup).length;
     }, [promoters, selectedIds]);
 
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
-            {/* Estatísticas Superiores */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
@@ -347,7 +331,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Filtros Avançados */}
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                     <div className="md:col-span-4 relative">
@@ -362,33 +345,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </div>
 
                     <div className="md:col-span-3 flex gap-2">
-                        <input 
-                            type="number" 
-                            placeholder="Idade Mín" 
-                            value={minAge}
-                            onChange={e => setMinAge(e.target.value)}
-                            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"
-                        />
-                        <input 
-                            type="number" 
-                            placeholder="Idade Máx" 
-                            value={maxAge}
-                            onChange={e => setMaxAge(e.target.value)}
-                            className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"
-                        />
+                        <input type="number" placeholder="Idade Mín" value={minAge} onChange={e => setMinAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                        <input type="number" placeholder="Idade Máx" value={maxAge} onChange={e => setMaxAge(e.target.value)} className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                     </div>
 
                     <form onSubmit={(e) => { e.preventDefault(); if(lookupEmail) setIsLookupModalOpen(true); }} className="flex gap-2 md:col-span-4">
-                         <input 
-                            type="email" 
-                            placeholder="Buscar e-mail global..." 
-                            value={lookupEmail}
-                            onChange={e => setLookupEmail(e.target.value)}
-                            className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"
-                        />
-                        <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors">
-                            <SearchIcon className="w-4 h-4" />
-                        </button>
+                         <input type="email" placeholder="Buscar e-mail global..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none"/>
+                        <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors"><SearchIcon className="w-4 h-4" /></button>
                     </form>
 
                     <button onClick={() => fetchData(null)} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700 transition-colors">
@@ -405,18 +368,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <option value="removed">🗑️ Removidas</option>
                         <option value="all">🌐 Ver Tudo</option>
                     </select>
-
                     <select value={filterGroup} onChange={e => setFilterGroup(e.target.value as any)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">👥 Grupo (Todos)</option>
                         <option value="in">✅ No Grupo</option>
                         <option value="out">❌ Fora do Grupo</option>
                     </select>
-
                     <select value={filterState} onChange={e => setFilterState(e.target.value)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todos Estados da Produtora</option>
                         {statesToShow.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
                     </select>
-
                     <select value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)} className="w-full sm:w-auto bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="all">Todas Campanhas</option>
                         {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -424,17 +384,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             </div>
 
-            {/* Seleção em Massa */}
             {selectedIds.size > 0 && (
                 <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30">
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
                     <div className="flex flex-wrap gap-2">
                         {notifyApprovalCount > 0 && (
-                            <button 
-                                onClick={handleBulkNotifyApproval} 
-                                disabled={isProcessingBulk}
-                                className="px-4 py-2 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-2"
-                            >
+                            <button onClick={handleBulkNotifyApproval} disabled={isProcessingBulk} className="px-4 py-2 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-indigo-500 transition-all flex items-center gap-2">
                                 <MailIcon className="w-3.5 h-3.5" /> Avisar Aprovação ({notifyApprovalCount})
                             </button>
                         )}
@@ -445,7 +400,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 </div>
             )}
 
-            {/* Lista Principal */}
             <div className="mx-2 md:mx-0">
                 {isLoading && promoters.length === 0 ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
@@ -453,12 +407,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando...</p>
                     </div>
                 ) : filteredPromoters.length === 0 ? (
-                    <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">
-                         Nenhum registro encontrado
-                    </div>
+                    <div className="bg-secondary p-20 rounded-[2.5rem] border border-white/5 text-center text-gray-500 font-bold uppercase tracking-widest">Nenhum registro encontrado</div>
                 ) : (
                     <>
-                        {/* Desktop: Table View */}
                         <div className="hidden md:block bg-secondary rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -467,10 +418,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <input type="checkbox" checked={selectedIds.size === filteredPromoters.length && filteredPromoters.length > 0} onChange={toggleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil</th>
+                                        {isSuperAdmin && <th className="px-6 py-5">Organização</th>}
                                         <th className="px-6 py-5 text-center">Idade</th>
-                                        <th className="px-6 py-5">Redes Sociais</th>
+                                        <th className="px-6 py-5">Social</th>
                                         <th className="px-6 py-5 text-center">Grupo?</th>
-                                        <th className="px-6 py-5">Evento</th>
                                         <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
@@ -488,10 +439,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     </div>
                                                     <div className="overflow-hidden">
                                                         <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name}</p>
-                                                        <p className="text-gray-500 text-[10px] truncate font-mono">{p.email}</p>
+                                                        <p className="text-gray-500 text-[10px] truncate font-mono">{p.campaignName || 'Geral'}</p>
                                                     </div>
                                                 </div>
                                             </td>
+                                            {isSuperAdmin && (
+                                                <td className="px-6 py-5">
+                                                    <p className="text-[10px] font-black text-primary uppercase truncate max-w-[120px]">{orgsMap[p.organizationId] || p.organizationId}</p>
+                                                </td>
+                                            )}
                                             <td className="px-6 py-5 text-center font-bold text-gray-300">{calculateAge(p.dateOfBirth)}a</td>
                                             <td className="px-6 py-5">
                                                 <div className="flex items-center gap-2">
@@ -508,19 +464,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-5 text-gray-300 font-bold text-[10px] uppercase truncate max-w-[120px]">{p.campaignName || 'Geral'}</td>
                                             <td className="px-6 py-5">{statusBadge(p.status)}</td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    {/* BOTÃO APROVADA - AVISO DE APROVAÇÃO MANUAL - APENAS SE FORA DO GRUPO */}
                                                     {p.status === 'approved' && !p.hasJoinedGroup && (
                                                         <button onClick={() => handleSendApprovalManual(p)} className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-all" title="Enviar Aviso de Aprovação"><WhatsAppIcon className="w-4 h-4" /></button>
                                                     )}
-                                                    
                                                     {p.status === 'pending' && (
                                                         <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
                                                     )}
-                                                    
                                                     <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
                                                     <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                 </div>
@@ -531,7 +483,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* Mobile: Card View */}
+                        {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
                             {filteredPromoters.map(p => (
                                 <div key={p.id} className={`bg-secondary p-5 rounded-3xl border ${selectedIds.has(p.id) ? 'border-primary' : 'border-white/5'} shadow-xl space-y-5`}>
@@ -541,60 +493,24 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner" onClick={() => setPhotoViewer({ isOpen: true, urls: p.photoUrls, index: 0 })}>
                                                 <img src={p.facePhotoUrl || p.photoUrls[0]} alt="" className="w-full h-full object-cover" />
                                             </div>
-                                            <div className="overflow-hidden">
+                                            <div className="overflow-hidden text-left">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name}</p>
                                                 <p className="text-gray-500 text-[10px] font-bold mb-1">{calculateAge(p.dateOfBirth)} anos • {p.state}</p>
                                                 <div className="flex items-center gap-2">
                                                     {statusBadge(p.status)}
-                                                    {p.status === 'approved' && (
-                                                        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${p.hasJoinedGroup ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-gray-700/30 text-gray-500 border-gray-700'}`}>
-                                                            {p.hasJoinedGroup ? 'No Grupo' : 'Fora'}
-                                                        </div>
-                                                    )}
+                                                    {isSuperAdmin && <span className="text-[8px] font-black text-primary uppercase">{orgsMap[p.organizationId] || 'Produtora'}</span>}
                                                 </div>
                                             </div>
                                         </div>
-                                        <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 text-gray-500 hover:text-white"><PencilIcon className="w-5 h-5" /></button>
                                     </div>
-
-                                    {/* Links de Redes Sociais */}
                                     <div className="grid grid-cols-2 gap-3 py-3 border-y border-white/5">
-                                        <a 
-                                            href={`https://instagram.com/${p.instagram.replace('@', '')}`} 
-                                            target="_blank" 
-                                            rel="noreferrer" 
-                                            className="flex items-center justify-center gap-2 py-2 bg-pink-500/10 text-pink-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-pink-500/20 active:bg-pink-500 active:text-white transition-all"
-                                        >
-                                            <InstagramIcon className="w-4 h-4" /> Instagram
-                                        </a>
-                                        <a 
-                                            href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} 
-                                            target="_blank" 
-                                            rel="noreferrer" 
-                                            className="flex items-center justify-center gap-2 py-2 bg-green-500/10 text-green-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-green-500/20 active:bg-green-500 active:text-white transition-all"
-                                        >
-                                            <WhatsAppIcon className="w-4 h-4" /> WhatsApp
-                                        </a>
+                                        <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-pink-500/10 text-pink-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-pink-500/20 active:bg-pink-500 active:text-white transition-all"><InstagramIcon className="w-4 h-4" /> Instagram</a>
+                                        <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-2 bg-green-500/10 text-green-500 rounded-xl font-black text-[10px] uppercase tracking-widest border border-green-500/20 active:bg-green-500 active:text-white transition-all"><WhatsAppIcon className="w-4 h-4" /> WhatsApp</a>
                                     </div>
-                                    
                                     <div className="flex gap-2">
-                                        {p.status === 'pending' && (
-                                            <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all">
-                                                <CheckCircleIcon className="w-4 h-4" /> Aprovar
-                                            </button>
-                                        )}
-                                        {p.status === 'approved' && !p.hasJoinedGroup && (
-                                            <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all">
-                                                <WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação
-                                            </button>
-                                        )}
-                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all">
-                                            <XIcon className="w-4 h-4" /> Rejeitar
-                                        </button>
-                                    </div>
-                                    
-                                    <div className="text-center">
-                                        <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">{p.campaignName || 'Geral'}</p>
+                                        {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 active:scale-95 transition-all"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
+                                        {p.status === 'approved' && !p.hasJoinedGroup && <button onClick={() => handleSendApprovalManual(p)} className="flex-1 py-4 bg-indigo-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20 active:scale-95 transition-all"><WhatsAppIcon className="w-4 h-4" /> Avisar Aprovação</button>}
+                                        <button onClick={() => { setSelectedPromoter(p); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all"><XIcon className="w-4 h-4" /> Rejeitar</button>
                                     </div>
                                 </div>
                             ))}
@@ -602,38 +518,25 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
                         {/* Paginação */}
                         <div className="mt-6 p-6 bg-secondary rounded-[1.5rem] md:rounded-[2.5rem] border border-white/5 flex justify-between items-center">
-                            <button 
-                                onClick={() => {
-                                    if (prevCursors.length === 0 || isLoading) return;
-                                    const newCursors = [...prevCursors];
-                                    newCursors.pop();
-                                    const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
-                                    setPrevCursors(newCursors);
-                                    fetchData(prevCursor);
-                                }} 
-                                disabled={prevCursors.length === 0 || isLoading}
-                                className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            >
-                                Anterior
-                            </button>
+                            <button onClick={() => {
+                                if (prevCursors.length === 0 || isLoading) return;
+                                const newCursors = [...prevCursors];
+                                newCursors.pop();
+                                const prevCursor = newCursors.length > 0 ? newCursors[newCursors.length - 1] : null;
+                                setPrevCursors(newCursors);
+                                fetchData(prevCursor);
+                            }} disabled={prevCursors.length === 0 || isLoading} className="px-6 py-2 bg-gray-800 text-gray-300 font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 disabled:opacity-30 transition-all">Anterior</button>
                             <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Página {prevCursors.length + 1}</span>
-                            <button 
-                                onClick={() => {
-                                    if (!hasMore || isLoading || !lastDoc) return;
-                                    setPrevCursors(prev => [...prev, lastDoc]);
-                                    fetchData(lastDoc);
-                                }} 
-                                disabled={!hasMore || isLoading}
-                                className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                            >
-                                Próxima
-                            </button>
+                            <button onClick={() => {
+                                if (!hasMore || isLoading || !lastDoc) return;
+                                setPrevCursors(prev => [...prev, lastDoc]);
+                                fetchData(lastDoc);
+                            }} disabled={!hasMore || isLoading} className="px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-xl hover:bg-primary-dark disabled:opacity-30 transition-all">Próxima</button>
                         </div>
                     </>
                 )}
             </div>
 
-            {/* Modais */}
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => setIsRejectionModalOpen(false)} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
             <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(null); }} />

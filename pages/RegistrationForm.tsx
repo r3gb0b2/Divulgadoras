@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail, getPromoterById } from '../services/promoterService';
-import { getCampaigns } from '../services/settingsService';
+import { addPromoter, getPromoterById } from '../services/promoterService';
+import { getOrganization } from '../services/organizationService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
   ArrowLeftIcon, CheckCircleIcon, XIcon, ShieldCheckIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
-import { Campaign } from '../types';
 
 const RegistrationForm: React.FC = () => {
   const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName?: string }>();
@@ -33,8 +32,18 @@ const RegistrationForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Validar se a organização existe antes de permitir o cadastro
+    if (organizationId) {
+        getOrganization(organizationId).then(org => {
+            setIsValidOrg(!!org && org.status !== 'deactivated');
+        }).catch(() => setIsValidOrg(false));
+    } else {
+        setIsValidOrg(false);
+    }
+
     if (editId) {
         getPromoterById(editId).then(p => {
             if (p) {
@@ -52,12 +61,11 @@ const RegistrationForm: React.FC = () => {
             }
         });
     }
-  }, [editId]);
+  }, [editId, organizationId]);
 
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 11) value = value.slice(0, 11);
-    // Máscara simples: 000.000.000-00
     value = value.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
     setFormData({ ...formData, cpf: value });
   };
@@ -68,7 +76,11 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organizationId || !state) return;
+    if (!organizationId || !state || isValidOrg === false) {
+      setError("Link de cadastro inválido. Por favor, solicite um novo link oficial.");
+      return;
+    }
+    
     if (photos.length < 1 && previews.length === 0) {
       setError("Envie ao menos 1 foto para identificação.");
       return;
@@ -95,6 +107,19 @@ const RegistrationForm: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isValidOrg === false) {
+      return (
+          <div className="max-w-2xl mx-auto py-20 px-4 text-center">
+              <div className="bg-red-900/20 border border-red-500/50 p-10 rounded-[3rem]">
+                  <XIcon className="w-20 h-20 text-red-500 mx-auto mb-6" />
+                  <h1 className="text-3xl font-black text-white uppercase mb-4">Link Inválido</h1>
+                  <p className="text-gray-400">Esta organização não existe ou o link de cadastro está quebrado.</p>
+                  <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-primary text-white font-bold rounded-full">Voltar ao Início</button>
+              </div>
+          </div>
+      );
+  }
 
   if (isSuccess) {
     return (
@@ -127,7 +152,6 @@ const RegistrationForm: React.FC = () => {
         <form onSubmit={handleSubmit} className="p-8 md:p-14 space-y-12">
           {error && <div className="bg-red-900/40 border border-red-500/50 text-red-200 p-5 rounded-2xl text-sm font-bold text-center">{error}</div>}
 
-          {/* Dados Principais */}
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <UserIcon className="w-6 h-6 text-primary" /> Dados Pessoais
@@ -176,7 +200,6 @@ const RegistrationForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Social */}
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais
@@ -203,7 +226,6 @@ const RegistrationForm: React.FC = () => {
             </div>
           </div>
 
-          {/* Fotos */}
           <div className="space-y-8">
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <CameraIcon className="w-6 h-6 text-primary" /> Fotos

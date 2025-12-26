@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -29,6 +28,9 @@ export const changePromoterEmail = async (promoterId: string, oldEmail: string, 
     }
 };
 
+/**
+ * Dispara e-mail de aviso de aprovação em massa via servidor.
+ */
 export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> => {
     try {
         const notifyFunc = functions.httpsCallable('notifyApprovalBulk');
@@ -42,6 +44,11 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
   const emailLower = data.email.toLowerCase().trim();
   const campaign = (data.campaignName && data.campaignName.trim() !== '') ? data.campaignName.trim() : "Geral";
   
+  // Validação Crítica: Impedir cadastro sem organização válida ou com rota errada
+  if (!data.organizationId || data.organizationId === 'register' || data.organizationId === 'undefined') {
+      throw new Error("Erro de identificação da produtora. Por favor, utilize o link oficial enviado pela sua organização.");
+  }
+
   try {
     const existing = await firestore.collection("promoters")
       .where("email", "==", emailLower)

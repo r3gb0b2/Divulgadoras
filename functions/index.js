@@ -1,4 +1,3 @@
-
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 const SibApiV3Sdk = require("@getbrevo/brevo");
@@ -94,15 +93,10 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
 
 exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId, token, metadata } = data;
-    
-    if (!promoterId || !token) {
-        console.error("Tentativa de salvar token inválida:", { promoterId, hasToken: !!token });
-        return { success: false, message: "Dados incompletos." };
-    }
+    if (!promoterId || !token) return { success: false, message: "Dados incompletos." };
 
     try {
         const promoterRef = db.collection("promoters").doc(promoterId);
-        
         await promoterRef.update({
             fcmToken: token,
             lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp(),
@@ -113,59 +107,7 @@ exports.savePromoterToken = functions.region("southamerica-east1").https.onCall(
                 syncMethod: metadata?.method || "standard"
             }
         });
-
-        console.log(`[Push] Token atualizado para promoter ${promoterId} (${metadata?.platform})`);
         return { success: true };
-    } catch (error) {
-        console.error("[Push] Erro ao atualizar Firestore:", error);
-        return { success: false, message: error.message };
-    }
-});
-
-exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const config = getConfig();
-    if (!config.zApiToken || !config.zApiInstance) return { success: false, message: "Configuração ausente." };
-
-    try {
-        const response = await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
-            body: JSON.stringify({ phone: "5585982280780", message: "🛠️ Teste de Notificação WhatsApp Equipe Certa ativo." })
-        });
-        const resData = await response.json();
-        return { success: response.ok, message: response.ok ? "Conexão OK!" : "Erro na API", debug: resData };
-    } catch (error) {
-        return { success: false, message: error.message };
-    }
-});
-
-exports.sendPushCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { title, body, url, promoterIds } = data;
-    if (!promoterIds || promoterIds.length === 0) return { success: false, message: "Nenhum destino." };
-
-    try {
-        const tokens = [];
-        const chunkedIds = [];
-        for (let i = 0; i < promoterIds.length; i += 30) chunkedIds.push(promoterIds.slice(i, i + 30));
-
-        for (const ids of chunkedIds) {
-            const snap = await db.collection("promoters").where(admin.firestore.FieldPath.documentId(), "in", ids).get();
-            snap.docs.forEach(doc => {
-                const p = doc.data();
-                if (p.fcmToken) tokens.push(p.fcmToken);
-            });
-        }
-
-        if (tokens.length === 0) return { success: false, message: "Nenhum token encontrado." };
-
-        const message = {
-            notification: { title, body },
-            data: { url: url || "/#/posts" },
-            tokens: tokens
-        };
-
-        const response = await admin.messaging().sendEachForMulticast(message);
-        return { success: true, message: `Push enviado para ${response.successCount} aparelhos.` };
     } catch (error) {
         return { success: false, message: error.message };
     }
@@ -190,7 +132,7 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
             const personalizedBody = body.replace(/{{promoterName}}/g, p.name) + personalFooter;
 
             return brevo.sendTransacEmail({
-                sender: { email: config.brevoEmail, name: "D&E" },
+                sender: { email: config.brevoEmail, name: "Equipe Certa" },
                 to: [{ email: p.email, name: p.name }],
                 subject: subject,
                 htmlContent: personalizedBody
@@ -198,7 +140,6 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
         });
 
         await Promise.all(emailPromises);
-        
         return { success: true, message: `E-mails enviados.` };
     } catch (error) {
         return { success: false, message: error.message };
@@ -220,4 +161,19 @@ exports.getEmailTemplate = functions.region("southamerica-east1").https.onCall(a
 exports.setEmailTemplate = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     await db.collection("settings").doc("emailTemplate").set({ htmlContent: data.htmlContent });
     return { success: true };
+});
+
+exports.testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const config = getConfig();
+    if (!config.zApiToken || !config.zApiInstance) return { success: false, message: "Configuração ausente." };
+    try {
+        const response = await fetch(`https://api.z-api.io/instances/${config.zApiInstance}/token/${config.zApiToken}/send-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'client-token': config.zApiClientToken },
+            body: JSON.stringify({ phone: "5585982280780", message: "🛠️ Teste WhatsApp ativo." })
+        });
+        return { success: response.ok };
+    } catch (error) {
+        return { success: false };
+    }
 });
