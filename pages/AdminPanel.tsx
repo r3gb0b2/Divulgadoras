@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   getAllPromotersPaginated, 
@@ -680,10 +681,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
               onGoToPromoter={(p) => { 
                   setIsLookupModalOpen(false); 
                   setSearchQuery(p.email); 
+                  // RESET FILTERS: Quando clicamos para ver na lista, limpamos filtros restritivos
                   setFilterStatus('all'); 
                   setFilterState('all');
                   setSelectedCampaign('all');
                   setFilterGroup('all');
+                  setMinAge('');
+                  setMaxAge('');
               }}
               onEdit={(p) => { setIsLookupModalOpen(false); setSelectedPromoter(p); setIsEditModalOpen(true); }}
               onDelete={async (p) => { 

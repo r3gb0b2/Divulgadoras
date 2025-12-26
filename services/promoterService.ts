@@ -167,54 +167,62 @@ export const getAllPromotersPaginated = async (options: {
     pageSize: number; lastDoc?: any;
 }): Promise<{ promoters: Promoter[], lastDoc: any }> => {
     
-    // Função auxiliar interna para construir e executar a query
-    const executeQuery = async (useOrderBy: boolean) => {
+    // Constrói a base da query com os filtros aplicados
+    const buildBaseQuery = () => {
         let q: firebase.firestore.Query = firestore.collection("promoters");
-        
         if (options.organizationId) q = q.where("organizationId", "==", options.organizationId);
         if (options.status && options.status !== 'all') q = q.where("status", "==", options.status);
         if (options.filterState && options.filterState !== 'all') q = q.where("state", "==", options.filterState);
-        
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
             q = q.where("allCampaigns", "array-contains", options.selectedCampaign);
         }
-        
-        if (useOrderBy) {
-            q = q.orderBy("createdAt", "desc");
-        }
-        
-        if (options.lastDoc) q = q.startAfter(options.lastDoc);
-        q = q.limit(options.pageSize);
-        
-        return await q.get();
+        return q;
     };
 
     try {
-        let snap;
-        
-        // TENTATIVA 1: Com ordenação (Pode falhar se faltar índice ou se o timestamp for nulo/pendente)
-        try {
-            snap = await executeQuery(true);
-            
-            // Se estiver vazio na primeira página, pode ser que os registros estejam com timestamp pendente (nulo)
-            // O Firestore exclui campos nulos de consultas ordenadas.
-            if (snap.empty && !options.lastDoc) {
-                console.log("Busca ordenada vazia. Tentando fallback não ordenado...");
-                snap = await executeQuery(false);
-            }
-        } catch (innerError) {
-            // TENTATIVA 2: Fallback imediato se der erro de índice ausente ou outro erro de query
-            console.warn("Erro na query ordenada. Executando fallback não ordenado:", innerError);
-            snap = await executeQuery(false);
+        let finalPromoters: Promoter[] = [];
+        let lastVisible = null;
+
+        // SE FOR A PRIMEIRA PÁGINA: Buscamos primeiro os nulos (novíssimos)
+        if (!options.lastDoc) {
+            const nullQuery = buildBaseQuery().where("createdAt", "==", null).limit(10);
+            const nullSnap = await nullQuery.get();
+            nullSnap.forEach(doc => finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter));
         }
 
-        const promoters = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
-        const lastVisible = snap.docs[snap.docs.length - 1];
+        // Busca principal com ordenação
+        let mainQuery = buildBaseQuery().orderBy("createdAt", "desc");
+        if (options.lastDoc) mainQuery = mainQuery.startAfter(options.lastDoc);
+        mainQuery = mainQuery.limit(options.pageSize);
+
+        try {
+            const mainSnap = await mainQuery.get();
+            mainSnap.forEach(doc => {
+                // Evita duplicatas se um documento nulo acabou de ganhar timestamp
+                if (!finalPromoters.find(p => p.id === doc.id)) {
+                    finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
+                }
+            });
+            lastVisible = mainSnap.docs[mainSnap.docs.length - 1];
+        } catch (innerError) {
+            // FALLBACK BRUTO: Se der erro de índice (comum ao usar filtros complexos + orderBy), busca sem ordem
+            console.warn("Erro na ordenação, usando busca bruta:", innerError);
+            let fallbackQuery = buildBaseQuery();
+            if (options.lastDoc) fallbackQuery = fallbackQuery.startAfter(options.lastDoc);
+            fallbackQuery = fallbackQuery.limit(options.pageSize);
+            const fallbackSnap = await fallbackQuery.get();
+            fallbackSnap.forEach(doc => {
+                if (!finalPromoters.find(p => p.id === doc.id)) {
+                    finalPromoters.push({ id: doc.id, ...doc.data() } as Promoter);
+                }
+            });
+            lastVisible = fallbackSnap.docs[fallbackSnap.docs.length - 1];
+        }
         
-        return { promoters, lastDoc: lastVisible };
+        return { promoters: finalPromoters, lastDoc: lastVisible };
     } catch (error) { 
-        console.error("Falha crítica no getAllPromotersPaginated:", error);
-        throw new Error("Erro de comunicação com o banco de dados."); 
+        console.error("Erro fatal na busca paginada:", error);
+        throw new Error("Erro ao buscar no banco de dados."); 
     }
 };
 
