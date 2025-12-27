@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGuestListForCampaign, checkInPerson, checkOutPerson, getActiveGuestListsForCampaign, unlockGuestListConfirmation } from '../services/guestListService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, DocumentDuplicateIcon } from '../components/Icons';
 import { getAllCampaigns } from '../services/settingsService';
 // FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
@@ -167,6 +168,14 @@ const PersonRow: React.FC<{
     const checkinKey = `${person.confirmationId}-${person.name}`;
     const isCheckedIn = !!person.checkedInAt;
     const isCheckedOut = !!person.checkedOutAt;
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(person.name);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
     
     return (
         <SwipeableRow onSwipeRight={() => onCheckIn(person.confirmationId, person.name)} enabled={!isCheckedIn && !processingCheckin}>
@@ -207,11 +216,18 @@ const PersonRow: React.FC<{
                    </div>
                  ) : (
                      <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleCopy}
+                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${copied ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                        >
+                            <DocumentDuplicateIcon className="w-3 h-3" />
+                            {copied ? 'Copiado' : 'Copiar'}
+                        </button>
                         {isLocked && person.isPromoter && (
                             <button
                                 onClick={() => onUnlock(person.confirmationId)}
                                 disabled={unlockingId === person.confirmationId}
-                                className="px-2 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                className="px-2 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-md hover:bg-indigo-700 disabled:opacity-50"
                                 title="Liberar lista para edição"
                             >
                                 {unlockingId === person.confirmationId ? '...' : 'Liberar'}
